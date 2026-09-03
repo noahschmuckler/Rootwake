@@ -1,35 +1,37 @@
-// Pass 0 (DESIGN.md): one voxel face, viewed from an already-locked camera.
-// Five hand-authored branches with flowers, click-to-select, 3-same-colour
-// match, staggered recede. No movement, no camera transition, no mirror,
-// no regrowth, no payout — all deliberately deferred to Pass 0.1+.
+// Pass 0 (DESIGN.md): one voxel face — five hand-authored branches with
+// flowers, click-to-select, 3-same-colour match, staggered recede.
+// Pass 0.1a: a free-orbit view of that voxel, a tween into the Pass 0 locked
+// framing on tapping it, and a button to back out. No movement, no field,
+// no mirror, no regrowth, no payout — still deferred.
 
 import * as THREE from 'three';
 import { assignColors, PALETTE } from './colors';
 import { buildRig, TIP_COUNT, type Branch } from './rig';
 import { PuzzleState } from './puzzle';
 import { RecedeAnimator } from './recede';
+import { CameraRig, HALF_VOXEL, type CameraMode } from './cameraLock';
 
 // ---- URL params -------------------------------------------------------------
 // `?seed=N` for a repeatable board (R reloads with a fresh one).
-// `?slowmo=N` runs the recede at 1/N speed — for staring at the choreography.
+// `?slowmo=N` runs the recede and camera tweens at 1/N speed.
 const params = new URLSearchParams(window.location.search);
 const seed = Number.parseInt(params.get('seed') ?? '', 10) || 1;
 const slowmo = Math.max(1, Number.parseFloat(params.get('slowmo') ?? '') || 1);
 
-// ---- Scene / locked camera -------------------------------------------------
+// ---- Scene / camera ---------------------------------------------------------
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0a0a12);
 
 const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.1, 100);
-// Straight-on framing of the +Z face: this IS the "locked puzzle view". The
-// 2D-legible puzzle plane is z = +1; the camera never moves in Pass 0.
-camera.position.set(0, 0, 4.6);
-camera.lookAt(0, 0, 0);
 
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 document.body.appendChild(renderer.domElement);
+
+// Starts in the free-orbit view; tapping the voxel tweens into the locked
+// Pass 0 framing (see cameraLock.ts).
+const cameraRig = new CameraRig(camera, renderer.domElement);
 
 scene.add(new THREE.AmbientLight(0x404060, 1.2));
 const key = new THREE.DirectionalLight(0xffffff, 1.4);
@@ -54,6 +56,13 @@ const rig = buildRig(colors);
 scene.add(rig.root);
 const animator = new RecedeAnimator();
 
+// Invisible box over the whole voxel: in the free view, tapping anywhere on
+// it (or on a flower) is "lock onto this voxel". No per-face picking yet —
+// there is only one face with flowers, so the lock always goes to +Z.
+const voxelHitBox = new THREE.Mesh(new THREE.BoxGeometry(HALF_VOXEL * 2, HALF_VOXEL * 2, HALF_VOXEL * 2));
+voxelHitBox.visible = false;
+scene.add(voxelHitBox);
+
 // ---- Selection visuals ------------------------------------------------------
 // Tuning: selected flowers glow (emissive) and swell slightly. No outline pass
 // yet — keeping the render pipeline plain until the feel is judged.
@@ -67,6 +76,24 @@ function setSelectedLook(branch: Branch, on: boolean): void {
 
 // ---- HUD --------------------------------------------------------------------
 const hud = document.getElementById('hud')!;
+const hint = document.getElementById('hint')!;
+const backButton = document.getElementById('back') as HTMLButtonElement;
+
+const HINTS: Record<CameraMode, string> = {
+  free: 'Drag to orbit. Tap the voxel to lock in.',
+  locking: '',
+  locked: 'Tap three flowers of the same colour.',
+  unlocking: '',
+};
+function applyMode(mode: CameraMode): void {
+  hint.textContent = HINTS[mode];
+  backButton.hidden = mode !== 'locked';
+  renderer.domElement.style.cursor = 'default';
+}
+cameraRig.onModeChange = applyMode;
+applyMode(cameraRig.mode);
+backButton.addEventListener('click', () => cameraRig.unlock(animClock));
+
 function updateHud(): void {
   const sel = puzzle.selected();
   const selText = sel.length ? `${sel.length}/3 ${PALETTE[colors[sel[0]]].name}` : 'none';
@@ -81,9 +108,13 @@ updateHud();
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 
-function pickTip(clientX: number, clientY: number): number | null {
+function castFrom(clientX: number, clientY: number): void {
   pointer.set((clientX / window.innerWidth) * 2 - 1, -(clientY / window.innerHeight) * 2 + 1);
   raycaster.setFromCamera(pointer, camera);
+}
+
+function pickTip(clientX: number, clientY: number): number | null {
+  castFrom(clientX, clientY);
   const hits = raycaster.intersectObjects(rig.hitTargets, false);
   for (const h of hits) {
     const tip = h.object.userData.tipIndex;
@@ -92,7 +123,30 @@ function pickTip(clientX: number, clientY: number): number | null {
   return null;
 }
 
+function pickVoxel(clientX: number, clientY: number): boolean {
+  castFrom(clientX, clientY);
+  return raycaster.intersectObjects([voxelHitBox, ...rig.hitTargets], false).length > 0;
+}
+
+/** Is there something tappable under the pointer in the current mode? */
+function hoverable(clientX: number, clientY: number): boolean {
+  switch (cameraRig.mode) {
+    case 'free':
+      return pickVoxel(clientX, clientY);
+    case 'locked':
+      return pickTip(clientX, clientY) !== null;
+    default:
+      return false;
+  }
+}
+
 function onTap(clientX: number, clientY: number): void {
+  if (cameraRig.mode === 'free') {
+    if (pickVoxel(clientX, clientY)) cameraRig.lock(animClock);
+    return;
+  }
+  if (cameraRig.mode !== 'locked') return; // mid-tween: ignore input
+
   const tip = pickTip(clientX, clientY);
   if (tip === null) return;
   const result = puzzle.toggle(tip);
@@ -122,9 +176,21 @@ function onTap(clientX: number, clientY: number): void {
   updateHud();
 }
 
-renderer.domElement.addEventListener('click', (e) => onTap(e.clientX, e.clientY));
+// Orbit drags end with a click event too, so a tap only counts if the pointer
+// barely moved between down and up. Tuning: 6px is comfortable for mouse;
+// touch may want more.
+const TAP_SLOP_PX = 6;
+let downX = 0;
+let downY = 0;
+renderer.domElement.addEventListener('pointerdown', (e) => {
+  downX = e.clientX;
+  downY = e.clientY;
+});
+renderer.domElement.addEventListener('click', (e) => {
+  if (Math.hypot(e.clientX - downX, e.clientY - downY) <= TAP_SLOP_PX) onTap(e.clientX, e.clientY);
+});
 renderer.domElement.addEventListener('pointermove', (e) => {
-  renderer.domElement.style.cursor = pickTip(e.clientX, e.clientY) === null ? 'default' : 'pointer';
+  renderer.domElement.style.cursor = hoverable(e.clientX, e.clientY) ? 'pointer' : 'default';
 });
 window.addEventListener('keydown', (e) => {
   if (e.key === 'r' || e.key === 'R') {
@@ -142,13 +208,14 @@ window.addEventListener('resize', () => {
 
 // ---- Loop -------------------------------------------------------------------
 // Animation clock in ms, scaled by slowmo so every tuning constant in
-// recede.ts stays expressed in real-speed milliseconds.
+// recede.ts and cameraLock.ts stays expressed in real-speed milliseconds.
 let animClock = 0;
 let lastFrame = performance.now();
 function animate(now: number): void {
   requestAnimationFrame(animate);
   animClock += (now - lastFrame) / slowmo;
   lastFrame = now;
+  cameraRig.update(animClock);
   animator.update(animClock);
   renderer.render(scene, camera);
 }

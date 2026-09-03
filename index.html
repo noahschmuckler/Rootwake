@@ -17,10 +17,19 @@
         font: 13px/1.4 system-ui, sans-serif; color: #6f7c6f;
         pointer-events: none; user-select: none;
       }
+      #back {
+        position: fixed; right: 12px; top: 10px;
+        font: 13px/1 system-ui, sans-serif; color: #c9d4c9;
+        background: #1e2a1e; border: 1px solid #3a4a3a; border-radius: 4px;
+        padding: 8px 12px; cursor: pointer;
+      }
+      #back:hover { background: #2a3a2a; }
+      #back[hidden] { display: none; }
     </style>
   </head>
   <body>
-    <div id="hint">Tap three flowers of the same colour.</div>
+    <div id="hint"></div>
+    <button id="back" type="button" hidden>Back out</button>
     <div id="hud"></div>
     <script type="module" src="/src/main.ts"></script>
   </body>
