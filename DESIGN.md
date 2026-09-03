@@ -171,7 +171,17 @@ clearing mechanic itself.
 
 ## Status
 
-Repo scaffolded (Vite + TypeScript + Three.js, a bare running scene — camera,
-renderer, lighting, a placeholder cube standing in for a voxel) on
-2026-09-03. **Pass 0 itself — the trunk/branch/flower rig, selection, and
-the recede animation — is unbuilt.** That's the next task.
+Repo scaffolded 2026-09-03. **Pass 0 is built and playable** (same day):
+trunk + five hand-authored branches + primitive flowers under a locked,
+straight-on camera; seeded colour assignment with a guaranteed triple;
+tap-to-select; 3-same-colour match; the cheap staggered recede.
+
+Controls for evaluating it: tap flowers; `R` reloads with a new seed;
+`?seed=N` repeats a board; `?slowmo=N` runs the recede at 1/N speed. Tuning
+constants (durations, stagger, easing, anticipation swell) sit at the top of
+`src/recede.ts`.
+
+**Next step is evaluation, not code:** does the selection/recede feel
+satisfying in isolation? Only after that call do Pass 0.1 (walkable field,
+lock transition, 6-face mirror) or the geometry-truncating recede fallback
+become worth building.

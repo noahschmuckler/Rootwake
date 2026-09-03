@@ -11,3 +11,7 @@ See `DESIGN.md` for the design brief and the current MVP spec, and
 npm install
 npm run dev
 ```
+
+Pass 0 is playable: tap three same-colour flowers to make them recede into
+the trunk. `R` reshuffles (new seed), `?seed=N` repeats a board, `?slowmo=N`
+slows the recede for inspection.

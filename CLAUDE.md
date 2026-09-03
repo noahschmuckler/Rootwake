@@ -21,14 +21,22 @@ don't add structure the prototype doesn't need yet.
 
 ## Status
 
-**Scaffold only.** `src/main.ts` is a bare running Three.js scene (camera,
-renderer, one light rig, a placeholder cube standing in for a voxel) —
-nothing about the actual game is built. `DESIGN.md`'s "MVP scope — Pass 0"
-section is the next thing to build: the trunk/branch/flower rig for one
-voxel face, click-to-select-3-same-color matching, and the vine-recede
-animation. That's the whole deliverable of this first pass — resist scope
-creep into movement, the 6-face mirror, or the other characters until Pass
-0's feel is validated (see DESIGN.md for why).
+**Pass 0 built (2026-09-03), awaiting feel evaluation.** `src/` now holds:
+
+- `colors.ts` — seeded palette assignment that constructs a guaranteed
+  same-colour triple.
+- `rig.ts` — hand-placed trunk/branch curves/flowers for the +Z face, plus
+  invisible hit spheres for tapping.
+- `puzzle.ts` — renderer-agnostic selection/match state (one model; the
+  later 6-face mirror should be views onto this, not copies).
+- `recede.ts` — the cheap recede (flower slides back along its curve and
+  scales out; tube untouched) with the tuning constants at the top.
+- `main.ts` — locked camera, raycast input, HUD, `?seed=` / `?slowmo=` params.
+
+Do **not** start Pass 0.1 (movement, camera lock transition, 6-face mirror)
+until the designer has judged whether the recede feels right — see
+DESIGN.md. If it feels flat, the sanctioned next move is the geometry-
+truncating recede fallback described there, not more wrapping.
 
 ## Conventions carried over from DiggyDwarves (the sibling project)
 
