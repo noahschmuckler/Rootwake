@@ -9,9 +9,12 @@ import { buildRig, TIP_COUNT, type Branch } from './rig';
 import { PuzzleState } from './puzzle';
 import { RecedeAnimator } from './recede';
 
-// ---- Seed: `?seed=N` for a repeatable board; R reloads with a fresh one. ----
+// ---- URL params -------------------------------------------------------------
+// `?seed=N` for a repeatable board (R reloads with a fresh one).
+// `?slowmo=N` runs the recede at 1/N speed — for staring at the choreography.
 const params = new URLSearchParams(window.location.search);
 const seed = Number.parseInt(params.get('seed') ?? '', 10) || 1;
+const slowmo = Math.max(1, Number.parseFloat(params.get('slowmo') ?? '') || 1);
 
 // ---- Scene / locked camera -------------------------------------------------
 const scene = new THREE.Scene();
@@ -69,7 +72,7 @@ function updateHud(): void {
   const selText = sel.length ? `${sel.length}/3 ${PALETTE[colors[sel[0]]].name}` : 'none';
   const dead = puzzle.isDead() && !animator.isBusy;
   hud.textContent =
-    `seed ${seed} · selected: ${selText}` +
+    `seed ${seed}${slowmo > 1 ? ` · slowmo ×${slowmo}` : ''} · selected: ${selText}` +
     (dead ? ' · nothing left to clear — press R for a new arrangement' : ' · R: new arrangement');
 }
 updateHud();
@@ -104,10 +107,12 @@ function onTap(clientX: number, clientY: number): void {
       setSelectedLook(rig.branches[tip], false);
       break;
     case 'match': {
-      // Leave the glow on while they recede — the animator owns scale from here.
-      // Recede order = selection order, so the last-tapped flower leaves last.
+      // The completing flower glows like the other two, then all three go.
+      // Recede order = tap order, so the flower that closed the match leaves
+      // last. The animator owns scale from here; the glow stays on the way home.
+      setSelectedLook(rig.branches[tip], true);
       const group = result.tips.map((t) => rig.branches[t]);
-      animator.start(group, performance.now(), (b) => {
+      animator.start(group, animClock, (b) => {
         puzzle.markCleared(b.index);
         updateHud();
       });
@@ -136,9 +141,15 @@ window.addEventListener('resize', () => {
 });
 
 // ---- Loop -------------------------------------------------------------------
-function animate(): void {
+// Animation clock in ms, scaled by slowmo so every tuning constant in
+// recede.ts stays expressed in real-speed milliseconds.
+let animClock = 0;
+let lastFrame = performance.now();
+function animate(now: number): void {
   requestAnimationFrame(animate);
-  animator.update(performance.now());
+  animClock += (now - lastFrame) / slowmo;
+  lastFrame = now;
+  animator.update(animClock);
   renderer.render(scene, camera);
 }
-animate();
+requestAnimationFrame(animate);

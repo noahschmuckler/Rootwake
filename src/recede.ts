@@ -15,15 +15,21 @@ export const RECEDE_DURATION_MS = 700;
 /** Gap between consecutive flowers in a matched triple starting their recede. */
 export const STAGGER_MS = 90;
 /** Brief "tug" before the recede: the flower swells outward before snapping back. */
-export const ANTICIPATION_MS = 110;
-export const ANTICIPATION_SCALE = 1.22;
+export const ANTICIPATION_MS = 90;
+export const ANTICIPATION_SCALE = 1.3;
 /** How many full turns the flower spins about its own facing axis on the way home. */
 export const SPIN_TURNS = 0.75;
 // ---------------------------------------------------------------------------
 
-/** Ease-in: starts slow, accelerates — reads as being pulled rather than gliding. */
-function easeInCubic(x: number): number {
-  return x * x * x;
+/**
+ * Ease-in: starts slow, accelerates into the trunk — reads as being pulled
+ * rather than gliding. Quadratic, not cubic: cubic left the flower visibly
+ * parked for the first ~40% of the travel time, which read as a hitch. The
+ * opposite feel (a snap that decelerates home, ease-out) is the obvious
+ * alternative to try if this still reads slow.
+ */
+function easeInQuad(x: number): number {
+  return x * x;
 }
 function easeOutQuad(x: number): number {
   return 1 - (1 - x) * (1 - x);
@@ -32,16 +38,28 @@ function easeOutQuad(x: number): number {
 interface Active {
   branch: Branch;
   startMs: number;
+  /** Scale the flower had when its recede began (selected flowers are already swollen). */
+  fromScale: number;
   onDone: () => void;
 }
 
 export class RecedeAnimator {
   private active: Active[] = [];
 
-  /** Start a staggered recede for a matched group. Order given = order they leave. */
+  /**
+   * Start a staggered recede for a matched group. Order given = order they
+   * leave. Stagger is sequential (0, 1×, 2× STAGGER_MS) rather than "one
+   * leads, two follow together" — the other reading of DESIGN.md's note;
+   * swap if the third flower feels late.
+   */
   start(branches: Branch[], nowMs: number, onDone: (branch: Branch) => void): void {
     branches.forEach((branch, i) => {
-      this.active.push({ branch, startMs: nowMs + i * STAGGER_MS, onDone: () => onDone(branch) });
+      this.active.push({
+        branch,
+        startMs: nowMs + i * STAGGER_MS,
+        fromScale: branch.flower.scale.x,
+        onDone: () => onDone(branch),
+      });
     });
   }
 
@@ -51,6 +69,7 @@ export class RecedeAnimator {
 
   update(nowMs: number): void {
     const still: Active[] = [];
+    const finished: Active[] = [];
     for (const a of this.active) {
       const elapsed = nowMs - a.startMs;
       if (elapsed < 0) {
@@ -62,25 +81,28 @@ export class RecedeAnimator {
       if (elapsed < ANTICIPATION_MS) {
         // Tug outward: swell in place, no travel yet.
         const k = easeOutQuad(elapsed / ANTICIPATION_MS);
-        const s = THREE.MathUtils.lerp(1, ANTICIPATION_SCALE, k);
+        const s = THREE.MathUtils.lerp(a.fromScale, ANTICIPATION_SCALE, k);
         flower.scale.setScalar(s);
         still.push(a);
         continue;
       }
 
       const p = Math.min(1, (elapsed - ANTICIPATION_MS) / RECEDE_DURATION_MS);
-      const travel = easeInCubic(p);
+      const travel = easeInQuad(p);
       flower.position.copy(curve.getPointAt(1 - travel));
       flower.scale.setScalar(ANTICIPATION_SCALE * (1 - travel));
       flower.rotation.z = travel * SPIN_TURNS * Math.PI * 2;
 
       if (p >= 1) {
         flower.visible = false;
-        a.onDone();
+        finished.push(a);
       } else {
         still.push(a);
       }
     }
+    // Swap the list before firing callbacks so `isBusy` is already accurate
+    // for anyone reacting to the last flower going home.
     this.active = still;
+    for (const a of finished) a.onDone();
   }
 }

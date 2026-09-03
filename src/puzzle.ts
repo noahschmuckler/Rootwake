@@ -16,6 +16,8 @@ export type ToggleResult =
 export class PuzzleState {
   readonly colors: readonly number[];
   private status: TipStatus[];
+  /** Selected tips in the order they were tapped — drives recede order. */
+  private order: number[] = [];
 
   constructor(colors: readonly number[]) {
     this.colors = colors;
@@ -26,8 +28,9 @@ export class PuzzleState {
     return this.status[tip];
   }
 
+  /** Selected tips, in tap order. */
   selected(): number[] {
-    return this.status.flatMap((s, i) => (s === 'selected' ? [i] : []));
+    return [...this.order];
   }
 
   /**
@@ -42,21 +45,25 @@ export class PuzzleState {
 
     if (s === 'selected') {
       this.status[tip] = 'live';
+      this.order = this.order.filter((t) => t !== tip);
       return { kind: 'deselected', tip };
     }
 
     const color = this.colors[tip];
     const deselected: number[] = [];
-    for (const other of this.selected()) {
+    for (const other of this.order) {
       if (this.colors[other] !== color) {
         this.status[other] = 'live';
         deselected.push(other);
       }
     }
+    this.order = this.order.filter((t) => this.colors[t] === color);
 
     this.status[tip] = 'selected';
-    const group = this.selected();
-    if (group.length >= MATCH_SIZE) {
+    this.order.push(tip);
+    if (this.order.length >= MATCH_SIZE) {
+      const group = this.order;
+      this.order = [];
       for (const t of group) this.status[t] = 'clearing';
       return { kind: 'match', tips: group };
     }
