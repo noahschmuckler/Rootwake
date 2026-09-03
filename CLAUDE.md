@@ -21,7 +21,8 @@ don't add structure the prototype doesn't need yet.
 
 ## Status
 
-**Pass 0 built (2026-09-03), awaiting feel evaluation.** `src/` now holds:
+**Pass 0 built and judged satisfying; Pass 0.1a (camera lock/unlock) built
+2026-09-03, awaiting feel evaluation.** `src/` holds:
 
 - `colors.ts` — seeded palette assignment that constructs a guaranteed
   same-colour triple.
@@ -31,12 +32,14 @@ don't add structure the prototype doesn't need yet.
   later 6-face mirror should be views onto this, not copies).
 - `recede.ts` — the cheap recede (flower slides back along its curve and
   scales out; tube untouched) with the tuning constants at the top.
-- `main.ts` — locked camera, raycast input, HUD, `?seed=` / `?slowmo=` params.
+- `cameraLock.ts` — free-orbit view, tween into the Pass 0 locked framing,
+  tween back out; tuning constants at the top.
+- `main.ts` — mode-aware input (tap-to-lock in free view, tap-to-select in
+  locked view), HUD + "Back out" button, `?seed=` / `?slowmo=` params.
 
-Do **not** start Pass 0.1 (movement, camera lock transition, 6-face mirror)
-until the designer has judged whether the recede feels right — see
-DESIGN.md. If it feels flat, the sanctioned next move is the geometry-
-truncating recede fallback described there, not more wrapping.
+Do **not** start the walkable field, player movement, multiple voxels, or
+the 6-face mirror until the designer has judged whether the lock/unlock
+transition feels right — see DESIGN.md.
 
 ## Conventions carried over from DiggyDwarves (the sibling project)
 

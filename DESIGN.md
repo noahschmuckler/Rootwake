@@ -171,17 +171,20 @@ clearing mechanic itself.
 
 ## Status
 
-Repo scaffolded 2026-09-03. **Pass 0 is built and playable** (same day):
-trunk + five hand-authored branches + primitive flowers under a locked,
-straight-on camera; seeded colour assignment with a guaranteed triple;
-tap-to-select; 3-same-colour match; the cheap staggered recede.
+Repo scaffolded 2026-09-03. **Pass 0 built and judged satisfying** (same
+day). **Pass 0.1a built** (same day): the app now boots into a free-orbit
+view of the voxel (drag to orbit), tapping the voxel tweens the camera into
+the unchanged Pass 0 locked framing, and a plain "Back out" button tweens
+back to the free view. Rig, colours, matching and recede are untouched.
 
-Controls for evaluating it: tap flowers; `R` reloads with a new seed;
-`?seed=N` repeats a board; `?slowmo=N` runs the recede at 1/N speed. Tuning
-constants (durations, stagger, easing, anticipation swell) sit at the top of
+Controls for evaluating it: drag to orbit; tap the voxel to lock in; tap
+flowers; "Back out" button to leave; `R` reloads with a new seed;
+`?seed=N` repeats a board; `?slowmo=N` runs the recede and camera tweens at
+1/N speed. Camera-tween tuning (durations, easing, orbit start/clamp) sits
+at the top of `src/cameraLock.ts`; recede tuning at the top of
 `src/recede.ts`.
 
-**Next step is evaluation, not code:** does the selection/recede feel
-satisfying in isolation? Only after that call do Pass 0.1 (walkable field,
-lock transition, 6-face mirror) or the geometry-truncating recede fallback
+**Next step is evaluation, not code:** does snapping from the free view
+into the flat locked framing feel good or jarring? Only after that call do
+the walkable field, real movement, multiple voxels, or the 6-face mirror
 become worth building.

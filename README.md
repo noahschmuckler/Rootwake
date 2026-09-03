@@ -12,6 +12,7 @@ npm install
 npm run dev
 ```
 
-Pass 0 is playable: tap three same-colour flowers to make them recede into
-the trunk. `R` reshuffles (new seed), `?seed=N` repeats a board, `?slowmo=N`
-slows the recede for inspection.
+Playable: drag to orbit the voxel, tap it to lock the camera onto its face,
+tap three same-colour flowers to make them recede into the trunk, "Back
+out" to return to the orbit view. `R` reshuffles (new seed), `?seed=N`
+repeats a board, `?slowmo=N` slows the recede and camera tweens.
