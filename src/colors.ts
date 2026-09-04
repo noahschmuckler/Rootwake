@@ -1,25 +1,23 @@
-// Deterministic flower-color assignment for one voxel face.
+// Flower / gem colours for the plant voxel.
 //
-// DESIGN.md open question #2: with 5 tips and a 3-same-color match rule, a
-// naive per-tip random draw can produce a dead board (e.g. a 2/2/1 split over
-// three colors). So the assignment is seeded and *constructed* to contain a
-// clearable triple, rather than sampled and hoped for.
+// Pass 0.3 pivot (DESIGN.md): the board's five gem types ARE the five flower
+// identities, 1:1. So every voxel carries all five colours, one per flower,
+// in a seeded order. The Pass 0 "construct a guaranteed triple" assignment is
+// retired with the tap-a-flower interaction it served.
 
 export interface FlowerColor {
   name: string;
   hex: number;
 }
 
-// Three colors for now. Tuning: with only 5 tips, more colors than three
-// makes the two non-triple tips read as noise; fewer makes 4/5-of-a-kind
-// boards very common. Revisit when regrowth/economy exist.
+/** Five colours = five gem types = five flowers. Order is the gem type index. */
 export const PALETTE: readonly FlowerColor[] = [
   { name: 'rose', hex: 0xe8527f },
   { name: 'gold', hex: 0xf2b53a },
   { name: 'sky', hex: 0x5cb8f0 },
+  { name: 'leaf', hex: 0x7ed957 },
+  { name: 'violet', hex: 0xb387f5 },
 ];
-
-export const MATCH_SIZE = 3;
 
 /** Small seeded PRNG (mulberry32) so a given seed always yields the same board. */
 export function mulberry32(seed: number): () => number {
@@ -34,32 +32,18 @@ export function mulberry32(seed: number): () => number {
 }
 
 /**
- * Returns one palette index per tip. Guaranteed: exactly MATCH_SIZE tips
- * share one color (the clearable triple); the remaining tips are drawn from
- * the *other* colors.
- *
- * Design choice flagged, not settled: the leftovers are deliberately kept
- * off the triple's color so a Pass 0 board always has exactly one triple
- * (cleaner for a feel-test). Allowing 4- or 5-of-a-kind boards is a one-line
- * change here once there's a reason to want them (regrowth, bigger boards).
+ * One palette index per tip, every colour used exactly once, in a seeded
+ * order. Requires tipCount === PALETTE.length — the 1:1 mapping is the point.
  */
-export function assignColors(tipCount: number, seed: number): number[] {
-  if (tipCount < MATCH_SIZE) {
-    throw new Error(`assignColors: need at least ${MATCH_SIZE} tips, got ${tipCount}`);
+export function assignDistinctColors(tipCount: number, seed: number): number[] {
+  if (tipCount !== PALETTE.length) {
+    throw new Error(`assignDistinctColors: need exactly ${PALETTE.length} tips for a 1:1 colour map, got ${tipCount}`);
   }
   const rand = mulberry32(seed);
-  const tripleColor = Math.floor(rand() * PALETTE.length);
-
-  // Pick MATCH_SIZE distinct tips for the triple (partial Fisher–Yates).
-  const order = Array.from({ length: tipCount }, (_, i) => i);
-  for (let i = 0; i < MATCH_SIZE; i++) {
-    const j = i + Math.floor(rand() * (tipCount - i));
+  const order = PALETTE.map((_, i) => i);
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
     [order[i], order[j]] = [order[j], order[i]];
   }
-  const tripleTips = new Set(order.slice(0, MATCH_SIZE));
-
-  const otherColors = PALETTE.map((_, i) => i).filter((i) => i !== tripleColor);
-  return Array.from({ length: tipCount }, (_, tip) =>
-    tripleTips.has(tip) ? tripleColor : otherColors[Math.floor(rand() * otherColors.length)]
-  );
+  return order;
 }

@@ -1,14 +1,18 @@
-// Pass 0.2: one placed voxel instance — Pass 0's rig + puzzle state + recede,
-// plus placement, a collider, whole-voxel fade, the resolve beat, and the
-// tap handling that used to live in main.ts. One-shot puzzle state each.
+// Pass 0.2: one placed voxel instance — Pass 0's rig + recede, plus
+// placement, a collider, whole-voxel fade and the resolve beat.
+// Pass 0.3a: the tap-a-flower puzzle is retired. Each voxel now carries a
+// match-3 Board and five per-flower HP pools; a run feeds the flower its
+// colour targets, a full pool recedes that flower (recede.ts unchanged), and
+// five receded flowers resolve the voxel (resolve.ts unchanged).
 
 import * as THREE from 'three';
-import { assignColors, PALETTE } from './colors';
-import { buildRig, HALF, TIP_COUNT, type Branch, type Rig } from './rig';
-import { PuzzleState } from './puzzle';
+import { assignDistinctColors, PALETTE } from './colors';
+import { buildRig, HALF, TIP_COUNT, type Rig } from './rig';
 import { RecedeAnimator } from './recede';
 import { ResolveBeat } from './resolve';
 import { lockedPoseFor, type CameraPose } from './cameraLock';
+import { Board, BOARD_COLS, BOARD_ROWS, type Run } from './match3';
+import { byColor, type TargetingStrategy } from './targeting';
 import type { CircleCollider } from './player';
 
 // ---- Tuning constants ---------------------------------------------------------
@@ -16,9 +20,17 @@ import type { CircleCollider } from './player';
 export const VOXEL_COLLIDER_RADIUS = 1.2;
 /** Player-to-centre distance within which a tap locks on. Start pocket is ~2.45 from every ring voxel. */
 export const LOCK_REACH = 3.3;
-// Selection look, unchanged from Pass 0.
-const SELECTED_SCALE = 1.18;
-const SELECTED_EMISSIVE = 0.55;
+/**
+ * Gems a flower's pool must absorb before it recedes. Each flower is 20% of
+ * the voxel with its own independent pool (designer-confirmed). 9 = three
+ * plain matches; cascades and 4/5-runs get there faster.
+ */
+export const POOL_CAPACITY = 9;
+/** Flower glow at an empty / full pool, and the extra flash on a hit. */
+const GLOW_EMPTY = 0.05;
+const GLOW_FULL = 0.7;
+const HIT_FLASH = 0.9;
+const FLASH_DECAY_PER_S = 3.5;
 // -------------------------------------------------------------------------------
 
 export type VoxelStatus = 'growing' | 'resolving' | 'resolved';
@@ -26,13 +38,20 @@ export type VoxelStatus = 'growing' | 'resolving' | 'resolved';
 export class Voxel {
   readonly group = new THREE.Group();
   readonly rig: Rig;
-  readonly puzzle: PuzzleState;
+  /** Palette index (= gem type) per flower tip. */
   readonly colors: number[];
+  readonly board: Board;
+  /** Gems absorbed per flower. */
+  readonly pools: number[];
+  /** Swappable: colour → flower now; column buckets for combat later. */
+  targeting: TargetingStrategy = byColor;
   /** Invisible box over the whole cube: the tap-to-lock target in the free view. */
   readonly hitBox: THREE.Mesh;
   status: VoxelStatus = 'growing';
   onResolved: (voxel: Voxel) => void = () => {};
 
+  private readonly receded: boolean[];
+  private readonly flash: number[];
   private readonly animator = new RecedeAnimator();
   private beat: ResolveBeat | null = null;
   private lastNow = 0;
@@ -43,10 +62,14 @@ export class Voxel {
    * @param faceToward point the flower face (+Z of the rig) turns to look at
    */
   constructor(readonly index: number, position: THREE.Vector3, faceToward: THREE.Vector3, seed: number) {
-    this.colors = assignColors(TIP_COUNT, seed);
-    this.puzzle = new PuzzleState(this.colors);
+    this.colors = assignDistinctColors(TIP_COUNT, seed);
+    this.board = new Board(BOARD_ROWS, BOARD_COLS, seed ^ 0x51ed);
+    this.pools = this.colors.map(() => 0);
+    this.receded = this.colors.map(() => false);
+    this.flash = this.colors.map(() => 0);
     this.rig = buildRig(this.colors, seed ^ 0x9e37);
     this.baseOpacity = this.rig.materials.map((m) => m.opacity);
+    for (const b of this.rig.branches) b.petalMaterial.emissiveIntensity = GLOW_EMPTY;
 
     this.group.position.copy(position);
     this.group.lookAt(faceToward.x, position.y, faceToward.z);
@@ -88,51 +111,43 @@ export class Voxel {
     return Math.hypot(p.x - this.group.position.x, p.z - this.group.position.z);
   }
 
-  /** Current selection for the HUD. */
-  selection(): { count: number; colorName: string } | null {
-    const sel = this.puzzle.selected();
-    return sel.length ? { count: sel.length, colorName: PALETTE[this.colors[sel[0]]].name } : null;
+  get flowersLeft(): number {
+    return this.receded.filter((r) => !r).length;
   }
 
-  /** Tip index under a world-space ray, or null. Only live flowers count. */
-  pickTip(raycaster: THREE.Raycaster): number | null {
-    for (const h of raycaster.intersectObjects(this.rig.hitTargets, false)) {
-      const tip = h.object.userData.tipIndex;
-      if (typeof tip === 'number' && h.object.parent?.visible) return tip;
+  /** HUD line: one entry per flower, in tip order. */
+  poolText(): string {
+    return this.colors
+      .map((c, i) => `${PALETTE[c].name} ${this.receded[i] ? '✓' : `${this.pools[i]}/${POOL_CAPACITY}`}`)
+      .join('  ');
+  }
+
+  /** Which flower a run feeds, via the current strategy. Null if none (already receded, or unmapped). */
+  targetFor(run: Run): number | null {
+    const t = this.targeting.target(run, {
+      targetCount: this.colors.length,
+      boardCols: this.board.cols,
+      colorOfTarget: (i) => this.colors[i],
+    });
+    if (t === null || this.receded[t] || this.status !== 'growing') return null;
+    return t;
+  }
+
+  flowerWorldPosition(flower: number): THREE.Vector3 {
+    return this.rig.branches[flower].flower.getWorldPosition(new THREE.Vector3());
+  }
+
+  /** A shot landed: feed the flower's pool; recede it when full; resolve the voxel when all five are gone. */
+  feed(flower: number, amount: number, nowMs: number): void {
+    if (this.status !== 'growing' || this.receded[flower]) return;
+    this.pools[flower] = Math.min(POOL_CAPACITY, this.pools[flower] + amount);
+    this.flash[flower] = HIT_FLASH;
+    if (this.pools[flower] >= POOL_CAPACITY) {
+      this.receded[flower] = true;
+      this.animator.start([this.rig.branches[flower]], nowMs, () => {
+        if (this.flowersLeft === 0 && !this.animator.isBusy) this.beginResolve(this.lastNow);
+      });
     }
-    return null;
-  }
-
-  /** Toggle-select a flower (locked view). Pass 0 behaviour, unchanged. */
-  tap(tip: number, nowMs: number): void {
-    if (this.status !== 'growing') return;
-    const result = this.puzzle.toggle(tip);
-    switch (result.kind) {
-      case 'noop':
-        break;
-      case 'selected':
-        for (const t of result.deselected) this.setSelectedLook(this.rig.branches[t], false);
-        this.setSelectedLook(this.rig.branches[tip], true);
-        break;
-      case 'deselected':
-        this.setSelectedLook(this.rig.branches[tip], false);
-        break;
-      case 'match': {
-        this.setSelectedLook(this.rig.branches[tip], true);
-        const group = result.tips.map((t) => this.rig.branches[t]);
-        this.animator.start(group, nowMs, (b) => {
-          this.puzzle.markCleared(b.index);
-          // Pass 0.2: once nothing clearable remains, the whole voxel goes.
-          if (!this.animator.isBusy && this.puzzle.isDead()) this.beginResolve(this.lastNow);
-        });
-        break;
-      }
-    }
-  }
-
-  private setSelectedLook(branch: Branch, on: boolean): void {
-    branch.petalMaterial.emissiveIntensity = on ? SELECTED_EMISSIVE : 0;
-    branch.flower.scale.setScalar(on ? SELECTED_SCALE : 1);
   }
 
   private beginResolve(nowMs: number): void {
@@ -152,7 +167,16 @@ export class Voxel {
   }
 
   update(nowMs: number): void {
+    const dt = Math.max(0, (nowMs - this.lastNow) / 1000);
     this.lastNow = nowMs;
+    // Flowers glow brighter as their pool fills, and flash on each hit.
+    for (let i = 0; i < this.colors.length; i++) {
+      this.flash[i] = Math.max(0, this.flash[i] - FLASH_DECAY_PER_S * dt);
+      if (!this.receded[i]) {
+        const fill = this.pools[i] / POOL_CAPACITY;
+        this.rig.branches[i].petalMaterial.emissiveIntensity = THREE.MathUtils.lerp(GLOW_EMPTY, GLOW_FULL, fill) + this.flash[i];
+      }
+    }
     this.animator.update(nowMs);
     if (this.beat) {
       this.beat.update(nowMs);

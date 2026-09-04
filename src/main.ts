@@ -4,14 +4,20 @@
 // Pass 0.1a: lock/unlock camera transition into that face and back.
 // Pass 0.2: the confinement→vista test. A tight thicket of 8 voxels around a
 //           dark start pocket, first-person touch movement, whole-voxel
-//           resolve once a voxel's triple is cleared, one bright way out.
-// Still out of scope: the 6-face mirror, a real field, other characters, art.
+//           resolve once a voxel is cleared, one bright way out.
+// Pass 0.3a: the match-3 pivot. A real board of 3D gems in the locked view;
+//           runs fire shots at the flower of their colour, fill its pool,
+//           recede it; five receded flowers resolve the voxel.
+// Still out of scope: combat, specials, the 6-face mirror, a real field, art.
 
 import * as THREE from 'three';
 import { CameraRig, type CameraMode } from './cameraLock';
 import { Player } from './player';
 import { Voxel, LOCK_REACH } from './voxel';
 import { buildWorld, GROUND_Y } from './world';
+import { BoardView } from './board3d';
+import { Projectiles } from './projectiles';
+import { PALETTE } from './colors';
 
 // ---- URL params -------------------------------------------------------------
 // `?seed=N` for a repeatable set of boards (R reloads with a fresh one).
@@ -30,6 +36,10 @@ document.body.appendChild(renderer.domElement);
 
 const world = buildWorld(scene);
 const cameraRig = new CameraRig(camera);
+// The board rides on the camera so "ahead and below, tilted" is a constant.
+scene.add(camera);
+const boardView = new BoardView(camera);
+const projectiles = new Projectiles(scene);
 const player = new Player(
   renderer.domElement,
   document.getElementById('joy')!,
@@ -108,15 +118,36 @@ const touch = window.matchMedia('(pointer: coarse)').matches;
 const HINTS: Record<CameraMode, string> = {
   free: `${touch ? 'Left thumb to walk' : 'WASD to walk'}, drag to look. Walk up to the growth and tap it.`,
   locking: '',
-  locked: 'Tap three flowers of the same colour.',
+  locked: 'Tap a gem, then a neighbour, to swap. Matches feed the flower of their colour.',
   unlocking: '',
 };
 function applyMode(mode: CameraMode): void {
   hint.textContent = HINTS[mode];
   player.enabled = mode === 'free';
-  if (mode === 'free') lockedVoxel = null;
+  if (mode === 'locked' && lockedVoxel) {
+    boardView.bind(lockedVoxel.board);
+    boardView.show(animClock);
+  }
+  if (mode === 'unlocking') boardView.hide();
+  if (mode === 'free') {
+    boardView.unbind();
+    lockedVoxel = null;
+  }
   updateHud();
 }
+
+// A run cleared on the board: shoot at the flower it targets; the hit feeds the pool.
+boardView.onRun = (run, origin) => {
+  const voxel = lockedVoxel;
+  if (!voxel) return;
+  const target = voxel.targetFor(run);
+  if (target === null) return;
+  const amount = run.cells.length;
+  projectiles.fire(origin, voxel.flowerWorldPosition(target), PALETTE[run.type].hex, animClock, () => {
+    voxel.feed(target, amount, animClock);
+    updateHud();
+  });
+};
 cameraRig.onModeChange = applyMode;
 backButton.addEventListener('click', () => {
   if (cameraRig.mode === 'locked') cameraRig.unlock(animClock, playerPose());
@@ -131,9 +162,8 @@ function updateHud(): void {
   const resolved = voxels.filter((v) => v.status === 'resolved').length;
   const parts = [`seed ${seed}`, `cleared ${resolved}/${voxels.length}`];
   if (slowmo > 1) parts.push(`slowmo ×${slowmo}`);
-  if (lockedVoxel && cameraRig.mode === 'locked') {
-    const sel = lockedVoxel.selection();
-    parts.push(`selected: ${sel ? `${sel.count}/3 ${sel.colorName}` : 'none'}`);
+  if (lockedVoxel && cameraRig.mode === 'locked' && lockedVoxel.status === 'growing') {
+    parts.push(lockedVoxel.poolText());
   }
   parts.push('R: new arrangement');
   hud.textContent = parts.join(' · ');
@@ -165,11 +195,7 @@ player.onTap = (x, y) => {
     lockedVoxel = voxel;
     cameraRig.lock(animClock, voxel.lockPose());
   } else if (cameraRig.mode === 'locked' && lockedVoxel) {
-    const tip = lockedVoxel.pickTip(raycaster);
-    if (tip !== null) {
-      lockedVoxel.tap(tip, animClock);
-      updateHud();
-    }
+    if (boardView.tap(raycaster)) updateHud();
   }
 };
 
@@ -185,6 +211,7 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  boardView.layout();
 });
 
 // ---- Loop -------------------------------------------------------------------
@@ -200,7 +227,7 @@ function animate(now: number): void {
   requestAnimationFrame(animate);
 
 // Debug handle for headless/console poking. Not part of the design surface.
-(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, player, voxels, world, cameraRig };
+(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, player, voxels, world, cameraRig, boardView };
   const dt = Math.min(0.1, (now - lastFrame) / 1000);
   animClock += (dt * 1000) / slowmo;
   lastFrame = now;
@@ -234,9 +261,14 @@ function animate(now: number): void {
   }
   for (const v of voxels) v.update(animClock);
 
+  // The board's job is done once its voxel starts resolving: get out of the way of the beat.
+  if (lockedVoxel && lockedVoxel.status !== 'growing') boardView.hide();
+  boardView.update(animClock);
+  projectiles.update(animClock);
+
   renderer.render(scene, camera);
 }
 requestAnimationFrame(animate);
 
 // Debug handle for headless/console poking. Not part of the design surface.
-(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, player, voxels, world, cameraRig };
+(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, player, voxels, world, cameraRig, boardView };
