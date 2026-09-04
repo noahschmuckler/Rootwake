@@ -72,7 +72,7 @@ export class Player {
 
   private readonly pointers = new Map<number, TrackedPointer>();
   private colliders: readonly CircleCollider[] = [];
-  private extraCollide: ((p: THREE.Vector3) => void) | undefined;
+  private isWalkable: ((p: THREE.Vector3) => boolean) | undefined;
 
   // Waypoint fan.
   private readonly markers = new THREE.Group();
@@ -139,12 +139,13 @@ export class Player {
   }
 
   /**
-   * Per frame. `colliders`/`extraCollide` are remembered so the waypoint fan
-   * can be filtered with the same walkability the move itself obeys.
+   * Per frame. `colliders` and `isWalkable` are remembered so the waypoint
+   * fan is filtered by the same rules the move itself obeys. Pass 0.5:
+   * `isWalkable` is how the cliff edge refuses a step — no fall state.
    */
-  update(nowMs: number, colliders: readonly CircleCollider[], extraCollide?: (p: THREE.Vector3) => void): void {
+  update(nowMs: number, colliders: readonly CircleCollider[], isWalkable?: (p: THREE.Vector3) => boolean): void {
     this.colliders = colliders;
-    this.extraCollide = extraCollide;
+    this.isWalkable = isWalkable;
 
     if (this.move) {
       const m = this.move;
@@ -163,11 +164,7 @@ export class Player {
     for (const c of this.colliders) {
       if (Math.hypot(p.x - c.x, p.z - c.z) < c.radius + PLAYER_RADIUS) return false;
     }
-    if (this.extraCollide) {
-      const probe = p.clone();
-      this.extraCollide(probe);
-      if (probe.distanceToSquared(p) > 1e-6) return false;
-    }
+    if (this.isWalkable && !this.isWalkable(p)) return false;
     return true;
   }
 

@@ -12,6 +12,8 @@
 // Pass 0.4:  the trees do the confining (no hedge/canopy), rock ground, and
 //           tillable grass patches — a second interactable with one shared
 //           pool, worked from a look-down lock.
+// Pass 0.5:  the plateau ends at a cliff. The edge refuses steps; below and
+//           beyond, a landscape you can only look at.
 // Still out of scope: combat, specials, the 6-face mirror, a real field, art.
 
 import * as THREE from 'three';
@@ -20,7 +22,7 @@ import { Player } from './player';
 import { Voxel } from './voxel';
 import { Patch } from './patch';
 import type { Interactable } from './interactable';
-import { buildWorld, GROUND_Y } from './world';
+import { buildWorld, EDGE_MARGIN, GROUND_Y } from './world';
 import { BoardView } from './board3d';
 import { Projectiles } from './projectiles';
 import { PALETTE } from './colors';
@@ -34,13 +36,14 @@ const slowmo = Math.max(1, Number.parseFloat(params.get('slowmo') ?? '') || 1);
 
 // ---- Scene / camera / renderer ---------------------------------------------
 const scene = new THREE.Scene();
-const camera = new THREE.PerspectiveCamera(40, window.innerWidth / window.innerHeight, 0.05, 300);
+const BASE_FOV = 40;
+const camera = new THREE.PerspectiveCamera(BASE_FOV, window.innerWidth / window.innerHeight, 0.05, 4000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 document.body.appendChild(renderer.domElement);
 
-buildWorld(scene);
+const world = buildWorld(scene);
 const cameraRig = new CameraRig(camera);
 // The board rides on the camera so "ahead and below, tilted" is a constant.
 scene.add(camera);
@@ -160,6 +163,7 @@ const HINTS: Record<CameraMode, string> = {
 function applyMode(mode: CameraMode): void {
   hint.textContent = mode === 'locked' && locked ? locked.hintLocked : HINTS[mode];
   player.enabled = mode === 'free';
+  if (mode !== 'free') setFov(BASE_FOV); // the edge widen is a free-view thing; the board lays out at base
   if (mode === 'locked' && locked) {
     boardView.bind(locked.board);
     boardView.show(animClock);
@@ -205,6 +209,23 @@ function updateHud(): void {
   parts.push('R: new arrangement');
   hud.textContent = parts.join(' · ');
   backButton.hidden = !(cameraRig.mode === 'locked' && locked?.status === 'growing');
+}
+
+// ---- Vertigo at the lip (Pass 0.5, nice-to-have) ----------------------------
+// Within EDGE_VERTIGO_RANGE of the cliff line the FOV widens a little and the
+// eye dips, ramping to full at EDGE_MARGIN. Calibration, not mechanic.
+const EDGE_VERTIGO_RANGE = 1.6;
+const EDGE_FOV_WIDEN = 9;
+const EDGE_EYE_DIP = 0.08;
+function setFov(fov: number): void {
+  if (Math.abs(camera.fov - fov) < 1e-3) return;
+  camera.fov = fov;
+  camera.updateProjectionMatrix();
+  boardView.layout();
+}
+function edgeCloseness(): number {
+  const d = world.distanceToEdge(player.position) - EDGE_MARGIN;
+  return THREE.MathUtils.clamp(1 - d / EDGE_VERTIGO_RANGE, 0, 1);
 }
 
 // ---- Input ------------------------------------------------------------------
@@ -264,15 +285,18 @@ function animate(now: number): void {
   requestAnimationFrame(animate);
 
 // Debug handle for headless/console poking. Not part of the design surface.
-(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, cameraRig, boardView };
+(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, world, cameraRig, boardView };
   const dt = Math.min(0.1, (now - lastFrame) / 1000);
   animClock += (dt * 1000) / slowmo;
   lastFrame = now;
 
   if (cameraRig.mode === 'free') {
     const colliders = voxels.flatMap((v) => v.collider() ?? []);
-    player.update(now, colliders);
+    player.update(now, colliders, world.isWalkable);
     player.applyCamera(camera);
+    const k = edgeCloseness();
+    setFov(BASE_FOV + EDGE_FOV_WIDEN * k);
+    camera.position.y -= EDGE_EYE_DIP * k;
   }
   cameraRig.update(animClock);
 
@@ -308,4 +332,4 @@ function animate(now: number): void {
 requestAnimationFrame(animate);
 
 // Debug handle for headless/console poking. Not part of the design surface.
-(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, cameraRig, boardView };
+(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, world, cameraRig, boardView };
