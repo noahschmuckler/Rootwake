@@ -13,7 +13,9 @@ npm run dev
 ```
 
 Playable: you wake in a dark pocket inside a thicket of eight voxels.
-Left thumb (or WASD) to walk, drag to look, tap a voxel to lock the camera
-onto its face, tap three same-colour flowers and the whole voxel sinks away.
+Hold on the left of the screen to pick a spot and release to hop there, drag
+to look, tap a voxel to lock the camera onto its face, then play the match-3
+board: tap a gem and a neighbour to swap. Matches shoot the flower of their
+colour; a filled flower recedes; five receded flowers sink the whole voxel.
 Clear toward the light. `R` reshuffles (new seed), `?seed=N` repeats a
 layout, `?slowmo=N` slows the animations.

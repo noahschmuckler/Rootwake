@@ -21,33 +21,41 @@ don't add structure the prototype doesn't need yet.
 
 ## Status
 
-**Pass 0 and 0.1a judged satisfying on phone; Pass 0.2 (the confinement→
-vista thicket) built 2026-09-04, awaiting evaluation.** `src/` holds:
+**Passes 0, 0.1a and 0.2 judged satisfying on phone; Pass 0.3 (match-3
+board in 3D + waypoint movement) built 2026-09-04 as two commits, awaiting
+evaluation.** `src/` holds:
 
-- `colors.ts` — seeded palette assignment that constructs a guaranteed
-  same-colour triple.
+- `colors.ts` — five colours = five gem types = five flowers; seeded
+  permutation per voxel.
+- `match3.ts` — pure match-3 core (deal, swap, runs, gravity, cascade,
+  re-deal). No Three.js; testable in node.
+- `targeting.ts` — swappable run→target strategy (`byColor` in use,
+  `byColumn` sketched for combat).
+- `board3d.ts` — the board as 3D gem meshes on the camera; animates the
+  steps the core returns. Tuning constants at the top.
+- `projectiles.ts` — the shot from a cleared run to its flower; the hit
+  feeds the pool.
 - `rig.ts` — hand-placed trunk/branch curves/flowers for the +Z face, a
   seeded dark foliage mass so the cube blocks sightlines, invisible hit
   spheres, per-instance materials.
-- `puzzle.ts` — renderer-agnostic selection/match state (one model; the
-  later 6-face mirror should be views onto this, not copies).
 - `recede.ts` — the cheap flower recede; tuning constants at the top.
 - `resolve.ts` — the whole-voxel release beat (stragglers, twist-and-sink,
   ring, sparks, flash); tuning constants at the top.
-- `voxel.ts` — one placed voxel instance: rig + puzzle + recede + collider
-  + fade + resolve, and the tap handling.
+- `voxel.ts` — one placed voxel instance: rig + board + five HP pools +
+  recede + collider + fade + resolve.
 - `cameraLock.ts` — pose-to-pose lock/unlock tween; `lockedPoseFor()` is
   the Pass 0 framing for any voxel.
-- `player.ts` — first-person touch/keyboard movement scaffolding.
+- `player.ts` — first-person look plus waypoint-fan movement (hold, pick,
+  release, tween).
 - `world.ts` — dark pocket, hedge wall, canopy, one bright opening, plain,
   hills, fog.
-- `main.ts` — thicket layout, mode-aware input, locked-view fade rule,
-  auto back-out, HUD, `?seed=` / `?slowmo=` params, `window.__rootwake`
-  debug handle.
+- `main.ts` — thicket layout, mode-aware input, board bind/show/hide,
+  shots → pools, locked-view fade rule, auto back-out, HUD, `?seed=` /
+  `?slowmo=` params, `window.__rootwake` debug handle.
 
-Do **not** start the 6-face mirror, a real field, other characters or art
-until the designer has judged whether the thicket delivers the
-confinement→vista feeling — see DESIGN.md.
+Do **not** start combat, specials, the 6-face mirror, a real field, other
+characters or art until the designer has judged 0.3a and 0.3b separately —
+see DESIGN.md.
 
 ## Headless checking
 

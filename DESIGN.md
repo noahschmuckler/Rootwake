@@ -289,13 +289,40 @@ now), match-3 specials/combos, and the other six characters.
 
 Repo scaffolded 2026-09-03. Pass 0 (matching + recede) and Pass 0.1a (orbit
 → locked puzzle → back out) both built the same day and landed well on phone
-playtests. **Pass 0.2 — the confinement→vista thicket test — built and
-confirmed 2026-09-04**: played great on a real phone playtest, the
-confinement-to-release arc read as satisfying even with the deliberately
-trivial 1-of-5-flowers puzzle. All three original feel-test questions (does
-matching+recede feel good, does the lock/unlock transition feel good, does
-the confinement→vista payoff land) are now answered yes — see "The pivot"
-above for what's queued next (Pass 0.3).
+playtests. Pass 0.2 (the confinement→vista thicket) built and confirmed
+2026-09-04 on a real phone playtest. **Pass 0.3 — the match-3-in-3D pivot
+(0.3a) and waypoint movement (0.3b) — built 2026-09-04 as two separate
+commits, awaiting evaluation.**
+
+What 0.3 adds:
+- **0.3a, the board.** A minimal match-3 core (`match3.ts`: seeded deal,
+  adjacent swap that reverts without a run, run detection, gravity,
+  cascade, re-deal when stuck; no specials/combos/tools) rendered as 3D gem
+  meshes (`board3d.ts`) parented to the camera — ahead, below centre,
+  tilted, fit to the viewport by width and height, semi-transparent, no
+  backing panel. Tap a gem then a neighbour to swap. Each run fires a shot
+  (`projectiles.ts`) at the flower of its colour; the hit feeds that
+  flower's own pool (`POOL_CAPACITY` 9 gems, five independent pools). A
+  full pool recedes its flower with the unchanged `recede.ts`; five receded
+  flowers start the unchanged `resolve.ts` beat. Colour→flower is a
+  swappable strategy (`targeting.ts`: `byColor` now, `byColumn` sketched
+  for combat). Tap-a-flower and `puzzle.ts` are retired.
+- **0.3b, waypoint movement.** Hold on the left of the screen: a fan of
+  ground-ring markers appears ahead (three distances, five angles scaled
+  to the camera's horizontal FOV), filtered by the existing collision plus
+  a straight-path check; slide to one, release, and the player tweens
+  there. Look-drag unchanged. The joystick is gone.
+
+Controls: hold-left to pick a spot and release to hop, drag to look, tap a
+voxel within reach to lock, tap gem + neighbour to swap, "Back out" button,
+`R` new seed, `?seed=N`, `?slowmo=N` (recede, resolve, shots, camera
+tweens). Tuning constants sit at the top of each module.
+
+**Next step is evaluation, not code, and there are two separable
+questions:** does the 3D board feel good to play in the locked view (0.3a),
+and does hopping between waypoints feel good in the thicket (0.3b)? Judge
+them one at a time. Still out of scope: combat and enemy targeting,
+abilities, specials/combos, the 6-face mirror, other characters, art.
 
 What 0.2 adds:
 - **Whole-voxel resolve.** A 5-flower one-shot voxel could never fully
