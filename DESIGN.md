@@ -363,12 +363,26 @@ regrowth, more than one tree-voxel-equivalent species, art fidelity beyond
 
 ## Status
 
-Repo scaffolded 2026-09-03. Pass 0 (matching + recede) and Pass 0.1a (orbit
-→ locked puzzle → back out) both built the same day and landed well on phone
-playtests. Pass 0.2 (the confinement→vista thicket) built and confirmed
-2026-09-04 on a real phone playtest. **Pass 0.3 — the match-3-in-3D pivot
-(0.3a) and waypoint movement (0.3b) — built 2026-09-04 as two separate
-commits, awaiting evaluation.**
+Repo scaffolded 2026-09-03. Passes 0, 0.1a, 0.2 and 0.3 (both halves) all
+built and confirmed on phone playtests. **Pass 0.4 — the tree-density
+enclosure (0.4a) and ground tilling (0.4b) — built 2026-09-04 as two
+separate commits, awaiting evaluation.**
+
+What 0.4 adds:
+- **0.4a, the enclosure.** Hedge wall and canopy are gone. 32 voxels on a
+  hex lattice (spacing 2.45) three rings deep around the start, faces toward
+  the start, so every direction is about three voxels thick before open
+  ground; a 70° sector toward +X is cleared in rings 2–3 with the staggered
+  pair standing in it as before. Ground is grey coarse rock (displaced,
+  flat-shaded). Rig geometry is merged per part so the count stays cheap on
+  a phone.
+- **0.4b, tilling.** Nine grass patches at grid-like positions (one under
+  your feet, one in the corridor, seven on the open rock). Tap one within
+  reach: the camera locks looking down (`lookDownPoseFor`), the board sits
+  over it, every match feeds one shared pool (`single` strategy, capacity
+  12). The look steps through four authored stages at thresholds — full
+  grass, patchy, sparse with clods, brown clods. Tilled patches keep their
+  clods, refuse taps, never collide, never resolve. No payout.
 
 What 0.3 adds:
 - **0.3a, the board.** A minimal match-3 core (`match3.ts`: seeded deal,

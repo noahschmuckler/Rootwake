@@ -21,41 +21,43 @@ don't add structure the prototype doesn't need yet.
 
 ## Status
 
-**Passes 0, 0.1a and 0.2 judged satisfying on phone; Pass 0.3 (match-3
-board in 3D + waypoint movement) built 2026-09-04 as two commits, awaiting
+**Passes 0 through 0.3 judged satisfying on phone; Pass 0.4 (tree-density
+enclosure + ground tilling) built 2026-09-04 as two commits, awaiting
 evaluation.** `src/` holds:
 
 - `colors.ts` — five colours = five gem types = five flowers; seeded
-  permutation per voxel.
+  permutation per voxel; the shared PRNG.
 - `match3.ts` — pure match-3 core (deal, swap, runs, gravity, cascade,
   re-deal). No Three.js; testable in node.
-- `targeting.ts` — swappable run→target strategy (`byColor` in use,
-  `byColumn` sketched for combat).
+- `targeting.ts` — swappable run→target strategy: `byColor` (voxels),
+  `single` (patches), `byColumn` (sketched for combat).
 - `board3d.ts` — the board as 3D gem meshes on the camera; animates the
   steps the core returns. Tuning constants at the top.
-- `projectiles.ts` — the shot from a cleared run to its flower; the hit
+- `projectiles.ts` — the shot from a cleared run to its target; the hit
   feeds the pool.
+- `interactable.ts` — what main.ts needs from anything it can lock onto
+  and feed; implemented by `Voxel` and `Patch`.
 - `rig.ts` — hand-placed trunk/branch curves/flowers for the +Z face, a
-  seeded dark foliage mass so the cube blocks sightlines, invisible hit
-  spheres, per-instance materials.
+  seeded dark foliage mass, invisible hit spheres, per-instance materials,
+  merged geometry per part.
 - `recede.ts` — the cheap flower recede; tuning constants at the top.
-- `resolve.ts` — the whole-voxel release beat (stragglers, twist-and-sink,
-  ring, sparks, flash); tuning constants at the top.
-- `voxel.ts` — one placed voxel instance: rig + board + five HP pools +
-  recede + collider + fade + resolve.
+- `resolve.ts` — the whole-voxel release beat; tuning constants at the top.
+- `voxel.ts` — one placed voxel: rig + board + five HP pools + recede +
+  collider + fade + resolve.
+- `patch.ts` — one tillable ground patch: board + one shared pool + four
+  authored grass→clods stages. Never collides, never resolves.
 - `cameraLock.ts` — pose-to-pose lock/unlock tween; `lockedPoseFor()` is
-  the Pass 0 framing for any voxel.
-- `player.ts` — first-person look plus waypoint-fan movement (hold, pick,
-  release, tween).
-- `world.ts` — dark pocket, hedge wall, canopy, one bright opening, plain,
-  hills, fog.
-- `main.ts` — thicket layout, mode-aware input, board bind/show/hide,
-  shots → pools, locked-view fade rule, auto back-out, HUD, `?seed=` /
-  `?slowmo=` params, `window.__rootwake` debug handle.
+  the Pass 0 face framing, `lookDownPoseFor()` the patch framing.
+- `player.ts` — first-person look plus waypoint-fan movement.
+- `world.ts` — rock ground (near displaced field + far plain), haze, sun,
+  pale hills. No enclosure geometry: the trees do that now.
+- `main.ts` — hex-lattice thicket, patch placement, mode-aware input over
+  all interactables, board bind/show/hide, shots → pools, locked-view fade
+  rule, auto back-out, HUD, `?seed=` / `?slowmo=`, `window.__rootwake`.
 
-Do **not** start combat, specials, the 6-face mirror, a real field, other
-characters or art until the designer has judged 0.3a and 0.3b separately —
-see DESIGN.md.
+Do **not** start payout/economy, regrowth, combat, specials, the 6-face
+mirror, more species or art until the designer has judged 0.4a and 0.4b
+separately — see DESIGN.md.
 
 ## Headless checking
 

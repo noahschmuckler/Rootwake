@@ -12,10 +12,11 @@ npm install
 npm run dev
 ```
 
-Playable: you wake in a dark pocket inside a thicket of eight voxels.
+Playable: you wake on a grass patch in a pocket inside a dense thicket.
 Hold on the left of the screen to pick a spot and release to hop there, drag
-to look, tap a voxel to lock the camera onto its face, then play the match-3
-board: tap a gem and a neighbour to swap. Matches shoot the flower of their
-colour; a filled flower recedes; five receded flowers sink the whole voxel.
-Clear toward the light. `R` reshuffles (new seed), `?seed=N` repeats a
-layout, `?slowmo=N` slows the animations.
+to look, tap a tree to lock onto its face or tap grass to lock looking down,
+then play the match-3 board: tap a gem and a neighbour to swap. On a tree,
+matches shoot the flower of their colour and a filled flower recedes; five
+receded flowers sink the whole tree. On grass, every match tills the patch
+down to clods. Clear toward the light. `R` reshuffles (new seed), `?seed=N`
+repeats a layout, `?slowmo=N` slows the animations.
