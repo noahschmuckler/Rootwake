@@ -171,20 +171,42 @@ clearing mechanic itself.
 
 ## Status
 
-Repo scaffolded 2026-09-03. **Pass 0 built and judged satisfying** (same
-day). **Pass 0.1a built** (same day): the app now boots into a free-orbit
-view of the voxel (drag to orbit), tapping the voxel tweens the camera into
-the unchanged Pass 0 locked framing, and a plain "Back out" button tweens
-back to the free view. Rig, colours, matching and recede are untouched.
+Repo scaffolded 2026-09-03. Pass 0 (matching + recede) and Pass 0.1a (orbit
+→ locked puzzle → back out) both built the same day and landed well on phone
+playtests. **Pass 0.2 — the confinement→vista thicket test — built
+2026-09-04, awaiting evaluation.**
 
-Controls for evaluating it: drag to orbit; tap the voxel to lock in; tap
-flowers; "Back out" button to leave; `R` reloads with a new seed;
-`?seed=N` repeats a board; `?slowmo=N` runs the recede and camera tweens at
-1/N speed. Camera-tween tuning (durations, easing, orbit start/clamp) sits
-at the top of `src/cameraLock.ts`; recede tuning at the top of
-`src/recede.ts`.
+What 0.2 adds:
+- **Whole-voxel resolve.** A 5-flower one-shot voxel could never fully
+  clear (two flowers always stranded, trunk stays an obstacle). Now, once
+  the one triple has receded, the whole voxel resolves: a short hold, the
+  stragglers recede, then the entire growth twists and sinks into the
+  ground behind a ground ring, rising sparks and a light flash. Resolved
+  voxels stop blocking sight and movement.
+- **First-person touch movement** (left-thumb joystick, drag to look, WASD
+  on desktop). First person rather than the 0.1a orbit because the thicket
+  is tight enough that a third-person camera would live inside neighbours.
+- **The thicket.** Eight voxels: a hex ring of six around a dark start
+  pocket, faces turned inward, plus two staggered behind the +X ring voxel
+  with a 0.4-unit slit between them. Dense dark foliage inside each cube so
+  it actually blocks sightlines. A dark hedge wall and canopy enclose the
+  pocket except for a ~45° opening at +X onto a bright hazy plain with pale
+  hills. Clearing the +X ring voxel shows the outer pair and a slit of
+  light; clearing one of those opens the way out.
+- Locking on requires being within reach. In the locked view the
+  neighbours the camera is inside or looking past fade out; what is behind
+  the face stays, so the vista is not given away by the puzzle view. After
+  a locked voxel resolves the camera holds ~450ms on the empty spot, then
+  backs out on its own.
 
-**Next step is evaluation, not code:** does snapping from the free view
-into the flat locked framing feel good or jarring? Only after that call do
-the walkable field, real movement, multiple voxels, or the 6-face mirror
-become worth building.
+Controls: left thumb / WASD to walk, drag to look, tap a voxel within reach
+to lock, tap flowers, "Back out" button, `R` new seed, `?seed=N`,
+`?slowmo=N` (recede, resolve and camera tweens). Tuning constants sit at the
+top of `resolve.ts`, `player.ts`, `world.ts`, `cameraLock.ts`, `recede.ts`
+and the layout block in `main.ts`.
+
+**Next step is evaluation, not code — and the question is emotional:** does
+resolving voxels and walking into the opened gap feel like escaping
+confinement into a vista, not merely "clearing opened a path"? Still out of
+scope until that call: the 6-face mirror, a real field, other characters,
+environment art.

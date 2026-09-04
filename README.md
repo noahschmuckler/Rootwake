@@ -12,7 +12,8 @@ npm install
 npm run dev
 ```
 
-Playable: drag to orbit the voxel, tap it to lock the camera onto its face,
-tap three same-colour flowers to make them recede into the trunk, "Back
-out" to return to the orbit view. `R` reshuffles (new seed), `?seed=N`
-repeats a board, `?slowmo=N` slows the recede and camera tweens.
+Playable: you wake in a dark pocket inside a thicket of eight voxels.
+Left thumb (or WASD) to walk, drag to look, tap a voxel to lock the camera
+onto its face, tap three same-colour flowers and the whole voxel sinks away.
+Clear toward the light. `R` reshuffles (new seed), `?seed=N` repeats a
+layout, `?slowmo=N` slows the animations.

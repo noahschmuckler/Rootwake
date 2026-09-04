@@ -21,25 +21,40 @@ don't add structure the prototype doesn't need yet.
 
 ## Status
 
-**Pass 0 built and judged satisfying; Pass 0.1a (camera lock/unlock) built
-2026-09-03, awaiting feel evaluation.** `src/` holds:
+**Pass 0 and 0.1a judged satisfying on phone; Pass 0.2 (the confinement→
+vista thicket) built 2026-09-04, awaiting evaluation.** `src/` holds:
 
 - `colors.ts` — seeded palette assignment that constructs a guaranteed
   same-colour triple.
-- `rig.ts` — hand-placed trunk/branch curves/flowers for the +Z face, plus
-  invisible hit spheres for tapping.
+- `rig.ts` — hand-placed trunk/branch curves/flowers for the +Z face, a
+  seeded dark foliage mass so the cube blocks sightlines, invisible hit
+  spheres, per-instance materials.
 - `puzzle.ts` — renderer-agnostic selection/match state (one model; the
   later 6-face mirror should be views onto this, not copies).
-- `recede.ts` — the cheap recede (flower slides back along its curve and
-  scales out; tube untouched) with the tuning constants at the top.
-- `cameraLock.ts` — free-orbit view, tween into the Pass 0 locked framing,
-  tween back out; tuning constants at the top.
-- `main.ts` — mode-aware input (tap-to-lock in free view, tap-to-select in
-  locked view), HUD + "Back out" button, `?seed=` / `?slowmo=` params.
+- `recede.ts` — the cheap flower recede; tuning constants at the top.
+- `resolve.ts` — the whole-voxel release beat (stragglers, twist-and-sink,
+  ring, sparks, flash); tuning constants at the top.
+- `voxel.ts` — one placed voxel instance: rig + puzzle + recede + collider
+  + fade + resolve, and the tap handling.
+- `cameraLock.ts` — pose-to-pose lock/unlock tween; `lockedPoseFor()` is
+  the Pass 0 framing for any voxel.
+- `player.ts` — first-person touch/keyboard movement scaffolding.
+- `world.ts` — dark pocket, hedge wall, canopy, one bright opening, plain,
+  hills, fog.
+- `main.ts` — thicket layout, mode-aware input, locked-view fade rule,
+  auto back-out, HUD, `?seed=` / `?slowmo=` params, `window.__rootwake`
+  debug handle.
 
-Do **not** start the walkable field, player movement, multiple voxels, or
-the 6-face mirror until the designer has judged whether the lock/unlock
-transition feels right — see DESIGN.md.
+Do **not** start the 6-face mirror, a real field, other characters or art
+until the designer has judged whether the thicket delivers the
+confinement→vista feeling — see DESIGN.md.
+
+## Headless checking
+
+The app can be driven under Playwright with the pre-installed Chromium
+(`--use-angle=swiftshader`). `npm run build && npx vite preview --port 4173`
+then screenshot; `?slowmo=N` slows animations for frame capture, and
+`window.__rootwake` exposes scene/camera/player/voxels for poking.
 
 ## Conventions carried over from DiggyDwarves (the sibling project)
 
