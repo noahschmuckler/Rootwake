@@ -23,6 +23,28 @@ export function lockedPoseFor(center: THREE.Vector3, normal: THREE.Vector3): Cam
   };
 }
 
+// ---- The look-down framing — Pass 0.4b, for ground patches --------------------
+/** Camera height above the patch and how far it stands back toward the viewer. */
+export const LOOKDOWN_HEIGHT = 2.4;
+export const LOOKDOWN_BACK = 1.1;
+
+/**
+ * A locked framing that looks down at a point on the ground from the
+ * viewer's side, so the board (ahead-and-below in camera space) sits over the
+ * patch. When the viewer is standing on the point, "their side" is behind
+ * where they are facing.
+ */
+export function lookDownPoseFor(center: THREE.Vector3, viewerPosition: THREE.Vector3, viewerForward: THREE.Vector3): CameraPose {
+  const back = new THREE.Vector3(viewerPosition.x - center.x, 0, viewerPosition.z - center.z);
+  if (back.lengthSq() < 0.09) back.set(-viewerForward.x, 0, -viewerForward.z);
+  if (back.lengthSq() < 1e-6) back.set(1, 0, 0);
+  back.normalize();
+  return {
+    position: center.clone().addScaledVector(back, LOOKDOWN_BACK).add(new THREE.Vector3(0, LOOKDOWN_HEIGHT, 0)),
+    target: center.clone(),
+  };
+}
+
 // ---- Tuning constants (open to feel iteration) ------------------------------
 export const LOCK_MS = 650;
 export const UNLOCK_MS = 550;

@@ -14,6 +14,7 @@ import { lockedPoseFor, type CameraPose } from './cameraLock';
 import { Board, BOARD_COLS, BOARD_ROWS, type Run } from './match3';
 import { byColor, type TargetingStrategy } from './targeting';
 import type { CircleCollider } from './player';
+import type { Interactable, InteractableStatus } from './interactable';
 
 // ---- Tuning constants ---------------------------------------------------------
 /** Movement collider. Inscribed radius is 1, corners reach 1.41; this lets you brush corners. */
@@ -33,9 +34,12 @@ const HIT_FLASH = 0.9;
 const FLASH_DECAY_PER_S = 3.5;
 // -------------------------------------------------------------------------------
 
-export type VoxelStatus = 'growing' | 'resolving' | 'resolved';
+export type VoxelStatus = InteractableStatus;
 
-export class Voxel {
+export class Voxel implements Interactable {
+  readonly kind = 'voxel' as const;
+  readonly lockReach = LOCK_REACH;
+  readonly hintLocked = 'Tap a gem, then a neighbour, to swap. Matches feed the flower of their colour.';
   readonly group = new THREE.Group();
   readonly rig: Rig;
   /** Palette index (= gem type) per flower tip. */
@@ -48,7 +52,8 @@ export class Voxel {
   /** Invisible box over the whole cube: the tap-to-lock target in the free view. */
   readonly hitBox: THREE.Mesh;
   status: VoxelStatus = 'growing';
-  onResolved: (voxel: Voxel) => void = () => {};
+  /** Fired once the resolve beat has finished and the voxel is gone. */
+  onDone: (it: Interactable) => void = () => {};
 
   private readonly receded: boolean[];
   private readonly flash: number[];
@@ -77,9 +82,9 @@ export class Voxel {
 
     this.hitBox = new THREE.Mesh(new THREE.BoxGeometry(HALF * 2, HALF * 2, HALF * 2));
     this.hitBox.visible = false;
-    this.hitBox.userData.voxel = this;
+    this.hitBox.userData.interactable = this;
     this.group.add(this.hitBox);
-    for (const h of this.rig.hitTargets) h.userData.voxel = this;
+    for (const h of this.rig.hitTargets) h.userData.interactable = this;
   }
 
   get center(): THREE.Vector3 {
@@ -91,7 +96,7 @@ export class Voxel {
     return new THREE.Vector3(0, 0, 1).applyQuaternion(this.group.quaternion);
   }
 
-  /** The Pass 0 framing for this voxel. */
+  /** The Pass 0 framing for this voxel (the viewer's position doesn't matter: the face decides). */
   lockPose(): CameraPose {
     return lockedPoseFor(this.center, this.normal);
   }
@@ -133,7 +138,7 @@ export class Voxel {
     return t;
   }
 
-  flowerWorldPosition(flower: number): THREE.Vector3 {
+  targetWorldPosition(flower: number): THREE.Vector3 {
     return this.rig.branches[flower].flower.getWorldPosition(new THREE.Vector3());
   }
 
@@ -183,7 +188,7 @@ export class Voxel {
       if (this.beat.isDone) {
         this.beat = null;
         this.status = 'resolved';
-        this.onResolved(this);
+        this.onDone(this);
       }
     }
   }

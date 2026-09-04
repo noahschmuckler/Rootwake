@@ -44,3 +44,15 @@ export const byColumn: TargetingStrategy = {
     return Math.min(ctx.targetCount - 1, Math.floor((meanCol / ctx.boardCols) * ctx.targetCount));
   },
 };
+
+/**
+ * One shared pool: every run feeds target 0 regardless of colour or column.
+ * Ground patches (Pass 0.4b) — the opposite of the flowers' five per-colour
+ * pools.
+ */
+export const single: TargetingStrategy = {
+  name: 'single',
+  target(_run, ctx) {
+    return ctx.targetCount > 0 ? 0 : null;
+  },
+};

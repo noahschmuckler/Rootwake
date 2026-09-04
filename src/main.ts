@@ -9,12 +9,17 @@
 //           runs fire shots at the flower of their colour, fill its pool,
 //           recede it; five receded flowers resolve the voxel.
 // Pass 0.3b: waypoint movement — hold, pick a marker ahead, release to hop.
+// Pass 0.4:  the trees do the confining (no hedge/canopy), rock ground, and
+//           tillable grass patches — a second interactable with one shared
+//           pool, worked from a look-down lock.
 // Still out of scope: combat, specials, the 6-face mirror, a real field, art.
 
 import * as THREE from 'three';
 import { CameraRig, type CameraMode } from './cameraLock';
 import { Player } from './player';
-import { Voxel, LOCK_REACH } from './voxel';
+import { Voxel } from './voxel';
+import { Patch } from './patch';
+import type { Interactable } from './interactable';
 import { buildWorld, GROUND_Y } from './world';
 import { BoardView } from './board3d';
 import { Projectiles } from './projectiles';
@@ -80,15 +85,35 @@ const slot = new THREE.Vector3(LATTICE_SPACING, 0, 0); // where the player stand
 for (const z of [-1.4, 1.4]) addVoxel(new THREE.Vector3(LATTICE_SPACING * 2, 0, z), slot);
 for (const v of voxels) scene.add(v.group);
 
+// ---- Tillable ground ---------------------------------------------------------
+// Pass 0.4b. Authored positions that read as a grid (2.5 apart, a couple of
+// cells left as rock) without the world being a grid: one under your feet in
+// the pocket, one in the corridor, the rest out on the open rock past the
+// opening. Patches never collide.
+const patches: Patch[] = [];
+const PATCH_POSITIONS: [number, number][] = [
+  [0, 0],
+  [LATTICE_SPACING * 3, 0],
+  [10.5, -2.5], [10.5, 0], [10.5, 2.5],
+  [13, -2.5], [13, 2.5],
+  [15.5, 0], [15.5, 2.5],
+];
+for (const [x, z] of PATCH_POSITIONS) {
+  patches.push(new Patch(patches.length, new THREE.Vector3(x, GROUND_Y, z), seed * 977 + patches.length * 23));
+}
+for (const p of patches) scene.add(p.group);
+
+const interactables: Interactable[] = [...voxels, ...patches];
+
 // ---- Lock / unlock plumbing --------------------------------------------------
-let lockedVoxel: Voxel | null = null;
+let locked: Interactable | null = null;
 /** After a locked voxel resolves, hold this long on the empty spot, then back out to reveal the gap. */
 const RELEASE_HOLD_MS = 450;
 let autoUnlockAt: number | null = null;
 
-for (const v of voxels) {
-  v.onResolved = (voxel) => {
-    if (voxel === lockedVoxel && cameraRig.mode === 'locked') autoUnlockAt = animClock + RELEASE_HOLD_MS;
+for (const it of interactables) {
+  it.onDone = (done) => {
+    if (done === locked && cameraRig.mode === 'locked') autoUnlockAt = animClock + RELEASE_HOLD_MS;
     updateHud();
   };
 }
@@ -104,7 +129,11 @@ const FADE_CORRIDOR = 2.6;
  * is beyond the voxel you're clearing keeps blocking the light until you
  * clear it too.
  */
-function obstructsLockedView(v: Voxel, locked: Voxel): boolean {
+/** For a look-down lock on a patch, voxels this close to the patch would loom into the frame. */
+const FADE_NEAR_PATCH = 2.3;
+function obstructsLockedView(v: Voxel, target: Interactable): boolean {
+  if (target.kind === 'patch') return v.distanceTo(target.center) < FADE_NEAR_PATCH;
+  const locked = target as Voxel;
   const pose = locked.lockPose();
   const c = v.center;
   if (c.distanceTo(pose.position) < FADE_NEAR_CAMERA) return true;
@@ -123,35 +152,35 @@ const hint = document.getElementById('hint')!;
 const backButton = document.getElementById('back') as HTMLButtonElement;
 
 const HINTS: Record<CameraMode, string> = {
-  free: 'Hold on the left to pick a spot, release to move. Drag to look. Tap the growth to lock in.',
+  free: 'Hold on the left to pick a spot, release to move. Drag to look. Tap growth or grass to lock in.',
   locking: '',
-  locked: 'Tap a gem, then a neighbour, to swap. Matches feed the flower of their colour.',
+  locked: '',
   unlocking: '',
 };
 function applyMode(mode: CameraMode): void {
-  hint.textContent = HINTS[mode];
+  hint.textContent = mode === 'locked' && locked ? locked.hintLocked : HINTS[mode];
   player.enabled = mode === 'free';
-  if (mode === 'locked' && lockedVoxel) {
-    boardView.bind(lockedVoxel.board);
+  if (mode === 'locked' && locked) {
+    boardView.bind(locked.board);
     boardView.show(animClock);
   }
   if (mode === 'unlocking') boardView.hide();
   if (mode === 'free') {
     boardView.unbind();
-    lockedVoxel = null;
+    locked = null;
   }
   updateHud();
 }
 
 // A run cleared on the board: shoot at the flower it targets; the hit feeds the pool.
 boardView.onRun = (run, origin) => {
-  const voxel = lockedVoxel;
-  if (!voxel) return;
-  const target = voxel.targetFor(run);
+  const it = locked;
+  if (!it) return;
+  const target = it.targetFor(run);
   if (target === null) return;
   const amount = run.cells.length;
-  projectiles.fire(origin, voxel.flowerWorldPosition(target), PALETTE[run.type].hex, animClock, () => {
-    voxel.feed(target, amount, animClock);
+  projectiles.fire(origin, it.targetWorldPosition(target), PALETTE[run.type].hex, animClock, () => {
+    it.feed(target, amount, animClock);
     updateHud();
   });
 };
@@ -167,14 +196,15 @@ function playerPose() {
 
 function updateHud(): void {
   const resolved = voxels.filter((v) => v.status === 'resolved').length;
-  const parts = [`seed ${seed}`, `cleared ${resolved}/${voxels.length}`];
+  const tilled = patches.filter((p) => p.status === 'resolved').length;
+  const parts = [`seed ${seed}`, `cleared ${resolved}/${voxels.length}`, `tilled ${tilled}/${patches.length}`];
   if (slowmo > 1) parts.push(`slowmo ×${slowmo}`);
-  if (lockedVoxel && cameraRig.mode === 'locked' && lockedVoxel.status === 'growing') {
-    parts.push(lockedVoxel.poolText());
+  if (locked && cameraRig.mode === 'locked' && locked.status === 'growing') {
+    parts.push(locked.poolText());
   }
   parts.push('R: new arrangement');
   hud.textContent = parts.join(' · ');
-  backButton.hidden = !(cameraRig.mode === 'locked' && lockedVoxel?.status === 'growing');
+  backButton.hidden = !(cameraRig.mode === 'locked' && locked?.status === 'growing');
 }
 
 // ---- Input ------------------------------------------------------------------
@@ -190,18 +220,18 @@ let tooFarUntil = 0;
 player.onTap = (x, y) => {
   castFrom(x, y);
   if (cameraRig.mode === 'free') {
-    const targets = voxels.filter((v) => v.status === 'growing').flatMap((v) => v.lockTargets);
+    const targets = interactables.filter((it) => it.status === 'growing').flatMap((it) => it.lockTargets);
     const hit = raycaster.intersectObjects(targets, false)[0];
     if (!hit) return;
-    const voxel = hit.object.userData.voxel as Voxel;
-    if (voxel.distanceTo(player.position) > LOCK_REACH) {
+    const it = hit.object.userData.interactable as Interactable;
+    if (it.distanceTo(player.position) > it.lockReach) {
       hint.textContent = 'Closer.';
       tooFarUntil = animClock + 900;
       return;
     }
-    lockedVoxel = voxel;
-    cameraRig.lock(animClock, voxel.lockPose());
-  } else if (cameraRig.mode === 'locked' && lockedVoxel) {
+    locked = it;
+    cameraRig.lock(animClock, it.lockPose({ position: player.position, forward: player.forward() }));
+  } else if (cameraRig.mode === 'locked' && locked) {
     if (boardView.tap(raycaster)) updateHud();
   }
 };
@@ -234,7 +264,7 @@ function animate(now: number): void {
   requestAnimationFrame(animate);
 
 // Debug handle for headless/console poking. Not part of the design surface.
-(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, cameraRig, boardView };
+(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, cameraRig, boardView };
   const dt = Math.min(0.1, (now - lastFrame) / 1000);
   animClock += (dt * 1000) / slowmo;
   lastFrame = now;
@@ -263,13 +293,13 @@ function animate(now: number): void {
   // the locked view gives the vista away.
   const lockedness = cameraRig.lockedness();
   for (const v of voxels) {
-    const fade = lockedVoxel && v !== lockedVoxel && obstructsLockedView(v, lockedVoxel) ? 1 - lockedness : 1;
+    const fade = locked && v !== locked && obstructsLockedView(v, locked) ? 1 - lockedness : 1;
     v.setFade(fade);
   }
-  for (const v of voxels) v.update(animClock);
+  for (const it of interactables) it.update(animClock);
 
-  // The board's job is done once its voxel starts resolving: get out of the way of the beat.
-  if (lockedVoxel && lockedVoxel.status !== 'growing') boardView.hide();
+  // The board's job is done once its target starts resolving (or is tilled): get out of the way.
+  if (locked && locked.status !== 'growing') boardView.hide();
   boardView.update(animClock);
   projectiles.update(animClock);
 
@@ -278,4 +308,4 @@ function animate(now: number): void {
 requestAnimationFrame(animate);
 
 // Debug handle for headless/console poking. Not part of the design surface.
-(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, cameraRig, boardView };
+(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, cameraRig, boardView };
