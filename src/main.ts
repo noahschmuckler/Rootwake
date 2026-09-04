@@ -35,7 +35,7 @@ renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 document.body.appendChild(renderer.domElement);
 
-const world = buildWorld(scene);
+buildWorld(scene);
 const cameraRig = new CameraRig(camera);
 // The board rides on the camera so "ahead and below, tilted" is a constant.
 scene.add(camera);
@@ -47,26 +47,37 @@ player.position.set(0, GROUND_Y, 0);
 player.yaw = Math.PI / 2;
 
 // ---- The thicket ------------------------------------------------------------
-// Six voxels in a hex ring around the start, faces turned inward, packed so
-// the pocket is enclosed on every side. Two more staggered behind the +X ring
-// voxel, between the pocket and the opening in the hedge: clearing the ring
-// voxel shows them, clearing one of them opens the way out. Tuning: the ring
-// radius sets how cramped the pocket is; at 2.45 corners nearly touch.
-const RING_RADIUS = 2.45;
-const RING_COUNT = 6;
+// Pass 0.4a: the trees do the confining. Voxels sit on a hex lattice around
+// the start, three rings deep, faces turned toward the start, so every
+// direction is roughly three voxels thick before open rock. The one way out
+// is kept as before: a sector toward +X is cleared in rings 2–3, and the two
+// staggered voxels behind the +X ring voxel stand in it — clear the ring
+// voxel to see them, clear one of them to get out. Tuning: LATTICE_SPACING
+// sets how cramped everything is; at 2.45 cube corners nearly touch.
+const LATTICE_SPACING = 2.45;
+const LATTICE_RINGS = 3;
+/** Half-angle of the cleared sector toward +X (rings 2–3 only). */
+const OPENING_HALF_ANGLE = (35 * Math.PI) / 180;
 const START = new THREE.Vector3(0, 0, 0);
 const voxels: Voxel[] = [];
-for (let i = 0; i < RING_COUNT; i++) {
-  const a = (i / RING_COUNT) * Math.PI * 2; // i = 0 is +X, toward the opening
-  const pos = new THREE.Vector3(Math.cos(a) * RING_RADIUS, 0, Math.sin(a) * RING_RADIUS);
-  voxels.push(new Voxel(voxels.length, pos, START, seed * 131 + voxels.length * 17));
+const addVoxel = (pos: THREE.Vector3, faceToward: THREE.Vector3) =>
+  voxels.push(new Voxel(voxels.length, pos, faceToward, seed * 131 + voxels.length * 17));
+
+for (let i = -LATTICE_RINGS; i <= LATTICE_RINGS; i++) {
+  for (let j = -LATTICE_RINGS; j <= LATTICE_RINGS; j++) {
+    const ring = Math.max(Math.abs(i), Math.abs(j), Math.abs(i + j)); // axial hex distance
+    if (ring === 0 || ring > LATTICE_RINGS) continue;
+    const x = LATTICE_SPACING * (i + j / 2);
+    const z = LATTICE_SPACING * j * (Math.sqrt(3) / 2);
+    if (ring >= 2 && Math.abs(Math.atan2(z, x)) < OPENING_HALF_ANGLE) continue;
+    addVoxel(new THREE.Vector3(x, 0, z), START);
+  }
 }
-const slot = new THREE.Vector3(RING_RADIUS, 0, 0); // where the player stands once the +X ring voxel is gone
-// Tuning: ±1.2 leaves a 0.4 slit between them — a glimpse of light, not a view.
-for (const z of [-1.2, 1.2]) {
-  const pos = new THREE.Vector3(RING_RADIUS + 2.5, 0, z);
-  voxels.push(new Voxel(voxels.length, pos, slot, seed * 131 + voxels.length * 17));
-}
+// The staggered pair in the corridor. ±1.4 leaves a 0.8 slit between them
+// (a glimpse, not a way through) and closes the gap to the ring-3 voxels
+// beside them, so the only way past is to clear one.
+const slot = new THREE.Vector3(LATTICE_SPACING, 0, 0); // where the player stands once the +X ring voxel is gone
+for (const z of [-1.4, 1.4]) addVoxel(new THREE.Vector3(LATTICE_SPACING * 2, 0, z), slot);
 for (const v of voxels) scene.add(v.group);
 
 // ---- Lock / unlock plumbing --------------------------------------------------
@@ -223,14 +234,14 @@ function animate(now: number): void {
   requestAnimationFrame(animate);
 
 // Debug handle for headless/console poking. Not part of the design surface.
-(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, player, voxels, world, cameraRig, boardView };
+(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, cameraRig, boardView };
   const dt = Math.min(0.1, (now - lastFrame) / 1000);
   animClock += (dt * 1000) / slowmo;
   lastFrame = now;
 
   if (cameraRig.mode === 'free') {
     const colliders = voxels.flatMap((v) => v.collider() ?? []);
-    player.update(now, colliders, world.collide);
+    player.update(now, colliders);
     player.applyCamera(camera);
   }
   cameraRig.update(animClock);
@@ -267,4 +278,4 @@ function animate(now: number): void {
 requestAnimationFrame(animate);
 
 // Debug handle for headless/console poking. Not part of the design surface.
-(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, player, voxels, world, cameraRig, boardView };
+(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, cameraRig, boardView };

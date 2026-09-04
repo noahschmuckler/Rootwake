@@ -8,6 +8,7 @@
 // plane in a 2D-legible spread while the branches wander in depth behind them.
 
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mulberry32, PALETTE } from './colors';
 
 /** Half-extent of the voxel cube (cube is 2×2×2, centred at the origin, resting on y = -1). */
@@ -42,6 +43,7 @@ const TRUNK_BASE = new THREE.Vector3(0, -HALF, 0);
 export interface Branch {
   index: number;
   curve: THREE.CatmullRomCurve3;
+  /** All five branch tubes are one merged mesh (draw-call budget); every Branch points at it. */
   tube: THREE.Mesh;
   flower: THREE.Group;
   /** Palette index this flower was dealt. */
@@ -77,23 +79,26 @@ function buildTrunk(material: THREE.Material): THREE.Mesh {
  * still read in the locked view; there it becomes the dark backdrop they sit
  * against. Seeded so a given voxel always packs the same way.
  */
-function buildFoliage(seed: number, material: THREE.Material): THREE.Group {
+function buildFoliage(seed: number, material: THREE.Material): THREE.Mesh {
   const rand = mulberry32(seed);
-  const group = new THREE.Group();
-  const geo = new THREE.IcosahedronGeometry(1, 1);
+  const base = new THREE.IcosahedronGeometry(1, 1);
+  const parts: THREE.BufferGeometry[] = [];
+  const m = new THREE.Matrix4();
+  const q = new THREE.Quaternion();
+  const e = new THREE.Euler();
   for (let i = 0; i < FOLIAGE_BLOBS; i++) {
-    const blob = new THREE.Mesh(geo, material);
     const r = 0.28 + rand() * 0.24;
-    blob.position.set(
+    const position = new THREE.Vector3(
       (rand() * 2 - 1) * (HALF - r * 0.6),
       (rand() * 2 - 1) * (HALF - r * 0.6),
       -HALF + r * 0.4 + rand() * (HALF + 0.3 - r)
     );
-    blob.scale.set(r * (0.8 + rand() * 0.5), r * (0.7 + rand() * 0.5), r * (0.8 + rand() * 0.5));
-    blob.rotation.set(rand() * Math.PI, rand() * Math.PI, rand() * Math.PI);
-    group.add(blob);
+    const scale = new THREE.Vector3(r * (0.8 + rand() * 0.5), r * (0.7 + rand() * 0.5), r * (0.8 + rand() * 0.5));
+    q.setFromEuler(e.set(rand() * Math.PI, rand() * Math.PI, rand() * Math.PI));
+    parts.push(base.clone().applyMatrix4(m.compose(position, q, scale)));
   }
-  return group;
+  // One mesh, not 26: with 30+ voxels the draw-call count matters on a phone.
+  return new THREE.Mesh(mergeGeometries(parts), material);
 }
 
 function buildCurve(index: number): THREE.CatmullRomCurve3 {
@@ -120,14 +125,18 @@ function buildFlower(
   const petalGeo = new THREE.SphereGeometry(1, 14, 10);
   const PETALS = 6;
   const PETAL_RADIUS = 0.12;
+  const parts: THREE.BufferGeometry[] = [];
+  const m = new THREE.Matrix4();
   for (let i = 0; i < PETALS; i++) {
     const angle = (i / PETALS) * Math.PI * 2;
-    const petal = new THREE.Mesh(petalGeo, petalMaterial);
-    petal.scale.set(0.12, 0.065, 0.04);
-    petal.position.set(Math.cos(angle) * PETAL_RADIUS, Math.sin(angle) * PETAL_RADIUS, 0);
-    petal.rotation.z = angle;
-    group.add(petal);
+    m.compose(
+      new THREE.Vector3(Math.cos(angle) * PETAL_RADIUS, Math.sin(angle) * PETAL_RADIUS, 0),
+      new THREE.Quaternion().setFromEuler(new THREE.Euler(0, 0, angle)),
+      new THREE.Vector3(0.12, 0.065, 0.04)
+    );
+    parts.push(petalGeo.clone().applyMatrix4(m));
   }
+  group.add(new THREE.Mesh(mergeGeometries(parts), petalMaterial));
   const pistil = new THREE.Mesh(new THREE.SphereGeometry(0.06, 12, 10), pistilMaterial);
   pistil.position.z = 0.02;
   group.add(pistil);
@@ -158,10 +167,15 @@ export function buildRig(colors: number[], seed = 7): Rig {
   const hitTargets: THREE.Object3D[] = [];
   const hitGeo = new THREE.SphereGeometry(0.24, 8, 6);
 
+  const curves = Array.from({ length: TIP_COUNT }, (_, i) => buildCurve(i));
+  const tube = new THREE.Mesh(
+    mergeGeometries(curves.map((c) => new THREE.TubeGeometry(c, 48, 0.045, 8, false))),
+    stemMaterial
+  );
+  root.add(tube);
+
   for (let i = 0; i < TIP_COUNT; i++) {
-    const curve = buildCurve(i);
-    const tube = new THREE.Mesh(new THREE.TubeGeometry(curve, 48, 0.045, 8, false), stemMaterial);
-    root.add(tube);
+    const curve = curves[i];
 
     const { group: flower, petalMaterial } = buildFlower(colors[i], pistilMaterial);
     materials.push(petalMaterial);
