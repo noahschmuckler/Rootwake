@@ -361,6 +361,83 @@ economy hookup exists yet — same deferral as the whole prototype so far),
 regrowth, more than one tree-voxel-equivalent species, art fidelity beyond
 "reads as grass vs. rock."
 
+## Pass 0.4c — tree targeting simplification (2026-09-04)
+
+A small, independent tweak to the trees built in 0.4a, queued alongside
+0.5 below but separable from it (its own commit). Collapse a tree from its
+current **five independent per-color pools down to one shared pool** —
+reusing the `single` targeting strategy already built for ground patches
+(`targeting.ts`) instead of `byColor`. All **four side faces** become
+lockable and show the same live state (the `Interactable.lockTargets`
+array + `lockedPoseFor`'s per-normal framing already support locking from
+whichever face was approached — this is mostly about populating
+`lockTargets` with all four side hit-regions instead of one, and swapping
+the targeting strategy). The 5 flowers keep their existing rig and
+`recede.ts` animation, but recede in **stages as the one shared pool
+crosses thresholds** (20% per flower) rather than each needing its own gem
+color. Once the shared pool fills, the tree resolves via the unchanged
+`resolve.ts`, from whichever side the player happened to be locked into —
+"clearing any one side clears the tree" falls out naturally once there's
+only one pool to clear. Top and bottom faces stay as they are (not part of
+this — "four sides" was specific).
+
+## Pass 0.5 — the first vista: a cliff edge, not open ground (2026-09-05)
+
+Redirected from a broader "vastness = big walkable acreage" framing after
+designer pushback: the acres-scale buildable home-base ground (farm
+fields, crafting machinery, a walkable multi-floor building system) is
+real and coming, but it's its own future phase, not this one — building it
+now would mean guessing at scale before the actual emotional beat (a vista
+moment, not walkable square footage) is validated. **This pass tests one
+specific moment:** reaching the edge of the mountain peak and seeing a
+vast, inaccessible landscape — distant hills and forests reaching to the
+horizon, thousands of feet below — gated by a dropoff steep enough that
+falling isn't possible, but standing at it should feel dizzying.
+
+**Why this is cheaper than it sounds:** the distant landscape is
+explicitly *not yet accessible* — the player never walks there, so none of
+it needs to be real, walkable, textured terrain. This is the classic
+distant-vista technique (correct from one vantage, not built to withstand
+scrutiny up close), and the codebase already has the seed of it: the
+existing pale-hill-spheres-plus-fog vista beyond the thicket's one opening
+(`world.ts`) is this exact pattern, just small and at eye level. This pass
+scales that idea up and moves it to a cliff edge instead of a gap in a
+hedge.
+
+**Four pieces:**
+
+1. **A modest plateau, not full acreage.** Extend the walkable ground just
+   enough to get from the tree cluster to a cliff edge — the same cheap
+   rock-pattern ground `0.4a` already uses. The full acres-scale buildable
+   plateau is a later phase; this doesn't need to be it.
+2. **The edge is a hard movement boundary, not a physics hazard.** Extend
+   whatever collision/walkability check the waypoint movement (0.3b)
+   already filters candidate points through, so it refuses any step across
+   the edge. No fall state, no new movement system.
+3. **The vista, viewed from height and looking both out and down**, not
+   through a narrow gap at eye level: layered distant hill/mountain
+   silhouettes at varying distances (more of them, bigger, further apart
+   than the existing thicket vista, for parallax as the player walks the
+   edge), a broad color band suggesting forest without tree geometry that
+   far out, and fog/aerial-perspective doing the desaturate-with-distance
+   work `THREE.Fog` already does. Looking straight down over the edge
+   should show cliff-face detail near the top fading through haze into a
+   long apparent drop before the distant landscape resumes far below — the
+   drop needs to read as height, not just "the ground stops and there's
+   fog."
+4. **Vertigo is a rendering/calibration problem, not a new mechanic.**
+   Look-drag already lets the camera pitch down; the work is entirely in
+   making what's rendered when it does convincing at real scale. A subtle
+   FOV widen or camera dip right at the edge is a cheap nice-to-have if
+   it's easy — not required for this pass to answer its question.
+
+**Explicitly not this pass:** the acres-scale buildable plateau, the
+building system (walls/windows/roofs/floors/furniture, walkable multi-story
+interiors), crafting machinery, mining, extending the interactive tilling
+system from 0.4b to any new ground. None of those are needed to find out
+whether this one moment — reaching an edge and seeing an inaccessible world
+spread out below — lands.
+
 ## Status
 
 Repo scaffolded 2026-09-03. Passes 0, 0.1a, 0.2 and 0.3 (both halves) all
