@@ -1,20 +1,22 @@
 // Pass 0.2: one placed voxel instance — Pass 0's rig + recede, plus
 // placement, a collider, whole-voxel fade and the resolve beat.
-// Pass 0.3a: the tap-a-flower puzzle is retired. Each voxel now carries a
-// match-3 Board and five per-flower HP pools; a run feeds the flower its
-// colour targets, a full pool recedes that flower (recede.ts unchanged), and
-// five receded flowers resolve the voxel (resolve.ts unchanged).
+// Pass 0.3a: the tap-a-flower puzzle is retired; a match-3 Board drives it.
+// Pass 0.4c: one shared pool instead of five per-colour pools (the `single`
+// strategy ground patches use), all four side faces carry the same live
+// flowers and any of them can be locked onto. Flowers recede in stages as
+// the pool crosses 20% thresholds (recede.ts unchanged); a full pool
+// resolves the tree (resolve.ts unchanged) from whichever side you're on.
 
 import * as THREE from 'three';
-import { assignDistinctColors, PALETTE } from './colors';
+import { assignDistinctColors } from './colors';
 import { buildRig, HALF, TIP_COUNT, type Rig } from './rig';
 import { RecedeAnimator } from './recede';
 import { ResolveBeat } from './resolve';
 import { lockedPoseFor, type CameraPose } from './cameraLock';
 import { Board, BOARD_COLS, BOARD_ROWS, type Run } from './match3';
-import { byColor, type TargetingStrategy } from './targeting';
+import { single, type TargetingStrategy } from './targeting';
 import type { CircleCollider } from './player';
-import type { Interactable, InteractableStatus } from './interactable';
+import type { Interactable, InteractableStatus, Viewer } from './interactable';
 
 // ---- Tuning constants ---------------------------------------------------------
 /** Movement collider. Inscribed radius is 1, corners reach 1.41; this lets you brush corners. */
@@ -22,11 +24,14 @@ export const VOXEL_COLLIDER_RADIUS = 1.2;
 /** Player-to-centre distance within which a tap locks on. Start pocket is ~2.45 from every ring voxel. */
 export const LOCK_REACH = 3.3;
 /**
- * Gems a flower's pool must absorb before it recedes. Each flower is 20% of
- * the voxel with its own independent pool (designer-confirmed). 9 = three
- * plain matches; cascades and 4/5-runs get there faster.
+ * Gems the tree's one shared pool absorbs before it resolves. Each flower
+ * is 20% of it and recedes as the pool crosses its threshold. 40 ≈ the
+ * 5 × 9 the per-colour pools added up to, minus a little: with one pool
+ * every run counts, so it fills steadier and a touch faster.
  */
-export const POOL_CAPACITY = 9;
+export const TREE_CAPACITY = 40;
+/** How many side faces carry flowers. Top and bottom stay bare. */
+export const SIDE_FACES = 4;
 /** Flower glow at an empty / full pool, and the extra flash on a hit. */
 const GLOW_EMPTY = 0.05;
 const GLOW_FULL = 0.7;
@@ -36,27 +41,34 @@ const FLASH_DECAY_PER_S = 3.5;
 
 export type VoxelStatus = InteractableStatus;
 
+/** Local +Z turned about Y by 90° steps: face k's outward normal. */
+function faceNormalLocal(face: number): THREE.Vector3 {
+  return new THREE.Vector3(Math.sin((face * Math.PI) / 2), 0, Math.cos((face * Math.PI) / 2));
+}
+
 export class Voxel implements Interactable {
   readonly kind = 'voxel' as const;
   readonly lockReach = LOCK_REACH;
-  readonly hintLocked = 'Tap a gem, then a neighbour, to swap. Matches feed the flower of their colour.';
+  readonly hintLocked = 'Tap a gem, then a neighbour, to swap. Every match feeds the tree.';
   readonly group = new THREE.Group();
   readonly rig: Rig;
   /** Palette index (= gem type) per flower tip. */
   readonly colors: number[];
   readonly board: Board;
-  /** Gems absorbed per flower. */
-  readonly pools: number[];
-  /** Swappable: colour → flower now; column buckets for combat later. */
-  targeting: TargetingStrategy = byColor;
+  /** Gems absorbed by the one shared pool. */
+  pool = 0;
+  /** Swappable: one shared pool now; per-colour or per-column are a one-line change. */
+  targeting: TargetingStrategy = single;
   /** Invisible box over the whole cube: the tap-to-lock target in the free view. */
   readonly hitBox: THREE.Mesh;
   status: VoxelStatus = 'growing';
   /** Fired once the resolve beat has finished and the voxel is gone. */
   onDone: (it: Interactable) => void = () => {};
 
+  /** Which side face the current/last lock framed. */
+  private lockedFace = 0;
   private readonly receded: boolean[];
-  private readonly flash: number[];
+  private flash = 0;
   private readonly animator = new RecedeAnimator();
   private beat: ResolveBeat | null = null;
   private lastNow = 0;
@@ -64,15 +76,13 @@ export class Voxel implements Interactable {
 
   /**
    * @param position   cube centre (y = 0 puts the base on the y = -1 ground)
-   * @param faceToward point the flower face (+Z of the rig) turns to look at
+   * @param faceToward point face 0 (+Z of the rig) turns to look at
    */
   constructor(readonly index: number, position: THREE.Vector3, faceToward: THREE.Vector3, seed: number) {
     this.colors = assignDistinctColors(TIP_COUNT, seed);
     this.board = new Board(BOARD_ROWS, BOARD_COLS, seed ^ 0x51ed);
-    this.pools = this.colors.map(() => 0);
     this.receded = this.colors.map(() => false);
-    this.flash = this.colors.map(() => 0);
-    this.rig = buildRig(this.colors, seed ^ 0x9e37);
+    this.rig = buildRig(this.colors, seed ^ 0x9e37, SIDE_FACES);
     this.baseOpacity = this.rig.materials.map((m) => m.opacity);
     for (const b of this.rig.branches) b.petalMaterial.emissiveIntensity = GLOW_EMPTY;
 
@@ -91,13 +101,28 @@ export class Voxel implements Interactable {
     return this.group.position.clone();
   }
 
-  /** World-space normal of the flower face. */
+  /** World-space outward normal of the face the lock framed (or will frame). */
   get normal(): THREE.Vector3 {
-    return new THREE.Vector3(0, 0, 1).applyQuaternion(this.group.quaternion);
+    return faceNormalLocal(this.lockedFace).applyQuaternion(this.group.quaternion);
   }
 
-  /** The Pass 0 framing for this voxel (the viewer's position doesn't matter: the face decides). */
-  lockPose(): CameraPose {
+  /**
+   * The Pass 0 framing, on whichever side face the viewer is nearest to —
+   * a tree can be worked from any side, and every side shows the same state.
+   */
+  lockPose(viewer: Viewer): CameraPose {
+    const toViewer = viewer.position.clone().sub(this.group.position);
+    toViewer.y = 0;
+    let best = 0;
+    let bestDot = -Infinity;
+    for (let f = 0; f < SIDE_FACES; f++) {
+      const d = faceNormalLocal(f).applyQuaternion(this.group.quaternion).dot(toViewer);
+      if (d > bestDot) {
+        bestDot = d;
+        best = f;
+      }
+    }
+    this.lockedFace = best;
     return lockedPoseFor(this.center, this.normal);
   }
 
@@ -120,36 +145,45 @@ export class Voxel implements Interactable {
     return this.receded.filter((r) => !r).length;
   }
 
-  /** HUD line: one entry per flower, in tip order. */
   poolText(): string {
-    return this.colors
-      .map((c, i) => `${PALETTE[c].name} ${this.receded[i] ? '✓' : `${this.pools[i]}/${POOL_CAPACITY}`}`)
-      .join('  ');
+    return `tree ${this.pool}/${TREE_CAPACITY} · flowers ${this.flowersLeft}`;
   }
 
-  /** Which flower a run feeds, via the current strategy. Null if none (already receded, or unmapped). */
+  /** The one shared target, via the strategy (so per-colour can come back with one line). */
   targetFor(run: Run): number | null {
-    const t = this.targeting.target(run, {
-      targetCount: this.colors.length,
+    if (this.status !== 'growing') return null;
+    return this.targeting.target(run, {
+      targetCount: 1,
       boardCols: this.board.cols,
-      colorOfTarget: (i) => this.colors[i],
+      colorOfTarget: () => -1,
     });
-    if (t === null || this.receded[t] || this.status !== 'growing') return null;
-    return t;
   }
 
-  targetWorldPosition(flower: number): THREE.Vector3 {
-    return this.rig.branches[flower].flower.getWorldPosition(new THREE.Vector3());
+  /** Shots aim at the next flower to go on the locked face, or the trunk once none are left. */
+  targetWorldPosition(): THREE.Vector3 {
+    const next = this.receded.indexOf(false);
+    if (next === -1) return this.center;
+    const branch = this.rig.branches.find((b) => b.face === this.lockedFace && b.tip === next);
+    return branch ? branch.flower.getWorldPosition(new THREE.Vector3()) : this.center;
   }
 
-  /** A shot landed: feed the flower's pool; recede it when full; resolve the voxel when all five are gone. */
-  feed(flower: number, amount: number, nowMs: number): void {
-    if (this.status !== 'growing' || this.receded[flower]) return;
-    this.pools[flower] = Math.min(POOL_CAPACITY, this.pools[flower] + amount);
-    this.flash[flower] = HIT_FLASH;
-    if (this.pools[flower] >= POOL_CAPACITY) {
-      this.receded[flower] = true;
-      this.animator.start([this.rig.branches[flower]], nowMs, () => {
+  /** A shot landed: feed the pool; recede each flower as its 20% threshold is crossed; resolve on full. */
+  feed(_target: number, amount: number, nowMs: number): void {
+    if (this.status !== 'growing') return;
+    this.pool = Math.min(TREE_CAPACITY, this.pool + amount);
+    this.flash = HIT_FLASH;
+    const stage = TREE_CAPACITY / TIP_COUNT;
+    for (let tip = 0; tip < TIP_COUNT; tip++) {
+      if (!this.receded[tip] && this.pool >= (tip + 1) * stage - 1e-6) this.recedeTip(tip, nowMs);
+    }
+  }
+
+  /** Recede one tip on every face at once (four copies of one state, not four states). */
+  private recedeTip(tip: number, nowMs: number): void {
+    this.receded[tip] = true;
+    for (const b of this.rig.branches) {
+      if (b.tip !== tip) continue;
+      this.animator.start([b], nowMs, () => {
         if (this.flowersLeft === 0 && !this.animator.isBusy) this.beginResolve(this.lastNow);
       });
     }
@@ -174,13 +208,11 @@ export class Voxel implements Interactable {
   update(nowMs: number): void {
     const dt = Math.max(0, (nowMs - this.lastNow) / 1000);
     this.lastNow = nowMs;
-    // Flowers glow brighter as their pool fills, and flash on each hit.
-    for (let i = 0; i < this.colors.length; i++) {
-      this.flash[i] = Math.max(0, this.flash[i] - FLASH_DECAY_PER_S * dt);
-      if (!this.receded[i]) {
-        const fill = this.pools[i] / POOL_CAPACITY;
-        this.rig.branches[i].petalMaterial.emissiveIntensity = THREE.MathUtils.lerp(GLOW_EMPTY, GLOW_FULL, fill) + this.flash[i];
-      }
+    // Every flower glows brighter as the shared pool fills, and flashes on each hit.
+    this.flash = Math.max(0, this.flash - FLASH_DECAY_PER_S * dt);
+    const glow = THREE.MathUtils.lerp(GLOW_EMPTY, GLOW_FULL, this.pool / TREE_CAPACITY) + this.flash;
+    for (const b of this.rig.branches) {
+      if (!this.receded[b.tip]) b.petalMaterial.emissiveIntensity = glow;
     }
     this.animator.update(nowMs);
     if (this.beat) {

@@ -41,7 +41,12 @@ const TRUNK_TOP = new THREE.Vector3(0, 0, 0);
 const TRUNK_BASE = new THREE.Vector3(0, -HALF, 0);
 
 export interface Branch {
+  /** Position in rig.branches. */
   index: number;
+  /** Which of the five tips this is (0–4); the same on every face. */
+  tip: number;
+  /** Which side face it grows out of (0 = +Z, then each 90° about Y). */
+  face: number;
   curve: THREE.CatmullRomCurve3;
   /** All five branch tubes are one merged mesh (draw-call budget); every Branch points at it. */
   tube: THREE.Mesh;
@@ -61,8 +66,8 @@ export interface Rig {
   materials: THREE.Material[];
 }
 
-/** Pass 0.2: how many foliage blobs pack the cube behind the flower face. */
-const FOLIAGE_BLOBS = 26;
+/** Pass 0.2: how many foliage blobs pack the cube's core behind the flowers. */
+const FOLIAGE_BLOBS = 30;
 
 function buildTrunk(material: THREE.Material): THREE.Mesh {
   const height = TRUNK_TOP.y - TRUNK_BASE.y;
@@ -88,10 +93,12 @@ function buildFoliage(seed: number, material: THREE.Material): THREE.Mesh {
   const e = new THREE.Euler();
   for (let i = 0; i < FOLIAGE_BLOBS; i++) {
     const r = 0.28 + rand() * 0.24;
+    // Pass 0.4c: the core is symmetric now that every side face carries
+    // flowers — blobs stay inside |x|,|z| < ~0.6 so each face's front slab is clear.
     const position = new THREE.Vector3(
+      (rand() * 2 - 1) * 0.6,
       (rand() * 2 - 1) * (HALF - r * 0.6),
-      (rand() * 2 - 1) * (HALF - r * 0.6),
-      -HALF + r * 0.4 + rand() * (HALF + 0.3 - r)
+      (rand() * 2 - 1) * 0.6
     );
     const scale = new THREE.Vector3(r * (0.8 + rand() * 0.5), r * (0.7 + rand() * 0.5), r * (0.8 + rand() * 0.5));
     q.setFromEuler(e.set(rand() * Math.PI, rand() * Math.PI, rand() * Math.PI));
@@ -144,10 +151,13 @@ function buildFlower(
 }
 
 /**
- * @param colors palette index per tip (see colors.ts)
- * @param seed   drives the foliage packing; defaults to a fixed layout
+ * @param colors    palette index per tip (see colors.ts)
+ * @param seed      drives the foliage packing; defaults to a fixed layout
+ * @param sideFaces how many side faces carry the branches and flowers: 1 (the
+ *                  Pass 0 single +Z face) or 4 (Pass 0.4c — every side shows
+ *                  the same live state, so a tree can be worked from any side)
  */
-export function buildRig(colors: number[], seed = 7): Rig {
+export function buildRig(colors: number[], seed = 7, sideFaces: 1 | 4 = 1): Rig {
   if (colors.length !== TIP_COUNT) {
     throw new Error(`buildRig: expected ${TIP_COUNT} colours, got ${colors.length}`);
   }
@@ -168,29 +178,35 @@ export function buildRig(colors: number[], seed = 7): Rig {
   const hitGeo = new THREE.SphereGeometry(0.24, 8, 6);
 
   const curves = Array.from({ length: TIP_COUNT }, (_, i) => buildCurve(i));
-  const tube = new THREE.Mesh(
-    mergeGeometries(curves.map((c) => new THREE.TubeGeometry(c, 48, 0.045, 8, false))),
-    stemMaterial
-  );
-  root.add(tube);
+  const tubeGeometry = mergeGeometries(curves.map((c) => new THREE.TubeGeometry(c, 48, 0.045, 8, false)));
 
-  for (let i = 0; i < TIP_COUNT; i++) {
-    const curve = curves[i];
+  for (let face = 0; face < sideFaces; face++) {
+    // Each face is the same hand-authored layout, turned about Y. Curves are
+    // expressed in face-local space; world positions come from the group.
+    const faceGroup = new THREE.Group();
+    faceGroup.rotation.y = (face * Math.PI) / 2;
+    root.add(faceGroup);
 
-    const { group: flower, petalMaterial } = buildFlower(colors[i], pistilMaterial);
-    materials.push(petalMaterial);
-    flower.position.copy(curve.getPointAt(1));
-    root.add(flower);
+    const tube = new THREE.Mesh(tubeGeometry, stemMaterial);
+    faceGroup.add(tube);
 
-    // Generous invisible hit sphere so a tap doesn't have to land on a petal.
-    // (Raycaster ignores `visible`, so this still catches clicks.)
-    const hit = new THREE.Mesh(hitGeo);
-    hit.visible = false;
-    hit.userData.tipIndex = i;
-    flower.add(hit);
-    hitTargets.push(hit);
+    for (let i = 0; i < TIP_COUNT; i++) {
+      const curve = curves[i];
+      const { group: flower, petalMaterial } = buildFlower(colors[i], pistilMaterial);
+      materials.push(petalMaterial);
+      flower.position.copy(curve.getPointAt(1));
+      faceGroup.add(flower);
 
-    branches.push({ index: i, curve, tube, flower, colorIndex: colors[i], petalMaterial });
+      // Generous invisible hit sphere so a tap doesn't have to land on a petal.
+      // (Raycaster ignores `visible`, so this still catches clicks.)
+      const hit = new THREE.Mesh(hitGeo);
+      hit.visible = false;
+      hit.userData.tipIndex = i;
+      flower.add(hit);
+      hitTargets.push(hit);
+
+      branches.push({ index: branches.length, tip: i, face, curve, tube, flower, colorIndex: colors[i], petalMaterial });
+    }
   }
 
   // Faint cube outline so the "voxel" reads as an object, not just a bush.

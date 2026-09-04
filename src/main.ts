@@ -15,7 +15,7 @@
 // Still out of scope: combat, specials, the 6-face mirror, a real field, art.
 
 import * as THREE from 'three';
-import { CameraRig, type CameraMode } from './cameraLock';
+import { CameraRig, lockedPoseFor, type CameraMode } from './cameraLock';
 import { Player } from './player';
 import { Voxel } from './voxel';
 import { Patch } from './patch';
@@ -134,7 +134,7 @@ const FADE_NEAR_PATCH = 2.3;
 function obstructsLockedView(v: Voxel, target: Interactable): boolean {
   if (target.kind === 'patch') return v.distanceTo(target.center) < FADE_NEAR_PATCH;
   const locked = target as Voxel;
-  const pose = locked.lockPose();
+  const pose = lockedPoseFor(locked.center, locked.normal); // the face the lock chose
   const c = v.center;
   if (c.distanceTo(pose.position) < FADE_NEAR_CAMERA) return true;
   const toCamera = locked.normal; // face normal points from the face toward the locked camera
