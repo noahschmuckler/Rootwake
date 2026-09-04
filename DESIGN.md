@@ -169,12 +169,133 @@ an exposed face to lock the camera onto it (and a way back out), and the
 puzzle" transition doesn't feel jarring — a real but separate risk from the
 clearing mechanic itself.
 
+## The pivot: the real match-3 board returns, rendered in 3D (2026-09-04)
+
+Pass 0/0.1a/0.2 all validated (see Status) — the tap-a-flower interaction
+works, the camera lock/unlock transition works, and the confinement→vista
+payoff itself reads as intended. With the core feel-tests answered, the
+designer's first big build-out direction: bring back DiggyDwarves' actual
+match-3 board (swap-to-match, falling/cascading gems) as the way you
+interact with a voxel, rendered as a physical object inside the 3D scene
+rather than a 2D overlay — so a match can visibly fire a projectile that
+flies through the 3D world and strikes its target. Direct tap-a-flower
+interaction is retired in favor of this for the plant voxel; the recede/
+resolve animations built for it stay exactly as-is as the *payoff* rendering,
+just now triggered by the board instead of by taps.
+
+### The board is real 3D geometry, not a texture
+
+Build the board from actual small 3D gem meshes arranged in a grid, parented
+to one `Object3D` positioned and tilted in world space in front of the
+player — **not** a 2D canvas/CSS texture painted onto a flat plane. Three
+reasons, all load-bearing:
+
+- The "trapezoid" look the designer wants from viewing an angled board is
+  what perspective projection does to a flat grid of objects for free — no
+  skew/warp code needed.
+- Transparency to see the target through the board is also free: don't put
+  an opaque backing panel behind the gems, and gaps between/around them show
+  the 3D scene naturally, correctly depth-sorted against everything else (a
+  textured overlay plane can't depth-composite against individual 3D objects
+  the same way).
+- **This reuses the exact interaction pattern already built and proven**:
+  raycasting taps against positioned 3D meshes within a locked camera
+  framing is precisely what `rig.ts`/`puzzle.ts` already do for the 5 flower
+  tips. Swapping the board in is "raycast against a grid of gems instead of
+  5 tips, add gravity/cascade," not new input plumbing.
+
+Port a **minimal** match-3 core (grid, swap, run-detection, cascade/gravity,
+score) as pure, Phaser-free TypeScript modeled on DiggyDwarves' proven
+algorithm — not the whole `Match3Scene`. No specials, no combos, no tool
+durability, no craft economy in this pass. Same "smallest slice" discipline
+as every prior pass.
+
+### Targeting: gem color ↔ flower identity, per-flower HP pools
+
+**Confirmed by the designer:** each flower has its own HP pool (20% of the
+voxel's total each); matches feed a *specific* flower's pool, not one shared
+counter that recedes flowers in a fixed order. Whichever pool fills first
+recedes first — order is emergent, not scripted. Defeating all 5 flowers
+triggers the existing whole-voxel `resolve.ts` beat completely unchanged.
+
+For this pass, the mapping is **gem color = flower identity, 1:1** — there
+are exactly 5 gem types in DiggyDwarves' board and exactly 5 flowers, so a
+match of color N feeds flower N's pool directly. No column-position logic
+needed here. (Combat, later, will need **column-bucket** targeting instead,
+since an enemy arc won't reliably have exactly 5 members — implement
+targeting as a small swappable strategy — `byColor` now, `byColumn` later —
+rather than hardcoding the color mapping somewhere it'll have to be ripped
+out.) Each match also fires a small projectile from its gem toward its
+target flower — visual only for now, no new gameplay rule beyond feeding the
+pool.
+
+### Movement: replace the joystick with a waypoint arc
+
+The designer's second half of this pivot: the free joystick (Pass 0.2)
+fights a game that's fundamentally about precise positioning to interact
+with puzzles, and doesn't suit turn-based play. Replace it with **VR-style
+teleport-arc movement**: press-hold on the movement side of the screen shows
+a fan of candidate tile markers arcing out ahead of the player; release
+tweens a smooth move to the chosen point. Right-side drag still free-looks,
+unchanged.
+
+Implement the candidate points as **continuous positions at fixed distances/
+angles ahead of the player, filtered by the existing collision/walkability
+check** — not a retrofit onto a formal square grid. The thicket's layout is
+organic (a hex ring at varying distances), so a rigid grid would fight the
+world rather than fit it. This is the same tween machinery `cameraLock.ts`
+already uses for the lock-in/back-out transitions, applied to player
+position instead of camera framing.
+
+This also resolves a movement fork DiggyDwarves' own design notes left open
+(`GAME_DESIGN.md`, "the wide top field — overland conventions": "(b)
+Baldur's-Gate convention — select move, choose a path... energy/fatigue
+bounds travel distance per turn") — same idea, now actually built, in 3D.
+It also echoes a pattern already proven once in the 2D game (the Underdelve's
+🎯 path-mode: tap a tile, auto-walk there, one input = one turn).
+
+**Turn structure, as currently understood:** movement (waypoint select →
+commit) is the turn-consuming action; matching plays out in real time as its
+own self-contained interaction once locked onto a board. Nothing currently
+acts *between* your matches (no enemies yet), so this doesn't need to be
+fully resolved this pass — revisit when combat/enemies exist.
+
+### Pass 0.3 scope
+
+**Pass 0.3a — the 3D match-3 board, retrofit onto the existing plant
+voxel.** Minimal match-3 core (no specials/combos/tools) rendered as tilted,
+semi-transparent 3D gem meshes in the already-locked voxel view (the lock/
+back-out toggle itself is unchanged — puzzle state already survives backing
+out). Color→flower targeting as above; matches fire a projectile toward
+their target flower; a flower recedes when its pool fills (reusing the
+existing recede animation from `recede.ts` unchanged); all 5 defeated
+triggers the existing `resolve.ts` beat unchanged.
+
+**Pass 0.3b — waypoint movement**, replacing the joystick in `player.ts`:
+press-hold shows a fan of candidate tile markers (filtered by existing
+collision), release commits a tweened move; right-side look-drag unchanged.
+
+Build and evaluate these as **two separate commits** even though they're
+going in together — if the combined result feels off, that keeps the two
+signals (does the 3D board feel good vs. does waypoint movement feel good)
+separable instead of confounded.
+
+**Explicitly not this pass:** combat/enemy-arc lane mapping, abilities/
+charge mechanics, mid-combat repositioning or AoE effects (design the
+targeting-strategy abstraction to be ready for these later, don't build them
+now), match-3 specials/combos, and the other six characters.
+
 ## Status
 
 Repo scaffolded 2026-09-03. Pass 0 (matching + recede) and Pass 0.1a (orbit
 → locked puzzle → back out) both built the same day and landed well on phone
-playtests. **Pass 0.2 — the confinement→vista thicket test — built
-2026-09-04, awaiting evaluation.**
+playtests. **Pass 0.2 — the confinement→vista thicket test — built and
+confirmed 2026-09-04**: played great on a real phone playtest, the
+confinement-to-release arc read as satisfying even with the deliberately
+trivial 1-of-5-flowers puzzle. All three original feel-test questions (does
+matching+recede feel good, does the lock/unlock transition feel good, does
+the confinement→vista payoff land) are now answered yes — see "The pivot"
+above for what's queued next (Pass 0.3).
 
 What 0.2 adds:
 - **Whole-voxel resolve.** A 5-flower one-shot voxel could never fully
