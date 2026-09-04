@@ -1,23 +1,38 @@
-// Pass 0.2: minimal first-person movement, touch-first. Scaffolding for the
-// confinement→vista test, not a feature: a dynamic virtual joystick on the
-// left part of the screen, drag-to-look elsewhere, WASD for desktop. First
-// person (not the 0.1a orbit) because voxels are packed tightly enough that a
-// third-person camera would spend most of its time inside one.
+// Pass 0.2: first-person movement scaffolding, touch-first.
+// Pass 0.3b: the free joystick is replaced by waypoint movement (DESIGN.md).
+// Press-hold on the movement side of the screen fans out candidate points
+// ahead of the player — continuous positions at fixed distances and angles,
+// filtered by the same collision the joystick used, not a formal grid — and
+// releasing over one tweens a smooth move there, with the ease cameraLock.ts
+// already uses. Drag elsewhere still free-looks. One input = one move.
 
 import * as THREE from 'three';
 
 // ---- Tuning constants ---------------------------------------------------------
 export const EYE_HEIGHT = 0.55;
 export const PLAYER_RADIUS = 0.25;
-export const WALK_SPEED = 1.9; // units/s
-/** Fraction of the screen width (from the left) where a touch becomes the joystick. */
-export const JOYSTICK_ZONE = 0.42;
-export const JOYSTICK_RADIUS_PX = 52;
+/** Fraction of the screen width (from the left) where a press becomes a move, not a look. */
+export const MOVE_ZONE = 0.42;
 export const LOOK_SENSITIVITY = 0.0042; // radians per px
 export const PITCH_LIMIT = Math.PI * 0.42;
 /** A press that moves less than this and lifts within TAP_MS counts as a tap. */
 export const TAP_SLOP_PX = 8;
 export const TAP_MS = 450;
+/** Holding this long on the movement side opens the waypoint fan. */
+export const HOLD_MS = 160;
+/**
+ * Candidate points: these distances ahead, at angles that are fractions of
+ * the camera's half horizontal field of view — so the fan always fits the
+ * screen, wide in landscape, narrow in portrait (turn first, then hop). The
+ * nearest row sits just below the view at level pitch: look down for it.
+ */
+export const WAYPOINT_DISTANCES = [1.0, 2.2, 3.4];
+export const WAYPOINT_ANGLE_FRACTIONS = [-0.85, -0.45, 0, 0.45, 0.85];
+/** How close (screen px) the thumb must be to a marker to pick it. */
+export const PICK_RADIUS_PX = 110;
+/** Move tween: a base plus a per-unit term so long hops take longer but not proportionally. */
+export const MOVE_BASE_MS = 320;
+export const MOVE_MS_PER_UNIT = 170;
 // -------------------------------------------------------------------------------
 
 export interface CircleCollider {
@@ -27,13 +42,22 @@ export interface CircleCollider {
 }
 
 interface TrackedPointer {
-  role: 'joystick' | 'look';
+  role: 'move' | 'look';
   startX: number;
   startY: number;
   lastX: number;
   lastY: number;
   downMs: number;
   moved: boolean;
+}
+
+interface Candidate {
+  point: THREE.Vector3;
+  marker: THREE.Mesh;
+}
+
+function easeInOutCubic(x: number): number {
+  return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
 }
 
 export class Player {
@@ -47,21 +71,53 @@ export class Player {
   onTap: (clientX: number, clientY: number) => void = () => {};
 
   private readonly pointers = new Map<number, TrackedPointer>();
-  private readonly joy = new THREE.Vector2();
-  private readonly keys = new Set<string>();
-  private readonly joyBase: HTMLElement;
-  private readonly joyKnob: HTMLElement;
+  private colliders: readonly CircleCollider[] = [];
+  private extraCollide: ((p: THREE.Vector3) => void) | undefined;
 
-  constructor(private readonly canvas: HTMLCanvasElement, joyBase: HTMLElement, joyKnob: HTMLElement) {
-    this.joyBase = joyBase;
-    this.joyKnob = joyKnob;
+  // Waypoint fan.
+  private readonly markers = new THREE.Group();
+  private readonly candidates: Candidate[] = [];
+  private fanOpen = false;
+  private picked: Candidate | null = null;
+  private readonly markerMaterial = new THREE.MeshBasicMaterial({
+    color: 0xcfe6cf,
+    transparent: true,
+    opacity: 0.5,
+    depthWrite: false,
+  });
+  private readonly pickedMaterial = new THREE.MeshBasicMaterial({
+    color: 0xffffff,
+    transparent: true,
+    opacity: 0.95,
+    depthWrite: false,
+  });
+
+  // Move tween.
+  private move: { from: THREE.Vector3; to: THREE.Vector3; startMs: number; durationMs: number } | null = null;
+
+  constructor(
+    private readonly canvas: HTMLCanvasElement,
+    scene: THREE.Scene,
+    private readonly camera: THREE.Camera
+  ) {
     canvas.addEventListener('pointerdown', this.onDown);
     canvas.addEventListener('pointermove', this.onMove);
     canvas.addEventListener('pointerup', this.onUp);
     canvas.addEventListener('pointercancel', this.onUp);
-    window.addEventListener('keydown', (e) => this.keys.add(e.key.toLowerCase()));
-    window.addEventListener('keyup', (e) => this.keys.delete(e.key.toLowerCase()));
-    window.addEventListener('blur', () => this.keys.clear());
+
+    const ring = new THREE.RingGeometry(0.15, 0.22, 24);
+    for (let i = 0; i < WAYPOINT_DISTANCES.length * WAYPOINT_ANGLE_FRACTIONS.length; i++) {
+      const marker = new THREE.Mesh(ring, this.markerMaterial);
+      marker.rotation.x = -Math.PI / 2;
+      marker.visible = false;
+      this.markers.add(marker);
+      this.candidates.push({ point: new THREE.Vector3(), marker });
+    }
+    scene.add(this.markers);
+  }
+
+  get isMoving(): boolean {
+    return this.move !== null;
   }
 
   eye(): THREE.Vector3 {
@@ -82,48 +138,130 @@ export class Player {
     camera.lookAt(this.eye().add(this.forward()));
   }
 
-  update(dtSeconds: number, colliders: readonly CircleCollider[], extraCollide?: (p: THREE.Vector3) => void): void {
-    if (!this.enabled) return;
-    // Move in the camera's yaw frame: joystick up = forward.
-    let mx = this.joy.x;
-    let mz = -this.joy.y;
-    if (this.keys.has('w') || this.keys.has('arrowup')) mz += 1;
-    if (this.keys.has('s') || this.keys.has('arrowdown')) mz -= 1;
-    if (this.keys.has('a') || this.keys.has('arrowleft')) mx -= 1;
-    if (this.keys.has('d') || this.keys.has('arrowright')) mx += 1;
-    const len = Math.hypot(mx, mz);
-    if (len < 1e-3) return;
-    if (len > 1) {
-      mx /= len;
-      mz /= len;
-    }
-    const step = WALK_SPEED * dtSeconds;
-    const sin = Math.sin(this.yaw);
-    const cos = Math.cos(this.yaw);
-    // forward is (-sin, -cos); right is (cos, -sin)
-    this.position.x += (-sin * mz + cos * mx) * step;
-    this.position.z += (-cos * mz - sin * mx) * step;
+  /**
+   * Per frame. `colliders`/`extraCollide` are remembered so the waypoint fan
+   * can be filtered with the same walkability the move itself obeys.
+   */
+  update(nowMs: number, colliders: readonly CircleCollider[], extraCollide?: (p: THREE.Vector3) => void): void {
+    this.colliders = colliders;
+    this.extraCollide = extraCollide;
 
-    for (const c of colliders) {
-      const dx = this.position.x - c.x;
-      const dz = this.position.z - c.z;
-      const minDist = c.radius + PLAYER_RADIUS;
-      const d = Math.hypot(dx, dz);
-      if (d < minDist && d > 1e-6) {
-        this.position.x = c.x + (dx / d) * minDist;
-        this.position.z = c.z + (dz / d) * minDist;
+    if (this.move) {
+      const m = this.move;
+      const p = Math.min(1, (nowMs - m.startMs) / m.durationMs);
+      this.position.lerpVectors(m.from, m.to, easeInOutCubic(p));
+      if (p >= 1) this.move = null;
+    }
+
+    if (this.fanOpen && this.enabled && !this.move) this.layoutFan();
+    else this.closeFan();
+  }
+
+  // ---- walkability -----------------------------------------------------------------
+
+  private isFree(p: THREE.Vector3): boolean {
+    for (const c of this.colliders) {
+      if (Math.hypot(p.x - c.x, p.z - c.z) < c.radius + PLAYER_RADIUS) return false;
+    }
+    if (this.extraCollide) {
+      const probe = p.clone();
+      this.extraCollide(probe);
+      if (probe.distanceToSquared(p) > 1e-6) return false;
+    }
+    return true;
+  }
+
+  private pathClear(from: THREE.Vector3, to: THREE.Vector3): boolean {
+    const steps = 8;
+    const probe = new THREE.Vector3();
+    for (let i = 1; i <= steps; i++) {
+      probe.lerpVectors(from, to, i / steps);
+      if (!this.isFree(probe)) return false;
+    }
+    return true;
+  }
+
+  // ---- waypoint fan ----------------------------------------------------------------
+
+  private halfHorizontalFov(): number {
+    const cam = this.camera as THREE.PerspectiveCamera;
+    return Math.atan(Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2) * cam.aspect);
+  }
+
+  private layoutFan(): void {
+    this.markers.visible = true;
+    const fx = -Math.sin(this.yaw);
+    const fz = -Math.cos(this.yaw);
+    const halfFov = this.halfHorizontalFov();
+    let i = 0;
+    for (const d of WAYPOINT_DISTANCES) {
+      for (const f of WAYPOINT_ANGLE_FRACTIONS) {
+        const a = f * halfFov;
+        const cand = this.candidates[i++];
+        const cos = Math.cos(a);
+        const sin = Math.sin(a);
+        // rotate the forward vector by `a` about +Y
+        cand.point.set(this.position.x + (fx * cos + fz * sin) * d, this.position.y, this.position.z + (-fx * sin + fz * cos) * d);
+        const ok = this.isFree(cand.point) && this.pathClear(this.position, cand.point);
+        cand.marker.visible = ok;
+        cand.marker.position.set(cand.point.x, this.position.y + 0.02, cand.point.z);
       }
     }
-    extraCollide?.(this.position);
+    this.refreshPick();
   }
+
+  private closeFan(): void {
+    if (!this.markers.visible) return;
+    this.markers.visible = false;
+    this.picked = null;
+  }
+
+  /** Highlight the visible marker nearest the move pointer on screen, if it's close enough. */
+  private refreshPick(): void {
+    const mp = [...this.pointers.values()].find((p) => p.role === 'move');
+    if (!mp) return;
+    const rect = this.canvas.getBoundingClientRect();
+    const v = new THREE.Vector3();
+    let best: Candidate | null = null;
+    let bestD = PICK_RADIUS_PX;
+    for (const cand of this.candidates) {
+      if (!cand.marker.visible) continue;
+      v.copy(cand.marker.position).project(this.camera);
+      const sx = rect.left + (v.x * 0.5 + 0.5) * rect.width;
+      const sy = rect.top + (-v.y * 0.5 + 0.5) * rect.height;
+      const d = Math.hypot(sx - mp.lastX, sy - mp.lastY);
+      if (d < bestD) {
+        bestD = d;
+        best = cand;
+      }
+    }
+    if (best !== this.picked) {
+      if (this.picked) {
+        this.picked.marker.material = this.markerMaterial;
+        this.picked.marker.scale.setScalar(1);
+      }
+      this.picked = best;
+      if (best) {
+        best.marker.material = this.pickedMaterial;
+        best.marker.scale.setScalar(1.45);
+      }
+    }
+  }
+
+  private commitMove(to: THREE.Vector3): void {
+    const from = this.position.clone();
+    const dist = from.distanceTo(to);
+    this.move = { from, to: to.clone(), startMs: performance.now(), durationMs: MOVE_BASE_MS + dist * MOVE_MS_PER_UNIT };
+  }
+
+  // ---- pointer events ---------------------------------------------------------------
 
   private readonly onDown = (e: PointerEvent): void => {
     const rect = this.canvas.getBoundingClientRect();
-    const isTouch = e.pointerType === 'touch';
-    const wantsJoystick =
-      isTouch && this.enabled && e.clientX - rect.left < rect.width * JOYSTICK_ZONE && ![...this.pointers.values()].some((p) => p.role === 'joystick');
-    const role: TrackedPointer['role'] = wantsJoystick ? 'joystick' : 'look';
-    if (role === 'look' && [...this.pointers.values()].some((p) => p.role === 'look')) return;
+    const roles = [...this.pointers.values()].map((p) => p.role);
+    const wantsMove = e.clientX - rect.left < rect.width * MOVE_ZONE && !roles.includes('move');
+    const role: TrackedPointer['role'] = wantsMove ? 'move' : 'look';
+    if (role === 'look' && roles.includes('look')) return;
     this.pointers.set(e.pointerId, {
       role,
       startX: e.clientX,
@@ -134,49 +272,39 @@ export class Player {
       moved: false,
     });
     this.canvas.setPointerCapture(e.pointerId);
-    if (role === 'joystick') this.showJoystick(e.clientX, e.clientY);
+    if (role === 'move' && this.enabled && !this.move) {
+      window.setTimeout(() => {
+        if (this.pointers.get(e.pointerId)?.role === 'move') this.fanOpen = true;
+      }, HOLD_MS);
+    }
   };
 
   private readonly onMove = (e: PointerEvent): void => {
     const p = this.pointers.get(e.pointerId);
     if (!p) return;
     if (Math.hypot(e.clientX - p.startX, e.clientY - p.startY) > TAP_SLOP_PX) p.moved = true;
-    if (p.role === 'joystick') {
-      const dx = e.clientX - p.startX;
-      const dy = e.clientY - p.startY;
-      const len = Math.hypot(dx, dy);
-      const clamp = Math.min(1, len / JOYSTICK_RADIUS_PX);
-      const nx = len > 0 ? dx / len : 0;
-      const ny = len > 0 ? dy / len : 0;
-      this.joy.set(nx * clamp, ny * clamp);
-      this.joyKnob.style.transform = `translate(${nx * clamp * JOYSTICK_RADIUS_PX}px, ${ny * clamp * JOYSTICK_RADIUS_PX}px)`;
-    } else if (this.enabled) {
+    if (p.role === 'look' && this.enabled) {
       this.yaw -= (e.clientX - p.lastX) * LOOK_SENSITIVITY;
       this.pitch = THREE.MathUtils.clamp(this.pitch - (e.clientY - p.lastY) * LOOK_SENSITIVITY, -PITCH_LIMIT, PITCH_LIMIT);
     }
     p.lastX = e.clientX;
     p.lastY = e.clientY;
+    if (p.role === 'move' && this.fanOpen) this.refreshPick();
   };
 
   private readonly onUp = (e: PointerEvent): void => {
     const p = this.pointers.get(e.pointerId);
     if (!p) return;
     this.pointers.delete(e.pointerId);
-    if (p.role === 'joystick') {
-      this.joy.set(0, 0);
-      this.hideJoystick();
+    if (p.role === 'move') {
+      const wasOpen = this.fanOpen;
+      this.fanOpen = false;
+      if (wasOpen && this.markers.visible) {
+        if (this.picked && this.enabled) this.commitMove(this.picked.point);
+        this.closeFan();
+        return; // a hold is never also a tap
+      }
     }
     if (!p.moved && performance.now() - p.downMs < TAP_MS) this.onTap(e.clientX, e.clientY);
   };
-
-  private showJoystick(x: number, y: number): void {
-    this.joyBase.hidden = false;
-    this.joyBase.style.left = `${x}px`;
-    this.joyBase.style.top = `${y}px`;
-    this.joyKnob.style.transform = 'translate(0px, 0px)';
-  }
-
-  private hideJoystick(): void {
-    this.joyBase.hidden = true;
-  }
 }

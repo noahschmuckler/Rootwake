@@ -8,6 +8,7 @@
 // Pass 0.3a: the match-3 pivot. A real board of 3D gems in the locked view;
 //           runs fire shots at the flower of their colour, fill its pool,
 //           recede it; five receded flowers resolve the voxel.
+// Pass 0.3b: waypoint movement — hold, pick a marker ahead, release to hop.
 // Still out of scope: combat, specials, the 6-face mirror, a real field, art.
 
 import * as THREE from 'three';
@@ -40,11 +41,7 @@ const cameraRig = new CameraRig(camera);
 scene.add(camera);
 const boardView = new BoardView(camera);
 const projectiles = new Projectiles(scene);
-const player = new Player(
-  renderer.domElement,
-  document.getElementById('joy')!,
-  document.getElementById('joy-knob')!
-);
+const player = new Player(renderer.domElement, scene, camera);
 player.position.set(0, GROUND_Y, 0);
 // Face away from the way out, so the vista is something you find, not something you're shown.
 player.yaw = Math.PI / 2;
@@ -114,9 +111,8 @@ const hud = document.getElementById('hud')!;
 const hint = document.getElementById('hint')!;
 const backButton = document.getElementById('back') as HTMLButtonElement;
 
-const touch = window.matchMedia('(pointer: coarse)').matches;
 const HINTS: Record<CameraMode, string> = {
-  free: `${touch ? 'Left thumb to walk' : 'WASD to walk'}, drag to look. Walk up to the growth and tap it.`,
+  free: 'Hold on the left to pick a spot, release to move. Drag to look. Tap the growth to lock in.',
   locking: '',
   locked: 'Tap a gem, then a neighbour, to swap. Matches feed the flower of their colour.',
   unlocking: '',
@@ -217,7 +213,7 @@ window.addEventListener('resize', () => {
 // ---- Loop -------------------------------------------------------------------
 // Animation clock in ms, scaled by slowmo so every tuning constant stays in
 // real-speed milliseconds. Movement uses real time — slowmo is for watching
-// animations, not for wading.
+// animations, not for hopping.
 let animClock = 0;
 let lastFrame = performance.now();
 applyMode(cameraRig.mode);
@@ -234,7 +230,7 @@ function animate(now: number): void {
 
   if (cameraRig.mode === 'free') {
     const colliders = voxels.flatMap((v) => v.collider() ?? []);
-    player.update(dt, colliders, world.collide);
+    player.update(now, colliders, world.collide);
     player.applyCamera(camera);
   }
   cameraRig.update(animClock);
