@@ -285,6 +285,82 @@ charge mechanics, mid-combat repositioning or AoE effects (design the
 targeting-strategy abstraction to be ready for these later, don't build them
 now), match-3 specials/combos, and the other six characters.
 
+## Pass 0.4 — ground, not just trees (2026-09-04)
+
+Both halves of Pass 0.3 landed. Direction for this pass, per the designer:
+move the thicket closer to what the shipped game's confinement actually
+looks like, and add a second interactable — tillable ground — alongside the
+plant voxels.
+
+### The enclosure: density, not a wall
+
+Pass 0.2's hedge-wall-and-canopy (`world.ts`: `ENCLOSURE_RADIUS`,
+`WALL_HEIGHT`, `CANOPY_HEIGHT`, the dark ring geometry) was scaffolding to
+get *a* confined pocket built fast — a stand-in, not the real thing. Retire
+it. The confinement should come from **the trees themselves being dense
+enough to block sightlines**, not from separate non-interactive boundary
+geometry: the starting area should read as roughly **three voxels thick**
+in every blocked direction before open ground appears, with the one
+existing opening (toward the vista) kept clear as before. This almost
+certainly means more voxel instances than the current 8, arranged so their
+own foliage does the enclosing work the hedge/canopy used to fake. Ground
+material also changes: mostly **grey coarse rock** (untillable), which the
+tillable grass patches (below) interrupt.
+
+### Ground tilling — the second interactable
+
+DiggyDwarves' own dig-the-soil verb, brought over: patches of ground are
+**tillable** (rendered as fuzzy green grass) among **untillable** ground
+(grey coarse rock). Patches sit at roughly grid-like world positions —
+authored placement that *reads* as a grid, not a retrofit of the world onto
+a real tile-grid data structure (the world stays the continuous-position
+model the waypoint movement already relies on).
+
+- **Tap a patch** → the camera tweens into a locked, **looking-down**
+  framing of it (a new orientation for the existing `cameraLock.ts`
+  machinery, not new tweening code — today's lock only frames a vertical
+  cube face), positioned so the match-3 board sits over the patch while
+  most of the grass remains visible around/behind it, same transparency
+  principle as the voxel board.
+- **One shared HP pool per patch** — every match feeds it regardless of
+  gem color, unlike the flowers' five independent per-color pools. This is
+  a new `targeting.ts` strategy (a third alongside `byColor`/`byColumn`):
+  every run feeds the single target, no color/column logic needed.
+  `board3d.ts`/`match3.ts`/`projectiles.ts` are otherwise reused as-is —
+  matches still fire a projectile at the patch.
+- **Visual staging, discrete steps at HP thresholds** — mirror
+  DiggyDwarves' own 4-phase grass system directly (bare → sparse → patchy
+  → full grass), just run in reverse: full fuzzy/spiky green grass at full
+  HP, stepping down through a couple of intermediate stages, ending at
+  fluffy brown clods at zero. Swap between a small set of authored
+  materials/meshes at thresholds — not a continuous shader LERP; the
+  discrete-phase approach is proven and cheap to build.
+- **A depleted patch doesn't vanish or resolve** — it's ground, not an
+  obstacle; once tilled it settles into its final clods look and simply
+  stops accepting more taps (one-shot, no regrowth — same convention as
+  voxels). No `resolve.ts`-style beat needed; there's nothing to remove.
+- **Patches never block movement**, before or after tilling — they're
+  floor. Tilling is an optional action you walk up to, not a path gate
+  (the opposite of voxels, which DO block until resolved).
+
+### Scope, split into two builds (same reason as 0.3a/0.3b — isolate the signals)
+
+**0.4a — the enclosure rework.** Remove the hedge/canopy geometry; redesign
+voxel placement so density (roughly three-thick) does the confining in
+every blocked direction, opening kept clear; reskin the ground to grey rock
+as the base material. Layout/art only — no new interaction.
+
+**0.4b — ground tilling.** The tappable grass patches: the look-down camera
+lock variant, the shared-pool targeting strategy, the board wired to it,
+and the discrete grass→clods staging. Depends on 0.4a's ground reskin
+existing to place patches against, but is otherwise a separate system from
+the enclosure layout.
+
+**Explicitly not this pass:** patch tilling paying out any resource (no
+economy hookup exists yet — same deferral as the whole prototype so far),
+regrowth, more than one tree-voxel-equivalent species, art fidelity beyond
+"reads as grass vs. rock."
+
 ## Status
 
 Repo scaffolded 2026-09-03. Pass 0 (matching + recede) and Pass 0.1a (orbit
