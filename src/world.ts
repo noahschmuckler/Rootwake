@@ -14,11 +14,32 @@ export const WALL_HEIGHT = 4.5;
 export const CANOPY_HEIGHT = 3.4;
 /** The one way out: an opening in the wall centred on +X, this wide. */
 export const OPENING_CENTER_ANGLE = 0; // radians, atan2(z, x) convention → +X
-export const OPENING_HALF_ANGLE = Math.PI / 6;
+export const OPENING_HALF_ANGLE = Math.PI / 8; // ~45° total: from the pocket the outer pair covers all of it but the slit
 export const VISTA_COLOR = 0xe6ecf2;
 export const FOG_NEAR = 9;
 export const FOG_FAR = 45;
 // -------------------------------------------------------------------------------
+
+/**
+ * A disc built from a subdivided grid clamped to a radius, instead of
+ * CircleGeometry's fan. The fan's centre vertex sits exactly under (or over)
+ * the camera at the start point, which puts a vertex at w = 0 in clip space
+ * and made software/mobile rasterisers draw the disc over everything.
+ */
+function discGeometry(radius: number, segments: number): THREE.BufferGeometry {
+  const geo = new THREE.PlaneGeometry(radius * 2, radius * 2, segments, segments);
+  const pos = geo.getAttribute('position') as THREE.BufferAttribute;
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const y = pos.getY(i);
+    const r = Math.hypot(x, y);
+    if (r > radius) {
+      pos.setXY(i, (x / r) * radius, (y / r) * radius);
+    }
+  }
+  pos.needsUpdate = true;
+  return geo;
+}
 
 export interface World {
   group: THREE.Group;
@@ -50,7 +71,7 @@ export function buildWorld(scene: THREE.Scene): World {
 
   // Dark pocket floor under the thicket.
   const pocket = new THREE.Mesh(
-    new THREE.CircleGeometry(ENCLOSURE_RADIUS + 0.6, 64),
+    discGeometry(ENCLOSURE_RADIUS + 0.6, 24),
     new THREE.MeshStandardMaterial({ color: 0x151b12, roughness: 1 })
   );
   pocket.rotation.x = -Math.PI / 2;
@@ -70,7 +91,7 @@ export function buildWorld(scene: THREE.Scene): World {
 
   // Canopy: a dark lid over the pocket so looking up reads as enclosed too.
   const canopy = new THREE.Mesh(
-    new THREE.CircleGeometry(ENCLOSURE_RADIUS + 0.3, 64),
+    discGeometry(ENCLOSURE_RADIUS + 0.3, 24),
     new THREE.MeshStandardMaterial({ color: 0x10170f, roughness: 1, side: THREE.DoubleSide })
   );
   canopy.rotation.x = Math.PI / 2;
