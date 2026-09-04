@@ -440,10 +440,30 @@ spread out below — lands.
 
 ## Status
 
-Repo scaffolded 2026-09-03. Passes 0, 0.1a, 0.2 and 0.3 (both halves) all
-built and confirmed on phone playtests. **Pass 0.4 — the tree-density
-enclosure (0.4a) and ground tilling (0.4b) — built 2026-09-04 as two
-separate commits, awaiting evaluation.**
+Repo scaffolded 2026-09-03. Passes 0 through 0.4 all built and confirmed on
+phone playtests. **Pass 0.4c (one shared pool per tree, four lockable
+faces) and Pass 0.5 (the cliff-edge vista) built 2026-09-05 as two separate
+commits, awaiting evaluation.**
+
+What 0.4c adds: a tree has one shared pool (`single` strategy, capacity
+40); its five flowers recede in stages at 20% thresholds on all four side
+faces at once; the tree resolves from whichever side is locked. The rig
+instances its hand-authored branches per side face around a shared trunk
+and foliage core.
+
+What 0.5 adds: the plateau ends at a curving cliff line ~24 units past the
+start. A faceted, ledged cliff face drops 400 units into haze; far below, a
+forest carpet, a river and three layers of mountain silhouettes fade with
+exponential fog into a gradient sky. The waypoint fan refuses any point
+past the lip (no fall state). Near the lip the FOV widens a little and the
+eye dips. The old pale hills are gone.
+
+**Next step is evaluation, not code — two separable questions:** does one
+shared pool with staged recedes still feel like clearing a tree (0.4c), and
+does reaching the lip and looking out and down land as vertigo and vastness
+(0.5)? Still out of scope: the buildable plateau, building/crafting/mining,
+tilling on new ground, payout, regrowth, combat, specials, other characters,
+art fidelity.
 
 What 0.4 adds:
 - **0.4a, the enclosure.** Hedge wall and canopy are gone. 32 voxels on a
