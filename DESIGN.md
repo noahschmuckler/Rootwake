@@ -438,6 +438,72 @@ system from 0.4b to any new ground. None of those are needed to find out
 whether this one moment — reaching an edge and seeing an inaccessible world
 spread out below — lands.
 
+## Pass 0.6 — weight: hands, felled trees, and land you have to clear (2026-09-05)
+
+Passes 0 through 0.5 validated moments. 0.6 is the first loop test, and it
+lands a second standing rule alongside confinement→vista: **objects have
+weight.** No bag of holding. Clearing the fiftieth tree does not put fifty
+"wood" in a list; it drops one log where the tree stood, and the log is in
+the way until someone moves it. This is the major pivot from DiggyDwarves,
+whose bag/cloth crafting was designed and never mattered because carrying
+was infinite. The sourdough loop there — a real process, in a place, over
+time — is the model for how everything should feel.
+
+### The rule: mass, strength, hands
+
+Every object type has a **size class** (how it fills a hand: `tiny` 20 per
+hand, `small` 5 per hand, `large` 1 per hand) and a **mass**. The character
+has a **strength**. Two numbers and one stat decide every physical
+interaction:
+
+- hands to **lift** = ceil(mass / strength); hands to **drag** = half that.
+- stackables (tiny/small) have negligible mass.
+- with strength 1 and two hands: a morningstar (mass 2) lifts two-handed and
+  drags one-handed; a log (mass 4) cannot be lifted but drags with two
+  hands; a boulder (mass 8) cannot be moved. At strength 4 the same table
+  says the log swings one-handed like a bat, the boulder lifts and throws,
+  morningstars dual-wield. Nothing is authored per object.
+- **strength is where fatigue and food land later** (DiggyDwarves' fatigue
+  finally means something: a tired character gets physically weak, one fed
+  on good food gets stronger than average). Not built this pass; strength
+  is a constant 1 that already goes through the formula.
+
+### Hands: the UI and the one gesture
+
+Two boxes at the top of the screen are the hands. **One gesture does
+everything: drag from a hand box to a thing.** From an empty hand it takes
+(sticks fly up into the box, shrunk and numbered; a handful of seeds is the
+cluster within arm's reach). From a full hand it places or uses (onto the
+ground: drop there; onto something: interact). Tap a full box to drop at
+your feet. Dragging a hand to a log forms a **constant luminescent linkage**
+from the nearest point on the log to the box; a drag-2 object needs both
+hands linked — one hand shows strain and refuses to move. While dragging,
+hops are shorter and slower. Objects never block movement; they block
+*tilling*.
+
+### The tree ending
+
+Foliage releases (the flowers recede as before, the greenery dissolves),
+then the **trunk topples toward the side you worked it from and lands with
+a weighty thud** — camera shake, dust. Branches and seeds break off around
+it. Where the tree stood a **footprint patch** appears, blocked until the
+log is dragged off and the sticks carried away; then it is tillable. The
+0.2 sink-into-ground beat stays in the code behind a constant for A/B.
+
+### Scope
+
+- **0.6a** — the felled-tree ending, spawned objects (log, sticks, seeds)
+  with the size/mass table, the blocked footprint patch. Layout of the
+  loop, no hands yet.
+- **0.6b** — hands: the two boxes, hand-to-thing, stacks, the two-hand log
+  drag with linkage, drop/place, footprint clearing → tillable.
+- **0.6c** (scoped, not yet built) — the first recipe weight motivates:
+  sticks → cord → a bag (a third hand) or a sledge for logs; seeds onto a
+  tilled patch to plant. Then fatigue/food onto strength.
+
+**Explicitly not this pass:** planting and growth, any recipe, payout
+counters, fatigue/food, combat use of held objects, physics.
+
 ## Status
 
 Repo scaffolded 2026-09-03. Passes 0 through 0.4 all built and confirmed on
