@@ -2,8 +2,10 @@
 
 A prototype for a separate, 3D game exploring a "confinement → open vista"
 cosmology — spun out of DiggyDwarves' overworld direction (a different repo,
-different stack). **Read `DESIGN.md` first** — it has the full design brief,
-reference games, and the current MVP spec (Pass 0). This file is just the
+different stack). **Read `DESIGN.md` first** — the design brief, reference
+games and the pass-by-pass record. `SYSTEMS.md` holds the systems as they
+are meant to work (vitality, vision, shelter, crafting, building);
+`ROADMAP.md` holds the pass order to build them. This file is the
 practical/dev-workflow half.
 
 ## Stack
@@ -71,10 +73,10 @@ objects have weight (DESIGN.md).** `src/` holds:
   footprint), blocked evaluation, hands wiring, HUD, `?seed=` /
   `?slowmo=`, `window.__rootwake`.
 
-Do **not** start 0.6c (recipes, planting), fatigue/food → strength, the
-buildable plateau, building/crafting/mining, combat, specials, more species
-or art until the designer has judged 0.6a and 0.6b separately — see
-DESIGN.md.
+0.6a and 0.6b have been judged satisfying. The next pass is whatever
+`ROADMAP.md` lists next (0.6c, then 0.7a); do not skip ahead in that order
+without the designer — each pass exists to answer a question the previous
+one raised.
 
 ## Headless checking
 

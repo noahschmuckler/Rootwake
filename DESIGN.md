@@ -504,6 +504,15 @@ log is dragged off and the sticks carried away; then it is tillable. The
 **Explicitly not this pass:** planting and growth, any recipe, payout
 counters, fatigue/food, combat use of held objects, physics.
 
+## Beyond the passes: SYSTEMS.md and ROADMAP.md (2026-09-05)
+
+The designer's systems notes — the "nothing just because" philosophy,
+vitality as a halo instead of a bar, the two vision regimes, shelter and
+weather, rocks and the stone hand axe, log-cabin shaping — live in
+`SYSTEMS.md`. The implementation order they imply (0.6c → 1.1 and beyond),
+one question per pass, lives in `ROADMAP.md`. This file stays the record of
+what was built and why.
+
 ## Status
 
 Repo scaffolded 2026-09-03. Passes 0 through 0.5 built and confirmed on phone
