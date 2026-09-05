@@ -23,8 +23,8 @@ don't add structure the prototype doesn't need yet.
 
 ## Status
 
-**Passes 0 through 0.6c judged satisfying on phone; Pass 0.7a (vitality)
-built 2026-09-05, awaiting evaluation. Standing rules: confinement→vista,
+**Passes 0 through 0.7a judged satisfying on phone; Pass 0.7b (day/night,
+vision regimes, lichen) built 2026-09-05, awaiting evaluation. Standing rules: confinement→vista,
 objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
 `src/` holds:
 
@@ -44,12 +44,15 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
   and 'planted'.
 - `growth.ts` — the sapling: three authored stages over GROW_MS;
   PLANT_SEEDS.
+- `daylight.ts` — the day cycle: sun/moon/hemisphere/sky/fog by time of
+  day; night vision (fed = moonlit and washed, tired = dark with glow).
 - `vitality.ts` — the one stat: drains, food, rest, collapse with
   diminishing wake-ups; bands → strength / caps / hands / fan reach; halo,
   saturation, exposure, blackout curves. Tuning constants at the top.
 - `objects.ts` — the weight rule: size class (20/5/1 per hand), mass,
-  strength, hands-to-lift / hands-to-drag; object types (seed, stick, log;
-  seeds are food); WorldObject/ObjectWorld and the felled-tree scatter.
+  strength, hands-to-lift / hands-to-drag; object types (seed, stick, log,
+  lichen; seeds are food); `collectible` flag; WorldObject/ObjectWorld and
+  the felled-tree scatter.
 - `hands.ts` — the two hand boxes and the one gesture (drag a box to a
   thing: take / gather / lift / link / place), leashes, fly-to-box, the
   two-hand log drag on a rope, strain; a placeOnTarget hook for things
@@ -75,15 +78,16 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
 - `world.ts` — the rock plateau cut on a curving cliff line, the cliff
   face, the never-walked landscape 400 below (forest floor, canopies,
   river, three mountain layers), FogExp2, sky dome; isWalkable() and
-  distanceToEdge().
+  distanceToEdge(); exposes sun/moon/hemi/sky/fog for the day cycle.
 - `main.ts` — hex-lattice thicket, patch placement, mode-aware input over
   all interactables, board bind/show/hide, shots → pools, locked-view fade
   rule, auto back-out, edge FOV/dip, felling aftermath (shake, scatter,
   footprint), blocked evaluation, hands wiring, vitality wiring (drains,
-  halo/filter/exposure/blackout, hints), HUD, `?seed=` / `?slowmo=` /
-  `?debug=`, `window.__rootwake`.
+  halo/filter/exposure/blackout, hints), day cycle + night vision + lichen
+  scatter, HUD, `?seed=` / `?slowmo=` / `?debug=` / `?time=`,
+  `window.__rootwake`. UI layers have explicit z-indexes above the canvas.
 
-The next pass is whatever `ROADMAP.md` lists next (0.7b once 0.7a is
+The next pass is whatever `ROADMAP.md` lists next (0.8 once 0.7b is
 judged); do not skip ahead in that order without the designer — each pass
 exists to answer a question the previous one raised.
 

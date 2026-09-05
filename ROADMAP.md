@@ -13,8 +13,8 @@ roof, must want a roof before there are shaped logs.
 
 ## Where we are
 
-Built and judged: Passes 0 → 0.6c. Built, awaiting judgement: 0.7a
-(vitality and the halo). Next: 0.7b.
+Built and judged: Passes 0 → 0.7a. Built, awaiting judgement: 0.7b
+(day/night, vision regimes, lichen). Next: 0.8.
 
 ## Pass 0.6c — planting and the first tension
 

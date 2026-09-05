@@ -23,6 +23,9 @@ hands to the log to drag it off; clear the footprint and it becomes
 tillable. Drag seeds onto tilled ground to plant a tree, or hold the seed
 box to eat them. Work tires you: the edges of the screen darken, colour
 drains, hops shorten; rest with a still press on the right, or collapse and
-wake tired. Clear toward the light, walk to the edge, and look down. `R`
+wake tired. Night falls every few minutes: well fed you see the plateau by
+moonlight, tired you see only the lichen glowing on the rock, and only
+then can you gather it. Clear toward the light, walk to the edge, and look
+down. `R`
 reshuffles (new seed), `?seed=N` repeats a layout, `?slowmo=N` slows the
 animations.

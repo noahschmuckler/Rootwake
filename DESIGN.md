@@ -515,10 +515,15 @@ what was built and why.
 
 ## Status
 
-Repo scaffolded 2026-09-03. Passes 0 through 0.6c built and confirmed on
-phone playtests. **Pass 0.7a (vitality and the halo) built 2026-09-05,
-awaiting evaluation.** Next per ROADMAP.md: 0.7b (day/night and the two
-vision regimes).
+Repo scaffolded 2026-09-03. Passes 0 through 0.7a built and confirmed on
+phone playtests. **Pass 0.7b (day/night and the two vision regimes) built
+2026-09-05, awaiting evaluation.** Next per ROADMAP.md: 0.8 (rocks and the
+stone hand axe).
+
+What 0.7b adds: a four-minute day. At night, well fed, the plateau is
+moonlit and washed out; tired, it is dark and the lichen on the rock glows,
+collectible only then. Also fixes a layering bug from 0.7a where the hand
+boxes went dead once the tired colour filter was on.
 
 What 0.7a adds: vitality (SYSTEMS.md §1). Working trees, tilling, hopping
 and time drain it; holding a box of seeds eats them; a still hold on the
