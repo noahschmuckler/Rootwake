@@ -515,9 +515,18 @@ what was built and why.
 
 ## Status
 
-Repo scaffolded 2026-09-03. Passes 0 through 0.6b built and confirmed on
-phone playtests. **Pass 0.6c (planting) built 2026-09-05, awaiting
-evaluation.** Next per ROADMAP.md: 0.7a (vitality and the halo).
+Repo scaffolded 2026-09-03. Passes 0 through 0.6c built and confirmed on
+phone playtests. **Pass 0.7a (vitality and the halo) built 2026-09-05,
+awaiting evaluation.** Next per ROADMAP.md: 0.7b (day/night and the two
+vision regimes).
+
+What 0.7a adds: vitality (SYSTEMS.md §1). Working trees, tilling, hopping
+and time drain it; holding a box of seeds eats them; a still hold on the
+look side rests. As it falls the screen's edges darken and close in, colour
+greys and the world dims; hops shorten; the log becomes too heavy to drag;
+then one hand, then none. At the floor you black out and wake tired, less
+each time until you eat. Well fed, colours are richer with a faint warm
+rim. `?debug=1` shows the number for tuning.
 
 What 0.6c adds: drag a hand holding four or more seeds onto a *tilled*
 patch to plant it. A sapling grows through three stages over 90 seconds and

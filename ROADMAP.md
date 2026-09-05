@@ -13,8 +13,8 @@ roof, must want a roof before there are shaped logs.
 
 ## Where we are
 
-Built and judged: Passes 0 → 0.5. Built, awaiting judgement: 0.6a (felled
-tree, objects, blocked footprints), 0.6b (hands). Scoped, unbuilt: 0.6c.
+Built and judged: Passes 0 → 0.6c. Built, awaiting judgement: 0.7a
+(vitality and the halo). Next: 0.7b.
 
 ## Pass 0.6c — planting and the first tension
 

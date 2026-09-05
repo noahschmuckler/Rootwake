@@ -23,7 +23,7 @@ don't add structure the prototype doesn't need yet.
 
 ## Status
 
-**Passes 0 through 0.6b judged satisfying on phone; Pass 0.6c (planting)
+**Passes 0 through 0.6c judged satisfying on phone; Pass 0.7a (vitality)
 built 2026-09-05, awaiting evaluation. Standing rules: confinement→vista,
 objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
 `src/` holds:
@@ -44,13 +44,17 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
   and 'planted'.
 - `growth.ts` — the sapling: three authored stages over GROW_MS;
   PLANT_SEEDS.
+- `vitality.ts` — the one stat: drains, food, rest, collapse with
+  diminishing wake-ups; bands → strength / caps / hands / fan reach; halo,
+  saturation, exposure, blackout curves. Tuning constants at the top.
 - `objects.ts` — the weight rule: size class (20/5/1 per hand), mass,
-  strength, hands-to-lift / hands-to-drag; object types (seed, stick, log);
-  WorldObject/ObjectWorld and the felled-tree scatter.
+  strength, hands-to-lift / hands-to-drag; object types (seed, stick, log;
+  seeds are food); WorldObject/ObjectWorld and the felled-tree scatter.
 - `hands.ts` — the two hand boxes and the one gesture (drag a box to a
   thing: take / gather / lift / link / place), leashes, fly-to-box, the
   two-hand log drag on a rope, strain; a placeOnTarget hook for things
-  that take a stack (tilled patches take seeds).
+  that take a stack (tilled patches take seeds); a HandCondition from
+  vitality (strength, caps, usable hands); hold a food box to eat.
 - `fell.ts` — the felled-tree ending: release, topple, thud, dust.
 - `rig.ts` — hand-placed trunk/branch curves/flowers, instanced per side
   face (1 or 4) around a seeded dark foliage core; invisible hit spheres,
@@ -67,7 +71,7 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
   the Pass 0 face framing, `lookDownPoseFor()` the patch framing.
 - `player.ts` — first-person look plus waypoint-fan movement; candidates
   filtered by colliders and the world's isWalkable(); encumbrance hooks;
-  per-frame push-out from colliders.
+  per-frame push-out from colliders; onHop and a still-hold rest gesture.
 - `world.ts` — the rock plateau cut on a curving cliff line, the cliff
   face, the never-walked landscape 400 below (forest floor, canopies,
   river, three mountain layers), FogExp2, sky dome; isWalkable() and
@@ -75,10 +79,11 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
 - `main.ts` — hex-lattice thicket, patch placement, mode-aware input over
   all interactables, board bind/show/hide, shots → pools, locked-view fade
   rule, auto back-out, edge FOV/dip, felling aftermath (shake, scatter,
-  footprint), blocked evaluation, hands wiring, HUD, `?seed=` /
-  `?slowmo=`, `window.__rootwake`.
+  footprint), blocked evaluation, hands wiring, vitality wiring (drains,
+  halo/filter/exposure/blackout, hints), HUD, `?seed=` / `?slowmo=` /
+  `?debug=`, `window.__rootwake`.
 
-The next pass is whatever `ROADMAP.md` lists next (0.7a once 0.6c is
+The next pass is whatever `ROADMAP.md` lists next (0.7b once 0.7a is
 judged); do not skip ahead in that order without the designer — each pass
 exists to answer a question the previous one raised.
 

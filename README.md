@@ -20,7 +20,9 @@ neighbour to swap. Every match feeds the tree; its flowers recede one by one
 and when the pool fills the trunk topples with a thud, leaving a log, sticks
 and seeds. Drag a hand box (top of the screen) to a thing to take it; both
 hands to the log to drag it off; clear the footprint and it becomes
-tillable. Drag seeds onto tilled ground to plant a tree. Clear toward the
-light, walk to the edge, and look down. `R`
+tillable. Drag seeds onto tilled ground to plant a tree, or hold the seed
+box to eat them. Work tires you: the edges of the screen darken, colour
+drains, hops shorten; rest with a still press on the right, or collapse and
+wake tired. Clear toward the light, walk to the edge, and look down. `R`
 reshuffles (new seed), `?seed=N` repeats a layout, `?slowmo=N` slows the
 animations.
