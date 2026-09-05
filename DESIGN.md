@@ -515,11 +515,15 @@ what was built and why.
 
 ## Status
 
-Repo scaffolded 2026-09-03. Passes 0 through 0.5 built and confirmed on phone
-playtests (0.4c and 0.5 judged good). **Pass 0.6a (the felled tree, objects,
-blocked footprints) and 0.6b (hands) built 2026-09-05 as two separate
-commits, awaiting evaluation. 0.6c (first recipe, planting) is scoped, not
-built.**
+Repo scaffolded 2026-09-03. Passes 0 through 0.6b built and confirmed on
+phone playtests. **Pass 0.6c (planting) built 2026-09-05, awaiting
+evaluation.** Next per ROADMAP.md: 0.7a (vitality and the halo).
+
+What 0.6c adds: drag a hand holding four or more seeds onto a *tilled*
+patch to plant it. A sapling grows through three stages over 90 seconds and
+becomes a new tree where the patch was — the first regrowth, and the
+player's to choose. Grass refuses ("Till it first."), planted refuses. A
+tree growing where you stand steps you to its edge.
 
 What 0.6 adds: see "Pass 0.6 — weight" above. In play: a cleared tree
 topples toward you with a thud and leaves a log, three sticks and twelve

@@ -23,10 +23,10 @@ don't add structure the prototype doesn't need yet.
 
 ## Status
 
-**Passes 0 through 0.5 judged satisfying on phone; Pass 0.6a (felled
-tree, objects, blocked footprints) and 0.6b (hands) built 2026-09-05 as two
-commits, awaiting evaluation. Standing rules: confinement→vista, and
-objects have weight (DESIGN.md).** `src/` holds:
+**Passes 0 through 0.6b judged satisfying on phone; Pass 0.6c (planting)
+built 2026-09-05, awaiting evaluation. Standing rules: confinement→vista,
+objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
+`src/` holds:
 
 - `colors.ts` — five colours = five gem types = five flowers; seeded
   permutation per voxel; the shared PRNG.
@@ -40,13 +40,17 @@ objects have weight (DESIGN.md).** `src/` holds:
 - `projectiles.ts` — the shot from a cleared run to its target; the hit
   feeds the pool.
 - `interactable.ts` — what main.ts needs from anything it can lock onto
-  and feed; implemented by `Voxel` and `Patch`. Status includes 'blocked'.
+  and feed; implemented by `Voxel` and `Patch`. Status includes 'blocked'
+  and 'planted'.
+- `growth.ts` — the sapling: three authored stages over GROW_MS;
+  PLANT_SEEDS.
 - `objects.ts` — the weight rule: size class (20/5/1 per hand), mass,
   strength, hands-to-lift / hands-to-drag; object types (seed, stick, log);
   WorldObject/ObjectWorld and the felled-tree scatter.
 - `hands.ts` — the two hand boxes and the one gesture (drag a box to a
   thing: take / gather / lift / link / place), leashes, fly-to-box, the
-  two-hand log drag on a rope, strain.
+  two-hand log drag on a rope, strain; a placeOnTarget hook for things
+  that take a stack (tilled patches take seeds).
 - `fell.ts` — the felled-tree ending: release, topple, thud, dust.
 - `rig.ts` — hand-placed trunk/branch curves/flowers, instanced per side
   face (1 or 4) around a seeded dark foliage core; invisible hit spheres,
@@ -57,12 +61,13 @@ objects have weight (DESIGN.md).** `src/` holds:
   recede at 20% steps on every face) + collider + fade + the ending
   (`fell` or `sink`); locks from whichever side face is nearest.
 - `patch.ts` — one tillable ground patch: board + one shared pool + four
-  authored grass→clods stages, plus a blocked state while objects lie on
-  it. Never collides, never resolves.
+  authored grass→clods stages, a blocked state while objects lie on it,
+  and a planted state that grows a sapling into a tree. Never collides.
 - `cameraLock.ts` — pose-to-pose lock/unlock tween; `lockedPoseFor()` is
   the Pass 0 face framing, `lookDownPoseFor()` the patch framing.
 - `player.ts` — first-person look plus waypoint-fan movement; candidates
-  filtered by colliders and the world's isWalkable(); encumbrance hooks.
+  filtered by colliders and the world's isWalkable(); encumbrance hooks;
+  per-frame push-out from colliders.
 - `world.ts` — the rock plateau cut on a curving cliff line, the cliff
   face, the never-walked landscape 400 below (forest floor, canopies,
   river, three mountain layers), FogExp2, sky dome; isWalkable() and
@@ -73,10 +78,9 @@ objects have weight (DESIGN.md).** `src/` holds:
   footprint), blocked evaluation, hands wiring, HUD, `?seed=` /
   `?slowmo=`, `window.__rootwake`.
 
-0.6a and 0.6b have been judged satisfying. The next pass is whatever
-`ROADMAP.md` lists next (0.6c, then 0.7a); do not skip ahead in that order
-without the designer — each pass exists to answer a question the previous
-one raised.
+The next pass is whatever `ROADMAP.md` lists next (0.7a once 0.6c is
+judged); do not skip ahead in that order without the designer — each pass
+exists to answer a question the previous one raised.
 
 ## Headless checking
 
