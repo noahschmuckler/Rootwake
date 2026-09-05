@@ -523,9 +523,11 @@ vision regimes).
 What 0.7a adds: vitality (SYSTEMS.md §1). Working trees, tilling, hopping
 and time drain it; holding a box of seeds eats them; a still hold on the
 look side rests. As it falls the screen's edges darken and close in, colour
-greys and the world dims; hops shorten; the log becomes too heavy to drag;
-then one hand, then none. At the floor you black out and wake tired, less
-each time until you eat. Well fed, colours are richer with a faint warm
+greys and the world dims; hops shorten; the log becomes too heavy to drag.
+Fatigue never takes a hand (designer's call after the first playtest: it
+arrived before any visual cue and blocked the cure — hand loss is a combat
+or poisoning effect, later). At the floor you black out and wake tired,
+less each time until you eat. Well fed, colours are richer with a faint warm
 rim. `?debug=1` shows the number for tuning.
 
 What 0.6c adds: drag a hand holding four or more seeds onto a *tilled*

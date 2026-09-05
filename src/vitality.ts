@@ -31,6 +31,8 @@ export const BLACKOUT_MS = 1400;
 export const WELL_FED = 0.85;
 export const TIRED = 0.45;
 export const EXHAUSTED = 0.2;
+/** The halo and greying start creeping in from here, well before the tired band, so the first sign of fatigue is what you see. */
+export const HALO_ONSET = 0.6;
 // -------------------------------------------------------------------------------
 
 export type Band = 'wellfed' | 'normal' | 'tired' | 'exhausted' | 'floor';
@@ -42,7 +44,11 @@ export interface VitalityEffects {
   strength: number;
   /** Multiplies stack caps. */
   capScale: number;
-  /** Hands you can use: 2, 1 or 0. */
+  /**
+   * Hands you can use. Fatigue never takes a hand (designer, after 0.7a:
+   * losing hands is too devastating for this axis — a combat or poisoning
+   * effect, later). Always 2 here; the plumbing stays for those.
+   */
   handsAvailable: number;
   /** Multiplies the waypoint fan's reach. */
   fanScale: number;
@@ -137,19 +143,19 @@ export class Vitality {
     const v = this.value / VITALITY_MAX;
     const band = this.band;
     // Smooth curves between the bands so the halo creeps rather than steps.
-    const tiredness = clamp01((TIRED - v) / TIRED); // 0 at TIRED, 1 at empty
+    const tiredness = clamp01((HALO_ONSET - v) / HALO_ONSET); // 0 at HALO_ONSET, 1 at empty
     const haloDark = Math.pow(tiredness, 0.8);
     const haloLight = clamp01((v - WELL_FED) / (1 - WELL_FED));
     let blackout = 0;
     if (this.phase.kind === 'fading') blackout = clamp01((nowMs - this.phase.startMs) / BLACKOUT_MS);
     else if (this.phase.kind === 'waking') blackout = 1 - clamp01((nowMs - this.phase.startMs) / BLACKOUT_MS);
     const tiers: Record<Band, [number, number, number, number]> = {
-      // strength, capScale, hands, fanScale
+      // strength, capScale, hands (always 2 — see VitalityEffects), fanScale
       wellfed: [1.25, 1, 2, 1.1],
       normal: [1, 1, 2, 1],
       tired: [0.75, 0.5, 2, 0.7],
-      exhausted: [0.5, 0.25, 1, 0.45],
-      floor: [0.25, 0, 0, 0.3],
+      exhausted: [0.5, 0.25, 2, 0.45],
+      floor: [0.25, 0.25, 2, 0.3],
     };
     const [strength, capScale, handsAvailable, fanScale] = tiers[band];
     return {
@@ -160,8 +166,8 @@ export class Vitality {
       fanScale,
       haloDark,
       haloLight,
-      saturation: 1 - 0.75 * Math.pow(tiredness, 1.5) + 0.15 * haloLight,
-      exposure: 1 - 0.35 * tiredness + 0.08 * haloLight,
+      saturation: 1 - 0.8 * Math.pow(tiredness, 1.3) + 0.15 * haloLight,
+      exposure: 1 - 0.4 * tiredness + 0.08 * haloLight,
       blackout,
     };
   }

@@ -67,8 +67,10 @@ Vitality maps onto the weight rule's **strength** (DESIGN.md §0.6):
 strength is a function of vitality, so a tired character drags what she
 used to lift and a well-fed one lifts what she used to drag. Beyond that:
 
-- **Carrying.** As vitality falls, stack caps shrink, then a hand becomes
-  unusable, then both.
+- **Carrying.** As vitality falls, stack caps shrink. Fatigue never takes a
+  hand away: losing hands is too devastating for this axis (it arrived
+  before any visual cue and blocked the cure, eating). Hand loss is a
+  combat or poisoning effect, later.
 - **Movement.** The waypoint fan's reach shrinks with fatigue; at the floor
   it is one short hop.
 - **Vision.** See §2 — this is the payoff that makes vitality more than a
@@ -81,7 +83,8 @@ used to lift and a well-fed one lifts what she used to drag. Beyond that:
 - Well fed: richer colours, a light, faint halo.
 - Normal: nothing to notice.
 - Tired: a steadily darkening halo, then greying colours, then tunnel
-  vision, then collapse.
+  vision, then collapse. The halo begins well before any mechanical
+  effect — what you see is always the first sign.
 
 No numeric readout in the main view. The halo is the meter, the colour of
 the world is the meter, the reach of the movement fan is the meter.

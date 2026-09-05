@@ -5,7 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>Rootwake</title>
     <style>
-      html, body { margin: 0; height: 100%; background: #0a0a12; overflow: hidden; touch-action: none; overscroll-behavior: none; }
+      html, body {
+        margin: 0; height: 100%; background: #0a0a12; overflow: hidden;
+        touch-action: none; overscroll-behavior: none;
+        /* Long presses are game gestures (rest, eat, recipes): no iOS text selection or callout. */
+        -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+      }
+      * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
       canvas { display: block; touch-action: none; }
       #hands {
         position: fixed; top: 8px; left: 50%; transform: translateX(-50%);
@@ -63,6 +69,11 @@
     <div id="hands"><div class="hand" data-hand="0"></div><div class="hand" data-hand="1"></div></div>
     <button id="back" type="button" hidden>Back out</button>
     <div id="hud"></div>
+    <script>
+      // Long presses must never open a context menu or start a selection on any browser.
+      document.addEventListener('contextmenu', (e) => e.preventDefault());
+      document.addEventListener('selectstart', (e) => e.preventDefault());
+    </script>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
