@@ -79,6 +79,8 @@ export class Patch implements Interactable {
   onDone: (it: Interactable) => void = () => {};
   /** Fired when a planted sapling has grown: replace me with a tree. */
   onGrown: (patch: Patch) => void = () => {};
+  /** Pass 0.8: tilling turns up a rock each time the look steps down. */
+  onRock: (patch: Patch) => void = () => {};
   readonly lockTargets: THREE.Object3D[];
   private sapling: Sapling | null = null;
   private plantedAt = 0;
@@ -157,7 +159,9 @@ export class Patch implements Interactable {
   feed(_target: number, amount: number): void {
     if (this.status !== 'growing') return;
     this.pool = Math.min(PATCH_CAPACITY, this.pool + amount);
+    const before = this.stage;
     this.setStage(this.stageFor(1 - this.pool / PATCH_CAPACITY));
+    if (this.stage !== before) this.onRock(this);
     if (this.pool >= PATCH_CAPACITY) {
       this.status = 'resolved';
       this.onDone(this);

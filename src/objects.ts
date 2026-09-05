@@ -27,7 +27,7 @@ export function handsToDrag(mass: number, strength = STRENGTH): number {
 }
 // -------------------------------------------------------------------------------
 
-export type ObjectTypeId = 'seed' | 'stick' | 'log' | 'lichen';
+export type ObjectTypeId = 'seed' | 'stick' | 'log' | 'lichen' | 'rock' | 'hand_axe';
 
 export interface ObjectType {
   id: ObjectTypeId;
@@ -47,6 +47,7 @@ export interface ObjectType {
 }
 
 const wood = new THREE.MeshStandardMaterial({ color: 0x5a3f2a, roughness: 0.95, flatShading: true });
+const stone = new THREE.MeshStandardMaterial({ color: 0x7c7a74, roughness: 1, flatShading: true });
 /** Lichen: rock-coloured and unlit by day; the day cycle raises its emissive for tired eyes at night. */
 export const lichenMaterial = new THREE.MeshStandardMaterial({ color: 0x6f6e68, emissive: 0x7ff0c8, emissiveIntensity: 0, roughness: 1, flatShading: true });
 const stickMaterial = new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughness: 0.95 });
@@ -99,6 +100,32 @@ export const OBJECT_TYPES: Record<ObjectTypeId, ObjectType> = {
       return m;
     },
   },
+  rock: {
+    id: 'rock',
+    label: 'rock',
+    size: 'large',
+    mass: 1, // strength 1: lifts one-handed
+    color: 0x7c7a74,
+    radius: 0.2,
+    blocks: true,
+    restHeight: 0.13,
+    build: () => {
+      const m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.17, 0), stone);
+      m.scale.set(1.15, 0.8, 1);
+      return m;
+    },
+  },
+  hand_axe: {
+    id: 'hand_axe',
+    label: 'hand axe',
+    size: 'large',
+    mass: 1,
+    color: 0x8a8880,
+    radius: 0.18,
+    blocks: true,
+    restHeight: 0.08,
+    build: () => buildLook('hand_axe'),
+  },
   log: {
     id: 'log',
     label: 'log',
@@ -116,6 +143,42 @@ export const OBJECT_TYPES: Record<ObjectTypeId, ObjectType> = {
   },
 };
 
+/**
+ * Authored intermediate looks a crafting target steps through (Pass 0.8).
+ * Knapping: rock → chipped → wedge → hand axe. Swapped at HP thresholds,
+ * never lerped — the same staging convention as grass and saplings.
+ */
+export function buildLook(look: string): THREE.Mesh {
+  switch (look) {
+    case 'rock_chipped': {
+      // One face struck flat.
+      const m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.17, 0), stone);
+      m.scale.set(1.1, 0.7, 0.85);
+      return m;
+    }
+    case 'rock_wedge': {
+      const m = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.16, 0.3, 5), stone);
+      m.rotation.z = Math.PI / 2;
+      return m;
+    }
+    case 'hand_axe':
+    default: {
+      // A finished wedge with a bright worked edge.
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.15, 0.32, 6), stone);
+      body.rotation.z = Math.PI / 2;
+      const edge = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.012, 0.045, 0.07, 6),
+        new THREE.MeshStandardMaterial({ color: 0xb8b6ae, roughness: 0.5, flatShading: true })
+      );
+      edge.rotation.z = Math.PI / 2;
+      edge.position.x = 0.19;
+      const holder = new THREE.Mesh(new THREE.BufferGeometry(), stone);
+      holder.add(body, edge);
+      return holder;
+    }
+  }
+}
+
 let nextObjectId = 1;
 
 /** One physical thing lying in the world. */
@@ -123,9 +186,11 @@ export class WorldObject {
   readonly id = nextObjectId++;
   /** A parent group carries position/heading; the mesh keeps its resting rotation. */
   readonly group = new THREE.Group();
-  readonly mesh: THREE.Mesh;
+  mesh: THREE.Mesh;
   /** Pass 0.7b: false while the thing can't be seen (lichen by day) — hands ignore it. */
   collectible = true;
+  /** Pass 0.8: crafting progress lives on the target, so leaving and coming back keeps it. */
+  craft: { recipeId: string; hp: number; stage: number; board: unknown } | null = null;
   /** A small wobble (the "this is in the way" hint); ends at this animation-clock time. */
   private waggleUntil = 0;
   private waggleStart = 0;
@@ -159,6 +224,14 @@ export class WorldObject {
 
   get position(): THREE.Vector3 {
     return this.group.position;
+  }
+
+  /** Swap the visible mesh for an authored look (crafting stages). */
+  setLook(look: string): void {
+    this.group.remove(this.mesh);
+    this.mesh = buildLook(look);
+    this.mesh.userData.object = this;
+    this.group.add(this.mesh);
   }
 
   /** Put it on the ground at (x, z), heading `yaw` about Y. */

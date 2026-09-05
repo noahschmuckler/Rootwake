@@ -45,6 +45,19 @@ export function lookDownPoseFor(center: THREE.Vector3, viewerPosition: THREE.Vec
   };
 }
 
+// ---- The crafting framing — Pass 0.8 -------------------------------------------
+/** The camera steps back and up from the eye a little and looks at the hovering target. */
+export const CRAFT_BACK = 0.55;
+export const CRAFT_UP = 0.3;
+
+export function craftPoseFor(hoverPoint: THREE.Vector3, eye: THREE.Vector3, forward: THREE.Vector3): CameraPose {
+  const back = new THREE.Vector3(-forward.x, 0, -forward.z).normalize();
+  return {
+    position: eye.clone().addScaledVector(back, CRAFT_BACK).add(new THREE.Vector3(0, CRAFT_UP, 0)),
+    target: hoverPoint.clone(),
+  };
+}
+
 // ---- Tuning constants (open to feel iteration) ------------------------------
 export const LOCK_MS = 650;
 export const UNLOCK_MS = 550;

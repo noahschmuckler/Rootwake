@@ -35,6 +35,8 @@ export const MOVE_BASE_MS = 320;
 export const MOVE_MS_PER_UNIT = 170;
 /** A still hold on the look side this long is "lie down here" (Pass 0.7a rest). */
 export const REST_HOLD_MS = 900;
+/** A still hold on a world object this long opens its recipes (Pass 0.8). */
+export const LONG_PRESS_MS = 450;
 // -------------------------------------------------------------------------------
 
 export interface CircleCollider {
@@ -44,7 +46,8 @@ export interface CircleCollider {
 }
 
 interface TrackedPointer {
-  role: 'move' | 'look';
+  /** 'press' (Pass 0.8): went down on a world object; a still hold is a long-press, a drag becomes a look. */
+  role: 'move' | 'look' | 'press';
   startX: number;
   startY: number;
   lastX: number;
@@ -80,6 +83,10 @@ export class Player {
   onHop: (distance: number) => void = () => {};
   /** A still hold on the look side: rest here. */
   onRestHold: () => void = () => {};
+  /** Pass 0.8: is there a pressable world object under this screen point? main.ts answers. */
+  objectAt: (clientX: number, clientY: number) => boolean = () => false;
+  /** A still hold on a world object. */
+  onLongPress: (clientX: number, clientY: number) => void = () => {};
 
   private readonly pointers = new Map<number, TrackedPointer>();
   private colliders: readonly CircleCollider[] = [];
@@ -284,8 +291,10 @@ export class Player {
   private readonly onDown = (e: PointerEvent): void => {
     const rect = this.canvas.getBoundingClientRect();
     const roles = [...this.pointers.values()].map((p) => p.role);
-    const wantsMove = e.clientX - rect.left < rect.width * MOVE_ZONE && !roles.includes('move');
-    const role: TrackedPointer['role'] = wantsMove ? 'move' : 'look';
+    // A press that lands on a world object is neither a move nor a look until it moves.
+    const onObject = this.enabled && roles.length === 0 && this.objectAt(e.clientX, e.clientY);
+    const wantsMove = !onObject && e.clientX - rect.left < rect.width * MOVE_ZONE && !roles.includes('move');
+    const role: TrackedPointer['role'] = onObject ? 'press' : wantsMove ? 'move' : 'look';
     if (role === 'look' && roles.includes('look')) return;
     this.pointers.set(e.pointerId, {
       role,
@@ -311,12 +320,24 @@ export class Player {
         }
       }, REST_HOLD_MS);
     }
+    if (role === 'press') {
+      window.setTimeout(() => {
+        const p = this.pointers.get(e.pointerId);
+        if (p && p.role === 'press' && !p.moved && this.enabled) {
+          this.pointers.delete(e.pointerId);
+          this.onLongPress(e.clientX, e.clientY);
+        }
+      }, LONG_PRESS_MS);
+    }
   };
 
   private readonly onMove = (e: PointerEvent): void => {
     const p = this.pointers.get(e.pointerId);
     if (!p) return;
-    if (Math.hypot(e.clientX - p.startX, e.clientY - p.startY) > TAP_SLOP_PX) p.moved = true;
+    if (Math.hypot(e.clientX - p.startX, e.clientY - p.startY) > TAP_SLOP_PX) {
+      p.moved = true;
+      if (p.role === 'press') p.role = 'look'; // dragged off the object: it was a look after all
+    }
     if (p.role === 'look' && this.enabled) {
       this.yaw -= (e.clientX - p.lastX) * LOOK_SENSITIVITY;
       this.pitch = THREE.MathUtils.clamp(this.pitch - (e.clientY - p.lastY) * LOOK_SENSITIVITY, -PITCH_LIMIT, PITCH_LIMIT);

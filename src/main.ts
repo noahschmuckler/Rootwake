@@ -28,6 +28,9 @@
 // Pass 0.7b: day and night. Well fed at night sees far but washed out; tired
 //           at night sees dark — and the lichen on the rock glows for tired
 //           eyes only, the first thing worth being tired for.
+// Pass 0.8:  rocks and the stone hand axe. Tilling turns up rocks; long-press
+//           a rock while holding one and it hovers in front of you; matches
+//           strike it with the rock in your hand until it is a hand axe.
 // Still out of scope: combat, specials, the 6-face mirror, a real field, art.
 
 import * as THREE from 'three';
@@ -43,6 +46,9 @@ import { PLANT_SEEDS } from './growth';
 import { Vitality, DRAIN_TREE_HIT, DRAIN_TILL_HIT, DRAIN_HOP, DRAIN_DRAG_HOP } from './vitality';
 import { DayCycle, GLOW_VISIBLE, START_TIME } from './daylight';
 import { Sky } from './sky';
+import { CraftSession } from './craft';
+import { recipesFor, type Recipe } from './recipes';
+import { OBJECT_TYPES, type WorldObject } from './objects';
 import { lichenMaterial } from './objects';
 import { mulberry32 } from './colors';
 import { HAZE_COLOR, HEMI_SKY_COLOR } from './world';
@@ -117,6 +123,75 @@ hands.placeOnTarget = (x, y, type, count) => {
   updateHud();
   return used;
 };
+
+// ---- Recipes and crafting (Pass 0.8) --------------------------------------------
+const menu = document.getElementById('menu')!;
+let craft: CraftSession | null = null;
+
+function viewerNow() {
+  return { position: player.position.clone(), forward: player.forward() };
+}
+
+/** Is there a world object under this point, within reach, that a long-press could act on? */
+player.objectAt = (x, y) => {
+  if (cameraRig.mode !== 'free') return false;
+  castFrom(x, y);
+  const hit = raycaster.intersectObjects(objects.raycastTargets(), false)[0];
+  if (!hit) return false;
+  const obj = hit.object.userData.object as WorldObject;
+  return Math.hypot(obj.position.x - player.position.x, obj.position.z - player.position.z) <= 3;
+};
+
+player.onLongPress = (x, y) => {
+  castFrom(x, y);
+  const hit = raycaster.intersectObjects(objects.raycastTargets(), false)[0];
+  if (!hit) return;
+  const obj = hit.object.userData.object as WorldObject;
+  const rows = recipesFor(obj.type.id, hands.heldTypes());
+  if (rows.length === 0) {
+    hint.textContent = `Nothing to make from a ${obj.type.label} yet.`;
+    tooFarUntil = animClock + 1400;
+    return;
+  }
+  menu.innerHTML = rows
+    .map(
+      (r, i) =>
+        `<button type="button" data-i="${i}" ${r.available ? '' : 'disabled'}>${r.recipe.label}${r.available ? '' : `<small>${r.reason}</small>`}</button>`
+    )
+    .join('');
+  menu.style.left = `${Math.min(window.innerWidth - 230, Math.max(10, x - 100))}px`;
+  menu.style.top = `${Math.min(window.innerHeight - 40 - rows.length * 52, Math.max(90, y - 30))}px`;
+  menu.hidden = false;
+  menu.querySelectorAll<HTMLButtonElement>('button').forEach((b) => {
+    b.addEventListener('pointerdown', (e) => e.stopPropagation());
+    b.addEventListener('click', () => {
+      menu.hidden = true;
+      startCraft(obj, rows[Number(b.dataset.i)].recipe);
+    });
+  });
+};
+// Any other press closes the menu.
+renderer.domElement.addEventListener('pointerdown', () => (menu.hidden = true));
+
+function startCraft(target: WorldObject, recipe: Recipe): void {
+  craft = new CraftSession(target, recipe, objects, viewerNow(), seed * 17 + target.id);
+  craft.onDone = (it) => {
+    const session = it as CraftSession;
+    // The result lands in a free hand; otherwise it drops at your feet.
+    const type = OBJECT_TYPES[session.result as keyof typeof OBJECT_TYPES];
+    const free = hands.freeHand();
+    if (free >= 0) hands.give(free, type);
+    else {
+      const f = player.forward();
+      objects.spawn(type.id, player.position.x + f.x * 0.6, GROUND_Y, player.position.z + f.z * 0.6, player.yaw);
+    }
+    hint.textContent = `A ${type.label}.`;
+    tooFarUntil = animClock + 1800;
+    onInteractableDone(it);
+  };
+  locked = craft;
+  cameraRig.lock(animClock, craft.lockPose(viewerNow()));
+}
 
 // ---- Vitality (Pass 0.7a) -----------------------------------------------------
 const vitality = new Vitality();
@@ -254,6 +329,26 @@ function onSaplingGrown(patch: Patch): void {
 }
 for (const p of patches) p.onGrown = onSaplingGrown;
 
+/** Pass 0.8: a rock turns up at the patch's edge each time tilling steps its look down. */
+const rockRand = mulberry32(seed * 3 + 11);
+function onRockTurnedUp(patch: Patch): void {
+  // Clear of the footprint square (the blocked check is per-axis, so the corner needs the margin too),
+  // so turning up a rock never blocks the round you are in.
+  const rockRadius = OBJECT_TYPES.rock.radius;
+  const clear = patch.footprintHalf + rockRadius + 0.3;
+  for (let tries = 0; tries < 8; tries++) {
+    const a = rockRand() * Math.PI * 2;
+    const r = clear * Math.SQRT2 * (1 + rockRand() * 0.25);
+    const x = patch.center.x + Math.cos(a) * r;
+    const z = patch.center.z + Math.sin(a) * r;
+    if (Math.abs(x - patch.center.x) < clear && Math.abs(z - patch.center.z) < clear) continue;
+    if (!world.isWalkable(new THREE.Vector3(x, GROUND_Y, z))) continue;
+    objects.spawn('rock', x, GROUND_Y, z, rockRand() * Math.PI);
+    return;
+  }
+}
+for (const p of patches) p.onRock = onRockTurnedUp;
+
 function onTreeFelled(v: Voxel): void {
   const dir = v.normal; // the face the lock chose = the side it fell toward
   objects.scatterFelledTree(v.center, dir, GROUND_Y, seed * 53 + v.index);
@@ -261,6 +356,7 @@ function onTreeFelled(v: Voxel): void {
   const footprint = new Patch(patches.length, new THREE.Vector3(v.center.x, GROUND_Y, v.center.z), seed * 977 + 500 + v.index, true, 2);
   footprint.onDone = onInteractableDone;
   footprint.onGrown = onSaplingGrown;
+  footprint.onRock = onRockTurnedUp;
   patches.push(footprint);
   interactables.push(footprint);
   scene.add(footprint.group);
@@ -316,6 +412,7 @@ const FADE_CORRIDOR = 2.6;
 /** For a look-down lock on a patch, voxels this close to the patch would loom into the frame. */
 const FADE_NEAR_PATCH = 2.3;
 function obstructsLockedView(v: Voxel, target: Interactable): boolean {
+  if (target.kind === 'craft') return false; // the camera stays at the player: nothing intrudes
   if (target.kind === 'patch') return v.distanceTo(target.center) < FADE_NEAR_PATCH;
   const locked = target as Voxel;
   const pose = lockedPoseFor(locked.center, locked.normal); // the face the lock chose
@@ -349,10 +446,14 @@ function applyMode(mode: CameraMode): void {
     boardView.bind(locked.board);
     boardView.show(animClock);
   }
-  if (mode === 'unlocking') boardView.hide();
+  if (mode === 'unlocking') {
+    boardView.hide();
+    if (craft && craft.status === 'growing') craft.cancel();
+  }
   if (mode === 'free') {
     boardView.unbind();
     locked = null;
+    craft = null;
   }
   updateHud();
 }
@@ -364,6 +465,18 @@ boardView.onRun = (run, origin) => {
   const target = it.targetFor(run);
   if (target === null) return;
   const amount = run.cells.length;
+  if (it.kind === 'craft') {
+    // The rock in your hand flies out, strikes, and comes back.
+    const session = it as CraftSession;
+    const hand = hands.handHolding(session.recipe.requiresHeld ?? 'rock');
+    const from = hand >= 0 ? hands.pointUnderBox(hand) : origin;
+    projectiles.strike(OBJECT_TYPES[session.recipe.requiresHeld ?? 'rock'].build(), from, it.targetWorldPosition(target), animClock, () => {
+      it.feed(target, amount, animClock);
+      vitality.drain(session.recipe.drain);
+      updateHud();
+    });
+    return;
+  }
   projectiles.fire(origin, it.targetWorldPosition(target), PALETTE[run.type].hex, animClock, () => {
     it.feed(target, amount, animClock);
     vitality.drain(it.kind === 'voxel' ? DRAIN_TREE_HIT : DRAIN_TILL_HIT);
@@ -480,8 +593,10 @@ function animate(now: number): void {
   requestAnimationFrame(animate);
 
 // Debug handle for headless/console poking. Not part of the design surface.
-(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, vitality, dayCycle, world, cameraRig, boardView };
-  const dt = Math.min(0.1, (now - lastFrame) / 1000);
+(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, vitality, dayCycle, world, cameraRig, boardView, get craft() { return craft; }, startCraft, get shake() { return { shakeUntil, animClock, offset: shakeOffset.clone() }; } };
+  // Clamped at zero: the first rAF timestamp can predate the module's own init time, and a
+  // negative delta once sent the animation clock negative — which armed the thud shake at load.
+  const dt = Math.min(0.1, Math.max(0, (now - lastFrame) / 1000));
   animClock += (dt * 1000) / slowmo;
   lastFrame = now;
 
@@ -529,6 +644,8 @@ function animate(now: number): void {
     p.setBlocked(objects.overlapsSquare(p.center.x, p.center.z, p.footprintHalf).length > 0);
   }
 
+  // If what we're locked onto stops being workable (a patch blocked mid-till), back out on our own.
+  if (locked && cameraRig.mode === 'locked' && locked.status === 'blocked' && autoUnlockAt === null) autoUnlockAt = animClock + 300;
   if (autoUnlockAt !== null && animClock >= autoUnlockAt) {
     autoUnlockAt = null;
     cameraRig.unlock(animClock, playerPose());
@@ -550,6 +667,7 @@ function animate(now: number): void {
     v.setFade(fade);
   }
   for (const it of interactables) it.update(animClock);
+  if (craft) craft.update(animClock);
   objects.update(animClock);
 
   // The board's job is done once its target starts resolving (or is tilled): get out of the way.
@@ -562,4 +680,4 @@ function animate(now: number): void {
 requestAnimationFrame(animate);
 
 // Debug handle for headless/console poking. Not part of the design surface.
-(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, vitality, dayCycle, world, cameraRig, boardView };
+(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, vitality, dayCycle, world, cameraRig, boardView, get craft() { return craft; }, startCraft, get shake() { return { shakeUntil, animClock, offset: shakeOffset.clone() }; } };

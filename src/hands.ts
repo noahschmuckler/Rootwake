@@ -430,8 +430,33 @@ export class Hands {
     return this.raycaster.ray.intersectPlane(this.groundPlane, p) ? p : null;
   }
 
+  /** Types lifted whole in a hand (Pass 0.8: what recipes can use). */
+  heldTypes(): ObjectTypeId[] {
+    const out: ObjectTypeId[] = [];
+    for (const s of this.state) if (s.kind === 'held') out.push(s.type.id as ObjectTypeId);
+    return out;
+  }
+
+  /** Index of a hand holding this type, or -1. */
+  handHolding(typeId: ObjectTypeId): number {
+    return this.state.findIndex((s) => s.kind === 'held' && s.type.id === typeId);
+  }
+
+  /** First empty usable hand, or -1. */
+  freeHand(): number {
+    for (let i = 0; i < this.condition.handsAvailable; i++) if (this.state[i].kind === 'empty') return i;
+    return -1;
+  }
+
+  /** Put a whole object into a hand (the crafting result arriving). */
+  give(hand: number, type: ObjectType): void {
+    this.state[hand] = { kind: 'held', type };
+    this.render();
+    this.onChange();
+  }
+
   /** World point a little ahead of the camera, under a box's screen position. */
-  private pointUnderBox(hand: number): THREE.Vector3 {
+  pointUnderBox(hand: number): THREE.Vector3 {
     const r = this.boxes[hand].getBoundingClientRect();
     const ndc = this.ndc(r.left + r.width / 2, r.top + r.height);
     const p = new THREE.Vector3(ndc.x, ndc.y, 0.5).unproject(this.camera);
