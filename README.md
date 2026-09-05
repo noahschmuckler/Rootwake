@@ -17,7 +17,9 @@ mountain plateau. Hold on the left of the screen to pick a spot and release
 to hop there, drag to look, tap a tree (any side) to lock onto it or tap
 grass to lock looking down, then play the match-3 board: tap a gem and a
 neighbour to swap. Every match feeds the tree; its flowers recede one by one
-and the whole tree sinks when the pool fills. On grass, matches till the
-patch down to clods. Clear toward the light, walk to the edge, and look
-down. `R` reshuffles (new seed), `?seed=N` repeats a layout, `?slowmo=N`
-slows the animations.
+and when the pool fills the trunk topples with a thud, leaving a log, sticks
+and seeds. Drag a hand box (top of the screen) to a thing to take it; both
+hands to the log to drag it off; clear the footprint and it becomes
+tillable. Clear toward the light, walk to the edge, and look down. `R`
+reshuffles (new seed), `?seed=N` repeats a layout, `?slowmo=N` slows the
+animations.

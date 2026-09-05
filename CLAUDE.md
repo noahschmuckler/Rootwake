@@ -21,9 +21,10 @@ don't add structure the prototype doesn't need yet.
 
 ## Status
 
-**Passes 0 through 0.4 judged satisfying on phone; Pass 0.4c (one pool per
-tree, four faces) and Pass 0.5 (cliff-edge vista) built 2026-09-05 as two
-commits, awaiting evaluation.** `src/` holds:
+**Passes 0 through 0.5 judged satisfying on phone; Pass 0.6a (felled
+tree, objects, blocked footprints) and 0.6b (hands) built 2026-09-05 as two
+commits, awaiting evaluation. Standing rules: confinement→vista, and
+objects have weight (DESIGN.md).** `src/` holds:
 
 - `colors.ts` — five colours = five gem types = five flowers; seeded
   permutation per voxel; the shared PRNG.
@@ -37,33 +38,43 @@ commits, awaiting evaluation.** `src/` holds:
 - `projectiles.ts` — the shot from a cleared run to its target; the hit
   feeds the pool.
 - `interactable.ts` — what main.ts needs from anything it can lock onto
-  and feed; implemented by `Voxel` and `Patch`.
+  and feed; implemented by `Voxel` and `Patch`. Status includes 'blocked'.
+- `objects.ts` — the weight rule: size class (20/5/1 per hand), mass,
+  strength, hands-to-lift / hands-to-drag; object types (seed, stick, log);
+  WorldObject/ObjectWorld and the felled-tree scatter.
+- `hands.ts` — the two hand boxes and the one gesture (drag a box to a
+  thing: take / gather / lift / link / place), leashes, fly-to-box, the
+  two-hand log drag on a rope, strain.
+- `fell.ts` — the felled-tree ending: release, topple, thud, dust.
 - `rig.ts` — hand-placed trunk/branch curves/flowers, instanced per side
   face (1 or 4) around a seeded dark foliage core; invisible hit spheres,
   per-instance materials, merged geometry per part.
 - `recede.ts` — the cheap flower recede; tuning constants at the top.
-- `resolve.ts` — the whole-voxel release beat; tuning constants at the top.
+- `resolve.ts` — the 0.2 sink beat, kept behind `TREE_ENDING` for A/B.
 - `voxel.ts` — one placed voxel: rig + board + one shared pool (flowers
-  recede at 20% steps on every face) + collider + fade + resolve; locks
-  from whichever side face is nearest.
+  recede at 20% steps on every face) + collider + fade + the ending
+  (`fell` or `sink`); locks from whichever side face is nearest.
 - `patch.ts` — one tillable ground patch: board + one shared pool + four
-  authored grass→clods stages. Never collides, never resolves.
+  authored grass→clods stages, plus a blocked state while objects lie on
+  it. Never collides, never resolves.
 - `cameraLock.ts` — pose-to-pose lock/unlock tween; `lockedPoseFor()` is
   the Pass 0 face framing, `lookDownPoseFor()` the patch framing.
 - `player.ts` — first-person look plus waypoint-fan movement; candidates
-  filtered by colliders and the world's isWalkable().
+  filtered by colliders and the world's isWalkable(); encumbrance hooks.
 - `world.ts` — the rock plateau cut on a curving cliff line, the cliff
   face, the never-walked landscape 400 below (forest floor, canopies,
   river, three mountain layers), FogExp2, sky dome; isWalkable() and
   distanceToEdge().
 - `main.ts` — hex-lattice thicket, patch placement, mode-aware input over
   all interactables, board bind/show/hide, shots → pools, locked-view fade
-  rule, auto back-out, edge FOV/dip, HUD, `?seed=` / `?slowmo=`,
-  `window.__rootwake`.
+  rule, auto back-out, edge FOV/dip, felling aftermath (shake, scatter,
+  footprint), blocked evaluation, hands wiring, HUD, `?seed=` /
+  `?slowmo=`, `window.__rootwake`.
 
-Do **not** start the buildable plateau, building/crafting/mining, payout,
-regrowth, combat, specials, more species or art until the designer has
-judged 0.4c and 0.5 separately — see DESIGN.md.
+Do **not** start 0.6c (recipes, planting), fatigue/food → strength, the
+buildable plateau, building/crafting/mining, combat, specials, more species
+or art until the designer has judged 0.6a and 0.6b separately — see
+DESIGN.md.
 
 ## Headless checking
 

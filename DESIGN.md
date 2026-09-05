@@ -506,10 +506,25 @@ counters, fatigue/food, combat use of held objects, physics.
 
 ## Status
 
-Repo scaffolded 2026-09-03. Passes 0 through 0.4 all built and confirmed on
-phone playtests. **Pass 0.4c (one shared pool per tree, four lockable
-faces) and Pass 0.5 (the cliff-edge vista) built 2026-09-05 as two separate
-commits, awaiting evaluation.**
+Repo scaffolded 2026-09-03. Passes 0 through 0.5 built and confirmed on phone
+playtests (0.4c and 0.5 judged good). **Pass 0.6a (the felled tree, objects,
+blocked footprints) and 0.6b (hands) built 2026-09-05 as two separate
+commits, awaiting evaluation. 0.6c (first recipe, planting) is scoped, not
+built.**
+
+What 0.6 adds: see "Pass 0.6 — weight" above. In play: a cleared tree
+topples toward you with a thud and leaves a log, three sticks and twelve
+seeds on a blocked footprint. Drag a hand box to seeds or sticks to gather
+them; drag both hands to the log to drag it off (hops shorten and slow);
+once the log and sticks are off the footprint the grass appears and it
+tills like any patch. Tap a box to drop at your feet; drag a full box to the
+ground to place there.
+
+**Next step is evaluation, not code — the first loop test:** does clearing
+a tree, hauling what it leaves, and getting tillable ground for it feel
+like accomplishment or chore? Watch especially the log drag (rope, hop
+length) and whether three sticks + twelve seeds is the right amount of
+stuff per tree.
 
 What 0.4c adds: a tree has one shared pool (`single` strategy, capacity
 40); its five flowers recede in stages at 20% thresholds on all four side
