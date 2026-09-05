@@ -189,6 +189,15 @@ already tilled. A rock is `large`, 1 in hand, light enough to lift.
   thresholds, no lerp).
 - At zero it is a **stone hand axe**: for cutting and shaping logs.
 
+### 5.3b Bags come late, and behind a chain
+
+A bag is the answer to the first want the weight rule produces (crawling
+back to a seed pile), and it must stay earned: **bag ← cloth ← thread or
+string ← plant fibres ← a processing activity** (retting, twisting,
+weaving — each its own board session at a place). No shortcut from sticks.
+The chain is the point: every link is stored potential you can see in a
+pile, and the bag arrives when the loop has taught you to want it badly.
+
 ### 5.4 Shaping logs: log-cabin construction
 
 With a stone hand axe in one hand, **long-press a log** for a menu of

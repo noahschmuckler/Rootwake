@@ -73,23 +73,29 @@ wedge emerges) feel like making a tool?*
   the projectile (`projectiles.ts` gets an "object as shot" that returns to
   the hand). Target HP with staged looks (the `patch.ts` staging pattern):
   rock → chipped → wedge → hand axe. Result replaces the target object.
+- No bag here: bags are gated behind cloth ← thread ← fibres ← processing
+  (SYSTEMS.md §5.3b), which needs the axe and the fibre plants first.
 - Touches: `patch.ts` (rock spawn), `objects.ts` (rock, axe), `recipes.ts`,
   `hands.ts`, `cameraLock.ts`, `board3d.ts` unchanged.
 
-## Pass 0.9 — shaping logs and the first wall
+## Pass 0.9 — shaping logs and the first bed
 
-*Question: does a wall of logs you fitted yourself feel like yours?*
+*Question: does a bed you fitted yourself, raising how well you sleep,
+feel like the answer to the fatigue you have been living with?*
 
 - With an axe in hand, long-press a log → the four shaping recipes
   (SYSTEMS §5.4). Each is a board session on the log; each spawns wood
   chips (`tiny`, kindling).
 - Shaped logs are objects with weight and **fittings**: a notched log placed
-  onto a notched log snaps into a wall course. Timber makes a roof piece.
-- **Roof detection**: up-ray from the player; `vitality.ts` uses it.
+  onto a notched log snaps into a course. **The first assembly is a bed**
+  (two notched logs and a stick lattice): rest on it raises the rest
+  ceiling from 0.7 toward 0.9 (`vitality.ts`). Walls and a roof follow in
+  1.0, and then a roof has a bed to protect.
 - Port DiggyDwarves' structure model as data (piece types, fittings), not
   its UI. End product = the pieces.
-- Touches: `recipes.ts`, `objects.ts` (shaped logs, timber, chips, roof
-  piece), `hands.ts` (snap-to-fitting on place), a small `structures.ts`.
+- Touches: `recipes.ts`, `objects.ts` (shaped logs, timber, chips, bed),
+  `hands.ts` (snap-to-fitting on place), a small `structures.ts`,
+  `vitality.ts` (rest ceiling by bed).
 
 ## Pass 1.0 — weather: the reason for the roof
 
@@ -99,7 +105,9 @@ roof?*
 - Rain: a particle layer, sky/fog darken, vitality drains while outdoors
   (not under a roof). Lightning: rare, a flash and a crack, a strike near
   the player saps vitality to the danger band.
-- Recovery faster under a roof; sleep ceiling by shelter quality.
+- Walls from fitted logs and a roof from timber; roof detection (up-ray
+  from the player). Recovery faster under a roof; sleep ceiling by shelter
+  quality on top of the bed's.
 - Touches: `world.ts` (weather), `vitality.ts`, `structures.ts` (quality).
 
 ## Pass 1.1 — fire, kindling, cooking
@@ -119,7 +127,10 @@ roof?*
   in-combat movement; `byColumn` targeting; held objects as weapons via the
   weight rule (a strong character swings a log).
 - Party roles (weak scout with aura vision, strong ranged, balanced).
-- Alchemy: potions and poisons that move the vision dial.
+- Alchemy: potions and poisons that move the vision dial. The first potion
+  is made from lichen and keeps the glow without the weakness — the thing
+  gathered while suffering ends the suffering.
+- Fibres → thread → cloth → bag (SYSTEMS §5.3b), each a processing activity.
 - The buildable plateau at acreage scale (instancing/LOD engineering pass).
 - Real forests for the plateau's middle.
 
