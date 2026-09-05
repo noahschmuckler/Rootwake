@@ -49,12 +49,18 @@ export function lookDownPoseFor(center: THREE.Vector3, viewerPosition: THREE.Vec
 /** The camera steps back and up from the eye a little and looks at the hovering target. */
 export const CRAFT_BACK = 0.55;
 export const CRAFT_UP = 0.3;
+/**
+ * The camera looks this far below the hovering target, so the target sits in
+ * the upper part of the frame, above the board's top row, instead of over it.
+ * Tuned so a rock clears the board at both phone and landscape aspects.
+ */
+export const CRAFT_LOOK_BELOW = 0.27;
 
 export function craftPoseFor(hoverPoint: THREE.Vector3, eye: THREE.Vector3, forward: THREE.Vector3): CameraPose {
   const back = new THREE.Vector3(-forward.x, 0, -forward.z).normalize();
   return {
     position: eye.clone().addScaledVector(back, CRAFT_BACK).add(new THREE.Vector3(0, CRAFT_UP, 0)),
-    target: hoverPoint.clone(),
+    target: hoverPoint.clone().add(new THREE.Vector3(0, -CRAFT_LOOK_BELOW, 0)),
   };
 }
 
