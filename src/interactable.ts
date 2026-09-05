@@ -6,7 +6,8 @@ import type * as THREE from 'three';
 import type { Board, Run } from './match3';
 import type { CameraPose } from './cameraLock';
 
-export type InteractableStatus = 'growing' | 'resolving' | 'resolved';
+/** 'blocked' (Pass 0.6a): a patch with something lying on it — not lockable until cleared. */
+export type InteractableStatus = 'growing' | 'blocked' | 'resolving' | 'resolved';
 
 export interface Viewer {
   position: THREE.Vector3;

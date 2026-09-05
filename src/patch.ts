@@ -43,12 +43,16 @@ export class Patch implements Interactable {
 
   private readonly stages: THREE.Group[] = [];
   private stage = -1;
+  private blockedLook!: THREE.Group;
+  /** Status to return to when unblocked (a partly tilled patch stays partly tilled). */
+  private unblockedStatus: InteractableStatus = 'growing';
 
-  constructor(readonly index: number, position: THREE.Vector3, seed: number) {
+  constructor(readonly index: number, position: THREE.Vector3, seed: number, blocked = false) {
     this.board = new Board(BOARD_ROWS, BOARD_COLS, seed ^ 0x7a11);
     this.group.position.copy(position);
     this.buildStages(seed);
     this.setStage(0);
+    if (blocked) this.setBlocked(true);
 
     // Thin invisible slab so a tap on the grass finds the patch. Not a collider.
     const hit = new THREE.Mesh(new THREE.BoxGeometry(PATCH_SIZE, 0.4, PATCH_SIZE));
@@ -61,6 +65,26 @@ export class Patch implements Interactable {
 
   get center(): THREE.Vector3 {
     return this.group.position.clone();
+  }
+
+  /** Half-size of the ground square objects must be clear of. */
+  get footprintHalf(): number {
+    return PATCH_SIZE / 2;
+  }
+
+  /** Something lying on the patch blocks it; clearing it restores whatever state it was in. */
+  setBlocked(blocked: boolean): void {
+    if (this.status === 'resolved') return;
+    if (blocked && this.status !== 'blocked') {
+      this.unblockedStatus = this.status;
+      this.status = 'blocked';
+    } else if (!blocked && this.status === 'blocked') {
+      this.status = this.unblockedStatus;
+    } else {
+      return;
+    }
+    this.blockedLook.visible = blocked;
+    this.stages.forEach((g, i) => (g.visible = !blocked && i === this.stage));
   }
 
   lockPose(viewer: Viewer): CameraPose {
@@ -91,7 +115,9 @@ export class Patch implements Interactable {
   }
 
   poolText(): string {
-    return this.status === 'resolved' ? 'tilled' : `soil ${this.pool}/${PATCH_CAPACITY}`;
+    if (this.status === 'resolved') return 'tilled';
+    if (this.status === 'blocked') return 'blocked — clear the ground';
+    return `soil ${this.pool}/${PATCH_CAPACITY}`;
   }
 
   update(): void {
@@ -143,6 +169,20 @@ export class Patch implements Interactable {
     const clodMaterial = new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughness: 1, flatShading: true });
     const soil = new THREE.PlaneGeometry(PATCH_SIZE, PATCH_SIZE);
     soil.rotateX(-Math.PI / 2);
+
+    // Blocked look: bare dark soil with a faint outline — the ground is there, not yet yours.
+    this.blockedLook = new THREE.Group();
+    const bare = new THREE.Mesh(soil, new THREE.MeshStandardMaterial({ color: 0x3a3128, roughness: 1 }));
+    bare.position.y = 0.012;
+    this.blockedLook.add(bare);
+    const outline = new THREE.LineSegments(
+      new THREE.EdgesGeometry(soil),
+      new THREE.LineBasicMaterial({ color: 0x9aa89a, transparent: true, opacity: 0.35 })
+    );
+    outline.position.y = 0.02;
+    this.blockedLook.add(outline);
+    this.blockedLook.visible = false;
+    this.group.add(this.blockedLook);
 
     for (let k = 0; k < BLADES_BY_STAGE.length; k++) {
       const g = new THREE.Group();

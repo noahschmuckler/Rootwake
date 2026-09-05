@@ -14,6 +14,9 @@
 //           pool, worked from a look-down lock.
 // Pass 0.5:  the plateau ends at a cliff. The edge refuses steps; below and
 //           beyond, a landscape you can only look at.
+// Pass 0.6a: objects have weight. A cleared tree topples and leaves a log,
+//           sticks and seeds where it stood; the footprint is blocked ground
+//           until they're moved.
 // Still out of scope: combat, specials, the 6-face mirror, a real field, art.
 
 import * as THREE from 'three';
@@ -23,6 +26,7 @@ import { Voxel } from './voxel';
 import { Patch } from './patch';
 import type { Interactable } from './interactable';
 import { buildWorld, EDGE_MARGIN, GROUND_Y } from './world';
+import { ObjectWorld } from './objects';
 import { BoardView } from './board3d';
 import { Projectiles } from './projectiles';
 import { PALETTE } from './colors';
@@ -49,6 +53,7 @@ const cameraRig = new CameraRig(camera);
 scene.add(camera);
 const boardView = new BoardView(camera);
 const projectiles = new Projectiles(scene);
+const objects = new ObjectWorld(scene);
 const player = new Player(renderer.domElement, scene, camera);
 player.position.set(0, GROUND_Y, 0);
 // Face away from the way out, so the vista is something you find, not something you're shown.
@@ -108,18 +113,40 @@ for (const p of patches) scene.add(p.group);
 
 const interactables: Interactable[] = [...voxels, ...patches];
 
+// ---- Felling aftermath (Pass 0.6a) ---------------------------------------------
+// Thud → camera shake. Done → the log lies along the fall, sticks and seeds
+// around it, and a blocked footprint patch under all of it.
+const SHAKE_MS = 320;
+const SHAKE_AMP = 0.045;
+let shakeUntil = -1;
+const shakeOffset = new THREE.Vector3();
+for (const v of voxels) {
+  v.onThud = () => {
+    shakeUntil = animClock + SHAKE_MS;
+  };
+}
+function onTreeFelled(v: Voxel): void {
+  const dir = v.normal; // the face the lock chose = the side it fell toward
+  objects.scatterFelledTree(v.center, dir, GROUND_Y, seed * 53 + v.index);
+  const footprint = new Patch(patches.length, new THREE.Vector3(v.center.x, GROUND_Y, v.center.z), seed * 977 + 500 + v.index, true);
+  footprint.onDone = onInteractableDone;
+  patches.push(footprint);
+  interactables.push(footprint);
+  scene.add(footprint.group);
+}
+
 // ---- Lock / unlock plumbing --------------------------------------------------
 let locked: Interactable | null = null;
 /** After a locked voxel resolves, hold this long on the empty spot, then back out to reveal the gap. */
 const RELEASE_HOLD_MS = 450;
 let autoUnlockAt: number | null = null;
 
-for (const it of interactables) {
-  it.onDone = (done) => {
-    if (done === locked && cameraRig.mode === 'locked') autoUnlockAt = animClock + RELEASE_HOLD_MS;
-    updateHud();
-  };
+function onInteractableDone(done: Interactable): void {
+  if (done === locked && cameraRig.mode === 'locked') autoUnlockAt = animClock + RELEASE_HOLD_MS;
+  if (done.kind === 'voxel' && (done as Voxel).ending === 'fell') onTreeFelled(done as Voxel);
+  updateHud();
 }
+for (const it of interactables) it.onDone = onInteractableDone;
 
 /** Radius around the locked camera position inside which a neighbour is faded. */
 const FADE_NEAR_CAMERA = 2.4;
@@ -285,7 +312,7 @@ function animate(now: number): void {
   requestAnimationFrame(animate);
 
 // Debug handle for headless/console poking. Not part of the design surface.
-(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, world, cameraRig, boardView };
+(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, world, cameraRig, boardView };
   const dt = Math.min(0.1, (now - lastFrame) / 1000);
   animClock += (dt * 1000) / slowmo;
   lastFrame = now;
@@ -299,6 +326,21 @@ function animate(now: number): void {
     camera.position.y -= EDGE_EYE_DIP * k;
   }
   cameraRig.update(animClock);
+
+  // Thud shake: applied on top of whoever owns the camera this frame, removed before they run again.
+  camera.position.sub(shakeOffset);
+  shakeOffset.set(0, 0, 0);
+  if (animClock < shakeUntil) {
+    const k = (shakeUntil - animClock) / SHAKE_MS;
+    shakeOffset.set((Math.random() - 0.5) * 2, (Math.random() - 0.5) * 2, 0).multiplyScalar(SHAKE_AMP * k * k);
+    camera.position.add(shakeOffset);
+  }
+
+  // A patch with anything lying on it is blocked ground.
+  for (const p of patches) {
+    if (p.status === 'resolved' || p.status === 'resolving') continue;
+    p.setBlocked(objects.overlapsSquare(p.center.x, p.center.z, p.footprintHalf).length > 0);
+  }
 
   if (autoUnlockAt !== null && animClock >= autoUnlockAt) {
     autoUnlockAt = null;
@@ -332,4 +374,4 @@ function animate(now: number): void {
 requestAnimationFrame(animate);
 
 // Debug handle for headless/console poking. Not part of the design surface.
-(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, world, cameraRig, boardView };
+(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, world, cameraRig, boardView };

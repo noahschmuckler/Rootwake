@@ -64,17 +64,26 @@ export interface Rig {
   hitTargets: THREE.Object3D[];
   /** Every material this rig owns — so a whole voxel can be faded as one. */
   materials: THREE.Material[];
+  /** Pass 0.6a: the parts the felling beat animates separately. */
+  trunkPivot: THREE.Group;
+  foliage: THREE.Mesh;
+  faceGroups: THREE.Group[];
+  edges: THREE.LineSegments;
 }
 
 /** Pass 0.2: how many foliage blobs pack the cube's core behind the flowers. */
 const FOLIAGE_BLOBS = 30;
 
-function buildTrunk(material: THREE.Material): THREE.Mesh {
+/** The trunk hangs off a pivot at its base so it can topple (Pass 0.6a). */
+function buildTrunk(material: THREE.Material): THREE.Group {
   const height = TRUNK_TOP.y - TRUNK_BASE.y;
-  const geo = new THREE.CylinderGeometry(0.1, 0.16, height, 12);
+  const geo = new THREE.CylinderGeometry(0.15, 0.21, height, 12);
   const mesh = new THREE.Mesh(geo, material);
-  mesh.position.set(0, (TRUNK_TOP.y + TRUNK_BASE.y) / 2, 0);
-  return mesh;
+  mesh.position.set(0, height / 2, 0);
+  const pivot = new THREE.Group();
+  pivot.position.copy(TRUNK_BASE);
+  pivot.add(mesh);
+  return pivot;
 }
 
 /**
@@ -170,8 +179,11 @@ export function buildRig(colors: number[], seed = 7, sideFaces: 1 | 4 = 1): Rig 
   const materials: THREE.Material[] = [woodMaterial, stemMaterial, pistilMaterial, foliageMaterial];
 
   const root = new THREE.Group();
-  root.add(buildTrunk(woodMaterial));
-  root.add(buildFoliage(seed, foliageMaterial));
+  const trunkPivot = buildTrunk(woodMaterial);
+  root.add(trunkPivot);
+  const foliage = buildFoliage(seed, foliageMaterial);
+  root.add(foliage);
+  const faceGroups: THREE.Group[] = [];
 
   const branches: Branch[] = [];
   const hitTargets: THREE.Object3D[] = [];
@@ -186,6 +198,7 @@ export function buildRig(colors: number[], seed = 7, sideFaces: 1 | 4 = 1): Rig 
     const faceGroup = new THREE.Group();
     faceGroup.rotation.y = (face * Math.PI) / 2;
     root.add(faceGroup);
+    faceGroups.push(faceGroup);
 
     const tube = new THREE.Mesh(tubeGeometry, stemMaterial);
     faceGroup.add(tube);
@@ -218,5 +231,5 @@ export function buildRig(colors: number[], seed = 7, sideFaces: 1 | 4 = 1): Rig 
   root.add(edges);
   materials.push(edgeMaterial);
 
-  return { root, branches, hitTargets, materials };
+  return { root, branches, hitTargets, materials, trunkPivot, foliage, faceGroups, edges };
 }

@@ -12,6 +12,7 @@ import { assignDistinctColors } from './colors';
 import { buildRig, HALF, TIP_COUNT, type Rig } from './rig';
 import { RecedeAnimator } from './recede';
 import { ResolveBeat } from './resolve';
+import { FellBeat } from './fell';
 import { lockedPoseFor, type CameraPose } from './cameraLock';
 import { Board, BOARD_COLS, BOARD_ROWS, type Run } from './match3';
 import { single, type TargetingStrategy } from './targeting';
@@ -32,6 +33,12 @@ export const LOCK_REACH = 3.3;
 export const TREE_CAPACITY = 40;
 /** How many side faces carry flowers. Top and bottom stay bare. */
 export const SIDE_FACES = 4;
+/**
+ * Pass 0.6a: how a cleared tree ends. 'fell' topples the trunk toward the
+ * side you worked it from and leaves a log, sticks and seeds (DESIGN.md
+ * "weight"); 'sink' is the validated 0.2 beat, kept for A/B.
+ */
+export const TREE_ENDING: 'fell' | 'sink' = 'fell';
 /** Flower glow at an empty / full pool, and the extra flash on a hit. */
 const GLOW_EMPTY = 0.05;
 const GLOW_FULL = 0.7;
@@ -64,13 +71,16 @@ export class Voxel implements Interactable {
   status: VoxelStatus = 'growing';
   /** Fired once the resolve beat has finished and the voxel is gone. */
   onDone: (it: Interactable) => void = () => {};
+  /** Fired when a felled trunk hits the ground (camera shake lives in main). */
+  onThud: (voxel: Voxel) => void = () => {};
+  readonly ending = TREE_ENDING;
 
   /** Which side face the current/last lock framed. */
   private lockedFace = 0;
   private readonly receded: boolean[];
   private flash = 0;
   private readonly animator = new RecedeAnimator();
-  private beat: ResolveBeat | null = null;
+  private beat: ResolveBeat | FellBeat | null = null;
   private lastNow = 0;
   private readonly baseOpacity: number[];
 
@@ -192,7 +202,10 @@ export class Voxel implements Interactable {
   private beginResolve(nowMs: number): void {
     if (this.status !== 'growing') return;
     this.status = 'resolving';
-    this.beat = new ResolveBeat(this.rig, this.group, nowMs);
+    this.beat =
+      this.ending === 'fell'
+        ? new FellBeat(this.rig, this.group, nowMs, faceNormalLocal(this.lockedFace), () => this.onThud(this))
+        : new ResolveBeat(this.rig, this.group, nowMs);
   }
 
   /** 1 = fully drawn, 0 = invisible. Used to drop the neighbours out of the locked view. */
@@ -220,6 +233,7 @@ export class Voxel implements Interactable {
       if (this.beat.isDone) {
         this.beat = null;
         this.status = 'resolved';
+        this.rig.root.visible = false; // what's left on the ground is spawned as objects by main
         this.onDone(this);
       }
     }
