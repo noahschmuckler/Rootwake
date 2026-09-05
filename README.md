@@ -25,7 +25,8 @@ box to eat them. Work tires you: the edges of the screen darken, colour
 drains, hops shorten; rest with a still press on the right, or collapse and
 wake tired. Night falls every few minutes: well fed you see the plateau by
 moonlight, tired you see only the lichen glowing on the rock, and only
-then can you gather it. Clear toward the light, walk to the edge, and look
-down. `R`
+then can you gather it. Tilling turns up rocks: lift one, long-press
+another, and knap it into a stone hand axe. Clear toward the light, walk to
+the edge, and look down. `R`
 reshuffles (new seed), `?seed=N` repeats a layout, `?slowmo=N` slows the
 animations.

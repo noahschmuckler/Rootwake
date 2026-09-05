@@ -23,8 +23,9 @@ don't add structure the prototype doesn't need yet.
 
 ## Status
 
-**Passes 0 through 0.7a judged satisfying on phone; Pass 0.7b (day/night,
-vision regimes, lichen) built 2026-09-05, awaiting evaluation. Standing rules: confinement→vista,
+**Passes 0 through 0.7b judged satisfying on phone; Pass 0.8 (rocks, the
+long-press recipe menu, the knapped hand axe) built 2026-09-05, awaiting
+evaluation. Standing rules: confinement→vista,
 objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
 `src/` holds:
 
@@ -38,10 +39,15 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
 - `board3d.ts` — the board as 3D gem meshes on the camera; animates the
   steps the core returns. Tuning constants at the top.
 - `projectiles.ts` — the shot from a cleared run to its target; the hit
-  feeds the pool.
+  feeds the pool. `strike()` sends a held object out and back.
 - `interactable.ts` — what main.ts needs from anything it can lock onto
-  and feed; implemented by `Voxel` and `Patch`. Status includes 'blocked'
-  and 'planted'.
+  and feed; implemented by `Voxel`, `Patch` and `CraftSession`. Status
+  includes 'blocked' and 'planted'.
+- `recipes.ts` — the recipe table (target, required held object, result,
+  HP, staged looks, drain) and the filter by what's in hand.
+- `craft.ts` — a crafting session: the target hovers ahead, the board plays
+  it, strikes step its look, the result lands in a hand; progress lives on
+  the target across back-outs.
 - `growth.ts` — the sapling: three authored stages over GROW_MS;
   PLANT_SEEDS.
 - `daylight.ts` — the day cycle: sun/moon/hemisphere/sky/fog by time of
@@ -55,8 +61,9 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
   saturation, exposure, blackout curves. Tuning constants at the top.
 - `objects.ts` — the weight rule: size class (20/5/1 per hand), mass,
   strength, hands-to-lift / hands-to-drag; object types (seed, stick, log,
-  lichen; seeds are food); `collectible` flag; the in-the-way waggle;
-  WorldObject/ObjectWorld and the felled-tree scatter.
+  lichen, rock, hand_axe; seeds are food); authored crafting looks and
+  `setLook`; `collectible` flag; the in-the-way waggle; WorldObject/
+  ObjectWorld and the felled-tree scatter.
 - `hands.ts` — the two hand boxes and the one gesture (drag a box to a
   thing: take / gather / lift / link / place), leashes, fly-to-box, the
   two-hand log drag on a rope, strain; a placeOnTarget hook for things
@@ -76,10 +83,12 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
   blocked state while objects lie on it (look unchanged, lock refused), and
   a planted state that grows a sapling into a tree. Never collides.
 - `cameraLock.ts` — pose-to-pose lock/unlock tween; `lockedPoseFor()` is
-  the Pass 0 face framing, `lookDownPoseFor()` the patch framing.
+  the Pass 0 face framing, `lookDownPoseFor()` the patch framing,
+  `craftPoseFor()` the hovering-target framing.
 - `player.ts` — first-person look plus waypoint-fan movement; candidates
   filtered by colliders and the world's isWalkable(); encumbrance hooks;
-  per-frame push-out from colliders; onHop and a still-hold rest gesture.
+  per-frame push-out from colliders; onHop, a still-hold rest gesture, and
+  a 'press' role on world objects that becomes a long-press.
 - `world.ts` — the rock plateau cut on a curving cliff line, the cliff
   face, the never-walked landscape 400 below (forest floor, canopies,
   river, three mountain layers), FogExp2, sky dome; isWalkable() and
@@ -89,10 +98,11 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
   rule, auto back-out, edge FOV/dip, felling aftermath (shake, scatter,
   footprint), blocked evaluation, hands wiring, vitality wiring (drains,
   halo/filter/exposure/blackout, hints), day cycle + night vision + lichen
-  scatter, HUD, `?seed=` / `?slowmo=` / `?debug=` / `?time=`,
-  `window.__rootwake`. UI layers have explicit z-indexes above the canvas.
+  scatter, rock spawning, the recipe menu and craft sessions, HUD,
+  `?seed=` / `?slowmo=` / `?debug=` / `?time=`, `window.__rootwake`. UI
+  layers have explicit z-indexes above the canvas.
 
-The next pass is whatever `ROADMAP.md` lists next (0.8 once 0.7b is
+The next pass is whatever `ROADMAP.md` lists next (0.9 once 0.8 is
 judged); do not skip ahead in that order without the designer — each pass
 exists to answer a question the previous one raised.
 

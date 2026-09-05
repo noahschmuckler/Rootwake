@@ -515,10 +515,16 @@ what was built and why.
 
 ## Status
 
-Repo scaffolded 2026-09-03. Passes 0 through 0.7a built and confirmed on
-phone playtests. **Pass 0.7b (day/night and the two vision regimes) built
-2026-09-05, awaiting evaluation.** Next per ROADMAP.md: 0.8 (rocks and the
-stone hand axe).
+Repo scaffolded 2026-09-03. Passes 0 through 0.7b built and confirmed on
+phone playtests (plus the sky). **Pass 0.8 (rocks and the stone hand axe)
+built 2026-09-05, awaiting evaluation.** Next per ROADMAP.md: 0.9 (shaping
+logs and the first bed).
+
+What 0.8 adds: tilling turns up rocks. Long-press a rock and its recipes
+appear; with a rock in hand, "Knap a hand axe" is available. The target
+rock lifts to hover in front of you, the board appears under it, and every
+match sends the rock in your hand out to strike it. It chips, becomes a
+wedge, and then a hand axe that lands in your free hand.
 
 What 0.7b adds: a four-minute day. At night, well fed, the plateau is
 moonlit and washed out; tired, it is dark and the lichen on the rock glows,
