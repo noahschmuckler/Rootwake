@@ -410,6 +410,7 @@ export class Hands {
     let bestD = SNAP_RADIUS_PX;
     const v = new THREE.Vector3();
     for (const o of this.objects.objects) {
+      if (!o.collectible) continue;
       v.copy(o.position).project(this.camera);
       if (v.z > 1 || Math.abs(v.x) > 1.2 || Math.abs(v.y) > 1.2) continue;
       const sx = (v.x * 0.5 + 0.5) * window.innerWidth;

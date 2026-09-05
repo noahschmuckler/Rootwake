@@ -61,6 +61,8 @@ export interface VitalityEffects {
   exposure: number;
   /** 0..1 black overlay for collapse/rest fades. */
   blackout: number;
+  /** Night vision (Pass 0.7b): 0 at tired and below, 1 at well fed. The day cycle reads it. */
+  vision: number;
 }
 
 type Phase = { kind: 'awake' } | { kind: 'fading'; to: 'collapse' | 'rest'; startMs: number } | { kind: 'waking'; startMs: number };
@@ -169,6 +171,7 @@ export class Vitality {
       saturation: 1 - 0.8 * Math.pow(tiredness, 1.3) + 0.15 * haloLight,
       exposure: 1 - 0.4 * tiredness + 0.08 * haloLight,
       blackout,
+      vision: clamp01((v - TIRED) / (WELL_FED - TIRED)),
     };
   }
 }

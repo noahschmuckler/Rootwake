@@ -25,6 +25,9 @@
 //           it drives strength, hands, hop reach and the look of the world.
 //           No bar: a halo, colour and exposure are the meter. Collapse is
 //           a blackout and a tired waking, never death.
+// Pass 0.7b: day and night. Well fed at night sees far but washed out; tired
+//           at night sees dark — and the lichen on the rock glows for tired
+//           eyes only, the first thing worth being tired for.
 // Still out of scope: combat, specials, the 6-face mirror, a real field, art.
 
 import * as THREE from 'three';
@@ -38,6 +41,10 @@ import { ObjectWorld } from './objects';
 import { Hands, DRAG_FAN_SCALE, DRAG_MOVE_SLOWDOWN } from './hands';
 import { PLANT_SEEDS } from './growth';
 import { Vitality, DRAIN_TREE_HIT, DRAIN_TILL_HIT, DRAIN_HOP, DRAIN_DRAG_HOP } from './vitality';
+import { DayCycle, GLOW_VISIBLE, START_TIME } from './daylight';
+import { lichenMaterial } from './objects';
+import { mulberry32 } from './colors';
+import { HAZE_COLOR, HEMI_SKY_COLOR } from './world';
 import { BoardView } from './board3d';
 import { Projectiles } from './projectiles';
 import { PALETTE } from './colors';
@@ -49,6 +56,8 @@ const params = new URLSearchParams(window.location.search);
 const seed = Number.parseInt(params.get('seed') ?? '', 10) || 1;
 const slowmo = Math.max(1, Number.parseFloat(params.get('slowmo') ?? '') || 1);
 const debug = params.has('debug');
+// `?time=0.75` starts at midnight (0 dawn, 0.25 noon, 0.5 dusk).
+const startTime = Number.parseFloat(params.get('time') ?? '') || START_TIME;
 
 // ---- Scene / camera / renderer ---------------------------------------------
 const scene = new THREE.Scene();
@@ -149,6 +158,17 @@ function applyVitality(): void {
   }
 }
 
+/** Night vision from vitality, applied on top of the vitality look; lichen lights for tired eyes. */
+function applyNight(): void {
+  const vision = dayCycle.vision(vitality.effects(animClock).vision);
+  renderer.toneMappingExposure *= vision.exposure;
+  const sat = (Number.parseFloat(renderer.domElement.style.filter.replace(/[^0-9.]/g, '')) || 1) * vision.saturation;
+  renderer.domElement.style.filter = sat < 0.995 ? `saturate(${sat.toFixed(3)})` : '';
+  lichenMaterial.emissiveIntensity = 2.6 * vision.glow;
+  const visible = vision.glow > GLOW_VISIBLE;
+  for (const o of objects.objects) if (o.type.id === 'lichen') o.collectible = visible;
+}
+
 
 // ---- The thicket ------------------------------------------------------------
 // Pass 0.4a: the trees do the confining. Voxels sit on a hex lattice around
@@ -242,6 +262,28 @@ function onTreeFelled(v: Voxel): void {
   patches.push(footprint);
   interactables.push(footprint);
   scene.add(footprint.group);
+}
+
+// ---- Day and night (Pass 0.7b) --------------------------------------------------
+const dayCycle = new DayCycle(
+  { sun: world.sun, moon: world.moon, hemi: world.hemi, skyMaterial: world.skyMaterial, fog: world.fog, background: scene.background as THREE.Color, dayHaze: HAZE_COLOR, dayHemiSky: HEMI_SKY_COLOR },
+  startTime
+);
+dayCycle.apply();
+
+// Lichen on the rock: near the outer trees and toward the lip. Rock-coloured by day.
+{
+  const rand = mulberry32(seed * 7 + 3);
+  let placed = 0;
+  for (let tries = 0; tries < 400 && placed < 40; tries++) {
+    const x = -12 + rand() * 34;
+    const z = (rand() * 2 - 1) * 20;
+    if (!world.isWalkable(new THREE.Vector3(x, GROUND_Y, z))) continue;
+    if (voxels.some((v) => Math.hypot(v.center.x - x, v.center.z - z) < 1.7)) continue;
+    if (patches.some((p) => Math.hypot(p.center.x - x, p.center.z - z) < 1.1)) continue;
+    objects.spawn('lichen', x, GROUND_Y, z, rand() * Math.PI);
+    placed++;
+  }
 }
 
 // ---- Lock / unlock plumbing --------------------------------------------------
@@ -342,7 +384,7 @@ function updateHud(): void {
   const parts = [`seed ${seed}`, `cleared ${resolved}/${voxels.length}`, `tilled ${tilled}/${patches.length}`];
   if (planted) parts.push(`planted ${planted}`);
   if (slowmo > 1) parts.push(`slowmo ×${slowmo}`);
-  if (debug) parts.push(`vit ${vitality.value.toFixed(2)} ${vitality.band}`);
+  if (debug) parts.push(`vit ${vitality.value.toFixed(2)} ${vitality.band}`, `time ${dayCycle.time.toFixed(2)} day ${dayCycle.day.toFixed(2)}`);
   if (locked && cameraRig.mode === 'locked' && locked.status === 'growing') {
     parts.push(locked.poolText());
   }
@@ -425,7 +467,7 @@ function animate(now: number): void {
   requestAnimationFrame(animate);
 
 // Debug handle for headless/console poking. Not part of the design surface.
-(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, vitality, world, cameraRig, boardView };
+(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, vitality, dayCycle, world, cameraRig, boardView };
   const dt = Math.min(0.1, (now - lastFrame) / 1000);
   animClock += (dt * 1000) / slowmo;
   lastFrame = now;
@@ -438,9 +480,12 @@ function animate(now: number): void {
     setFov(BASE_FOV + EDGE_FOV_WIDEN * k);
     camera.position.y -= EDGE_EYE_DIP * k;
   }
-  // Vitality: drains with time, drives hands/reach, paints the halo.
+  // Vitality: drains with time, drives hands/reach, paints the halo. Then the hour of the day on top.
   vitality.update(animClock);
   applyVitality();
+  dayCycle.advance((dt * 1000) / slowmo);
+  dayCycle.apply(vitality.effects(animClock).vision);
+  applyNight();
   const vfx = vitality.effects(animClock);
   // Encumbrance: dragging shortens and slows hops; straining stops them. Fatigue shortens them too.
   player.fanScale = (hands.dragging ? DRAG_FAN_SCALE : 1) * vfx.fanScale;
@@ -502,4 +547,4 @@ function animate(now: number): void {
 requestAnimationFrame(animate);
 
 // Debug handle for headless/console poking. Not part of the design surface.
-(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, vitality, world, cameraRig, boardView };
+(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, vitality, dayCycle, world, cameraRig, boardView };

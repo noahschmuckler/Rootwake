@@ -13,6 +13,7 @@ export const GROUND_Y = -1;
 /** Fog/horizon colour and the zenith it grades to. */
 export const HAZE_COLOR = 0xdfe7ef;
 export const ZENITH_COLOR = 0x8fb0d8;
+export const HEMI_SKY_COLOR = 0xdfe8f0;
 /** Exponential-squared fog: ~10% at 300, ~25% at 450 (the cliff foot), ~60% at 1000, gone by ~2000. Barely touches the thicket. */
 export const FOG_DENSITY = 0.0011;
 /** Coarse rock: colour, mesh density and bump height. */
@@ -33,6 +34,12 @@ export const DROP = 400;
 
 export interface World {
   group: THREE.Group;
+  /** Handles the day cycle repaints (Pass 0.7b). */
+  sun: THREE.DirectionalLight;
+  moon: THREE.DirectionalLight;
+  hemi: THREE.HemisphereLight;
+  skyMaterial: THREE.MeshBasicMaterial;
+  fog: THREE.FogExp2;
   /** Can the player stand here? The waypoint fan filters candidates through this. */
   isWalkable: (p: THREE.Vector3) => boolean;
   /** Horizontal distance from a point to the cliff lip (negative = past it). */
@@ -134,15 +141,21 @@ export function buildWorld(scene: THREE.Scene): World {
   const rand = mulberry32(19);
 
   scene.background = new THREE.Color(HAZE_COLOR);
-  scene.fog = new THREE.FogExp2(HAZE_COLOR, FOG_DENSITY);
-  group.add(skyDome());
+  const fog = new THREE.FogExp2(HAZE_COLOR, FOG_DENSITY);
+  scene.fog = fog;
+  const sky = skyDome();
+  group.add(sky);
 
   // Lighting: a bright sky hemisphere, a low warm sun from the cliff side so
-  // the vista direction is the lit one.
-  scene.add(new THREE.HemisphereLight(0xdfe8f0, 0x2a3324, 1.1));
+  // the vista direction is the lit one. The day cycle repaints these.
+  const hemi = new THREE.HemisphereLight(HEMI_SKY_COLOR, 0x2a3324, 1.1);
+  scene.add(hemi);
   const sun = new THREE.DirectionalLight(0xfff0d8, 1.6);
   sun.position.set(30, 12, -8);
   scene.add(sun);
+  const moon = new THREE.DirectionalLight(0xbcc8e0, 0);
+  moon.position.set(-6, 40, 12);
+  scene.add(moon);
 
   // The plateau and its cliff face.
   const rockMaterial = new THREE.MeshStandardMaterial({ color: ROCK_COLOR, roughness: 1, flatShading: true });
@@ -218,5 +231,5 @@ export function buildWorld(scene: THREE.Scene): World {
     p.x <= cliffEdgeX(p.z) - EDGE_MARGIN && p.x >= PLATEAU_MIN_X + 1 && Math.abs(p.z) <= PLATEAU_HALF_Z - 1;
   const distanceToEdge = (p: THREE.Vector3): number => cliffEdgeX(p.z) - p.x;
 
-  return { group, isWalkable, distanceToEdge };
+  return { group, sun, moon, hemi, skyMaterial: sky.material as THREE.MeshBasicMaterial, fog, isWalkable, distanceToEdge };
 }

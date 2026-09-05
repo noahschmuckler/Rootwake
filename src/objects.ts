@@ -24,7 +24,7 @@ export function handsToDrag(mass: number, strength = STRENGTH): number {
 }
 // -------------------------------------------------------------------------------
 
-export type ObjectTypeId = 'seed' | 'stick' | 'log';
+export type ObjectTypeId = 'seed' | 'stick' | 'log' | 'lichen';
 
 export interface ObjectType {
   id: ObjectTypeId;
@@ -44,6 +44,8 @@ export interface ObjectType {
 }
 
 const wood = new THREE.MeshStandardMaterial({ color: 0x5a3f2a, roughness: 0.95, flatShading: true });
+/** Lichen: rock-coloured and unlit by day; the day cycle raises its emissive for tired eyes at night. */
+export const lichenMaterial = new THREE.MeshStandardMaterial({ color: 0x6f6e68, emissive: 0x7ff0c8, emissiveIntensity: 0, roughness: 1, flatShading: true });
 const stickMaterial = new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughness: 0.95 });
 const seedMaterial = new THREE.MeshStandardMaterial({ color: 0xe6d38f, roughness: 0.6 });
 
@@ -79,6 +81,21 @@ export const OBJECT_TYPES: Record<ObjectTypeId, ObjectType> = {
       return m;
     },
   },
+  lichen: {
+    id: 'lichen',
+    label: 'lichen',
+    size: 'tiny',
+    mass: 0,
+    color: 0x7ff0c8,
+    radius: 0.25,
+    blocks: false,
+    restHeight: 0.02,
+    build: () => {
+      const m = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 1), lichenMaterial);
+      m.scale.set(0.32, 0.04, 0.24);
+      return m;
+    },
+  },
   log: {
     id: 'log',
     label: 'log',
@@ -104,6 +121,8 @@ export class WorldObject {
   /** A parent group carries position/heading; the mesh keeps its resting rotation. */
   readonly group = new THREE.Group();
   readonly mesh: THREE.Mesh;
+  /** Pass 0.7b: false while the thing can't be seen (lichen by day) — hands ignore it. */
+  collectible = true;
 
   constructor(readonly type: ObjectType) {
     this.mesh = type.build();
@@ -147,13 +166,13 @@ export class ObjectWorld {
 
   /** Meshes for raycasting; each carries userData.object. */
   raycastTargets(): THREE.Object3D[] {
-    return this.objects.map((o) => o.mesh);
+    return this.objects.filter((o) => o.collectible).map((o) => o.mesh);
   }
 
-  /** Objects of a type within `radius` (ground plane) of a point, nearest first. */
+  /** Collectible objects of a type within `radius` (ground plane) of a point, nearest first. */
   nearby(x: number, z: number, radius: number, typeId?: ObjectTypeId): WorldObject[] {
     return this.objects
-      .filter((o) => (!typeId || o.type.id === typeId) && Math.hypot(o.position.x - x, o.position.z - z) <= radius)
+      .filter((o) => o.collectible && (!typeId || o.type.id === typeId) && Math.hypot(o.position.x - x, o.position.z - z) <= radius)
       .sort((a, b) => Math.hypot(a.position.x - x, a.position.z - z) - Math.hypot(b.position.x - x, b.position.z - z));
   }
 
