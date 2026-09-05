@@ -45,7 +45,11 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
 - `growth.ts` — the sapling: three authored stages over GROW_MS;
   PLANT_SEEDS.
 - `daylight.ts` — the day cycle: sun/moon/hemisphere/sky/fog by time of
-  day; night vision (fed = moonlit and washed, tired = dark with glow).
+  day; night vision (fed = moonlit and washed, tired = dark with glow);
+  `sunDirection`.
+- `sky.ts` — the visible sky: sun disc + glow, moon opposite, a turning
+  star field that fades in at dusk, drifting cloud sprites; rides on the
+  camera at dome distance. Generated textures, unlit, unfogged.
 - `vitality.ts` — the one stat: drains, food, rest, collapse with
   diminishing wake-ups; bands → strength / caps / hands / fan reach; halo,
   saturation, exposure, blackout curves. Tuning constants at the top.

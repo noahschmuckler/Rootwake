@@ -62,6 +62,12 @@ export class DayCycle {
     return Math.sin(this.time * Math.PI * 2);
   }
 
+  /** Unit vector toward the sun. Rises over -Z, arcs toward +X (the cliff), sets over +Z. */
+  get sunDirection(): THREE.Vector3 {
+    const a = this.time * Math.PI * 2;
+    return new THREE.Vector3(Math.cos(a) * 0.6 + 0.3, this.sunHeight, -Math.sin(a) * 0.9).normalize();
+  }
+
   /** 1 in full day, 0 in full night, smooth through dawn and dusk. */
   get day(): number {
     return THREE.MathUtils.smoothstep(this.sunHeight, -0.25, 0.35);
@@ -76,9 +82,7 @@ export class DayCycle {
     const day = this.day;
     const night = 1 - day;
     const r = this.rig;
-    const a = this.time * Math.PI * 2;
-    // Sun rises over -Z, arcs toward +X (the cliff), sets over +Z.
-    r.sun.position.set(Math.cos(a) * 20 + 10, this.sunHeight * 30 + 2, -Math.sin(a) * 30);
+    r.sun.position.copy(this.sunDirection).multiplyScalar(40);
     r.sun.intensity = 1.6 * day;
     r.moon.intensity = NIGHT_VISION_MOON * night * nightVision;
     r.hemi.intensity = THREE.MathUtils.lerp(0.18, 1.1, day) + NIGHT_VISION_HEMI * night * nightVision;

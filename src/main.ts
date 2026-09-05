@@ -42,6 +42,7 @@ import { Hands, DRAG_FAN_SCALE, DRAG_MOVE_SLOWDOWN } from './hands';
 import { PLANT_SEEDS } from './growth';
 import { Vitality, DRAIN_TREE_HIT, DRAIN_TILL_HIT, DRAIN_HOP, DRAIN_DRAG_HOP } from './vitality';
 import { DayCycle, GLOW_VISIBLE, START_TIME } from './daylight';
+import { Sky } from './sky';
 import { lichenMaterial } from './objects';
 import { mulberry32 } from './colors';
 import { HAZE_COLOR, HEMI_SKY_COLOR } from './world';
@@ -271,6 +272,7 @@ const dayCycle = new DayCycle(
   startTime
 );
 dayCycle.apply();
+const sky = new Sky(scene);
 
 // Lichen on the rock: near the outer trees and toward the lip. Rock-coloured by day.
 {
@@ -496,6 +498,7 @@ function animate(now: number): void {
   applyVitality();
   dayCycle.advance((dt * 1000) / slowmo);
   dayCycle.apply(vitality.effects(animClock).vision);
+  sky.update(camera.position, dayCycle.sunDirection, dayCycle.day, dayCycle.time, dt);
   applyNight();
   const vfx = vitality.effects(animClock);
   // Encumbrance: dragging shortens and slows hops; straining stops them. Fatigue shortens them too.
