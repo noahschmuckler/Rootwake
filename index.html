@@ -18,7 +18,7 @@
       #halo { z-index: 5; }
       #blackout { z-index: 6; }
       #links { z-index: 8; }
-      #hint, #hud { z-index: 9; }
+      #text { z-index: 9; }
       #hands, #back { z-index: 10; }
       #menu {
         position: fixed; z-index: 11; display: flex; flex-direction: column; gap: 6px; width: 220px;
@@ -59,16 +59,14 @@
       #links .snap.core { stroke: #ffffff; stroke-width: 3; }
       #links .strain.glow { stroke: rgba(232, 162, 92, 0.4); }
       #links .strain.core { stroke: #f0b070; }
-      #hud {
-        position: fixed; left: 12px; top: 100px; right: 110px;
-        font: 13px/1.4 system-ui, sans-serif; color: #9aa89a;
-        pointer-events: none; user-select: none;
-      }
-      #hint {
+      /* Hint and HUD stack in one column so a wrapped hint (narrow phones) never runs under the HUD. */
+      #text {
         position: fixed; left: 12px; top: 80px; right: 110px;
-        font: 13px/1.4 system-ui, sans-serif; color: #8a978a;
+        font: 13px/1.4 system-ui, sans-serif;
         pointer-events: none; user-select: none;
       }
+      #hint { color: #8a978a; }
+      #hud { color: #9aa89a; margin-top: 4px; }
       #back {
         position: fixed; right: 12px; top: 10px;
         font: 13px/1 system-ui, sans-serif; color: #c9d4c9;
@@ -78,16 +76,15 @@
       #back:hover { background: #2a3a2a; }
       #back[hidden] { display: none; }
     </style>
-    <script type="module" crossorigin src="/Rootwake/assets/index-PZLqLW_d.js"></script>
+    <script type="module" crossorigin src="/Rootwake/assets/index-1MYapa71.js"></script>
   </head>
   <body>
     <div id="halo"></div>
     <div id="blackout"></div>
-    <div id="hint"></div>
+    <div id="text"><div id="hint"></div><div id="hud"></div></div>
     <svg id="links" xmlns="http://www.w3.org/2000/svg"></svg>
     <div id="hands"><div class="hand" data-hand="0"></div><div class="hand" data-hand="1"></div></div>
     <button id="back" type="button" hidden>Back out</button>
-    <div id="hud"></div>
     <div id="menu" hidden></div>
     <script>
       // Long presses must never open a context menu or start a selection on any browser.
