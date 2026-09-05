@@ -22,13 +22,50 @@ export const PATCH_SIZE = 1.3;
 export const PATCH_CAPACITY = 12;
 /** Player-to-centre distance within which a tap locks on. */
 export const PATCH_LOCK_REACH = 2.8;
-/** Blades and clods in the fullest / barest stages; middle stages are subsets. */
-const BLADES_BY_STAGE = [170, 100, 40, 0];
+/** Grass clumps (crossed standees) and clods in each stage; clumps are subsets of one seeded layout. */
+const CLUMPS_BY_STAGE = [16, 9, 4, 0];
 const CLODS_BY_STAGE = [0, 3, 8, 15];
+/** Tint multiplied over the blade texture per stage: fresh → yellowing → dry. */
+const CLUMP_TINT_BY_STAGE = [0xffffff, 0xd8cf98, 0xb8a878, 0xffffff];
+const CLUMP_SIZE = 0.42;
 /** Remaining-HP fractions above which each stage shows. */
 const STAGE_MIN_FRACTION = [0.66, 0.33, 0.0001];
 const SOIL_BY_STAGE = [0x2f3d27, 0x3d3a28, 0x4a3b28, 0x52402c];
 // -------------------------------------------------------------------------------
+
+/** One shared blade texture: a tuft fanning from the bottom centre, transparent elsewhere. */
+let grassTexture: THREE.CanvasTexture | null = null;
+function getGrassTexture(): THREE.CanvasTexture {
+  if (grassTexture) return grassTexture;
+  const size = 128;
+  const canvas = document.createElement('canvas');
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d')!;
+  ctx.clearRect(0, 0, size, size);
+  const rand = mulberry32(42);
+  const blades = 13;
+  for (let i = 0; i < blades; i++) {
+    const t = (i + 0.5) / blades;
+    const lean = (t - 0.5) * 1.7; // fan left to right
+    const height = 0.55 + rand() * 0.45;
+    const baseX = size * (0.42 + rand() * 0.16);
+    const tipX = baseX + lean * size * 0.32;
+    const tipY = size * (1 - height);
+    const width = 5 + rand() * 4;
+    const g = 120 + Math.floor(rand() * 70);
+    ctx.fillStyle = `rgb(${40 + Math.floor(rand() * 40)}, ${g}, ${40 + Math.floor(rand() * 30)})`;
+    ctx.beginPath();
+    ctx.moveTo(baseX - width / 2, size);
+    ctx.quadraticCurveTo(baseX + lean * size * 0.1, size * 0.6, tipX, tipY);
+    ctx.quadraticCurveTo(baseX + lean * size * 0.12 + width * 0.3, size * 0.62, baseX + width / 2, size);
+    ctx.closePath();
+    ctx.fill();
+  }
+  grassTexture = new THREE.CanvasTexture(canvas);
+  grassTexture.colorSpace = THREE.SRGBColorSpace;
+  return grassTexture;
+}
 
 export class Patch implements Interactable {
   readonly kind = 'patch' as const;
@@ -48,17 +85,26 @@ export class Patch implements Interactable {
 
   private readonly stages: THREE.Group[] = [];
   private stage = -1;
-  private blockedLook!: THREE.Group;
   /** Planted: bare worked soil under the sapling, no clods to hide it. */
   private plantedLook!: THREE.Mesh;
   /** Status to return to when unblocked (a partly tilled patch stays partly tilled). */
   private unblockedStatus: InteractableStatus = 'growing';
 
-  constructor(readonly index: number, position: THREE.Vector3, seed: number, blocked = false) {
+  /**
+   * @param blocked      start with something lying on it (a felled tree's footprint)
+   * @param initialStage start partly tilled — the ground under a felled tree is disturbed, not lawn
+   */
+  constructor(readonly index: number, position: THREE.Vector3, seed: number, blocked = false, initialStage = 0) {
     this.board = new Board(BOARD_ROWS, BOARD_COLS, seed ^ 0x7a11);
     this.group.position.copy(position);
     this.buildStages(seed);
-    this.setStage(0);
+    if (initialStage > 0) {
+      // Pool value whose remaining fraction sits inside that stage.
+      const remaining = initialStage === 1 ? 0.5 : initialStage === 2 ? 0.2 : 0;
+      this.pool = Math.min(PATCH_CAPACITY, Math.round(PATCH_CAPACITY * (1 - remaining)));
+      if (initialStage >= 3) this.status = 'resolved';
+    }
+    this.setStage(this.stageFor(1 - this.pool / PATCH_CAPACITY));
     if (blocked) this.setBlocked(true);
 
     // Thin invisible slab so a tap on the grass finds the patch. Not a collider.
@@ -87,11 +133,8 @@ export class Patch implements Interactable {
       this.status = 'blocked';
     } else if (!blocked && this.status === 'blocked') {
       this.status = this.unblockedStatus;
-    } else {
-      return;
     }
-    this.blockedLook.visible = blocked;
-    this.stages.forEach((g, i) => (g.visible = !blocked && i === this.stage));
+    // The look does not change: grass under a log is still grass. Only the lock is refused.
   }
 
   lockPose(viewer: Viewer): CameraPose {
@@ -182,18 +225,24 @@ export class Patch implements Interactable {
     const rand = mulberry32(seed);
     const half = PATCH_SIZE / 2;
 
-    // Shared transform lists: stage k shows the first N of each.
-    const bladeBase = new THREE.ConeGeometry(0.035, 0.24, 5);
-    bladeBase.translate(0, 0.12, 0);
-    const blades: THREE.BufferGeometry[] = [];
+    // Shared layouts: stage k shows the first N clumps and the first M clods.
+    // A clump is two crossed quads (an X from above) carrying the blade texture,
+    // its bottom edge on the ground; a standee reads as a tuft from any side.
+    const quad = new THREE.PlaneGeometry(CLUMP_SIZE, CLUMP_SIZE);
+    quad.translate(0, CLUMP_SIZE / 2, 0);
+    const clumps: THREE.BufferGeometry[] = [];
     const m = new THREE.Matrix4();
     const q = new THREE.Quaternion();
     const e = new THREE.Euler();
-    for (let i = 0; i < BLADES_BY_STAGE[0]; i++) {
-      const pos = new THREE.Vector3((rand() * 2 - 1) * (half - 0.05), 0, (rand() * 2 - 1) * (half - 0.05));
-      q.setFromEuler(e.set((rand() - 0.5) * 0.7, rand() * Math.PI * 2, (rand() - 0.5) * 0.7));
-      const h = 0.7 + rand() * 0.7;
-      blades.push(bladeBase.clone().applyMatrix4(m.compose(pos, q, new THREE.Vector3(1, h, 1))));
+    for (let i = 0; i < CLUMPS_BY_STAGE[0]; i++) {
+      const pos = new THREE.Vector3((rand() * 2 - 1) * (half - 0.12), 0, (rand() * 2 - 1) * (half - 0.12));
+      const yaw = rand() * Math.PI;
+      const sc = 0.75 + rand() * 0.5;
+      const scale = new THREE.Vector3(sc, sc * (0.8 + rand() * 0.4), sc);
+      q.setFromEuler(e.set(0, yaw, 0));
+      clumps.push(quad.clone().applyMatrix4(m.compose(pos, q, scale)));
+      q.setFromEuler(e.set(0, yaw + Math.PI / 2, 0));
+      clumps.push(quad.clone().applyMatrix4(m.compose(pos, q, scale)));
     }
     const clodBase = new THREE.IcosahedronGeometry(1, 0);
     const clods: THREE.BufferGeometry[] = [];
@@ -204,37 +253,30 @@ export class Patch implements Interactable {
       clods.push(clodBase.clone().applyMatrix4(m.compose(pos, q, new THREE.Vector3(r, r * 0.65, r))));
     }
 
-    const bladeMaterial = new THREE.MeshStandardMaterial({ color: 0x5fae3c, roughness: 0.9, flatShading: true });
-    const dryBladeMaterial = new THREE.MeshStandardMaterial({ color: 0x8aa04a, roughness: 0.9, flatShading: true });
+    const texture = getGrassTexture();
     const clodMaterial = new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughness: 1, flatShading: true });
     const soil = new THREE.PlaneGeometry(PATCH_SIZE, PATCH_SIZE);
     soil.rotateX(-Math.PI / 2);
 
-    // Blocked look: bare dark soil with a faint outline — the ground is there, not yet yours.
-    this.blockedLook = new THREE.Group();
-    const bare = new THREE.Mesh(soil, new THREE.MeshStandardMaterial({ color: 0x3a3128, roughness: 1 }));
-    bare.position.y = 0.012;
-    this.blockedLook.add(bare);
-    const outline = new THREE.LineSegments(
-      new THREE.EdgesGeometry(soil),
-      new THREE.LineBasicMaterial({ color: 0x9aa89a, transparent: true, opacity: 0.35 })
-    );
-    outline.position.y = 0.02;
-    this.blockedLook.add(outline);
-    this.blockedLook.visible = false;
-    this.group.add(this.blockedLook);
     this.plantedLook = new THREE.Mesh(soil, new THREE.MeshStandardMaterial({ color: 0x4a3626, roughness: 1 }));
     this.plantedLook.position.y = 0.012;
     this.plantedLook.visible = false;
     this.group.add(this.plantedLook);
 
-    for (let k = 0; k < BLADES_BY_STAGE.length; k++) {
+    for (let k = 0; k < CLUMPS_BY_STAGE.length; k++) {
       const g = new THREE.Group();
       const base = new THREE.Mesh(soil, new THREE.MeshStandardMaterial({ color: SOIL_BY_STAGE[k], roughness: 1 }));
       base.position.y = 0.012;
       g.add(base);
-      if (BLADES_BY_STAGE[k] > 0) {
-        g.add(new THREE.Mesh(mergeGeometries(blades.slice(0, BLADES_BY_STAGE[k])), k === 0 ? bladeMaterial : dryBladeMaterial));
+      if (CLUMPS_BY_STAGE[k] > 0) {
+        const material = new THREE.MeshStandardMaterial({
+          map: texture,
+          color: CLUMP_TINT_BY_STAGE[k],
+          alphaTest: 0.5,
+          side: THREE.DoubleSide,
+          roughness: 1,
+        });
+        g.add(new THREE.Mesh(mergeGeometries(clumps.slice(0, CLUMPS_BY_STAGE[k] * 2)), material));
       }
       if (CLODS_BY_STAGE[k] > 0) {
         g.add(new THREE.Mesh(mergeGeometries(clods.slice(0, CLODS_BY_STAGE[k])), clodMaterial));

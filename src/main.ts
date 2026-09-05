@@ -256,7 +256,8 @@ for (const p of patches) p.onGrown = onSaplingGrown;
 function onTreeFelled(v: Voxel): void {
   const dir = v.normal; // the face the lock chose = the side it fell toward
   objects.scatterFelledTree(v.center, dir, GROUND_Y, seed * 53 + v.index);
-  const footprint = new Patch(patches.length, new THREE.Vector3(v.center.x, GROUND_Y, v.center.z), seed * 977 + 500 + v.index, true);
+  // Disturbed ground under a felled tree: sparse, already part-worked (stage 2), with the log on it.
+  const footprint = new Patch(patches.length, new THREE.Vector3(v.center.x, GROUND_Y, v.center.z), seed * 977 + 500 + v.index, true, 2);
   footprint.onDone = onInteractableDone;
   footprint.onGrown = onSaplingGrown;
   patches.push(footprint);
@@ -425,7 +426,17 @@ player.onTap = (x, y) => {
   if (cameraRig.mode === 'free') {
     const targets = interactables.filter((it) => it.status === 'growing').flatMap((it) => it.lockTargets);
     const hit = raycaster.intersectObjects(targets, false)[0];
-    if (!hit) return;
+    if (!hit) {
+      // Tapping blocked ground: the thing in the way waggles. That is the whole hint.
+      const blockedHit = raycaster.intersectObjects(patches.filter((p) => p.status === 'blocked').flatMap((p) => p.lockTargets), false)[0];
+      if (blockedHit) {
+        const patch = blockedHit.object.userData.interactable as Patch;
+        for (const o of objects.overlapsSquare(patch.center.x, patch.center.z, patch.footprintHalf)) o.waggle(animClock);
+        hint.textContent = 'Something is in the way.';
+        tooFarUntil = animClock + 1200;
+      }
+      return;
+    }
     const it = hit.object.userData.interactable as Interactable;
     if (it.distanceTo(player.position) > it.lockReach) {
       hint.textContent = 'Closer.';
@@ -536,6 +547,7 @@ function animate(now: number): void {
     v.setFade(fade);
   }
   for (const it of interactables) it.update(animClock);
+  objects.update(animClock);
 
   // The board's job is done once its target starts resolving (or is tilled): get out of the way.
   if (locked && locked.status !== 'growing') boardView.hide();

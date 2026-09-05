@@ -13,6 +13,9 @@ export const STACK_CAP: Record<SizeClass, number> = { tiny: 20, small: 5, large:
 /** Character strength. A constant for now; fatigue and food will move it (DESIGN.md). */
 export const STRENGTH = 1;
 export const HANDS = 2;
+/** The in-the-way waggle: duration and amplitude. */
+export const WAGGLE_MS = 650;
+export const WAGGLE_RAD = 0.09;
 
 /** Hands needed to lift an object of this mass at this strength (stackables are weightless). */
 export function handsToLift(mass: number, strength = STRENGTH): number {
@@ -123,6 +126,30 @@ export class WorldObject {
   readonly mesh: THREE.Mesh;
   /** Pass 0.7b: false while the thing can't be seen (lichen by day) — hands ignore it. */
   collectible = true;
+  /** A small wobble (the "this is in the way" hint); ends at this animation-clock time. */
+  private waggleUntil = 0;
+  private waggleStart = 0;
+
+  /** Wobble for a moment (WAGGLE_MS). */
+  waggle(nowMs: number): void {
+    this.waggleStart = nowMs;
+    this.waggleUntil = nowMs + WAGGLE_MS;
+  }
+
+  updateWaggle(nowMs: number): void {
+    if (nowMs >= this.waggleUntil) {
+      if (this.waggleUntil !== 0) {
+        this.group.rotation.x = 0;
+        this.group.rotation.z = 0;
+        this.waggleUntil = 0;
+      }
+      return;
+    }
+    const p = (nowMs - this.waggleStart) / WAGGLE_MS;
+    const a = Math.sin(p * Math.PI * 6) * WAGGLE_RAD * (1 - p);
+    this.group.rotation.z = a;
+    this.group.rotation.x = a * 0.5;
+  }
 
   constructor(readonly type: ObjectType) {
     this.mesh = type.build();
@@ -162,6 +189,10 @@ export class ObjectWorld {
     const i = this.objects.indexOf(obj);
     if (i >= 0) this.objects.splice(i, 1);
     this.group.remove(obj.group);
+  }
+
+  update(nowMs: number): void {
+    for (const o of this.objects) o.updateWaggle(nowMs);
   }
 
   /** Meshes for raycasting; each carries userData.object. */
