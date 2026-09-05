@@ -209,7 +209,10 @@ export class Voxel implements Interactable {
   }
 
   /** 1 = fully drawn, 0 = invisible. Used to drop the neighbours out of the locked view. */
+  /** Last fade applied (debug/headless inspection). */
+  lastFade = 1;
   setFade(alpha: number): void {
+    this.lastFade = alpha;
     const a = THREE.MathUtils.clamp(alpha, 0, 1);
     this.rig.root.visible = a > 0 && this.status !== 'resolved';
     this.rig.materials.forEach((m, i) => {

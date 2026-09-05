@@ -135,6 +135,37 @@ export class BoardView {
     return this.active !== null || this.queue.length > 0;
   }
 
+  /**
+   * World-space y of the board's lowest corner if the camera had this pose
+   * (position + look target). Locks use it to keep the board out of the
+   * ground: the board lives in camera space, so a camera pitched down puts
+   * its lower rows below the floor unless the whole framing is lifted.
+   */
+  lowestWorldY(position: THREE.Vector3, target: THREE.Vector3, cols = this.model?.cols ?? 6, rows = this.model?.rows ?? 6): number {
+    const cam = new THREE.PerspectiveCamera(this.camera.fov, this.camera.aspect, 0.05, 10);
+    cam.position.copy(position);
+    cam.lookAt(target);
+    cam.updateMatrixWorld();
+    const halfH = Math.tan(THREE.MathUtils.degToRad(this.camera.fov) / 2) * BOARD_DISTANCE;
+    const halfW = halfH * this.camera.aspect;
+    const scale = Math.min((halfW * 2 * BOARD_FIT_WIDTH) / cols, (halfH * 2 * BOARD_FIT_HEIGHT) / (rows * Math.cos(BOARD_TILT)));
+    const groupY = halfH * 2 * BOARD_Y_FRACTION;
+    let lowest = Infinity;
+    for (const sx of [-1, 1]) {
+      for (const sy of [-1, 1]) {
+        // corner in board-local, then tilted about X, then into camera space, then world
+        const lx = (sx * (cols - 1)) / 2 + sx * 0.5;
+        const ly = (sy * (rows - 1)) / 2 + sy * 0.5;
+        const p = new THREE.Vector3(lx * scale, ly * scale * Math.cos(-BOARD_TILT), ly * scale * Math.sin(-BOARD_TILT));
+        p.y += groupY;
+        p.z -= BOARD_DISTANCE;
+        p.applyMatrix4(cam.matrixWorld);
+        lowest = Math.min(lowest, p.y);
+      }
+    }
+    return lowest;
+  }
+
   bind(board: Board): void {
     this.model = board;
     this.selectedId = null;

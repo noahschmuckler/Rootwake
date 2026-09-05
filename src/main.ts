@@ -34,7 +34,7 @@
 // Still out of scope: combat, specials, the 6-face mirror, a real field, art.
 
 import * as THREE from 'three';
-import { CameraRig, lockedPoseFor, type CameraMode } from './cameraLock';
+import { CameraRig, lockedPoseFor, type CameraMode, type CameraPose } from './cameraLock';
 import { Player } from './player';
 import { Voxel } from './voxel';
 import { Patch } from './patch';
@@ -52,7 +52,7 @@ import { OBJECT_TYPES, type WorldObject } from './objects';
 import { lichenMaterial } from './objects';
 import { mulberry32 } from './colors';
 import { HAZE_COLOR, HEMI_SKY_COLOR } from './world';
-import { BoardView } from './board3d';
+import { BoardView, BOARD_DISTANCE } from './board3d';
 import { Projectiles } from './projectiles';
 import { PALETTE } from './colors';
 
@@ -124,6 +124,37 @@ hands.placeOnTarget = (x, y, type, count) => {
   return used;
 };
 
+// ---- Lock framing safety ---------------------------------------------------------
+/** The board's lowest corner must stay this far above the ground in any lock. */
+const BOARD_GROUND_CLEARANCE = 0.12;
+/** The lock camera must stay this far (horizontally) from any standing tree's centre. */
+const CAMERA_TREE_CLEARANCE = 1.35;
+
+/**
+ * Lock onto `it` with a framing that keeps the board out of the ground and
+ * the camera out of the trees. Lifts the whole pose (and tells the target,
+ * which may hover) rather than steepening it, so the framing angle survives.
+ */
+function lockOnto(it: Interactable): void {
+  const pose = it.lockPose(viewerNow());
+  // Camera inside a standing tree: step forward toward the target until clear.
+  for (let guard = 0; guard < 6; guard++) {
+    const inside = voxels.find((v) => v.status !== 'resolved' && Math.hypot(v.center.x - pose.position.x, v.center.z - pose.position.z) < CAMERA_TREE_CLEARANCE && pose.position.y < 1);
+    if (!inside) break;
+    pose.position.lerp(pose.target, 0.25);
+  }
+  const lowest = boardView.lowestWorldY(pose.position, pose.target, it.board.cols, it.board.rows);
+  const lift = GROUND_Y + BOARD_GROUND_CLEARANCE - lowest;
+  if (lift > 0) {
+    pose.position.y += lift;
+    pose.target.y += lift;
+    it.onPoseLifted?.(lift);
+  }
+  locked = it;
+  lockedPose = pose;
+  cameraRig.lock(animClock, pose);
+}
+
 // ---- Recipes and crafting (Pass 0.8) --------------------------------------------
 const menu = document.getElementById('menu')!;
 let craft: CraftSession | null = null;
@@ -189,8 +220,7 @@ function startCraft(target: WorldObject, recipe: Recipe): void {
     tooFarUntil = animClock + 1800;
     onInteractableDone(it);
   };
-  locked = craft;
-  cameraRig.lock(animClock, craft.lockPose(viewerNow()));
+  lockOnto(craft);
 }
 
 // ---- Vitality (Pass 0.7a) -----------------------------------------------------
@@ -387,6 +417,8 @@ const sky = new Sky(scene);
 
 // ---- Lock / unlock plumbing --------------------------------------------------
 let locked: Interactable | null = null;
+/** The pose lockOnto actually applied (after stepping out of trees and lifting). */
+let lockedPose: CameraPose | null = null;
 /** After a locked voxel resolves, hold this long on the empty spot, then back out to reveal the gap. */
 const RELEASE_HOLD_MS = 450;
 let autoUnlockAt: number | null = null;
@@ -412,7 +444,20 @@ const FADE_CORRIDOR = 2.6;
 /** For a look-down lock on a patch, voxels this close to the patch would loom into the frame. */
 const FADE_NEAR_PATCH = 2.3;
 function obstructsLockedView(v: Voxel, target: Interactable): boolean {
-  if (target.kind === 'craft') return false; // the camera stays at the player: nothing intrudes
+  if (target.kind === 'craft') {
+    // The camera backs off and lifts from the player: a neighbouring tree (or its
+    // flowers) can end up beside or ahead of it, over the board. Fade what is
+    // near the camera or in the corridor between camera and board.
+    if (!lockedPose) return false;
+    const c = v.center;
+    if (c.distanceTo(lockedPose.position) < FADE_NEAR_CAMERA) return true;
+    const axis = lockedPose.target.clone().sub(lockedPose.position).normalize();
+    const rel = c.clone().sub(lockedPose.position);
+    const along = rel.dot(axis);
+    if (along < 0 || along > BOARD_DISTANCE + 1) return false;
+    const lateral = rel.clone().sub(axis.multiplyScalar(along)).length();
+    return lateral < FADE_CORRIDOR;
+  }
   if (target.kind === 'patch') return v.distanceTo(target.center) < FADE_NEAR_PATCH;
   const locked = target as Voxel;
   const pose = lockedPoseFor(locked.center, locked.normal); // the face the lock chose
@@ -558,8 +603,7 @@ player.onTap = (x, y) => {
       tooFarUntil = animClock + 900;
       return;
     }
-    locked = it;
-    cameraRig.lock(animClock, it.lockPose({ position: player.position, forward: player.forward() }));
+    lockOnto(it);
   } else if (cameraRig.mode === 'locked' && locked) {
     if (boardView.tap(raycaster)) updateHud();
   }

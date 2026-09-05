@@ -31,6 +31,8 @@ export interface Interactable {
   /** Hint shown in the locked view. */
   readonly hintLocked: string;
   lockPose(viewer: Viewer): CameraPose;
+  /** The lock framing had to be lifted by dy to keep the board above ground — follow it if you hover. */
+  onPoseLifted?(dy: number): void;
   distanceTo(p: THREE.Vector3): number;
   /** Which target a run feeds (via its targeting strategy), or null. */
   targetFor(run: Run): number | null;

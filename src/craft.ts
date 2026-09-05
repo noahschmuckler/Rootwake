@@ -14,9 +14,9 @@ import type { ObjectWorld, WorldObject } from './objects';
 import type { Recipe } from './recipes';
 
 // ---- Tuning constants ---------------------------------------------------------
-/** Where the target hovers: ahead of the eye and a little below it. */
+/** Where the target hovers: ahead of the eye, about level with it (the board sits beneath). */
 export const HOVER_AHEAD = 1.25;
-export const HOVER_DROP = 0.2;
+export const HOVER_DROP = 0.05;
 /** Idle bob of the hovering target. */
 export const HOVER_BOB = 0.02;
 // -------------------------------------------------------------------------------
@@ -86,6 +86,12 @@ export class CraftSession implements Interactable {
 
   targetWorldPosition(): THREE.Vector3 {
     return this.hover.clone();
+  }
+
+  /** The framing was lifted to clear the ground: the target hovers higher too. */
+  onPoseLifted(dy: number): void {
+    this.hover.y += dy;
+    this.target.group.position.y = this.hover.y;
   }
 
   /** A strike landed. */
