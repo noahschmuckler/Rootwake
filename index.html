@@ -20,6 +20,17 @@
       #links { z-index: 8; }
       #hint, #hud { z-index: 9; }
       #hands, #back { z-index: 10; }
+      #menu {
+        position: fixed; z-index: 11; display: flex; flex-direction: column; gap: 6px; width: 220px;
+        background: rgba(20, 28, 20, 0.92); border: 1px solid #3a4a3a; border-radius: 8px; padding: 8px;
+      }
+      #menu[hidden] { display: none; }
+      #menu button {
+        font: 14px/1.2 system-ui, sans-serif; color: #dfe8df; background: #26382a; border: 1px solid #4a5f4a;
+        border-radius: 6px; padding: 10px 12px; text-align: left; cursor: pointer;
+      }
+      #menu button:disabled { color: #8a978a; background: #1c261c; cursor: default; }
+      #menu button small { display: block; font-size: 11px; opacity: 0.8; margin-top: 3px; }
       #hands {
         position: fixed; top: 8px; left: 50%; transform: translateX(-50%);
         display: flex; gap: 10px; touch-action: none; user-select: none;
@@ -67,7 +78,7 @@
       #back:hover { background: #2a3a2a; }
       #back[hidden] { display: none; }
     </style>
-    <script type="module" crossorigin src="/Rootwake/assets/index-Daqj8rS7.js"></script>
+    <script type="module" crossorigin src="/Rootwake/assets/index-PZLqLW_d.js"></script>
   </head>
   <body>
     <div id="halo"></div>
@@ -77,6 +88,7 @@
     <div id="hands"><div class="hand" data-hand="0"></div><div class="hand" data-hand="1"></div></div>
     <button id="back" type="button" hidden>Back out</button>
     <div id="hud"></div>
+    <div id="menu" hidden></div>
     <script>
       // Long presses must never open a context menu or start a selection on any browser.
       document.addEventListener('contextmenu', (e) => e.preventDefault());
