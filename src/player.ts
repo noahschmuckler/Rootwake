@@ -33,6 +33,8 @@ export const PICK_RADIUS_PX = 110;
 /** Move tween: a base plus a per-unit term so long hops take longer but not proportionally. */
 export const MOVE_BASE_MS = 320;
 export const MOVE_MS_PER_UNIT = 170;
+/** A still hold on the look side this long is "lie down here" (Pass 0.7a rest). */
+export const REST_HOLD_MS = 900;
 // -------------------------------------------------------------------------------
 
 export interface CircleCollider {
@@ -74,6 +76,10 @@ export class Player {
   moveSlowdown = 1;
   /** False while straining against something too heavy: the fan shows nothing. */
   canMove = true;
+  /** A hop was committed (distance in world units) — vitality drains on it. */
+  onHop: (distance: number) => void = () => {};
+  /** A still hold on the look side: rest here. */
+  onRestHold: () => void = () => {};
 
   private readonly pointers = new Map<number, TrackedPointer>();
   private colliders: readonly CircleCollider[] = [];
@@ -270,6 +276,7 @@ export class Player {
     const from = this.position.clone();
     const dist = from.distanceTo(to);
     this.move = { from, to: to.clone(), startMs: performance.now(), durationMs: (MOVE_BASE_MS + dist * MOVE_MS_PER_UNIT) * this.moveSlowdown };
+    this.onHop(dist);
   }
 
   // ---- pointer events ---------------------------------------------------------------
@@ -294,6 +301,15 @@ export class Player {
       window.setTimeout(() => {
         if (this.pointers.get(e.pointerId)?.role === 'move') this.fanOpen = true;
       }, HOLD_MS);
+    }
+    if (role === 'look' && this.enabled) {
+      window.setTimeout(() => {
+        const p = this.pointers.get(e.pointerId);
+        if (p && p.role === 'look' && !p.moved && this.enabled) {
+          this.pointers.delete(e.pointerId);
+          this.onRestHold();
+        }
+      }, REST_HOLD_MS);
     }
   };
 

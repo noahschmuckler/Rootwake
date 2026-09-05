@@ -25,7 +25,17 @@ export const DRAG_ROPE = 1.0;
 export const DRAG_FAN_SCALE = 0.55;
 export const DRAG_MOVE_SLOWDOWN = 1.7;
 export const TAP_SLOP_PX = 8;
+/** Holding a box with food this long starts eating; one unit per EAT_INTERVAL_MS after. */
+export const EAT_HOLD_MS = 450;
+export const EAT_INTERVAL_MS = 260;
 // -------------------------------------------------------------------------------
+
+/** What vitality lets the hands do right now (Pass 0.7a). main.ts sets it each frame. */
+export interface HandCondition {
+  strength: number;
+  capScale: number;
+  handsAvailable: number;
+}
 
 export type HandState =
   | { kind: 'empty' }
@@ -64,8 +74,13 @@ export class Hands {
    * consumed, or null if nothing there took it.
    */
   placeOnTarget: (clientX: number, clientY: number, type: ObjectType, count: number) => number | null = () => null;
+  /** Pass 0.7a: eat one unit of a food type. Return false to refuse. */
+  onEat: (type: ObjectType) => boolean = () => false;
+  condition: HandCondition = { strength: 1, capScale: 1, handsAvailable: HANDS };
+  private eating: { hand: number; nextMs: number; ate: boolean } | null = null;
 
   private gesture: Gesture | null = null;
+  private holdTimer: number | null = null;
   private flies: Fly[] = [];
   private readonly flyGroup = new THREE.Group();
   private readonly raycaster = new THREE.Raycaster();
@@ -99,13 +114,13 @@ export class Hands {
   get dragging(): WorldObject | null {
     const linked = this.linkedObject();
     if (!linked) return null;
-    return this.linkedHands(linked) >= handsToDrag(linked.type.mass) ? linked : null;
+    return this.linkedHands(linked) >= handsToDrag(linked.type.mass, this.condition.strength) ? linked : null;
   }
 
   /** Linked to something too heavy for the hands on it. */
   get straining(): boolean {
     const linked = this.linkedObject();
-    return linked !== null && this.linkedHands(linked) < handsToDrag(linked.type.mass);
+    return linked !== null && this.linkedHands(linked) < handsToDrag(linked.type.mass, this.condition.strength);
   }
 
   private linkedObject(): WorldObject | null {
@@ -123,9 +138,44 @@ export class Hands {
 
   // ---- per frame -------------------------------------------------------------------
 
+  /** Vitality changed what the hands can do: drop what a now-unusable hand holds. */
+  setCondition(c: HandCondition): void {
+    const before = this.condition.handsAvailable;
+    this.condition = c;
+    if (c.handsAvailable < before) {
+      for (let i = c.handsAvailable; i < HANDS; i++) {
+        const s = this.state[i];
+        if (s.kind === 'linked') this.unlink(s.obj);
+        else if (s.kind !== 'empty') this.tapBox(i);
+      }
+      this.render();
+      this.onChange();
+    } else if (c.handsAvailable !== before) {
+      this.render();
+    }
+  }
+
   update(nowMs: number): void {
     const dt = Math.min(0.1, Math.max(0, (nowMs - this.lastMs) / 1000));
     this.lastMs = nowMs;
+
+    // Eating: hold a food box, one unit at a time.
+    if (this.eating && nowMs >= this.eating.nextMs) {
+      const s = this.state[this.eating.hand];
+      if (s.kind === 'stack' && s.type.food && this.onEat(s.type)) {
+        s.count--;
+        this.eating.ate = true;
+        this.eating.nextMs = nowMs + EAT_INTERVAL_MS;
+        if (s.count <= 0) {
+          this.state[this.eating.hand] = { kind: 'empty' };
+          this.eating = null;
+        }
+        this.render();
+        this.onChange();
+      } else {
+        this.eating = null;
+      }
+    }
 
     // Flying pickups: world → a point just in front of the camera under the box.
     const keep: Fly[] = [];
@@ -160,9 +210,22 @@ export class Hands {
   private onDown(e: PointerEvent, hand: number): void {
     if (this.gesture) return;
     e.preventDefault();
+    if (hand >= this.condition.handsAvailable) {
+      this.say('Too tired.');
+      this.onChange();
+      return;
+    }
     this.gesture = { pointerId: e.pointerId, hand, startX: e.clientX, startY: e.clientY, x: e.clientX, y: e.clientY, moved: false, target: null };
     this.boxes[hand].setPointerCapture(e.pointerId);
     this.boxes[hand].classList.add('active');
+    // A still hold on a food box is eating (SYSTEMS.md §3: one motion).
+    const s = this.state[hand];
+    if (s.kind === 'stack' && s.type.food) {
+      this.holdTimer = window.setTimeout(() => {
+        const g = this.gesture;
+        if (g && g.pointerId === e.pointerId && !g.moved) this.eating = { hand, nextMs: this.lastMs, ate: false };
+      }, EAT_HOLD_MS);
+    }
   }
 
   private onMove(e: PointerEvent): void {
@@ -178,8 +241,16 @@ export class Hands {
     const g = this.gesture;
     if (!g || g.pointerId !== e.pointerId) return;
     this.gesture = null;
+    if (this.holdTimer !== null) {
+      window.clearTimeout(this.holdTimer);
+      this.holdTimer = null;
+    }
+    const wasEating = this.eating !== null && this.eating.ate;
+    this.eating = null;
     this.boxes[g.hand].classList.remove('active');
-    if (!g.moved) this.tapBox(g.hand);
+    if (wasEating) {
+      // a hold that fed you is neither a tap nor a place
+    } else if (!g.moved) this.tapBox(g.hand);
     else this.release(g);
     this.render();
     this.onChange();
@@ -240,7 +311,7 @@ export class Hands {
       this.gather(hand, target);
       return;
     }
-    const lift = handsToLift(t.mass);
+    const lift = handsToLift(t.mass, this.condition.strength);
     if (lift <= this.freeHands()) {
       // Lift: the object leaves the world and lives in this hand (and any others it needs).
       this.fly(target, hand);
@@ -254,10 +325,10 @@ export class Hands {
       }
       return;
     }
-    if (handsToDrag(t.mass) <= HANDS) {
+    if (handsToDrag(t.mass, this.condition.strength) <= this.condition.handsAvailable) {
       // Too heavy to lift: link this hand; it drags once enough hands are on it.
       this.state[hand] = { kind: 'linked', obj: target };
-      if (this.linkedHands(target) < handsToDrag(t.mass)) this.say('Too heavy for one hand.');
+      if (this.linkedHands(target) < handsToDrag(t.mass, this.condition.strength)) this.say('Too heavy for one hand.');
       return;
     }
     this.say('Too heavy.');
@@ -267,7 +338,7 @@ export class Hands {
   private gather(hand: number, target: WorldObject): void {
     const s = this.state[hand];
     if (s.kind !== 'stack') return;
-    const cap = STACK_CAP[s.type.size];
+    const cap = Math.max(1, Math.floor(STACK_CAP[s.type.size] * this.condition.capScale));
     const cluster = this.objects.nearby(target.position.x, target.position.z, GATHER_RADIUS, s.type.id as ObjectTypeId);
     for (const obj of cluster) {
       if (s.count >= cap) break;
@@ -420,6 +491,7 @@ export class Hands {
     const straining = this.straining;
     this.state.forEach((s, i) => {
       const box = this.boxes[i];
+      box.classList.toggle('disabled', i >= this.condition.handsAvailable);
       box.classList.toggle('full', s.kind !== 'empty');
       box.classList.toggle('linked', s.kind === 'linked');
       box.classList.toggle('strain', s.kind === 'linked' && straining);

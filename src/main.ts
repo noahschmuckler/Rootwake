@@ -21,6 +21,10 @@
 //           two hands drag a log on a luminescent leash.
 // Pass 0.6c: planting. Seeds onto tilled ground grow a sapling into a new
 //           tree — the first regrowth, and the player's to choose.
+// Pass 0.7a: vitality. Effort and time drain it, seeds and rest restore it;
+//           it drives strength, hands, hop reach and the look of the world.
+//           No bar: a halo, colour and exposure are the meter. Collapse is
+//           a blackout and a tired waking, never death.
 // Still out of scope: combat, specials, the 6-face mirror, a real field, art.
 
 import * as THREE from 'three';
@@ -33,6 +37,7 @@ import { buildWorld, EDGE_MARGIN, GROUND_Y } from './world';
 import { ObjectWorld } from './objects';
 import { Hands, DRAG_FAN_SCALE, DRAG_MOVE_SLOWDOWN } from './hands';
 import { PLANT_SEEDS } from './growth';
+import { Vitality, DRAIN_TREE_HIT, DRAIN_TILL_HIT, DRAIN_HOP, DRAIN_DRAG_HOP } from './vitality';
 import { BoardView } from './board3d';
 import { Projectiles } from './projectiles';
 import { PALETTE } from './colors';
@@ -43,12 +48,16 @@ import { PALETTE } from './colors';
 const params = new URLSearchParams(window.location.search);
 const seed = Number.parseInt(params.get('seed') ?? '', 10) || 1;
 const slowmo = Math.max(1, Number.parseFloat(params.get('slowmo') ?? '') || 1);
+const debug = params.has('debug');
 
 // ---- Scene / camera / renderer ---------------------------------------------
 const scene = new THREE.Scene();
 const BASE_FOV = 40;
 const camera = new THREE.PerspectiveCamera(BASE_FOV, window.innerWidth / window.innerHeight, 0.05, 4000);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
+// Linear tone mapping at exposure 1 is a no-op; vitality lowers the exposure as you tire.
+renderer.toneMapping = THREE.LinearToneMapping;
+renderer.toneMappingExposure = 1;
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 document.body.appendChild(renderer.domElement);
@@ -98,6 +107,48 @@ hands.placeOnTarget = (x, y, type, count) => {
   updateHud();
   return used;
 };
+
+// ---- Vitality (Pass 0.7a) -----------------------------------------------------
+const vitality = new Vitality();
+const halo = document.getElementById('halo')!;
+const blackout = document.getElementById('blackout')!;
+hands.onEat = (type) => {
+  if (!type.food) return false;
+  vitality.eat(type.food);
+  return true;
+};
+player.onHop = () => vitality.drain(hands.dragging ? DRAIN_DRAG_HOP : DRAIN_HOP);
+player.onRestHold = () => {
+  if (cameraRig.mode === 'free' && !vitality.busy) vitality.rest(animClock);
+};
+vitality.onEvent = (what) => {
+  const text = { collapse: 'You collapse.', wake: 'You wake, still tired.', rest: 'You rest.', ate: '' }[what];
+  if (text) {
+    hint.textContent = text;
+    tooFarUntil = animClock + 1800;
+  }
+};
+let lastBand = vitality.band;
+function applyVitality(): void {
+  const fx = vitality.effects(animClock);
+  hands.setCondition({ strength: fx.strength, capScale: fx.capScale, handsAvailable: fx.handsAvailable });
+  // Halo: a dark vignette that closes in as you tire; a faint warm rim when well fed.
+  const inner = 100 - 70 * fx.haloDark; // % radius where the dark begins
+  halo.style.background =
+    fx.haloDark > 0.01
+      ? `radial-gradient(ellipse at center, rgba(0,0,0,0) ${Math.max(15, inner - 45)}%, rgba(0,0,0,${(0.92 * fx.haloDark).toFixed(3)}) ${inner}%)`
+      : fx.haloLight > 0.01
+        ? `radial-gradient(ellipse at center, rgba(255,240,200,0) 62%, rgba(255,236,190,${(0.22 * fx.haloLight).toFixed(3)}) 100%)`
+        : 'none';
+  renderer.domElement.style.filter = fx.saturation < 0.995 ? `saturate(${fx.saturation.toFixed(3)})` : '';
+  renderer.toneMappingExposure = fx.exposure;
+  blackout.style.opacity = fx.blackout.toFixed(3);
+  if (fx.band !== lastBand) {
+    lastBand = fx.band;
+    updateHud();
+  }
+}
+
 
 // ---- The thicket ------------------------------------------------------------
 // Pass 0.4a: the trees do the confining. Voxels sit on a hex lattice around
@@ -270,6 +321,7 @@ boardView.onRun = (run, origin) => {
   const amount = run.cells.length;
   projectiles.fire(origin, it.targetWorldPosition(target), PALETTE[run.type].hex, animClock, () => {
     it.feed(target, amount, animClock);
+    vitality.drain(it.kind === 'voxel' ? DRAIN_TREE_HIT : DRAIN_TILL_HIT);
     updateHud();
   });
 };
@@ -290,6 +342,7 @@ function updateHud(): void {
   const parts = [`seed ${seed}`, `cleared ${resolved}/${voxels.length}`, `tilled ${tilled}/${patches.length}`];
   if (planted) parts.push(`planted ${planted}`);
   if (slowmo > 1) parts.push(`slowmo ×${slowmo}`);
+  if (debug) parts.push(`vit ${vitality.value.toFixed(2)} ${vitality.band}`);
   if (locked && cameraRig.mode === 'locked' && locked.status === 'growing') {
     parts.push(locked.poolText());
   }
@@ -372,7 +425,7 @@ function animate(now: number): void {
   requestAnimationFrame(animate);
 
 // Debug handle for headless/console poking. Not part of the design surface.
-(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, world, cameraRig, boardView };
+(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, vitality, world, cameraRig, boardView };
   const dt = Math.min(0.1, (now - lastFrame) / 1000);
   animClock += (dt * 1000) / slowmo;
   lastFrame = now;
@@ -385,10 +438,15 @@ function animate(now: number): void {
     setFov(BASE_FOV + EDGE_FOV_WIDEN * k);
     camera.position.y -= EDGE_EYE_DIP * k;
   }
-  // Encumbrance: dragging shortens and slows hops; straining stops them.
-  player.fanScale = hands.dragging ? DRAG_FAN_SCALE : 1;
+  // Vitality: drains with time, drives hands/reach, paints the halo.
+  vitality.update(animClock);
+  applyVitality();
+  const vfx = vitality.effects(animClock);
+  // Encumbrance: dragging shortens and slows hops; straining stops them. Fatigue shortens them too.
+  player.fanScale = (hands.dragging ? DRAG_FAN_SCALE : 1) * vfx.fanScale;
   player.moveSlowdown = hands.dragging ? DRAG_MOVE_SLOWDOWN : 1;
   player.canMove = !hands.straining;
+  player.enabled = cameraRig.mode === 'free' && !vitality.busy;
   hands.update(animClock);
   if (hands.notice) {
     hint.textContent = hands.notice;
@@ -444,4 +502,4 @@ function animate(now: number): void {
 requestAnimationFrame(animate);
 
 // Debug handle for headless/console poking. Not part of the design surface.
-(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, world, cameraRig, boardView };
+(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, vitality, world, cameraRig, boardView };

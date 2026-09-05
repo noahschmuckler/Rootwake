@@ -38,6 +38,8 @@ export interface ObjectType {
   blocks: boolean;
   /** Height of the mesh's centre above the ground when resting. */
   restHeight: number;
+  /** Vitality restored by eating one (Pass 0.7a). Absent = not food. */
+  food?: number;
   build: () => THREE.Mesh;
 }
 
@@ -55,6 +57,7 @@ export const OBJECT_TYPES: Record<ObjectTypeId, ObjectType> = {
     radius: 0.06,
     blocks: false,
     restHeight: 0.05,
+    food: 0.04, // seeds are poor food (SYSTEMS.md §3)
     build: () => {
       const m = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), seedMaterial);
       m.scale.set(1, 0.7, 1.3);
