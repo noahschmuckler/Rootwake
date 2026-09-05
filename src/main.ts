@@ -17,6 +17,8 @@
 // Pass 0.6a: objects have weight. A cleared tree topples and leaves a log,
 //           sticks and seeds where it stood; the footprint is blocked ground
 //           until they're moved.
+// Pass 0.6b: hands. Two boxes; drag a hand to a thing to take or place it;
+//           two hands drag a log on a luminescent leash.
 // Still out of scope: combat, specials, the 6-face mirror, a real field, art.
 
 import * as THREE from 'three';
@@ -27,6 +29,7 @@ import { Patch } from './patch';
 import type { Interactable } from './interactable';
 import { buildWorld, EDGE_MARGIN, GROUND_Y } from './world';
 import { ObjectWorld } from './objects';
+import { Hands, DRAG_FAN_SCALE, DRAG_MOVE_SLOWDOWN } from './hands';
 import { BoardView } from './board3d';
 import { Projectiles } from './projectiles';
 import { PALETTE } from './colors';
@@ -58,6 +61,17 @@ const player = new Player(renderer.domElement, scene, camera);
 player.position.set(0, GROUND_Y, 0);
 // Face away from the way out, so the vista is something you find, not something you're shown.
 player.yaw = Math.PI / 2;
+
+const hands = new Hands(
+  camera,
+  player,
+  objects,
+  scene,
+  [...document.querySelectorAll<HTMLElement>('#hands .hand')],
+  document.getElementById('links') as unknown as SVGSVGElement,
+  GROUND_Y,
+  (p) => world.isWalkable(p)
+);
 
 // ---- The thicket ------------------------------------------------------------
 // Pass 0.4a: the trees do the confining. Voxels sit on a hex lattice around
@@ -182,7 +196,7 @@ const hint = document.getElementById('hint')!;
 const backButton = document.getElementById('back') as HTMLButtonElement;
 
 const HINTS: Record<CameraMode, string> = {
-  free: 'Hold on the left to pick a spot, release to move. Drag to look. Tap growth or grass to lock in.',
+  free: 'Hold on the left to move, drag to look, tap growth or grass to lock in. Drag a hand box to a thing to take or place it.',
   locking: '',
   locked: '',
   unlocking: '',
@@ -312,7 +326,7 @@ function animate(now: number): void {
   requestAnimationFrame(animate);
 
 // Debug handle for headless/console poking. Not part of the design surface.
-(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, world, cameraRig, boardView };
+(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, world, cameraRig, boardView };
   const dt = Math.min(0.1, (now - lastFrame) / 1000);
   animClock += (dt * 1000) / slowmo;
   lastFrame = now;
@@ -324,6 +338,16 @@ function animate(now: number): void {
     const k = edgeCloseness();
     setFov(BASE_FOV + EDGE_FOV_WIDEN * k);
     camera.position.y -= EDGE_EYE_DIP * k;
+  }
+  // Encumbrance: dragging shortens and slows hops; straining stops them.
+  player.fanScale = hands.dragging ? DRAG_FAN_SCALE : 1;
+  player.moveSlowdown = hands.dragging ? DRAG_MOVE_SLOWDOWN : 1;
+  player.canMove = !hands.straining;
+  hands.update(animClock);
+  if (hands.notice) {
+    hint.textContent = hands.notice;
+    hands.notice = null;
+    tooFarUntil = animClock + 1200;
   }
   cameraRig.update(animClock);
 
@@ -374,4 +398,4 @@ function animate(now: number): void {
 requestAnimationFrame(animate);
 
 // Debug handle for headless/console poking. Not part of the design surface.
-(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, world, cameraRig, boardView };
+(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, world, cameraRig, boardView };

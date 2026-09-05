@@ -69,6 +69,11 @@ export class Player {
   enabled = true;
   /** Taps that were not drags, in client pixels. */
   onTap: (clientX: number, clientY: number) => void = () => {};
+  /** Pass 0.6b encumbrance: scales the fan's reach and the hop's duration (1 = unburdened). */
+  fanScale = 1;
+  moveSlowdown = 1;
+  /** False while straining against something too heavy: the fan shows nothing. */
+  canMove = true;
 
   private readonly pointers = new Map<number, TrackedPointer>();
   private colliders: readonly CircleCollider[] = [];
@@ -154,7 +159,7 @@ export class Player {
       if (p >= 1) this.move = null;
     }
 
-    if (this.fanOpen && this.enabled && !this.move) this.layoutFan();
+    if (this.fanOpen && this.enabled && this.canMove && !this.move) this.layoutFan();
     else this.closeFan();
   }
 
@@ -198,7 +203,8 @@ export class Player {
         const cos = Math.cos(a);
         const sin = Math.sin(a);
         // rotate the forward vector by `a` about +Y
-        cand.point.set(this.position.x + (fx * cos + fz * sin) * d, this.position.y, this.position.z + (-fx * sin + fz * cos) * d);
+        const dist = d * this.fanScale;
+        cand.point.set(this.position.x + (fx * cos + fz * sin) * dist, this.position.y, this.position.z + (-fx * sin + fz * cos) * dist);
         const ok = this.isFree(cand.point) && this.pathClear(this.position, cand.point);
         cand.marker.visible = ok;
         cand.marker.position.set(cand.point.x, this.position.y + 0.02, cand.point.z);
@@ -248,7 +254,7 @@ export class Player {
   private commitMove(to: THREE.Vector3): void {
     const from = this.position.clone();
     const dist = from.distanceTo(to);
-    this.move = { from, to: to.clone(), startMs: performance.now(), durationMs: MOVE_BASE_MS + dist * MOVE_MS_PER_UNIT };
+    this.move = { from, to: to.clone(), startMs: performance.now(), durationMs: (MOVE_BASE_MS + dist * MOVE_MS_PER_UNIT) * this.moveSlowdown };
   }
 
   // ---- pointer events ---------------------------------------------------------------

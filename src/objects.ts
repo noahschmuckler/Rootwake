@@ -34,6 +34,8 @@ export interface ObjectType {
   color: number;
   /** Ground-plane radius used for "is it lying on this patch" checks. */
   radius: number;
+  /** Does it block ground from being tilled? Seeds don't; sticks and logs do. */
+  blocks: boolean;
   /** Height of the mesh's centre above the ground when resting. */
   restHeight: number;
   build: () => THREE.Mesh;
@@ -51,6 +53,7 @@ export const OBJECT_TYPES: Record<ObjectTypeId, ObjectType> = {
     mass: 0,
     color: 0xe6d38f,
     radius: 0.06,
+    blocks: false,
     restHeight: 0.05,
     build: () => {
       const m = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), seedMaterial);
@@ -65,6 +68,7 @@ export const OBJECT_TYPES: Record<ObjectTypeId, ObjectType> = {
     mass: 0,
     color: 0x6b4a2e,
     radius: 0.28,
+    blocks: true,
     restHeight: 0.04,
     build: () => {
       const m = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.04, 0.55, 6), stickMaterial);
@@ -79,6 +83,7 @@ export const OBJECT_TYPES: Record<ObjectTypeId, ObjectType> = {
     mass: 4, // strength 1: cannot lift (4 hands), drags with 2
     color: 0x5a3f2a,
     radius: 0.62,
+    blocks: true,
     restHeight: 0.18,
     build: () => {
       const m = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.19, 1.25, 10), wood);
@@ -149,10 +154,10 @@ export class ObjectWorld {
       .sort((a, b) => Math.hypot(a.position.x - x, a.position.z - z) - Math.hypot(b.position.x - x, b.position.z - z));
   }
 
-  /** Objects whose footprint overlaps an axis-aligned ground square. */
+  /** Blocking objects whose footprint overlaps an axis-aligned ground square. */
   overlapsSquare(cx: number, cz: number, half: number): WorldObject[] {
     return this.objects.filter(
-      (o) => Math.abs(o.position.x - cx) < half + o.type.radius && Math.abs(o.position.z - cz) < half + o.type.radius
+      (o) => o.type.blocks && Math.abs(o.position.x - cx) < half + o.type.radius && Math.abs(o.position.z - cz) < half + o.type.radius
     );
   }
 
