@@ -51,8 +51,8 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
   saturation, exposure, blackout curves. Tuning constants at the top.
 - `objects.ts` — the weight rule: size class (20/5/1 per hand), mass,
   strength, hands-to-lift / hands-to-drag; object types (seed, stick, log,
-  lichen; seeds are food); `collectible` flag; WorldObject/ObjectWorld and
-  the felled-tree scatter.
+  lichen; seeds are food); `collectible` flag; the in-the-way waggle;
+  WorldObject/ObjectWorld and the felled-tree scatter.
 - `hands.ts` — the two hand boxes and the one gesture (drag a box to a
   thing: take / gather / lift / link / place), leashes, fly-to-box, the
   two-hand log drag on a rope, strain; a placeOnTarget hook for things
@@ -68,8 +68,9 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
   recede at 20% steps on every face) + collider + fade + the ending
   (`fell` or `sink`); locks from whichever side face is nearest.
 - `patch.ts` — one tillable ground patch: board + one shared pool + four
-  authored grass→clods stages, a blocked state while objects lie on it,
-  and a planted state that grows a sapling into a tree. Never collides.
+  authored stages (X-standee grass tufts → dry tufts + clods → clods), a
+  blocked state while objects lie on it (look unchanged, lock refused), and
+  a planted state that grows a sapling into a tree. Never collides.
 - `cameraLock.ts` — pose-to-pose lock/unlock tween; `lockedPoseFor()` is
   the Pass 0 face framing, `lookDownPoseFor()` the patch framing.
 - `player.ts` — first-person look plus waypoint-fan movement; candidates
