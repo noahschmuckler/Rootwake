@@ -49,6 +49,8 @@ export class Patch implements Interactable {
   private readonly stages: THREE.Group[] = [];
   private stage = -1;
   private blockedLook!: THREE.Group;
+  /** Planted: bare worked soil under the sapling, no clods to hide it. */
+  private plantedLook!: THREE.Mesh;
   /** Status to return to when unblocked (a partly tilled patch stays partly tilled). */
   private unblockedStatus: InteractableStatus = 'growing';
 
@@ -136,6 +138,8 @@ export class Patch implements Interactable {
     if (!this.acceptsSeeds || seedsAvailable < PLANT_SEEDS) return 0;
     this.status = 'planted';
     this.plantedAt = nowMs;
+    this.stages.forEach((g) => (g.visible = false));
+    this.plantedLook.visible = true;
     this.sapling = new Sapling();
     this.sapling.group.position.y = 0.01;
     this.group.add(this.sapling.group);
@@ -219,6 +223,10 @@ export class Patch implements Interactable {
     this.blockedLook.add(outline);
     this.blockedLook.visible = false;
     this.group.add(this.blockedLook);
+    this.plantedLook = new THREE.Mesh(soil, new THREE.MeshStandardMaterial({ color: 0x4a3626, roughness: 1 }));
+    this.plantedLook.position.y = 0.012;
+    this.plantedLook.visible = false;
+    this.group.add(this.plantedLook);
 
     for (let k = 0; k < BLADES_BY_STAGE.length; k++) {
       const g = new THREE.Group();
