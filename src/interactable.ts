@@ -6,8 +6,11 @@ import type * as THREE from 'three';
 import type { Board, Run } from './match3';
 import type { CameraPose } from './cameraLock';
 
-/** 'blocked' (Pass 0.6a): a patch with something lying on it — not lockable until cleared. */
-export type InteractableStatus = 'growing' | 'blocked' | 'resolving' | 'resolved';
+/**
+ * 'blocked' (Pass 0.6a): a patch with something lying on it — not lockable until cleared.
+ * 'planted' (Pass 0.6c): a tilled patch with a sapling on it — becomes a tree when grown.
+ */
+export type InteractableStatus = 'growing' | 'blocked' | 'resolving' | 'resolved' | 'planted';
 
 export interface Viewer {
   position: THREE.Vector3;

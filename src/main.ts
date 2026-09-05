@@ -19,6 +19,8 @@
 //           until they're moved.
 // Pass 0.6b: hands. Two boxes; drag a hand to a thing to take or place it;
 //           two hands drag a log on a luminescent leash.
+// Pass 0.6c: planting. Seeds onto tilled ground grow a sapling into a new
+//           tree — the first regrowth, and the player's to choose.
 // Still out of scope: combat, specials, the 6-face mirror, a real field, art.
 
 import * as THREE from 'three';
@@ -30,6 +32,7 @@ import type { Interactable } from './interactable';
 import { buildWorld, EDGE_MARGIN, GROUND_Y } from './world';
 import { ObjectWorld } from './objects';
 import { Hands, DRAG_FAN_SCALE, DRAG_MOVE_SLOWDOWN } from './hands';
+import { PLANT_SEEDS } from './growth';
 import { BoardView } from './board3d';
 import { Projectiles } from './projectiles';
 import { PALETTE } from './colors';
@@ -72,6 +75,29 @@ const hands = new Hands(
   GROUND_Y,
   (p) => world.isWalkable(p)
 );
+// Seeds released over a tilled patch plant it (Pass 0.6c).
+hands.placeOnTarget = (x, y, type, count) => {
+  if (type.id !== 'seed') return null;
+  castFrom(x, y);
+  const hit = raycaster.intersectObjects(patches.flatMap((p) => p.lockTargets), false)[0];
+  if (!hit) return null;
+  const patch = hit.object.userData.interactable as Patch;
+  if (patch.distanceTo(player.position) > patch.lockReach) {
+    hands.notice = 'Out of reach.';
+    return 0;
+  }
+  if (!patch.acceptsSeeds) {
+    hands.notice = patch.status === 'planted' ? 'Already planted.' : 'Till it first.';
+    return 0;
+  }
+  if (count < PLANT_SEEDS) {
+    hands.notice = `Needs ${PLANT_SEEDS} seeds.`;
+    return 0;
+  }
+  const used = patch.plant(count, animClock);
+  updateHud();
+  return used;
+};
 
 // ---- The thicket ------------------------------------------------------------
 // Pass 0.4a: the trees do the confining. Voxels sit on a hex lattice around
@@ -139,11 +165,29 @@ for (const v of voxels) {
     shakeUntil = animClock + SHAKE_MS;
   };
 }
+/** Pass 0.6c: a grown sapling becomes a tree where its patch was. */
+function onSaplingGrown(patch: Patch): void {
+  const v = new Voxel(voxels.length, new THREE.Vector3(patch.center.x, 0, patch.center.z), player.position.clone(), seed * 131 + 4000 + voxels.length * 17);
+  v.onDone = onInteractableDone;
+  v.onThud = () => {
+    shakeUntil = animClock + SHAKE_MS;
+  };
+  voxels.push(v);
+  interactables.push(v);
+  scene.add(v.group);
+  scene.remove(patch.group);
+  patches.splice(patches.indexOf(patch), 1);
+  interactables.splice(interactables.indexOf(patch), 1);
+  updateHud();
+}
+for (const p of patches) p.onGrown = onSaplingGrown;
+
 function onTreeFelled(v: Voxel): void {
   const dir = v.normal; // the face the lock chose = the side it fell toward
   objects.scatterFelledTree(v.center, dir, GROUND_Y, seed * 53 + v.index);
   const footprint = new Patch(patches.length, new THREE.Vector3(v.center.x, GROUND_Y, v.center.z), seed * 977 + 500 + v.index, true);
   footprint.onDone = onInteractableDone;
+  footprint.onGrown = onSaplingGrown;
   patches.push(footprint);
   interactables.push(footprint);
   scene.add(footprint.group);
@@ -242,7 +286,9 @@ function playerPose() {
 function updateHud(): void {
   const resolved = voxels.filter((v) => v.status === 'resolved').length;
   const tilled = patches.filter((p) => p.status === 'resolved').length;
+  const planted = patches.filter((p) => p.status === 'planted').length;
   const parts = [`seed ${seed}`, `cleared ${resolved}/${voxels.length}`, `tilled ${tilled}/${patches.length}`];
+  if (planted) parts.push(`planted ${planted}`);
   if (slowmo > 1) parts.push(`slowmo ×${slowmo}`);
   if (locked && cameraRig.mode === 'locked' && locked.status === 'growing') {
     parts.push(locked.poolText());
@@ -362,7 +408,7 @@ function animate(now: number): void {
 
   // A patch with anything lying on it is blocked ground.
   for (const p of patches) {
-    if (p.status === 'resolved' || p.status === 'resolving') continue;
+    if (p.status === 'resolved' || p.status === 'resolving' || p.status === 'planted') continue;
     p.setBlocked(objects.overlapsSquare(p.center.x, p.center.z, p.footprintHalf).length > 0);
   }
 

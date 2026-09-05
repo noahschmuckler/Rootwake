@@ -157,6 +157,21 @@ export class Player {
       const p = Math.min(1, (nowMs - m.startMs) / m.durationMs);
       this.position.lerpVectors(m.from, m.to, easeInOutCubic(p));
       if (p >= 1) this.move = null;
+    } else {
+      // Something may have grown around us (Pass 0.6c: a sapling becoming a
+      // tree). Step out to the collider's edge rather than being stuck inside.
+      for (const c of colliders) {
+        const dx = this.position.x - c.x;
+        const dz = this.position.z - c.z;
+        const d = Math.hypot(dx, dz);
+        const min = c.radius + PLAYER_RADIUS;
+        if (d < min) {
+          const nx = d > 1e-4 ? dx / d : 1;
+          const nz = d > 1e-4 ? dz / d : 0;
+          this.position.x = c.x + nx * min;
+          this.position.z = c.z + nz * min;
+        }
+      }
     }
 
     if (this.fanOpen && this.enabled && this.canMove && !this.move) this.layoutFan();

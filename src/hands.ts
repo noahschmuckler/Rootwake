@@ -58,6 +58,12 @@ export class Hands {
   /** A short message for the HUD hint (too heavy, out of reach), cleared by the caller. */
   notice: string | null = null;
   onChange: () => void = () => {};
+  /**
+   * Pass 0.6c: a full hand released over something that isn't an object or
+   * bare ground — a patch, later a station. Return how many of the stack were
+   * consumed, or null if nothing there took it.
+   */
+  placeOnTarget: (clientX: number, clientY: number, type: ObjectType, count: number) => number | null = () => null;
 
   private gesture: Gesture | null = null;
   private flies: Fly[] = [];
@@ -208,7 +214,18 @@ export class Hands {
       this.gather(g.hand, target);
       return;
     }
-    // Place onto the ground where the pointer points.
+    // Onto something that takes it (a tilled patch takes seeds)…
+    if (s.kind === 'stack') {
+      const consumed = this.placeOnTarget(g.x, g.y, s.type, s.count);
+      if (consumed !== null) {
+        if (consumed > 0) {
+          s.count -= consumed;
+          if (s.count <= 0) this.state[g.hand] = { kind: 'empty' };
+        }
+        return;
+      }
+    }
+    // …else onto the ground where the pointer points.
     const ground = this.pickGround(g.x, g.y);
     if (!ground) return;
     if (!this.inReach(ground)) return this.say('Out of reach.');

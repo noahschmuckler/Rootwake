@@ -13,6 +13,7 @@ import { Board, BOARD_COLS, BOARD_ROWS, type Run } from './match3';
 import { single, type TargetingStrategy } from './targeting';
 import { lookDownPoseFor, type CameraPose } from './cameraLock';
 import type { Interactable, InteractableStatus, Viewer } from './interactable';
+import { GROW_MS, PLANT_SEEDS, Sapling } from './growth';
 
 // ---- Tuning constants ---------------------------------------------------------
 /** Side of the square patch. Roughly one grid cell of the shipped game. */
@@ -39,7 +40,11 @@ export class Patch implements Interactable {
   pool = 0;
   targeting: TargetingStrategy = single;
   onDone: (it: Interactable) => void = () => {};
+  /** Fired when a planted sapling has grown: replace me with a tree. */
+  onGrown: (patch: Patch) => void = () => {};
   readonly lockTargets: THREE.Object3D[];
+  private sapling: Sapling | null = null;
+  private plantedAt = 0;
 
   private readonly stages: THREE.Group[] = [];
   private stage = -1;
@@ -115,13 +120,44 @@ export class Patch implements Interactable {
   }
 
   poolText(): string {
+    if (this.status === 'planted') return 'planted';
     if (this.status === 'resolved') return 'tilled';
     if (this.status === 'blocked') return 'blocked — clear the ground';
     return `soil ${this.pool}/${PATCH_CAPACITY}`;
   }
 
-  update(): void {
-    // Nothing animates on a patch: stages are discrete swaps.
+  /** Can seeds go in? Only tilled ground, and only once. */
+  get acceptsSeeds(): boolean {
+    return this.status === 'resolved';
+  }
+
+  /** Plant from a hand. Returns the seeds consumed (0 if it can't take them). */
+  plant(seedsAvailable: number, nowMs: number): number {
+    if (!this.acceptsSeeds || seedsAvailable < PLANT_SEEDS) return 0;
+    this.status = 'planted';
+    this.plantedAt = nowMs;
+    this.sapling = new Sapling();
+    this.sapling.group.position.y = 0.01;
+    this.group.add(this.sapling.group);
+    return PLANT_SEEDS;
+  }
+
+  /** Grow progress 0..1 (debug/tests read this). */
+  get growth(): number {
+    return this.status === 'planted' ? Math.min(1, (this.lastNow - this.plantedAt) / GROW_MS) : 0;
+  }
+  private lastNow = 0;
+
+  update(nowMs: number): void {
+    this.lastNow = nowMs;
+    if (this.status !== 'planted' || !this.sapling) return;
+    const p = this.growth;
+    this.sapling.setProgress(p);
+    if (p >= 1) {
+      this.group.remove(this.sapling.group);
+      this.sapling = null;
+      this.onGrown(this);
+    }
   }
 
   // ---- looks ----------------------------------------------------------------------
