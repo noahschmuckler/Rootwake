@@ -524,7 +524,11 @@ What 0.8 adds: tilling turns up rocks. Long-press a rock and its recipes
 appear; with a rock in hand, "Knap a hand axe" is available. The target
 rock lifts to hover in front of you, the board appears under it, and every
 match sends the rock in your hand out to strike it. It chips, becomes a
-wedge, and then a hand axe that lands in your free hand.
+wedge, and then a hand axe that lands in your free hand. First phone
+attempt put half the board underground (the craft camera pitches down at
+the hovering rock); every lock now lifts its framing until the board's
+lowest corner clears the ground, steps the camera out of any tree it lands
+in, and craft locks fade intruding trees like tree locks do.
 
 What 0.7b adds: a four-minute day. At night, well fed, the plateau is
 moonlit and washed out; tired, it is dark and the lichen on the rock glows,
