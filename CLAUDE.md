@@ -54,10 +54,11 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
   back-outs.
 - `structures.ts` — fittings, slots and fills as data: a notched log let
   go beside another snaps parallel into a bed frame; sticks laid on the
-  frame make a bed; a notched log let go by the frame stacks onto a side
-  log (walls), timber laid across both walls is the roof (quality =
-  timbers/4); `bedNear()` and `shelterAt()` for rest and weather. Pieces
-  stop being collectible (taking a structure apart is not built).
+  frame make a bed; notched logs let go by the frame stack onto a side log
+  (walls, WALL_COURSES high), timber laid across both walls is the roof
+  (quality = timbers/4); `bedNear()`, `shelterAt()` and `dryStrips()` (where
+  rain stops) for rest and weather. Pieces stop being collectible (taking a
+  structure apart is not built).
 - `weather.ts` — dry spells and showers on a clock (`?rain=1` forces the
   first), rain streaks around the camera, `overcast` for the day cycle and
   sky, lightning (flash, delayed crack, near strikes that sap outdoors).

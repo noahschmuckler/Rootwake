@@ -534,6 +534,14 @@ phone: does the first rain make you want the wall you built to have a roof
 code: shower timing against the four-minute day, the drain rate, lightning
 odds, and "under a roof" as a footprint test rather than an up-ray.
 
+Designer, same playtest: "it's not a roof unless I can walk underneath it
+and look out at the rain falling outside." So the walls are two courses
+(roof at ~1 m over a 0.55 eye), rain stops at the roof plane — no drops
+under a laid timber, drops through the gaps until the roof is whole — and
+the screen rain sheet is off while you stand under it, so what you see is
+the rain outside. Build cost went up with it (two more shaped logs);
+WALL_COURSES is the knob.
+
 Designer notes after the first 1.0 playtest: rain and fatigue together
 were "a bit too aggressive" — an unbreakable collapse→wake loop with no
 seeds in reach, "essentially dead". Two rules follow. Waking (from collapse

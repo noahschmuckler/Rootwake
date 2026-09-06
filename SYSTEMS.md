@@ -154,13 +154,16 @@ segments; "under a roof" is a ray cast straight up from the player hitting a
 roof piece. Quality is a property of what the pieces are made of and how
 many gaps there are. Refine once the log-cabin pieces exist (§5).
 
-As built (1.0): the first roof is over the bed. A notched log stacked on
-each side log of the bed frame is the two walls; timber laid across them
-is the roof, four to close it; quality = timbers laid / 4. "Under the
-roof" is the frame's footprint plus a margin (the up-ray, simplified). Rain
-drains you only outdoors; a close strike is held off under any roof; the
-sleep ceiling gains 0.1 × quality and the restore 40% × quality on top of
-the bed's.
+As built (1.0): the first roof is over the bed. Notched logs stacked two
+courses high on each side log of the bed frame are the walls (roof at about
+a metre; eye height is 0.55, so you stand under it and look out the open
+ends); timber laid across them is the roof, four to close it; quality =
+timbers laid / 4. Rain stops at the roof: under a laid timber no drops
+fall, and through the gaps they do until the roof is whole; the rain sheet
+on the screen is off while you are under it. "Under the roof" is the
+frame's footprint plus a margin (the up-ray, simplified). Rain drains you
+only outdoors; a close strike is held off under any roof; the sleep ceiling
+gains 0.1 × quality and the restore 40% × quality on top of the bed's.
 
 ---
 
