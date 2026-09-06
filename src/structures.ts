@@ -129,7 +129,7 @@ export class Structure implements StructureLike {
     for (const p of this.pieces) {
       if (p.plan.tag !== 'course' && p.plan.tag !== 'door' && p.plan.tag !== 'cut') continue;
       if (p.y > HEAD_HEIGHT) continue;
-      const half = (p.obj.type.halfLength ?? 0.3) - 0.05;
+      const half = (p.obj.type.halfLength ?? 0.3) - 0.1; // the rounded ends don't block
       const yaw = p.obj.group.rotation.y;
       const ax = Math.cos(yaw) * half;
       const az = -Math.sin(yaw) * half;

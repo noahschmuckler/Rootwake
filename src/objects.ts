@@ -27,7 +27,7 @@ export function handsToDrag(mass: number, strength = STRENGTH): number {
 }
 // -------------------------------------------------------------------------------
 
-export type ObjectTypeId = 'seed' | 'stick' | 'log' | 'log_short' | 'lichen' | 'rock' | 'hand_axe' | 'log_long_notched' | 'log_notched' | 'log_stub' | 'log_half' | 'timber' | 'timber_short' | 'chip';
+export type ObjectTypeId = 'seed' | 'wheat_seed' | 'popcorn' | 'stick' | 'log' | 'log_short' | 'lichen' | 'rock' | 'hand_axe' | 'log_long_notched' | 'log_notched' | 'log_stub' | 'log_half' | 'timber' | 'timber_short' | 'chip';
 
 export interface ObjectType {
   id: ObjectTypeId;
@@ -43,6 +43,8 @@ export interface ObjectType {
   restHeight: number;
   /** Vitality restored by eating one (Pass 0.7a). Absent = not food. */
   food?: number;
+  /** 1.1c: eating one also slows every drain for this long (SYSTEMS §3: better food). */
+  nourishMs?: number;
   /** For long things: half their length along local X, so hands and ropes aim at the nearer end. */
   halfLength?: number;
   build: () => THREE.Mesh;
@@ -56,6 +58,8 @@ const stickMaterial = new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughnes
 /** Freshly cut wood (notches, split faces, chips): paler than bark. */
 const cutWood = new THREE.MeshStandardMaterial({ color: 0xb8925a, roughness: 0.9, flatShading: true });
 const seedMaterial = new THREE.MeshStandardMaterial({ color: 0xe6d38f, roughness: 0.6 });
+const wheatMaterial = new THREE.MeshStandardMaterial({ color: 0xe0b437, roughness: 0.55 });
+const popcornMaterial = new THREE.MeshStandardMaterial({ color: 0xfff3d6, roughness: 0.9, flatShading: true });
 
 /**
  * The notch grid (structures.ts): notches a bay apart, log ends overhanging the
@@ -69,7 +73,7 @@ export const SHORT_LOG_LENGTH = NOTCH_PITCH + LOG_OVERHANG * 2;
 /** The knuckle: the middle of a log with its one notch — a portable notch to end a wall on, or a campfire's cross. */
 export const STUB_LENGTH = 0.55;
 /** A doorway cut from a long wall log: the gap, and the two half logs left either side (outer notch kept). */
-export const DOOR_GAP = 0.6;
+export const DOOR_GAP = 0.9; // wide enough for the player's radius (0.25) against the half logs' (0.17)
 export const HALF_LOG_LENGTH = (LONG_LOG_LENGTH - DOOR_GAP) / 2;
 export const TIMBER_THICK = 0.1;
 export const TIMBER_WIDE = 0.24;
@@ -88,6 +92,42 @@ export const OBJECT_TYPES: Record<ObjectTypeId, ObjectType> = {
     build: () => {
       const m = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), seedMaterial);
       m.scale.set(1, 0.7, 1.3);
+      return m;
+    },
+  },
+  // 1.1c: better food. Wheat seeds come from transmuting tree seeds (the wheat rune) and from harvesting wheat;
+  // popcorn from wheat seeds on a fire. Both nourish: drains slow for a while after eating.
+  wheat_seed: {
+    id: 'wheat_seed',
+    label: 'wheat seeds',
+    size: 'tiny',
+    mass: 0,
+    color: 0xe0b437,
+    radius: 0.06,
+    blocks: false,
+    restHeight: 0.05,
+    food: 0.06,
+    nourishMs: 90_000,
+    build: () => {
+      const m = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), wheatMaterial);
+      m.scale.set(0.9, 0.7, 1.5);
+      return m;
+    },
+  },
+  popcorn: {
+    id: 'popcorn',
+    label: 'popcorn',
+    size: 'tiny',
+    mass: 0,
+    color: 0xfff3d6,
+    radius: 0.09,
+    blocks: false,
+    restHeight: 0.07,
+    food: 0.12,
+    nourishMs: 150_000,
+    build: () => {
+      const m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.09, 1), popcornMaterial);
+      m.scale.set(1.15, 0.9, 1);
       return m;
     },
   },

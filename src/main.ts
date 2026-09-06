@@ -48,9 +48,9 @@ import { DayCycle, GLOW_VISIBLE, START_TIME } from './daylight';
 import { Sky } from './sky';
 import { CraftSession } from './craft';
 import { recipesFor, type Recipe } from './recipes';
-import { OBJECT_TYPES, HANDS, handsToLift, type WorldObject } from './objects';
+import { OBJECT_TYPES, HANDS, handsToLift, type WorldObject, type ObjectTypeId } from './objects';
 import { Structure, Structures } from './structures';
-import { BuildSite, CutDoorway, Deconstruct, Ignite, DRAIN_BUILD, DRAIN_UNBUILD } from './site';
+import { BuildSite, CutDoorway, Deconstruct, Ignite, Transmute, DRAIN_BUILD, DRAIN_UNBUILD, DRAIN_TRANSMUTE } from './site';
 import { Fire, FUEL_MS } from './fire';
 import { BLUEPRINTS, blueprintsFor, BUILD_MATERIALS, drawPlan, ingredientsText, type Blueprint } from './blueprints';
 import { GROUND_REST, type RestQuality } from './vitality';
@@ -110,7 +110,7 @@ const hands = new Hands(
 );
 // Seeds released over a tilled patch plant it (Pass 0.6c).
 hands.placeOnTarget = (x, y, type, count) => {
-  if (type.id !== 'seed') return null;
+  if (type.id !== 'seed' && type.id !== 'wheat_seed') return null;
   castFrom(x, y);
   const hit = raycaster.intersectObjects(patches.flatMap((p) => p.lockTargets), false)[0];
   if (!hit) return null;
@@ -127,7 +127,11 @@ hands.placeOnTarget = (x, y, type, count) => {
     hands.notice = `Needs ${PLANT_SEEDS} seeds.`;
     return 0;
   }
-  const used = patch.plant(count, animClock);
+  const used = patch.plant(count, animClock, type.id === 'wheat_seed' ? 'wheat' : 'tree');
+  if (used > 0 && type.id === 'wheat_seed') {
+    hint.textContent = 'Wheat, planted. Four stalks in a minute; harvest them with the board.';
+    tooFarUntil = animClock + 3000;
+  }
   updateHud();
   return used;
 };
@@ -135,7 +139,9 @@ hands.placeOnTarget = (x, y, type, count) => {
 // ---- Structures (Pass 0.9 → 1.0c) ------------------------------------------------
 // Structures are built by blueprints at a site (site.ts); nothing snaps on release any more.
 const structures = new Structures(GROUND_Y);
-const sites: (BuildSite | Deconstruct | CutDoorway | Ignite)[] = [];
+const sites: (BuildSite | Deconstruct | CutDoorway | Ignite | Transmute)[] = [];
+/** Runes the character knows (1.1c). Starts with wheat (designer's call). */
+const runes: { rune: 'wheat'; from: ObjectTypeId; to: ObjectTypeId; label: string }[] = [{ rune: 'wheat', from: 'seed', to: 'wheat_seed', label: 'Wheat rune' }];
 /** A blueprint whose needs the HUD shows (the checkbox in the blueprint menu). */
 let trackedBlueprint: Blueprint | null = null;
 
@@ -154,7 +160,23 @@ function fireUnder(x: number, y: number): Fire | null {
   return s.fire;
 }
 const placeSeeds = hands.placeOnTarget;
+const popping: { fire: Fire; at: number; count: number }[] = [];
+const POP_DELAY_MS = 2600;
 hands.placeOnTarget = (x, y, type, count) => {
+  if (type.id === 'wheat_seed') {
+    const fire = fireUnder(x, y);
+    if (fire) {
+      if (!fire.lit) {
+        hands.notice = 'The fire is out.';
+        return 0;
+      }
+      const n = Math.min(count, 5);
+      popping.push({ fire, at: animClock + POP_DELAY_MS, count: n });
+      hint.textContent = 'The seeds go on the coals…';
+      tooFarUntil = animClock + POP_DELAY_MS + 600;
+      return n;
+    }
+  }
   if (FUEL_MS[type.id]) {
     const fire = fireUnder(x, y);
     if (fire) {
@@ -326,7 +348,7 @@ player.onLongPress = (x, y) => {
   const structHit = raycaster.intersectObjects(pressableStructureTargets(), true)[0];
   if (structHit) {
     const s = structHit.object.userData.structure as Structure;
-    const pending = sites.find((site) => site.structure === s && site.status === 'growing');
+    const pending = sites.find((site) => 'structure' in site && site.structure === s && site.status === 'growing');
     const rows: Parameters<typeof showMenu>[2] = [];
     if (pending) {
       rows.push({ label: pending instanceof BuildSite ? `Building: ${pending.blueprint.label}` : 'Taking apart', small: 'tap inside the ring to continue', disabled: true, onPick: () => {} });
@@ -364,6 +386,10 @@ player.onLongPress = (x, y) => {
     disabled: !r.available,
     onPick: () => startCraft(obj, r.recipe),
   }));
+  for (const r of runes) {
+    if (r.from !== obj.type.id) continue;
+    rows.push({ label: 'Transmute…', small: `${r.label}: seeds within reach become ${OBJECT_TYPES[r.to].label}`, onPick: () => startTransmute(obj, r.rune, r.to) });
+  }
   if (BUILD_MATERIALS.includes(obj.type.id)) {
     // Inside a pending site's ring, the material's menu can abandon that site; otherwise it can start one here.
     const pending = sites.find((site) => site instanceof BuildSite && site.status === 'growing' && site.distanceTo(obj.position) <= site.ringRadius) as BuildSite | undefined;
@@ -469,19 +495,41 @@ function startSite(bp: Blueprint, structure: Structure): void {
   tooFarUntil = animClock + 4500;
   updateHud();
 }
-function finishSite(site: BuildSite | Deconstruct | CutDoorway | Ignite): void {
+function finishSite(site: BuildSite | Deconstruct | CutDoorway | Ignite | Transmute): void {
   if (site instanceof BuildSite) site.dispose();
+  if (site instanceof Transmute && site.status !== 'resolved') site.dispose();
   sites.splice(sites.indexOf(site), 1);
   const i = interactables.indexOf(site);
   if (i >= 0) interactables.splice(i, 1);
 }
-function abandonSite(site: BuildSite | Deconstruct | CutDoorway | Ignite): void {
+function abandonSite(site: BuildSite | Deconstruct | CutDoorway | Ignite | Transmute): void {
   site.status = 'resolved';
   finishSite(site);
   if (site instanceof BuildSite && site.structure.pieces.length === 0) structures.remove(site.structure);
   hint.textContent = 'Site abandoned. What was placed stays.';
   tooFarUntil = animClock + 2000;
   updateHud();
+}
+function startTransmute(anchor: WorldObject, rune: 'wheat', to: ObjectTypeId): void {
+  const site = new Transmute(rune, to, anchor, objects, GROUND_Y, seed * 271 + sites.length * 5);
+  scene.add(site.group);
+  sites.push(site);
+  interactables.push(site);
+  site.onCharged = () => updateHud();
+  site.onDone = (it) => {
+    finishSite(site);
+    hint.textContent = `${OBJECT_TYPES[to].label[0].toUpperCase()}${OBJECT_TYPES[to].label.slice(1)}. Eat them, plant four on tilled ground, or pop them on a fire.`;
+    tooFarUntil = animClock + 3600;
+    onInteractableDone(it);
+  };
+  if (site.distanceTo(player.position) > site.lockReach) {
+    hint.textContent = 'Closer.';
+    tooFarUntil = animClock + 900;
+    site.cancel();
+    finishSite(site);
+    return;
+  }
+  lockOnto(site);
 }
 function startIgnite(s: Structure): void {
   const site = new Ignite(s, GROUND_Y, seed * 389 + sites.length * 7);
@@ -582,7 +630,7 @@ const halo = document.getElementById('halo')!;
 const blackout = document.getElementById('blackout')!;
 hands.onEat = (type) => {
   if (!type.food) return false;
-  vitality.eat(type.food);
+  vitality.eat(type.food, type.nourishMs ?? 0);
   return true;
 };
 player.onHop = () => vitality.drain(hands.dragging ? DRAIN_DRAG_HOP : DRAIN_HOP);
@@ -594,6 +642,7 @@ player.onRestHold = () => {
   vitality.rest(animClock, restQuality);
 };
 vitality.onEvent = (what) => {
+  if (what === 'ate') updateHud(); // 'nourished' appears the moment it applies
   const rested = restQuality.bed
     ? restQuality.shelter >= 1
       ? 'You sleep in your bed, in your cabin, and wake whole.'
@@ -722,6 +771,18 @@ function onSaplingGrown(patch: Patch): void {
   updateHud();
 }
 for (const p of patches) p.onGrown = onSaplingGrown;
+/** 1.1c: a harvest scatters wheat seeds over the patch. */
+function onHarvest(patch: Patch, seeds: number): void {
+  const rand = mulberry32(seed * 7 + patch.index * 31 + Math.floor(animClock));
+  for (let i = 0; i < seeds; i++) {
+    const a = rand() * Math.PI * 2;
+    const r = 0.15 + rand() * 0.45;
+    objects.spawn('wheat_seed', patch.center.x + Math.cos(a) * r, GROUND_Y, patch.center.z + Math.sin(a) * r, rand() * Math.PI);
+  }
+  hint.textContent = `Wheat: ${seeds} seeds. Eat them, plant them, or pop them on a fire.`;
+  tooFarUntil = animClock + 3200;
+}
+for (const p of patches) p.onHarvest = onHarvest;
 
 /** Pass 0.8: a rock turns up at the patch's edge each time tilling steps its look down. */
 const rockRand = mulberry32(seed * 3 + 11);
@@ -750,6 +811,7 @@ function onTreeFelled(v: Voxel): void {
   const footprint = new Patch(patches.length, new THREE.Vector3(v.center.x, GROUND_Y, v.center.z), seed * 977 + 500 + v.index, true, 2);
   footprint.onDone = onInteractableDone;
   footprint.onGrown = onSaplingGrown;
+  footprint.onHarvest = onHarvest;
   footprint.onRock = onRockTurnedUp;
   patches.push(footprint);
   interactables.push(footprint);
@@ -906,10 +968,16 @@ function applyMode(mode: CameraMode): void {
   if (mode === 'locked' && locked) {
     boardView.bind(locked.board);
     boardView.show(animClock);
+    // Finished (or blocked) while the camera was still on its way in: back out rather than sit on a dead board.
+    if (locked.status !== 'growing' && autoUnlockAt === null) autoUnlockAt = animClock + RELEASE_HOLD_MS;
   }
   if (mode === 'unlocking') {
     boardView.hide();
     if (craft && craft.status === 'growing') craft.cancel();
+    if (locked instanceof Transmute && locked.status === 'growing') {
+      locked.cancel();
+      finishSite(locked);
+    }
   }
   if (mode === 'free') {
     boardView.unbind();
@@ -940,7 +1008,7 @@ boardView.onRun = (run, origin) => {
   }
   projectiles.fire(origin, it.targetWorldPosition(target), PALETTE[run.type].hex, animClock, () => {
     it.feed(target, amount, animClock);
-    vitality.drain(it.kind === 'voxel' ? DRAIN_TREE_HIT : it.kind === 'patch' ? DRAIN_TILL_HIT : it instanceof Deconstruct ? DRAIN_UNBUILD : DRAIN_BUILD);
+    vitality.drain(it.kind === 'voxel' ? DRAIN_TREE_HIT : it.kind === 'patch' ? DRAIN_TILL_HIT : it instanceof Deconstruct ? DRAIN_UNBUILD : it instanceof Transmute ? DRAIN_TRANSMUTE : DRAIN_BUILD);
     updateHud();
   });
 };
@@ -961,6 +1029,7 @@ function updateHud(): void {
   const parts = [`seed ${seed}`, `cleared ${resolved}/${voxels.length}`, `tilled ${tilled}/${patches.length}`];
   if (planted) parts.push(`planted ${planted}`);
   if (weather.raining) parts.push('rain');
+  if (vitality.nourished(animClock)) parts.push('nourished');
   if (trackedBlueprint) parts.push(`${trackedBlueprint.label}: ${ingredientsText(trackedBlueprint)}`);
   if (slowmo > 1) parts.push(`slowmo ×${slowmo}`);
   if (debug) parts.push(`vit ${vitality.value.toFixed(2)} ${vitality.band}`, `time ${dayCycle.time.toFixed(2)} day ${dayCycle.day.toFixed(2)}`, `rain ${weather.rain.toFixed(2)} roof ${structures.shelterAt(player.position.x, player.position.z).toFixed(2)}`);
@@ -1166,6 +1235,20 @@ function animate(now: number): void {
   }
   for (const it of interactables) it.update(animClock);
   for (const st of structures.list) st.fire?.update(animClock);
+  // Popcorn (1.1c): a moment after wheat seeds go on a lit fire, giant kernels pop out around it.
+  for (let i = popping.length - 1; i >= 0; i--) {
+    const pop = popping[i];
+    if (animClock < pop.at) continue;
+    popping.splice(i, 1);
+    const c = pop.fire.group.position;
+    for (let k = 0; k < pop.count; k++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = 0.55 + Math.random() * 0.45;
+      objects.spawn('popcorn', c.x + Math.cos(a) * r, GROUND_Y, c.z + Math.sin(a) * r, a).waggle(animClock);
+    }
+    hint.textContent = 'Pop! Popcorn, out of the fire.';
+    tooFarUntil = animClock + 2600;
+  }
   if (craft) craft.update(animClock);
   objects.update(animClock);
 
