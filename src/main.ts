@@ -50,7 +50,7 @@ import { CraftSession } from './craft';
 import { recipesFor, type Recipe } from './recipes';
 import { OBJECT_TYPES, HANDS, handsToLift, type WorldObject } from './objects';
 import { Structure, Structures } from './structures';
-import { BuildSite, Deconstruct, DRAIN_BUILD, DRAIN_UNBUILD } from './site';
+import { BuildSite, CutDoorway, Deconstruct, DRAIN_BUILD, DRAIN_UNBUILD } from './site';
 import { BLUEPRINTS, blueprintsFor, BUILD_MATERIALS, drawPlan, ingredientsText, type Blueprint } from './blueprints';
 import { GROUND_REST, type RestQuality } from './vitality';
 import { Weather, DRAIN_RAIN_PER_SECOND, LIGHTNING_SAP_TO } from './weather';
@@ -134,7 +134,7 @@ hands.placeOnTarget = (x, y, type, count) => {
 // ---- Structures (Pass 0.9 → 1.0c) ------------------------------------------------
 // Structures are built by blueprints at a site (site.ts); nothing snaps on release any more.
 const structures = new Structures(GROUND_Y);
-const sites: (BuildSite | Deconstruct)[] = [];
+const sites: (BuildSite | Deconstruct | CutDoorway)[] = [];
 /** A blueprint whose needs the HUD shows (the checkbox in the blueprint menu). */
 let trackedBlueprint: Blueprint | null = null;
 
@@ -294,6 +294,18 @@ player.onLongPress = (x, y) => {
       rows.push({ label: 'Abandon that', onPick: () => abandonSite(pending) });
     } else {
       rows.push({ label: 'Blueprints…', small: 'add to this', onPick: () => openBlueprints(s, null) });
+      // A wall of whole long logs can have a doorway cut through it — with the axe in hand.
+      const placed = s.pieces.find((pc) => pc.obj === (structHit.object.userData.object as WorldObject));
+      const wall = placed ? s.wallOf(placed) : null;
+      if (wall && s.uncutLogs(wall).length > 0) {
+        const axe = hands.heldTypes().includes('hand_axe');
+        rows.push({
+          label: 'Cut a doorway here',
+          small: axe ? `${s.uncutLogs(wall).length} logs; the middles come out as knuckles` : 'needs a hand axe in hand',
+          disabled: !axe,
+          onPick: () => startCut(s, wall),
+        });
+      }
       rows.push({ label: 'Take apart', small: `${s.pieces.length} pieces`, onPick: () => startDeconstruct(s) });
     }
     showMenu(x, y, rows);
@@ -409,19 +421,38 @@ function startSite(bp: Blueprint, structure: Structure): void {
   tooFarUntil = animClock + 4500;
   updateHud();
 }
-function finishSite(site: BuildSite | Deconstruct): void {
+function finishSite(site: BuildSite | Deconstruct | CutDoorway): void {
   if (site instanceof BuildSite) site.dispose();
   sites.splice(sites.indexOf(site), 1);
   const i = interactables.indexOf(site);
   if (i >= 0) interactables.splice(i, 1);
 }
-function abandonSite(site: BuildSite | Deconstruct): void {
+function abandonSite(site: BuildSite | Deconstruct | CutDoorway): void {
   site.status = 'resolved';
   finishSite(site);
   if (site instanceof BuildSite && site.structure.pieces.length === 0) structures.remove(site.structure);
   hint.textContent = 'Site abandoned. What was placed stays.';
   tooFarUntil = animClock + 2000;
   updateHud();
+}
+function startCut(s: Structure, wall: 'A' | 'B' | 'back'): void {
+  const site = new CutDoorway(s, wall, objects, GROUND_Y, seed * 743 + sites.length * 13);
+  sites.push(site);
+  interactables.push(site);
+  site.onCut = () => updateHud();
+  site.onDone = (it) => {
+    finishSite(site);
+    hint.textContent = 'A doorway. The knuckles lie outside it.';
+    tooFarUntil = animClock + 2400;
+    onInteractableDone(it);
+  };
+  if (site.distanceTo(player.position) > site.lockReach) {
+    hint.textContent = 'Closer.';
+    tooFarUntil = animClock + 900;
+    finishSite(site);
+    return;
+  }
+  lockOnto(site);
 }
 function startDeconstruct(s: Structure): void {
   const site = new Deconstruct(s, structures, GROUND_Y, seed * 611 + sites.length * 17);

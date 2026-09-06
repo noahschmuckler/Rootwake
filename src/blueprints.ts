@@ -33,7 +33,9 @@ export interface PiecePlan {
   /** 0 lies along the frame's long axis; PI/2 across it. */
   yaw: number;
   /** What it is for: walls block, roofs keep rain off, beds are slept in. */
-  tag: 'course' | 'door' | 'roof' | 'floor' | 'bed';
+  tag: 'course' | 'door' | 'roof' | 'floor' | 'bed' | 'cut' | 'fire';
+  /** Lean (rotation about the piece's own across axis), for sticks stood against each other. */
+  tilt?: number;
 }
 
 /** What a blueprint needs to know about a structure it might be sited on. */
@@ -89,7 +91,7 @@ export const BLUEPRINTS: Blueprint[] = [
   {
     id: 'door-wall',
     label: 'Door wall course',
-    blurb: 'Closes the open front from one side: a stub as a portable notch, a short notched log on it. The gap it leaves is the doorway. One per course.',
+    blurb: 'Closes the open front from one side: a knuckle as a portable notch, a short notched log on it. The gap it leaves is the doorway. One per course.',
     pieces: [
       { type: 'log_stub', along: P, across: 0, y: T / 2, yaw: 0, tag: 'door' },
       { type: 'log_notched', along: P, across: -P + SHORT_LOG_LENGTH / 2 - 0.15, y: T, yaw: Math.PI / 2, tag: 'door' },

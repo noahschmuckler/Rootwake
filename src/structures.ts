@@ -7,7 +7,7 @@
 // what goes where — the blueprints do.
 
 import * as THREE from 'three';
-import type { WorldObject } from './objects';
+import { DOOR_GAP, HALF_LOG_LENGTH, type ObjectWorld, type WorldObject } from './objects';
 import type { SegmentCollider } from './player';
 import { P, ROOF_SLATS, T, type Blueprint, type PiecePlan, type StructureLike } from './blueprints';
 
@@ -17,6 +17,8 @@ export const HEAD_HEIGHT = 0.9;
 /** Roof slats keep this much of each side dry (a long timber over 2-bay walls). */
 export const SLAT_HALF_ACROSS = 1.15;
 export const SLAT_HALF_ALONG = 0.12;
+/** Logs rest with their centre LOG_RADIUS above the ground they are given: what spawn adds. */
+const OBJECT_REST = 0.17;
 // -------------------------------------------------------------------------------
 
 export interface Placed {
@@ -119,7 +121,7 @@ export class Structure implements StructureLike {
   colliders(): SegmentCollider[] {
     const out: SegmentCollider[] = [];
     for (const p of this.pieces) {
-      if (p.plan.tag !== 'course' && p.plan.tag !== 'door') continue;
+      if (p.plan.tag !== 'course' && p.plan.tag !== 'door' && p.plan.tag !== 'cut') continue;
       if (p.y > HEAD_HEIGHT) continue;
       const half = (p.obj.type.halfLength ?? 0.3) - 0.05;
       const yaw = p.obj.group.rotation.y;
@@ -128,6 +130,48 @@ export class Structure implements StructureLike {
       out.push({ x1: p.obj.position.x - ax, z1: p.obj.position.z - az, x2: p.obj.position.x + ax, z2: p.obj.position.z + az, radius: T / 2 });
     }
     return out;
+  }
+
+  // ---- walls and the doorway cut (1.1) ----
+  /** Which wall a course log belongs to, by where it lies in the frame. */
+  wallOf(p: Placed): 'A' | 'B' | 'back' | null {
+    if (p.plan.tag !== 'course') return null;
+    if (p.plan.yaw !== 0) return 'back';
+    return p.plan.across < 0 ? 'A' : 'B';
+  }
+
+  /** The course logs of a wall still whole (not cut), lowest first. */
+  uncutLogs(wall: 'A' | 'B' | 'back'): Placed[] {
+    return this.pieces.filter((p) => this.wallOf(p) === wall && p.obj.type.id === 'log_long_notched').sort((a, b) => a.y - b.y);
+  }
+
+  /**
+   * Cut a doorway through one course log of a wall: the log's middle comes out
+   * as a knuckle (its notch and all) and two half logs stay either side, each
+   * keeping its outer notch. Returns the knuckle, lying on the ground outside.
+   */
+  cutCourse(wall: 'A' | 'B' | 'back', objects: ObjectWorld, groundY: number): WorldObject | null {
+    const target = this.uncutLogs(wall)[0];
+    if (!target) return null;
+    const yaw = target.obj.group.rotation.y;
+    const ax = Math.cos(yaw);
+    const az = -Math.sin(yaw);
+    const off = DOOR_GAP / 2 + HALF_LOG_LENGTH / 2;
+    const c = target.obj.position;
+    const y = groundY + target.y;
+    objects.remove(target.obj);
+    // The half at -axis keeps the log's yaw (its outer end is local -X); the other turns about.
+    const left = objects.spawn('log_half', c.x - ax * off, y - OBJECT_REST, c.z - az * off, yaw);
+    const right = objects.spawn('log_half', c.x + ax * off, y - OBJECT_REST, c.z + az * off, yaw + Math.PI);
+    const i = this.pieces.indexOf(target);
+    this.pieces.splice(i, 1, { obj: left, plan: target.plan, y: target.y }, { obj: right, plan: { ...target.plan, tag: 'cut' }, y: target.y });
+    for (const h of [left, right]) {
+      h.collectible = false;
+      h.mesh.traverse((m) => (m.userData.structure = this));
+    }
+    // The knuckle: out through the new gap, a step outside the wall.
+    const outward = this.wallOf(target) === 'back' ? this.world(-1, 0).sub(this.center).normalize() : this.world(0, target.plan.across).sub(this.center).normalize();
+    return objects.spawn('log_stub', c.x + outward.x * 0.7, groundY, c.z + outward.z * 0.7, yaw + Math.PI / 2);
   }
 
   /** A blueprint piece is in place. */

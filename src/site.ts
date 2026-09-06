@@ -246,6 +246,109 @@ export class BuildSite implements Interactable {
   }
 }
 
+/**
+ * Cutting a doorway (1.1): with the hand axe in hand, long-press a wall. Each
+ * match cuts one course of that wall — the middle comes out as a knuckle, two
+ * half logs stay either side — lowest first, until the wall is open.
+ */
+export class CutDoorway implements Interactable {
+  readonly kind = 'site' as const;
+  readonly index: number;
+  readonly board: Board;
+  readonly lockReach = 4.5;
+  readonly hintLocked = 'Cutting a doorway: tap a gem, then a neighbour. Each match cuts a log through.';
+  readonly lockTargets: THREE.Object3D[] = [];
+  status: InteractableStatus = 'growing';
+  onDone: (it: Interactable) => void = () => {};
+  onCut: (left: number) => void = () => {};
+  readonly center: THREE.Vector3;
+  readonly floorY: number;
+  private readonly flights: Flight[] = [];
+
+  constructor(
+    readonly structure: Structure,
+    readonly wall: 'A' | 'B' | 'back',
+    private readonly objects: ObjectWorld,
+    private readonly groundY: number,
+    seed: number
+  ) {
+    this.index = 9700 + Math.floor(Math.random() * 100000);
+    const first = structure.uncutLogs(wall)[0];
+    this.center = first ? first.obj.position.clone() : structure.center.clone();
+    this.center.y = groundY;
+    this.floorY = groundY + structure.wallTop + BOARD_ABOVE_PIECES;
+    this.board = new Board(BOARD_ROWS, BOARD_COLS, seed ^ 0x6d0f);
+    if (!first) this.status = 'resolved';
+  }
+
+  lockPose(viewer: Viewer): CameraPose {
+    const pose = lookDownPoseFor(this.center, viewer.position, viewer.forward);
+    pose.target.y += SITE_LOOK_UP;
+    return pose;
+  }
+  distanceTo(p: THREE.Vector3): number {
+    return Math.hypot(p.x - this.center.x, p.z - this.center.z);
+  }
+  targetFor(run: Run): number | null {
+    if (this.status !== 'growing') return null;
+    return single.target(run, { targetCount: 1, boardCols: this.board.cols, colorOfTarget: () => -1 });
+  }
+  targetWorldPosition(): THREE.Vector3 {
+    const next = this.structure.uncutLogs(this.wall)[0];
+    return next ? next.obj.group.position.clone() : this.center.clone();
+  }
+  feed(_target: number, _amount: number, nowMs: number): void {
+    if (this.status !== 'growing') return;
+    const knuckle = this.structure.cutCourse(this.wall, this.objects, this.groundY);
+    if (!knuckle) return;
+    // The knuckle drops out through the gap onto the ground outside.
+    const to = knuckle.group.position.clone();
+    knuckle.collectible = false;
+    this.flights.push({
+      obj: knuckle,
+      from: this.targetWorldPosition().clone().add(new THREE.Vector3(0, 0.2, 0)),
+      to,
+      fromYaw: knuckle.group.rotation.y,
+      toYaw: knuckle.group.rotation.y,
+      startMs: nowMs,
+      onLand: () => {
+        knuckle.collectible = true;
+      },
+    });
+    const left = this.structure.uncutLogs(this.wall).length;
+    this.onCut(left);
+    if (left === 0) {
+      this.status = 'resolved';
+      this.onDone(this);
+    }
+  }
+  cancel(): void {}
+  poolText(): string {
+    return `doorway, ${this.structure.uncutLogs(this.wall).length} logs to cut`;
+  }
+  update(nowMs: number): void {
+    flyAll(this.flights, nowMs);
+  }
+}
+
+/** Advance a set of flights; landed ones call back. */
+function flyAll(flights: Flight[], nowMs: number): void {
+  for (let i = flights.length - 1; i >= 0; i--) {
+    const f = flights[i];
+    const t = Math.min(1, (nowMs - f.startMs) / FLY_MS);
+    const e = t * t * (3 - 2 * t);
+    f.obj.group.position.lerpVectors(f.from, f.to, e);
+    f.obj.group.position.y += Math.sin(t * Math.PI) * 0.6;
+    f.obj.group.rotation.y = f.fromYaw + (f.toYaw - f.fromYaw) * e;
+    if (t >= 1) {
+      f.obj.group.position.copy(f.to);
+      f.obj.group.rotation.y = f.toYaw;
+      flights.splice(i, 1);
+      f.onLand();
+    }
+  }
+}
+
 /** Taking a structure apart: each match lifts the last piece off onto a pile at the open front. */
 export class Deconstruct implements Interactable {
   readonly kind = 'site' as const;

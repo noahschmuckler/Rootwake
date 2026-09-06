@@ -27,7 +27,7 @@ export function handsToDrag(mass: number, strength = STRENGTH): number {
 }
 // -------------------------------------------------------------------------------
 
-export type ObjectTypeId = 'seed' | 'stick' | 'log' | 'log_short' | 'lichen' | 'rock' | 'hand_axe' | 'log_long_notched' | 'log_notched' | 'log_stub' | 'timber' | 'timber_short' | 'chip';
+export type ObjectTypeId = 'seed' | 'stick' | 'log' | 'log_short' | 'lichen' | 'rock' | 'hand_axe' | 'log_long_notched' | 'log_notched' | 'log_stub' | 'log_half' | 'timber' | 'timber_short' | 'chip';
 
 export interface ObjectType {
   id: ObjectTypeId;
@@ -66,8 +66,11 @@ export const LOG_OVERHANG = 0.15;
 export const LOG_RADIUS = 0.17;
 export const LONG_LOG_LENGTH = NOTCH_PITCH * 2 + LOG_OVERHANG * 2;
 export const SHORT_LOG_LENGTH = NOTCH_PITCH + LOG_OVERHANG * 2;
-/** The stub: half a short log with one notch in the middle — a portable notch to end a wall on. */
+/** The knuckle: the middle of a log with its one notch — a portable notch to end a wall on, or a campfire's cross. */
 export const STUB_LENGTH = 0.55;
+/** A doorway cut from a long wall log: the gap, and the two half logs left either side (outer notch kept). */
+export const DOOR_GAP = 0.6;
+export const HALF_LOG_LENGTH = (LONG_LOG_LENGTH - DOOR_GAP) / 2;
 export const TIMBER_THICK = 0.1;
 export const TIMBER_WIDE = 0.24;
 
@@ -197,14 +200,27 @@ export const OBJECT_TYPES: Record<ObjectTypeId, ObjectType> = {
   log_stub: {
     id: 'log_stub',
     halfLength: STUB_LENGTH / 2,
-    label: 'stub',
+    label: 'knuckle',
     size: 'large',
-    mass: 1, // half a short log: a portable notch. Lifts one-handed.
+    mass: 1, // the middle of a log with its one notch: a portable notch. Lifts one-handed.
     color: 0x5a3f2a,
     radius: 0.3,
     blocks: true,
     restHeight: 0.17,
     build: () => buildLook('log_stub'),
+  },
+  // What a long wall log becomes either side of a cut doorway: one end notch, the cut end bare.
+  log_half: {
+    id: 'log_half',
+    halfLength: HALF_LOG_LENGTH / 2,
+    label: 'half log',
+    size: 'large',
+    mass: 2,
+    color: 0x5a3f2a,
+    radius: 0.45,
+    blocks: true,
+    restHeight: 0.17,
+    build: () => buildLook('log_half'),
   },
   // Timber comes in the two log lengths: long slats span the cabin, short ones are furniture.
   timber: {
@@ -233,7 +249,7 @@ export const OBJECT_TYPES: Record<ObjectTypeId, ObjectType> = {
   },
   chip: {
     id: 'chip',
-    label: 'wood chips',
+    label: 'wood shavings',
     size: 'tiny',
     mass: 0,
     color: 0xb8925a,
@@ -435,6 +451,9 @@ export function buildLook(look: string): THREE.Mesh {
     }
     case 'log_stub':
       return notched(STUB_LENGTH, [0]);
+    case 'log_half':
+      // The outer end is local -X: its notch sits LOG_OVERHANG in from that end.
+      return notched(HALF_LOG_LENGTH, [-HALF_LOG_LENGTH / 2 + LOG_OVERHANG]);
     case 'log_stubbed': {
       // A short log cut through the middle: two stubs' worth, still lying end to end.
       const a = logMesh(STUB_LENGTH);

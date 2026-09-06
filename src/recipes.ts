@@ -100,7 +100,7 @@ export const RECIPES: Recipe[] = [
   },
   {
     id: 'stubs',
-    label: 'Cut into stubs',
+    label: 'Cut into knuckles',
     target: 'log_notched',
     requiresHeld: 'hand_axe',
     result: 'log_stub',
