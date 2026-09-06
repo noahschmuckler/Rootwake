@@ -154,16 +154,13 @@ segments; "under a roof" is a ray cast straight up from the player hitting a
 roof piece. Quality is a property of what the pieces are made of and how
 many gaps there are. Refine once the log-cabin pieces exist (§5).
 
-As built (1.0): the first roof is over the bed. Notched logs stacked two
-courses high on each side log of the bed frame are the walls (roof at about
-a metre; eye height is 0.55, so you stand under it and look out the open
-ends); timber laid across them is the roof, four to close it; quality =
-timbers laid / 4. Rain stops at the roof: under a laid timber no drops
-fall, and through the gaps they do until the roof is whole; the rain sheet
-on the screen is off while you are under it. "Under the roof" is the
-frame's footprint plus a margin (the up-ray, simplified). Rain drains you
-only outdoors; a close strike is held off under any roof; the sleep ceiling
-gains 0.1 × quality and the restore 40% × quality on top of the bed's.
+As built (1.0b): the roof is the cabin's (§5.4): six timber slats across
+the long walls; quality = slats laid / 6. Rain stops at the slats and comes
+through the gaps until the roof is whole; the rain sheet on the screen is
+off while you are under it. "Under the roof" is the cabin's footprint (the
+up-ray, simplified). Rain drains you only outdoors; a close strike is held
+off under any roof; the sleep ceiling gains 0.1 × quality and the restore
+40% × quality on top of the bed's.
 
 ---
 
@@ -212,31 +209,48 @@ weaving — each its own board session at a place). No shortcut from sticks.
 The chain is the point: every link is stored potential you can see in a
 pile, and the bag arrives when the loop has taught you to want it badly.
 
-### 5.4 Shaping logs: log-cabin construction
+### 5.4 Shaping logs: Lincoln Logs
 
-With a stone hand axe in one hand, **long-press a log** for a menu of
-modified logs:
+The building system is Lincoln Logs (designer's call, after 1.0). One
+convention makes it: **the notch grid.** Notches sit on a square lattice of
+one bay; a log lies between grid points; courses alternate direction by 90°,
+each log dropping into the notches of the two below it; walls rise half a
+log per course; ends overhang the crossing. Nothing ever stacks parallel.
 
-- a fitting **notch at one end, one side**;
-- notches at **both ends, both sides**;
-- an **offset cut** to stabilise two logs set end to end for longer walls;
-- **cut into timber**, for building pieces and for fire.
+**Pieces.** A felled tree gives a **long log** (two bays) and a **short log**
+(one bay). With a stone hand axe in one hand, **long-press a log** for:
 
-Working a log this way **spawns wood chips**, suitable for kindling. Every
-operation leaves something physical behind that answers another need
-(chips → kindling → fire → cooking and light).
+- **Notch it** — three notches on a long log, two on a short: the blocks.
+- **Cut in half** — a long log into two short.
+- **Cut into timber** — squared quarter-logs: roof slats and floorboards.
 
-Fitted logs stack into walls log-cabin style; timber makes roof pieces
-(§4). The pieces are objects with weight: a wall segment is placed by
-dragging the shaped log to where it goes, and it stays heavy.
+Working a log **spawns wood chips**, kindling for the fire (§6, 1.1). Every
+operation leaves something physical behind that answers another need.
 
-**Fittings and fills (0.9).** A shaped piece let go beside a piece it fits
-snaps into place — the first fitting is two both-ends-notched logs side by
-side, a stick's length apart: a **bed frame**. Structures then take fills:
-a hand of sticks laid across the frame is the lattice, and the frame is a
-**bed** — the first thing sleep quality can key off (§1.2). Fittings and
-fills are rows of data (`structures.ts`), not code paths, so walls and
-roofs (1.0) add rows.
+Later pieces from the box: the half-length (one-notch) log that frames
+doors and windows; the half-round that levels a wall's top; gable ends and
+a ridge; door and window frames of timber; a chimney — of rocks, where the
+hearth goes; fences and rails.
+
+**The cabin (as built, 1.0b).** Two bays long, one wide, three courses high:
+
+1. Two long notched logs let go a bay apart are the **sills**.
+2. A short notched log across one end is the first **cross log** — and that
+   end is the back wall. The other end stays open: the **doorway**.
+3. Long logs on the sides and cross logs on the back, course by course,
+   each resting in the notches of the course below.
+4. One cross log over the doorway, up top: the **lintel**.
+5. Timber across the long walls, six to a whole **roof**. Rain stops at the
+   slats and comes through the gaps until it is whole.
+6. Timber inside, six to a **floor**; a hand of sticks on the floor is the
+   **bed**. Roof before floor, floor before bed: shelter first, furniture
+   after.
+
+Wall logs block you; the doorway does not. Under the roof no rain falls,
+the screen rain sheet is off, and you look out at the rain. Sleep in the bed
+reaches full vitality. Cost, at one long and one short log per tree: nine
+trees for the walls, two for the roof, two for the floor — a third of the
+thicket, which is also how the vista gets opened.
 
 ---
 

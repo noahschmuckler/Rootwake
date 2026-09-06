@@ -24,9 +24,9 @@ don't add structure the prototype doesn't need yet.
 ## Status
 
 **Passes 0 through 0.9 judged satisfying on phone; Pass 1.0 (rain that
-drains you outdoors, lightning, walls and a timber roof over the bed frame,
-rest by shelter) built 2026-09-06, awaiting evaluation. Standing rules:
-confinement→vista,
+drains you outdoors, lightning, the Lincoln Log cabin with a walkable
+floor, rest by shelter) built 2026-09-06, awaiting evaluation. Standing
+rules: confinement→vista,
 objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
 `src/` holds:
 
@@ -46,19 +46,22 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
   includes 'blocked' and 'planted'.
 - `recipes.ts` — the recipe table (target, required held object, result
   and count, chips, HP, staged looks, drain) and the filter by what's in
-  hand: knapping, and the four log-shaping recipes behind the hand axe.
+  hand: knapping, and the log recipes behind the hand axe (notch, cut in
+  half, cut into timber, for long and short logs).
 - `craft.ts` — a crafting session: a liftable target hovers ahead, a heavy
   one (a log) is worked where it lies under the patch look-down framing;
   the board plays it, strikes step its look and scatter chips, results land
   in a hand or where the target lay; progress lives on the target across
   back-outs.
-- `structures.ts` — fittings, slots and fills as data: a notched log let
-  go beside another snaps parallel into a bed frame; sticks laid on the
-  frame make a bed; notched logs let go by the frame stack onto a side log
-  (walls, WALL_COURSES high), timber laid across both walls is the roof
-  (quality = timbers/4); `bedNear()`, `shelterAt()` and `dryStrips()` (where
-  rain stops) for rest and weather. Pieces stop being collectible (taking a
-  structure apart is not built).
+- `structures.ts` — Lincoln Logs: the notch grid and the cabin. Two long
+  notched logs a bay apart found it (sills); it then offers *slots* — cross
+  logs and long logs course by course (the first cross log names the back
+  wall, the other end is the doorway, a lintel over it), roof slats, then
+  floorboards, then sticks on the floor for the bed — and a released piece
+  takes the nearest slot within SNAP_REACH. `colliders()` (wall logs block,
+  the doorway doesn't), `dryStrips()` (where rain stops), `shelterAt()`,
+  `bedNear()`. Pieces stop being collectible (taking a structure apart is
+  not built).
 - `weather.ts` — dry spells and showers on a clock (`?rain=1` forces the
   first), rain streaks around the camera, `overcast` for the day cycle and
   sky, lightning (flash, delayed crack, near strikes that sap outdoors).
@@ -78,7 +81,9 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
   curves. Tuning constants at the top.
 - `objects.ts` — the weight rule: size class (20/5/1 per hand), mass,
   strength, hands-to-lift / hands-to-drag; object types (seed, stick, log,
-  lichen, rock, hand_axe, the shaped logs, timber, chip; seeds are food);
+  lichen, rock, hand_axe, long and short logs raw and notched, timber, chip;
+  seeds are food; the notch grid constants; a felled tree gives a long log
+  and a short);
   authored crafting looks and `setLook` (multi-part looks: raycast
   recursively); `collectible` flag; the in-the-way waggle; WorldObject/
   ObjectWorld and the felled-tree scatter.
@@ -106,7 +111,8 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
   the Pass 0 face framing, `lookDownPoseFor()` the patch framing,
   `craftPoseFor()` the hovering-target framing.
 - `player.ts` — first-person look plus waypoint-fan movement; candidates
-  filtered by colliders and the world's isWalkable(); encumbrance hooks;
+  filtered by colliders (circles for trees, segments for wall logs) and the
+  world's isWalkable(); encumbrance hooks;
   per-frame push-out from colliders; onHop, a still-hold rest gesture, and
   a 'press' role on world objects that becomes a long-press.
 - `world.ts` — the rock plateau cut on a curving cliff line, the cliff

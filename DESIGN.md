@@ -534,13 +534,21 @@ phone: does the first rain make you want the wall you built to have a roof
 code: shower timing against the four-minute day, the drain rate, lightning
 odds, and "under a roof" as a footprint test rather than an up-ray.
 
-Designer, same playtest: "it's not a roof unless I can walk underneath it
-and look out at the rain falling outside." So the walls are two courses
-(roof at ~1 m over a 0.55 eye), rain stops at the roof plane — no drops
-under a laid timber, drops through the gaps until the roof is whole — and
-the screen rain sheet is off while you stand under it, so what you see is
-the rain outside. Build cost went up with it (two more shaped logs);
-WALL_COURSES is the knob.
+Designer, same playtest, in two steps: "it's not a roof unless I can walk
+underneath it and look out at the rain falling outside" — and then "an
+interior, walkable floor: a cabin. The bed is furniture inside. No sane
+survivalist builds a bed before they have a roof. The building system we're
+recreating is Lincoln Logs." So 1.0b (2026-09-06) replaced the box-over-bed
+with the notch grid and the cabin (SYSTEMS §5.4): a felled tree gives a long
+log and a short one; long-press with the axe to notch, halve, or cut to
+timber; two long sills a bay apart, cross logs course by course (the first
+names the back wall, the other end is the doorway), a lintel, six roof
+slats, six floorboards, and a hand of sticks on the floor for the bed. Wall
+logs block you, the doorway does not; rain stops at the slats; the screen
+rain sheet is off inside. The single-notch and offset-cut logs are gone
+until openings and longer walls need them. Cost: about thirteen trees — a
+third of the thicket, which is also how the vista opens. Knobs: COURSES,
+slat/board counts, tree yield.
 
 Designer notes after the first 1.0 playtest: rain and fatigue together
 were "a bit too aggressive" — an unbreakable collapse→wake loop with no
