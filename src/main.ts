@@ -140,6 +140,8 @@ hands.placeOnTarget = (x, y, type, count) => {
 // Structures are built by blueprints at a site (site.ts); nothing snaps on release any more.
 const structures = new Structures(GROUND_Y);
 const sites: (BuildSite | Deconstruct | CutDoorway | Ignite | Transmute)[] = [];
+/** Things still animating after their session ended (a rune's burst). */
+let effects: Transmute[] = [];
 /** Runes the character knows (1.1c). Starts with wheat (designer's call). */
 const runes: { rune: 'wheat'; from: ObjectTypeId; to: ObjectTypeId; label: string }[] = [{ rune: 'wheat', from: 'seed', to: 'wheat_seed', label: 'Wheat rune' }];
 /** A blueprint whose needs the HUD shows (the checkbox in the blueprint menu). */
@@ -497,7 +499,10 @@ function startSite(bp: Blueprint, structure: Structure): void {
 }
 function finishSite(site: BuildSite | Deconstruct | CutDoorway | Ignite | Transmute): void {
   if (site instanceof BuildSite) site.dispose();
-  if (site instanceof Transmute && site.status !== 'resolved') site.dispose();
+  if (site instanceof Transmute) {
+    if (site.status !== 'resolved') site.dispose();
+    else effects.push(site); // the burst plays out after the session is gone
+  }
   sites.splice(sites.indexOf(site), 1);
   const i = interactables.indexOf(site);
   if (i >= 0) interactables.splice(i, 1);
@@ -518,6 +523,7 @@ function startTransmute(anchor: WorldObject, rune: 'wheat', to: ObjectTypeId): v
   site.onCharged = () => updateHud();
   site.onDone = (it) => {
     finishSite(site);
+    shakeUntil = animClock + SHAKE_MS * 0.7; // the burst has weight
     hint.textContent = `${OBJECT_TYPES[to].label[0].toUpperCase()}${OBJECT_TYPES[to].label.slice(1)}. Eat them, plant four on tilled ground, or pop them on a fire.`;
     tooFarUntil = animClock + 3600;
     onInteractableDone(it);
@@ -1235,6 +1241,8 @@ function animate(now: number): void {
   }
   for (const it of interactables) it.update(animClock);
   for (const st of structures.list) st.fire?.update(animClock);
+  for (const fx of effects) fx.update(animClock);
+  effects = effects.filter((fx) => !fx.finished);
   // Popcorn (1.1c): a moment after wheat seeds go on a lit fire, giant kernels pop out around it.
   for (let i = popping.length - 1; i >= 0; i--) {
     const pop = popping[i];

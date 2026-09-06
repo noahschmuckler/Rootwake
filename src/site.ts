@@ -522,6 +522,16 @@ export const TRANSMUTE_HOVER = 0.55;
 export const DRAIN_TRANSMUTE = 0.012;
 const runeDim = new THREE.MeshBasicMaterial({ color: 0x3a4a5a, transparent: true, opacity: 0.55, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
 const runeLit = new THREE.MeshBasicMaterial({ color: 0xffe07a, transparent: true, opacity: 0.95, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
+/** The burst: white-hot, additive, fading over BURST_MS; BURST_SHARDS small triangles fly apart. */
+const runeBurst = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 1, depthWrite: false, toneMapped: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
+export const BURST_MS = 1100;
+export const BURST_SHARDS = 14;
+const shardGeometry = (() => {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0.09, 0.02, 0, 0.03, 0.08, 0], 3));
+  g.computeVertexNormals();
+  return g;
+})();
 
 export class Transmute implements Interactable {
   readonly kind = 'site' as const;
@@ -539,6 +549,10 @@ export class Transmute implements Interactable {
   private charged = 0;
   private readonly seeds: WorldObject[];
   private doneAt = -1;
+  /** The burst's shards: small triangles thrown outward and down. */
+  private readonly shards: { mesh: THREE.Mesh; vx: number; vy: number; vz: number; spin: number }[] = [];
+  /** True once the burst has played and the rune is gone. */
+  finished = false;
 
   constructor(
     readonly rune: RuneId,
@@ -589,7 +603,7 @@ export class Transmute implements Interactable {
     this.charged++;
     this.onCharged(this.charged, this.total);
     if (this.charged >= this.total) {
-      // The change: every seed becomes the result where it lies; the rune flares and goes.
+      // The change: every seed becomes the result where it lies; the rune bursts (update() plays it out).
       for (const s of this.seeds) {
         const at = s.position.clone();
         const yaw = s.group.rotation.y;
@@ -597,6 +611,15 @@ export class Transmute implements Interactable {
         this.objects.spawn(this.result, at.x, this.groundY, at.z, yaw).waggle(nowMs);
       }
       this.doneAt = nowMs;
+      for (const m of this.segments) m.material = runeBurst;
+      for (let i = 0; i < BURST_SHARDS; i++) {
+        const a = (i / BURST_SHARDS) * Math.PI * 2 + Math.random() * 0.4;
+        const mesh = new THREE.Mesh(shardGeometry, runeBurst);
+        mesh.position.set(Math.cos(a) * 0.1, Math.sin(a) * 0.1, 0);
+        this.group.add(mesh);
+        const speed = 1.6 + Math.random() * 1.4;
+        this.shards.push({ mesh, vx: Math.cos(a) * speed, vy: Math.sin(a) * speed, vz: 1.2 + Math.random() * 1.5, spin: (Math.random() - 0.5) * 12 });
+      }
       this.status = 'resolved';
       this.onDone(this);
     }
@@ -612,16 +635,37 @@ export class Transmute implements Interactable {
     return `${this.rune} rune ${this.charged}/${this.total}`;
   }
   update(nowMs: number): void {
-    // A slow turn while charging; a flare and fade once done.
-    this.group.rotation.z = nowMs / 4000;
+    if (this.finished) return;
     if (this.doneAt >= 0) {
-      const k = Math.min(1, (nowMs - this.doneAt) / 700);
-      this.group.scale.setScalar(1 + k * 1.6);
-      for (const m of this.segments) (m.material as THREE.MeshBasicMaterial).opacity = 0.95 * (1 - k);
-      if (k >= 1) this.dispose();
-    } else {
-      const pulse = 0.55 + 0.1 * Math.sin(nowMs / 300);
-      runeDim.opacity = pulse;
+      // The burst: the constellation flares white, swells and lifts, its pieces spin apart as shards, and all of it fades.
+      const t = (nowMs - this.doneAt) / 1000;
+      const k = Math.min(1, t / (BURST_MS / 1000));
+      this.group.rotation.z += 0.02 + 0.08 * (1 - k);
+      const swell = 1 + 2.2 * Math.sin(k * Math.PI * 0.5);
+      this.group.position.y = this.groundY + TRANSMUTE_HOVER + 0.7 * k;
+      this.segments.forEach((m, i) => {
+        const a = (i / this.segments.length) * Math.PI * 2;
+        m.scale.setScalar(swell);
+        m.position.set(Math.cos(a) * 0.9 * k, Math.sin(a) * 0.9 * k, 0);
+      });
+      for (const sh of this.shards) {
+        // the rune lies flat: its local z is up
+        sh.mesh.position.x += sh.vx * (1 / 60);
+        sh.mesh.position.y += sh.vy * (1 / 60);
+        sh.mesh.position.z += sh.vz * (1 / 60);
+        sh.vz -= 4 * (1 / 60);
+        sh.mesh.rotation.z += sh.spin * (1 / 60);
+      }
+      runeBurst.opacity = k < 0.15 ? 1 : Math.max(0, 1 - (k - 0.15) / 0.85);
+      runeBurst.color.setHex(k < 0.25 ? 0xffffff : 0xffe07a);
+      if (k >= 1) {
+        this.dispose();
+        this.finished = true;
+      }
+      return;
     }
+    // A slow turn while charging.
+    this.group.rotation.z = nowMs / 4000;
+    runeDim.opacity = 0.55 + 0.1 * Math.sin(nowMs / 300);
   }
 }
