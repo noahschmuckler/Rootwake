@@ -27,7 +27,7 @@ export function handsToDrag(mass: number, strength = STRENGTH): number {
 }
 // -------------------------------------------------------------------------------
 
-export type ObjectTypeId = 'seed' | 'stick' | 'log' | 'lichen' | 'rock' | 'hand_axe' | 'log_notched' | 'log_notched_end' | 'log_offset' | 'timber' | 'chip';
+export type ObjectTypeId = 'seed' | 'stick' | 'log' | 'log_short' | 'lichen' | 'rock' | 'hand_axe' | 'log_long_notched' | 'log_notched' | 'timber' | 'chip';
 
 export interface ObjectType {
   id: ObjectTypeId;
@@ -43,6 +43,8 @@ export interface ObjectType {
   restHeight: number;
   /** Vitality restored by eating one (Pass 0.7a). Absent = not food. */
   food?: number;
+  /** For long things: half their length along local X, so hands and ropes aim at the nearer end. */
+  halfLength?: number;
   build: () => THREE.Mesh;
 }
 
@@ -54,6 +56,16 @@ const stickMaterial = new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughnes
 /** Freshly cut wood (notches, split faces, chips): paler than bark. */
 const cutWood = new THREE.MeshStandardMaterial({ color: 0xb8925a, roughness: 0.9, flatShading: true });
 const seedMaterial = new THREE.MeshStandardMaterial({ color: 0xe6d38f, roughness: 0.6 });
+
+/**
+ * The notch grid (structures.ts): notches a bay apart, log ends overhanging the
+ * outer notch. A long log spans two bays (three notches), a short one one bay.
+ */
+export const NOTCH_PITCH = 1.0;
+export const LOG_OVERHANG = 0.15;
+export const LOG_RADIUS = 0.17;
+export const LONG_LOG_LENGTH = NOTCH_PITCH * 2 + LOG_OVERHANG * 2;
+export const SHORT_LOG_LENGTH = NOTCH_PITCH + LOG_OVERHANG * 2;
 
 export const OBJECT_TYPES: Record<ObjectTypeId, ObjectType> = {
   seed: {
@@ -128,56 +140,62 @@ export const OBJECT_TYPES: Record<ObjectTypeId, ObjectType> = {
     restHeight: 0.08,
     build: () => buildLook('hand_axe'),
   },
+  // ---- Logs (Pass 1.0b: Lincoln Logs). A felled tree gives a long log (two bays) and a short one (one bay).
+  // Mass is game mass: long drags with two hands, short with one, timber lifts. ----
   log: {
     id: 'log',
-    label: 'log',
+    halfLength: LONG_LOG_LENGTH / 2,
+    label: 'long log',
     size: 'large',
     mass: 4, // strength 1: cannot lift (4 hands), drags with 2
     color: 0x5a3f2a,
-    radius: 0.62,
+    radius: 1.15,
     blocks: true,
-    restHeight: 0.18,
-    build: () => logMesh(),
+    restHeight: 0.17,
+    build: () => logMesh(LONG_LOG_LENGTH),
   },
-  // ---- Pass 0.9: shaped logs (SYSTEMS.md §5.4). Same mass as the log they were: shaping removes little. ----
+  log_short: {
+    id: 'log_short',
+    halfLength: SHORT_LOG_LENGTH / 2,
+    label: 'short log',
+    size: 'large',
+    mass: 2, // drags with one hand
+    color: 0x5a3f2a,
+    radius: 0.65,
+    blocks: true,
+    restHeight: 0.17,
+    build: () => logMesh(SHORT_LOG_LENGTH),
+  },
+  log_long_notched: {
+    id: 'log_long_notched',
+    halfLength: LONG_LOG_LENGTH / 2,
+    label: 'long notched log',
+    size: 'large',
+    mass: 4,
+    color: 0x5a3f2a,
+    radius: 1.15,
+    blocks: true,
+    restHeight: 0.17,
+    build: () => buildLook('log_long_notched'),
+  },
   log_notched: {
     id: 'log_notched',
+    halfLength: SHORT_LOG_LENGTH / 2,
     label: 'notched log',
     size: 'large',
-    mass: 4,
+    mass: 2,
     color: 0x5a3f2a,
-    radius: 0.62,
+    radius: 0.65,
     blocks: true,
-    restHeight: 0.18,
+    restHeight: 0.17,
     build: () => buildLook('log_notched'),
-  },
-  log_notched_end: {
-    id: 'log_notched_end',
-    label: 'end-notched log',
-    size: 'large',
-    mass: 4,
-    color: 0x5a3f2a,
-    radius: 0.62,
-    blocks: true,
-    restHeight: 0.18,
-    build: () => buildLook('log_notched_end'),
-  },
-  log_offset: {
-    id: 'log_offset',
-    label: 'offset-cut log',
-    size: 'large',
-    mass: 4,
-    color: 0x5a3f2a,
-    radius: 0.62,
-    blocks: true,
-    restHeight: 0.18,
-    build: () => buildLook('log_offset'),
   },
   timber: {
     id: 'timber',
+    halfLength: 0.6,
     label: 'timber',
     size: 'large',
-    mass: 1, // half a log, squared: lifts one-handed
+    mass: 1, // a squared quarter of a log: lifts one-handed. Roof slats and floorboards.
     color: 0xb8925a,
     radius: 0.6,
     blocks: true,
@@ -202,24 +220,31 @@ export const OBJECT_TYPES: Record<ObjectTypeId, ObjectType> = {
 };
 
 /** The plain log body every log look starts from: lies along local X. */
-function logMesh(length = 1.25): THREE.Mesh {
-  const m = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.19, length, 10), wood);
+function logMesh(length: number): THREE.Mesh {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(LOG_RADIUS, LOG_RADIUS + 0.015, length, 10), wood);
   m.rotation.z = Math.PI / 2;
   return m;
 }
 
-/** A notch cut into a log: a pale wedge set into the bark at x, on top (up) or underneath. */
+/** A notch cut into a log: a pale saddle set into the bark at x, on top (up) or underneath — where a cross log sits. */
 function notch(x: number, up: boolean): THREE.Mesh {
-  const n = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 0.4), cutWood);
-  n.position.set(x, up ? 0.13 : -0.13, 0);
+  const n = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.1, 0.42), cutWood);
+  n.position.set(x, up ? 0.14 : -0.14, 0);
   return n;
 }
 
+/** Notches top and bottom at each grid point along a log. */
+function notched(length: number, points: number[]): THREE.Mesh {
+  const parts: THREE.Object3D[] = [logMesh(length)];
+  for (const x of points) parts.push(notch(x, true), notch(x, false));
+  return holder(wood, ...parts);
+}
+
 /** Axe marks: thin pale slashes lying on the top of the bark. */
-function scoreMarks(count: number, parent: THREE.Object3D): void {
+function scoreMarks(count: number, parent: THREE.Object3D, length: number): void {
   for (let i = 0; i < count; i++) {
     const s = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.015, 0.24), cutWood);
-    const t = (i / Math.max(1, count - 1) - 0.5) * 0.9;
+    const t = (i / Math.max(1, count - 1) - 0.5) * (length - 0.4);
     s.position.set(t, 0.165, 0);
     s.rotation.y = 0.35 * Math.sin(i * 1.7);
     parent.add(s);
@@ -253,38 +278,43 @@ export function buildLook(look: string): THREE.Mesh {
     }
     // ---- Pass 0.9: log shaping (all lie along local X like the log) ----
     case 'log_scored': {
-      const h = holder(wood, logMesh());
-      scoreMarks(5, h);
+      const h = holder(wood, logMesh(LONG_LOG_LENGTH));
+      scoreMarks(8, h, LONG_LOG_LENGTH);
       return h;
     }
-    case 'log_split': {
+    case 'log_scored_short': {
+      const h = holder(wood, logMesh(SHORT_LOG_LENGTH));
+      scoreMarks(5, h, SHORT_LOG_LENGTH);
+      return h;
+    }
+    case 'log_split':
+    case 'log_split_short': {
       // Cut most of the way through: a pale split runs the length of the top.
-      const split = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.08, 0.06), cutWood);
+      const length = look === 'log_split' ? LONG_LOG_LENGTH : SHORT_LOG_LENGTH;
+      const split = new THREE.Mesh(new THREE.BoxGeometry(length - 0.1, 0.08, 0.06), cutWood);
       split.position.y = 0.15;
-      const h = holder(wood, logMesh(), split);
-      scoreMarks(3, h);
+      const h = holder(wood, logMesh(length), split);
+      scoreMarks(3, h, length);
       return h;
     }
-    case 'log_notched': {
-      const body = logMesh();
-      return holder(wood, body, notch(0.48, true), notch(-0.48, true), notch(0.48, false), notch(-0.48, false));
+    case 'log_halved': {
+      // A long log cut through the middle: two short logs' worth, still lying end to end.
+      const a = logMesh(SHORT_LOG_LENGTH);
+      a.position.x = -SHORT_LOG_LENGTH / 2 - 0.03;
+      const b = logMesh(SHORT_LOG_LENGTH);
+      b.position.x = SHORT_LOG_LENGTH / 2 + 0.03;
+      const cutA = new THREE.Mesh(new THREE.CircleGeometry(LOG_RADIUS, 10), cutWood);
+      cutA.rotation.y = Math.PI / 2;
+      cutA.position.x = -0.02;
+      const cutB = cutA.clone();
+      cutB.rotation.y = -Math.PI / 2;
+      cutB.position.x = 0.02;
+      return holder(wood, a, b, cutA, cutB);
     }
-    case 'log_notched_end': {
-      const body = logMesh();
-      return holder(wood, body, notch(0.48, true));
-    }
-    case 'log_offset': {
-      // One end stepped: the top half runs on past the bottom half, to lap the next log.
-      const body = logMesh(0.95);
-      body.position.x = -0.15;
-      const tongue = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.18, 0.55, 10), wood);
-      tongue.rotation.z = Math.PI / 2;
-      tongue.scale.set(1, 1, 0.55);
-      tongue.position.set(0.35, 0.08, 0);
-      const face = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.02, 0.3), cutWood);
-      face.position.set(0.35, -0.01, 0);
-      return holder(wood, body, tongue, face);
-    }
+    case 'log_long_notched':
+      return notched(LONG_LOG_LENGTH, [-NOTCH_PITCH, 0, NOTCH_PITCH]);
+    case 'log_notched':
+      return notched(SHORT_LOG_LENGTH, [-NOTCH_PITCH / 2, NOTCH_PITCH / 2]);
     case 'timber': {
       const plank = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.1, 0.24), cutWood);
       return holder(cutWood, plank);
@@ -424,7 +454,9 @@ export class ObjectWorld {
   scatterFelledTree(center: THREE.Vector3, fallDir: THREE.Vector3, groundY: number, seed: number): void {
     const rand = mulberry32(seed);
     const yaw = Math.atan2(fallDir.x, fallDir.z) + Math.PI / 2; // the log mesh lies along its local X
-    this.spawn('log', center.x + fallDir.x * 0.62, groundY, center.z + fallDir.z * 0.62, yaw);
+    // Designer (1.0b): a trunk gives a long log and a short one — the long lies where it fell, the short beyond it.
+    this.spawn('log', center.x + fallDir.x * (LONG_LOG_LENGTH / 2 + 0.1), groundY, center.z + fallDir.z * (LONG_LOG_LENGTH / 2 + 0.1), yaw);
+    this.spawn('log_short', center.x + fallDir.x * (LONG_LOG_LENGTH + SHORT_LOG_LENGTH / 2 + 0.25), groundY, center.z + fallDir.z * (LONG_LOG_LENGTH + SHORT_LOG_LENGTH / 2 + 0.25), yaw + (rand() - 0.5) * 0.4);
     for (let i = 0; i < 3; i++) {
       const a = rand() * Math.PI * 2;
       const r = 0.45 + rand() * 0.55;

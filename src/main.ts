@@ -138,7 +138,7 @@ hands.onRelease = (obj) => {
   hint.textContent = structures.lastSays;
   tooFarUntil = animClock + 3000;
 };
-// Sticks released over a bed frame are laid across it; seeds over a tilled patch plant it (0.6c).
+// Sticks released over a cabin's floor make its bed; seeds over a tilled patch plant it (0.6c).
 const placeSeeds = hands.placeOnTarget;
 hands.placeOnTarget = (x, y, type, count) => {
   if (type.id === 'stick') {
@@ -150,12 +150,12 @@ hands.placeOnTarget = (x, y, type, count) => {
       hands.notice = 'Out of reach.';
       return 0;
     }
-    const used = structures.addFill(s, 'stick', count);
+    const used = structures.addSticks(s, count);
     if (used === 0) {
-      hands.notice = s.kind === 'bed' ? 'The bed is made.' : 'It takes no more.';
+      hands.notice = s.bed ? 'The bed is made.' : s.floored ? 'It takes no more.' : 'Lay a floor first.';
       return 0;
     }
-    hint.textContent = s.kind === 'bed' ? 'A bed. Hold still on the look side beside it to sleep.' : `Sticks laid across the frame.`;
+    hint.textContent = structures.lastSays;
     tooFarUntil = animClock + 3000;
     return used;
   }
@@ -251,7 +251,9 @@ function startCraft(target: WorldObject, recipe: Recipe): void {
     const session = it as CraftSession;
     const type = OBJECT_TYPES[session.result as keyof typeof OBJECT_TYPES];
     const count = session.recipe.resultCount ?? 1;
-    // Each result lands in a free hand if one hand can take it; otherwise it lies where the target lay.
+    // Each result lands in a free hand if one hand can take it; otherwise it lies where the target lay:
+    // halves end to end along the log, timbers in a bundle beside each other.
+    const along = new THREE.Vector3(Math.cos(session.restYaw), 0, -Math.sin(session.restYaw));
     const perp = new THREE.Vector3(Math.sin(session.restYaw), 0, Math.cos(session.restYaw));
     for (let i = 0; i < count; i++) {
       const free = hands.freeHand();
@@ -259,8 +261,9 @@ function startCraft(target: WorldObject, recipe: Recipe): void {
         hands.give(free, type);
         continue;
       }
-      const off = (i - (count - 1) / 2) * 0.5;
-      const at = session.restPosition.clone().addScaledVector(perp, off);
+      const at = session.restPosition.clone();
+      if (type.halfLength && type.halfLength > 0.6) at.addScaledVector(along, (i - (count - 1) / 2) * (type.halfLength * 2 + 0.1));
+      else at.addScaledVector(along, (i % 2) * 1.3 - 0.65 * Math.min(1, count - 1)).addScaledVector(perp, (Math.floor(i / 2) - (Math.ceil(count / 2) - 1) / 2) * 0.32);
       objects.spawn(type.id, at.x, GROUND_Y, at.z, session.restYaw);
     }
     hint.textContent = count > 1 ? `${count} ${type.label}.` : `A ${type.label}.`;
@@ -290,12 +293,10 @@ player.onRestHold = () => {
 vitality.onEvent = (what) => {
   const rested = restQuality.bed
     ? restQuality.shelter >= 1
-      ? 'You sleep in your bed under your roof, and wake whole.'
-      : restQuality.shelter > 0
-        ? 'You sleep in your bed under a patchy roof, and wake rested.'
-        : 'You sleep in your bed, and wake rested.'
+      ? 'You sleep in your bed, in your cabin, and wake whole.'
+      : 'You sleep in your bed under a patchy roof, and wake rested.'
     : restQuality.shelter > 0
-      ? 'You rest under the roof.'
+      ? 'You rest on the cabin floor.'
       : 'You rest.';
   const text = { collapse: 'You collapse.', wake: 'You wake, still tired.', rest: rested, ate: '' }[what];
   if (text) {
@@ -731,7 +732,7 @@ function animate(now: number): void {
   lastFrame = now;
 
   if (cameraRig.mode === 'free') {
-    const colliders = voxels.flatMap((v) => v.collider() ?? []);
+    const colliders = [...voxels.flatMap((v) => v.collider() ?? []), ...structures.colliders()];
     player.update(now, colliders, world.isWalkable);
     player.applyCamera(camera);
     const k = edgeCloseness();
@@ -747,7 +748,7 @@ function animate(now: number): void {
   const roofed = structures.shelterAt(player.position.x, player.position.z) > 0;
   rainSheet.style.opacity = (roofed ? 0 : weather.rain * RAIN_SHEET_OPACITY).toFixed(3);
   if (weather.rain > 0.3 && roofed !== wasRoofed && animClock > tooFarUntil) {
-    hint.textContent = roofed ? 'Under the roof. The rain falls outside.' : 'Out in the rain again.';
+    hint.textContent = roofed ? 'Under your roof. The rain falls outside.' : 'Out in the rain again.';
     tooFarUntil = animClock + 2600;
   }
   wasRoofed = roofed;

@@ -44,6 +44,25 @@ export interface CircleCollider {
   z: number;
   radius: number;
 }
+/** Pass 1.0b: a wall log — a thick segment on the ground plane. */
+export interface SegmentCollider {
+  x1: number;
+  z1: number;
+  x2: number;
+  z2: number;
+  radius: number;
+}
+export type Collider = CircleCollider | SegmentCollider;
+
+/** Nearest point on a collider's core (centre, or segment) to p, and the collider's radius. */
+function nearestOnCollider(c: Collider, px: number, pz: number): { x: number; z: number } {
+  if (!('x1' in c)) return { x: c.x, z: c.z };
+  const dx = c.x2 - c.x1;
+  const dz = c.z2 - c.z1;
+  const len2 = dx * dx + dz * dz;
+  const t = len2 < 1e-9 ? 0 : Math.max(0, Math.min(1, ((px - c.x1) * dx + (pz - c.z1) * dz) / len2));
+  return { x: c.x1 + dx * t, z: c.z1 + dz * t };
+}
 
 interface TrackedPointer {
   /** 'press' (Pass 0.8): went down on a world object; a still hold is a long-press, a drag becomes a look. */
@@ -89,7 +108,7 @@ export class Player {
   onLongPress: (clientX: number, clientY: number) => void = () => {};
 
   private readonly pointers = new Map<number, TrackedPointer>();
-  private colliders: readonly CircleCollider[] = [];
+  private colliders: readonly Collider[] = [];
   private isWalkable: ((p: THREE.Vector3) => boolean) | undefined;
 
   // Waypoint fan.
@@ -161,7 +180,7 @@ export class Player {
    * fan is filtered by the same rules the move itself obeys. Pass 0.5:
    * `isWalkable` is how the cliff edge refuses a step — no fall state.
    */
-  update(nowMs: number, colliders: readonly CircleCollider[], isWalkable?: (p: THREE.Vector3) => boolean): void {
+  update(nowMs: number, colliders: readonly Collider[], isWalkable?: (p: THREE.Vector3) => boolean): void {
     this.colliders = colliders;
     this.isWalkable = isWalkable;
 
@@ -174,15 +193,16 @@ export class Player {
       // Something may have grown around us (Pass 0.6c: a sapling becoming a
       // tree). Step out to the collider's edge rather than being stuck inside.
       for (const c of colliders) {
-        const dx = this.position.x - c.x;
-        const dz = this.position.z - c.z;
+        const n = nearestOnCollider(c, this.position.x, this.position.z);
+        const dx = this.position.x - n.x;
+        const dz = this.position.z - n.z;
         const d = Math.hypot(dx, dz);
         const min = c.radius + PLAYER_RADIUS;
         if (d < min) {
           const nx = d > 1e-4 ? dx / d : 1;
           const nz = d > 1e-4 ? dz / d : 0;
-          this.position.x = c.x + nx * min;
-          this.position.z = c.z + nz * min;
+          this.position.x = n.x + nx * min;
+          this.position.z = n.z + nz * min;
         }
       }
     }
@@ -195,7 +215,8 @@ export class Player {
 
   private isFree(p: THREE.Vector3): boolean {
     for (const c of this.colliders) {
-      if (Math.hypot(p.x - c.x, p.z - c.z) < c.radius + PLAYER_RADIUS) return false;
+      const n = nearestOnCollider(c, p.x, p.z);
+      if (Math.hypot(p.x - n.x, p.z - n.z) < c.radius + PLAYER_RADIUS) return false;
     }
     if (this.isWalkable && !this.isWalkable(p)) return false;
     return true;

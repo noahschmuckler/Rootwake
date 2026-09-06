@@ -517,8 +517,8 @@ export class Hands {
 
   /** For a long object, the end nearer the player; otherwise its centre. */
   private nearestPointOn(obj: WorldObject): THREE.Vector3 {
-    if (obj.type.id !== 'log') return obj.position.clone();
-    const half = 0.55;
+    if (!obj.type.halfLength) return obj.position.clone();
+    const half = obj.type.halfLength - 0.1;
     const yaw = obj.group.rotation.y;
     const along = new THREE.Vector3(Math.cos(yaw), 0, -Math.sin(yaw)).multiplyScalar(half);
     const a = obj.position.clone().add(along);
