@@ -32,6 +32,10 @@
       #tools button b { font-size: 20px; line-height: 1; }
       #tools button.active { border-color: #dff5c8; box-shadow: 0 0 12px rgba(190, 255, 170, 0.6); }
       #tools button[hidden] { display: none; }
+      /* While locked on a board the tools lie side by side along the bottom edge, under the last gem row. */
+      #tools.locked { flex-direction: row; right: auto; left: 50%; bottom: 8px; transform: translateX(-50%); gap: 12px; }
+      #tools.locked button { width: 88px; height: 46px; flex-direction: row; gap: 6px; }
+      #tools.locked button b { font-size: 18px; }
       #menu {
         position: fixed; z-index: 11; display: flex; flex-direction: column; gap: 6px; width: 220px;
         background: rgba(20, 28, 20, 0.92); border: 1px solid #3a4a3a; border-radius: 8px; padding: 8px;

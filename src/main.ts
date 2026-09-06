@@ -872,6 +872,7 @@ function updateHud(): void {
   const zoomable = lockedNow || (cameraRig.mode === 'free' && player.view === 'third');
   zoomInButton.hidden = !zoomable;
   zoomOutButton.hidden = !zoomable;
+  document.getElementById('tools')!.classList.toggle('locked', lockedNow); // side by side along the bottom, off the gems
   walkButton.hidden = cameraRig.mode !== 'free';
   viewButton.hidden = cameraRig.mode !== 'free';
 }
