@@ -60,7 +60,9 @@ movement, and *what you can see*.
   tired. **Each collapse without eating in between restores less.** You are
   never dead. At the extreme you can only look around, move once, and
   collapse again — the game keeps you alive and makes the need for food
-  unmistakable.
+  unmistakable. As built (1.0 fix): "move once" is guaranteed — waking never
+  leaves you below WAKE_MIN (0.14), about eleven hops above the floor,
+  whatever the diminishing factor says.
 
 ### 1.3 What it does
 

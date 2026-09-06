@@ -534,6 +534,17 @@ phone: does the first rain make you want the wall you built to have a roof
 code: shower timing against the four-minute day, the drain rate, lightning
 odds, and "under a roof" as a footprint test rather than an up-ray.
 
+Designer notes after the first 1.0 playtest: rain and fatigue together
+were "a bit too aggressive" — an unbreakable collapse→wake loop with no
+seeds in reach, "essentially dead". Two rules follow. Waking (from collapse
+or rest) never leaves you below WAKE_MIN (0.14): you can always move at
+least once more, however many times you have gone down unfed. Rain now only
+doubles the idle drain (0.0015/s; a shower costs ~0.05–0.08) and showers
+are shorter. And rain must be legible even exhausted at night: a
+screen-space rain sheet (`#rain`) sits over the canvas, outside its
+saturation filter and exposure, on top of brighter 3D streaks, and the HUD
+says "rain" while it falls.
+
 Designer note after 0.9: a dragged log now leads with the end nearer the
 player (it used to turn a fixed end toward the pull, which put end-notched
 logs the wrong way round). More log positioning may be needed once other
