@@ -43,6 +43,14 @@ export const GROUND_REST: RestQuality = { bed: false, shelter: 0 };
 /** Collapse: the floor, the wake level, and how each collapse/rest without food shrinks it. */
 export const COLLAPSE_FLOOR = 0.05;
 export const WAKE_LEVEL = 0.35;
+/**
+ * Waking (from collapse or rest) never leaves you below this, however many
+ * times you have gone down without eating. Designer, after 1.0: the diminishing
+ * wake-ups plus rain made an unbreakable collapse→wake loop with no seeds in
+ * reach — "essentially dead". You must always wake able to move at least once
+ * more: 0.09 above the floor is ~11 hops or a minute standing still.
+ */
+export const WAKE_MIN = 0.14;
 export const DIMINISH = 0.6;
 export const BLACKOUT_MS = 1400;
 /** Bands, as fractions of VITALITY_MAX. */
@@ -151,13 +159,13 @@ export class Vitality {
           const factor = Math.pow(DIMINISH, this.sinceEating);
           this.sinceEating++;
           if (this.phase.to === 'collapse') {
-            this.value = Math.max(this.value, WAKE_LEVEL * factor * VITALITY_MAX);
+            this.value = Math.max(this.value, Math.max(WAKE_MIN, WAKE_LEVEL * factor) * VITALITY_MAX);
           } else {
             const q = this.phase.quality;
             const rest = REST[q.bed ? 'bed' : 'ground'];
             const ceiling = Math.min(1, rest.ceiling + ROOF_CEILING_BONUS * q.shelter) * VITALITY_MAX;
             this.value = Math.min(Math.max(this.value, ceiling), this.value + rest.restore * (1 + ROOF_RESTORE_BONUS * q.shelter) * factor);
-            this.value = Math.max(this.value, COLLAPSE_FLOOR * VITALITY_MAX + 0.02);
+            this.value = Math.max(this.value, WAKE_MIN * VITALITY_MAX);
           }
           const was = this.phase.to;
           this.phase = { kind: 'waking', startMs: nowMs };

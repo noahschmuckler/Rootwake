@@ -15,14 +15,18 @@ import { mulberry32 } from './colors';
 /** Dry spell before a shower, and shower length (ms of animation time). */
 export const DRY_MIN_MS = 70_000;
 export const DRY_MAX_MS = 150_000;
-export const RAIN_MIN_MS = 35_000;
-export const RAIN_MAX_MS = 70_000;
+export const RAIN_MIN_MS = 30_000;
+export const RAIN_MAX_MS = 55_000;
 /** The first shower comes sooner than a dry spell: the phone session should meet rain. */
 export const FIRST_DRY_MS = 55_000;
 /** Ramp in/out of a shower. */
 export const RAIN_RAMP_MS = 8_000;
-/** Vitality per second out in full rain (SYSTEMS §1.1). A full shower costs ~0.15–0.3. */
-export const DRAIN_RAIN_PER_SECOND = 0.004;
+/**
+ * Vitality per second out in full rain (SYSTEMS §1.1): doubles the idle drain,
+ * so a full shower costs ~0.05–0.08. Designer, after 1.0: 0.004 was "a bit too
+ * aggressive" and, with the diminishing wake-ups, stranded them.
+ */
+export const DRAIN_RAIN_PER_SECOND = 0.0015;
 /** Lightning: mean interval at full rain, how often a strike is close, what it saps you to. */
 export const LIGHTNING_MEAN_MS = 16_000;
 export const LIGHTNING_NEAR_CHANCE = 0.3;
@@ -34,12 +38,14 @@ export const OVERCAST_SUN = 0.35;
 export const OVERCAST_HEMI = 0.75;
 export const OVERCAST_FOG = 1.8;
 /** Rain field: streak count, box around the camera, fall speed, streak length. */
-export const RAIN_STREAKS = 900;
+export const RAIN_STREAKS = 1400;
 export const RAIN_BOX = 14;
 export const RAIN_HEIGHT = 9;
 export const RAIN_SPEED = 9;
-export const RAIN_STREAK = 0.32;
+export const RAIN_STREAK = 0.45;
 export const RAIN_WIND = 0.12;
+/** Streak opacity at full rain. The DOM sheet (#rain) carries the read at night; these give depth. */
+export const RAIN_STREAK_OPACITY = 0.6;
 // -------------------------------------------------------------------------------
 
 type Phase = { kind: 'dry'; until: number } | { kind: 'rain'; until: number };
@@ -80,7 +86,7 @@ export class Weather {
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
-    this.material = new THREE.LineBasicMaterial({ color: 0xc4cedb, transparent: true, opacity: 0, depthWrite: false });
+    this.material = new THREE.LineBasicMaterial({ color: 0xdde6f2, transparent: true, opacity: 0, depthWrite: false, fog: false });
     this.lines = new THREE.LineSegments(geo, this.material);
     this.lines.frustumCulled = false;
     this.lines.visible = false;
@@ -131,7 +137,7 @@ export class Weather {
 
     // The rain field: fall, wrap around the camera, fade with intensity.
     this.lines.visible = this.rain > 0.005;
-    this.material.opacity = 0.42 * this.rain;
+    this.material.opacity = RAIN_STREAK_OPACITY * this.rain;
     if (this.lines.visible) {
       const p = this.positions;
       const fall = RAIN_SPEED * dt;

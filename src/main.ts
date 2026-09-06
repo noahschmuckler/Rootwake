@@ -462,10 +462,14 @@ const sky = new Sky(scene);
 
 // ---- Weather (Pass 1.0) -----------------------------------------------------------
 const weather = new Weather(scene, seed, 0, forceRain);
+const rainSheet = document.getElementById('rain')!;
+/** The screen rain sheet at full shower. Designer, after 1.0: rain must read even tired at night. */
+const RAIN_SHEET_OPACITY = 0.55;
 weather.onRain = (raining) => {
   const sheltered = structures.shelterAt(player.position.x, player.position.z) > 0;
   hint.textContent = raining ? (sheltered ? 'Rain on the roof.' : 'Rain. It wears at you out here.') : 'The rain passes.';
   tooFarUntil = animClock + 3200;
+  updateHud();
 };
 weather.onLightning = (near) => {
   shakeUntil = animClock + SHAKE_MS; // the crack
@@ -623,6 +627,7 @@ function updateHud(): void {
   const planted = patches.filter((p) => p.status === 'planted').length;
   const parts = [`seed ${seed}`, `cleared ${resolved}/${voxels.length}`, `tilled ${tilled}/${patches.length}`];
   if (planted) parts.push(`planted ${planted}`);
+  if (weather.raining) parts.push('rain');
   if (slowmo > 1) parts.push(`slowmo ×${slowmo}`);
   if (debug) parts.push(`vit ${vitality.value.toFixed(2)} ${vitality.band}`, `time ${dayCycle.time.toFixed(2)} day ${dayCycle.day.toFixed(2)}`, `rain ${weather.rain.toFixed(2)} roof ${structures.shelterAt(player.position.x, player.position.z).toFixed(2)}`);
   if (locked && cameraRig.mode === 'locked' && locked.status === 'growing') {
@@ -737,6 +742,7 @@ function animate(now: number): void {
   applyVitality();
   dayCycle.advance((dt * 1000) / slowmo);
   weather.update(animClock, camera.position);
+  rainSheet.style.opacity = (weather.rain * RAIN_SHEET_OPACITY).toFixed(3);
   if (debug && animClock - lastDebugHud > 500) {
     lastDebugHud = animClock;
     updateHud(); // the debug readouts (vitality, time, rain, roof) move on their own
