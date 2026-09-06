@@ -6,6 +6,13 @@
 // it) plus the small amount of geometry to snap and to lay the fill. This is
 // DiggyDwarves' structure model reduced to its rows; none of its UI.
 //
+// Pass 1.0: the bed frame is also the first shelter's foundation. A notched
+// log let go by the frame stacks onto its side log (a wall, one per side);
+// with both walls up, timber let go by it lays across the top — a roof over
+// the bed, ROOF_TIMBERS wide. Shelter quality is how much of the roof is
+// there. So every fitting is a *slot* a structure offers for a piece type,
+// and a released piece takes the nearest slot within SNAP_REACH.
+//
 // Pieces in a structure stop being collectible: the hands ignore them, tilling
 // stays blocked under them. Open question (flagged): taking a structure apart
 // again is not built — a bed is permanent for now.
@@ -20,7 +27,26 @@ export const SNAP_REACH = 0.9;
 export const BED_STICKS = 5;
 /** Standing within this of a bed's centre, the rest gesture is a night in bed. */
 export const BED_REST_REACH = 1.3;
+/** Pass 1.0: timbers a roof takes to be whole; how high a stacked wall log sits; the roof's height above ground. */
+export const ROOF_TIMBERS = 4;
+export const WALL_COURSE_HEIGHT = 0.34; // a log's diameter: the next log rests on the one below
+export const ROOF_HEIGHT = 0.18 + WALL_COURSE_HEIGHT + 0.17; // ground → top of the wall log, where timber rests
+/** "Under the roof" is the frame's footprint plus this margin (SYSTEMS §4 working definition, simplified from an up-ray). */
+export const SHELTER_MARGIN = 0.35;
 // -------------------------------------------------------------------------------
+
+/** A place a structure offers a piece: where it will rest, and what taking it means. */
+export interface Slot {
+  type: ObjectTypeId;
+  x: number;
+  z: number;
+  /** Ground level the piece rests on (its own restHeight is added). */
+  groundY: number;
+  yaw: number;
+  take: (piece: WorldObject) => void;
+  /** Hint after it snaps. */
+  says: string;
+}
 
 export type StructureKind = 'bed_frame' | 'bed';
 
@@ -54,6 +80,9 @@ export class Structure {
   readonly group = new THREE.Group();
   readonly center: THREE.Vector3;
   readonly yaw: number;
+  /** Pass 1.0: a wall log stacked on each side log, and the timbers laid across them. */
+  readonly walls: (WorldObject | null)[] = [null, null];
+  readonly roof: WorldObject[] = [];
 
   constructor(kind: StructureKind, pieces: WorldObject[], yaw: number) {
     this.kind = kind;
@@ -72,6 +101,61 @@ export class Structure {
   get fill(): Fill | null {
     return FILLS.find((f) => f.structure === this.kind) ?? null;
   }
+
+  /** Roof over it, 0..1. */
+  get shelter(): number {
+    return this.walls.every(Boolean) ? this.roof.length / ROOF_TIMBERS : 0;
+  }
+
+  /** Is a ground point under this structure's roof (footprint plus margin)? */
+  covers(x: number, z: number): boolean {
+    if (this.shelter <= 0) return false;
+    const dx = x - this.center.x;
+    const dz = z - this.center.z;
+    const along = dx * Math.cos(this.yaw) - dz * Math.sin(this.yaw);
+    const across = dx * Math.sin(this.yaw) + dz * Math.cos(this.yaw);
+    return Math.abs(along) <= 0.62 + SHELTER_MARGIN && Math.abs(across) <= 0.45 + SHELTER_MARGIN;
+  }
+
+  /** The slots this structure offers right now. */
+  slots(groundY: number): Slot[] {
+    const out: Slot[] = [];
+    const along = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
+    // Walls: a notched log on top of each side log.
+    this.walls.forEach((w, i) => {
+      if (w) return;
+      const base = this.pieces[i];
+      out.push({
+        type: 'log_notched',
+        x: base.position.x,
+        z: base.position.z,
+        groundY: groundY + WALL_COURSE_HEIGHT,
+        yaw: this.yaw,
+        take: (piece) => {
+          this.walls[i] = piece;
+        },
+        says: this.walls.some(Boolean) ? 'The second wall log. Now timber across the top.' : 'A wall log, stacked on the frame. Another on the other side.',
+      });
+    });
+    // Roof: with both walls up, timber lies across them, spread along the frame.
+    if (this.walls.every(Boolean) && this.roof.length < ROOF_TIMBERS) {
+      const k = this.roof.length;
+      const t = -0.45 + (0.9 * k) / (ROOF_TIMBERS - 1);
+      const at = this.center.clone().addScaledVector(along, t);
+      out.push({
+        type: 'timber',
+        x: at.x,
+        z: at.z,
+        groundY: groundY + ROOF_HEIGHT,
+        yaw: this.yaw + Math.PI / 2,
+        take: (piece) => {
+          this.roof.push(piece);
+        },
+        says: k + 1 >= ROOF_TIMBERS ? 'The roof is whole.' : `Timber across the walls: a roof, ${k + 1} of ${ROOF_TIMBERS}.`,
+      });
+    }
+    return out;
+  }
 }
 
 export class Structures {
@@ -82,12 +166,33 @@ export class Structures {
     scene.add(this.group);
   }
 
+  /** What the last snap said (a hint for main). */
+  lastSays = '';
+
   /**
-   * A piece was let go: if a fitting says it belongs beside a matching piece
-   * within SNAP_REACH of a slot, move it into the slot and make the structure.
+   * A piece was let go: the nearest slot within SNAP_REACH takes it — a slot
+   * on an existing structure (wall, roof), or a fitting beside a loose piece
+   * that makes a new one. Returns the structure it joined, or null.
    */
   trySnap(piece: WorldObject, objects: ObjectWorld): Structure | null {
     if (!piece.collectible) return null;
+    // Slots on standing structures first: nearest wins.
+    let best: { slot: Slot; s: Structure; d: number } | null = null;
+    for (const s of this.list) {
+      for (const slot of s.slots(this.groundY)) {
+        if (slot.type !== piece.type.id) continue;
+        const d = Math.hypot(piece.position.x - slot.x, piece.position.z - slot.z);
+        if (d <= SNAP_REACH && (!best || d < best.d)) best = { slot, s, d };
+      }
+    }
+    if (best) {
+      piece.rest(best.slot.x, best.slot.groundY, best.slot.z, best.slot.yaw);
+      piece.collectible = false;
+      piece.mesh.traverse((m) => (m.userData.structure = best!.s));
+      best.slot.take(piece);
+      this.lastSays = best.slot.says;
+      return best.s;
+    }
     for (const fit of FITTINGS) {
       if (piece.type.id !== fit.piece) continue;
       const candidates = objects.objects.filter((o) => o !== piece && o.collectible && o.type.id === fit.onto);
@@ -102,6 +207,7 @@ export class Structures {
           const s = new Structure(fit.yields, [onto, piece], yaw);
           this.group.add(s.group);
           this.list.push(s);
+          this.lastSays = 'The notched logs fit together: a bed frame. Lay sticks across it.';
           return s;
         }
       }
@@ -144,9 +250,18 @@ export class Structures {
     const out: THREE.Object3D[] = [];
     for (const s of this.list) {
       for (const p of s.pieces) out.push(p.mesh);
+      for (const w of s.walls) if (w) out.push(w.mesh);
+      for (const r of s.roof) out.push(r.mesh);
       out.push(s.group);
     }
     return out;
+  }
+
+  /** Roof over a ground point, 0 (open sky) .. 1 (a whole roof). */
+  shelterAt(x: number, z: number): number {
+    let best = 0;
+    for (const s of this.list) if (s.covers(x, z)) best = Math.max(best, s.shelter);
+    return best;
   }
 
   /** A finished bed within BED_REST_REACH of a ground point, or null. */

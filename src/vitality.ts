@@ -26,13 +26,20 @@ export const EAT_INTERVAL_MS = 260; // one seed per this while the box is held
  * and restores more. Open question (SYSTEMS §6): ceiling vs slower drain — this
  * picks the ceiling, as ROADMAP 0.9 asks.
  */
-export type RestQuality = 'ground' | 'bed';
-export const REST: Record<RestQuality, { restore: number; ceiling: number }> = {
+export interface RestQuality {
+  bed: boolean;
+  /** Pass 1.0: roof over you, 0 (none) .. 1 (whole). Raises the ceiling and the restore on top of the bed's. */
+  shelter: number;
+}
+export const REST: Record<'ground' | 'bed', { restore: number; ceiling: number }> = {
   ground: { restore: 0.35, ceiling: 0.7 },
   bed: { restore: 0.5, ceiling: 0.9 },
 };
+export const ROOF_CEILING_BONUS = 0.1; // a whole roof over a bed reaches 1.0
+export const ROOF_RESTORE_BONUS = 0.4; // ×(1 + this × shelter)
 export const REST_RESTORE = REST.ground.restore;
 export const REST_CEILING_OUTDOORS = REST.ground.ceiling;
+export const GROUND_REST: RestQuality = { bed: false, shelter: 0 };
 /** Collapse: the floor, the wake level, and how each collapse/rest without food shrinks it. */
 export const COLLAPSE_FLOOR = 0.05;
 export const WAKE_LEVEL = 0.35;
@@ -109,6 +116,12 @@ export class Vitality {
     this.value = Math.max(0, this.value - amount);
   }
 
+  /** Pass 1.0: a near lightning strike. Drops you to `to` at once (never raises). */
+  sap(to: number): void {
+    if (this.phase.kind !== 'awake') return;
+    this.value = Math.min(this.value, to * VITALITY_MAX);
+  }
+
   /** Eat one unit of food worth `amount`. Resets the diminishing counter. */
   eat(amount: number): void {
     this.value = Math.min(VITALITY_MAX, this.value + amount);
@@ -117,7 +130,7 @@ export class Vitality {
   }
 
   /** Lie down where you are — on the ground, or in a bed (Pass 0.9). */
-  rest(nowMs: number, quality: RestQuality = 'ground'): void {
+  rest(nowMs: number, quality: RestQuality = GROUND_REST): void {
     if (this.phase.kind !== 'awake') return;
     this.phase = { kind: 'fading', to: 'rest', quality, startMs: nowMs };
   }
@@ -129,7 +142,7 @@ export class Vitality {
       case 'awake':
         this.value = Math.max(0, this.value - DRAIN_PER_SECOND * dt);
         if (this.value <= COLLAPSE_FLOOR * VITALITY_MAX) {
-          this.phase = { kind: 'fading', to: 'collapse', quality: 'ground', startMs: nowMs };
+          this.phase = { kind: 'fading', to: 'collapse', quality: GROUND_REST, startMs: nowMs };
           this.onEvent('collapse');
         }
         break;
@@ -140,9 +153,10 @@ export class Vitality {
           if (this.phase.to === 'collapse') {
             this.value = Math.max(this.value, WAKE_LEVEL * factor * VITALITY_MAX);
           } else {
-            const rest = REST[this.phase.quality];
-            const ceiling = rest.ceiling * VITALITY_MAX;
-            this.value = Math.min(Math.max(this.value, ceiling), this.value + rest.restore * factor);
+            const q = this.phase.quality;
+            const rest = REST[q.bed ? 'bed' : 'ground'];
+            const ceiling = Math.min(1, rest.ceiling + ROOF_CEILING_BONUS * q.shelter) * VITALITY_MAX;
+            this.value = Math.min(Math.max(this.value, ceiling), this.value + rest.restore * (1 + ROOF_RESTORE_BONUS * q.shelter) * factor);
             this.value = Math.max(this.value, COLLAPSE_FLOOR * VITALITY_MAX + 0.02);
           }
           const was = this.phase.to;

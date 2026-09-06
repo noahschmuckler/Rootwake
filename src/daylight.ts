@@ -27,6 +27,13 @@ export const NIGHT_EXPOSURE_TIRED = 0.3;
 export const NIGHT_SATURATION_FED = 0.45;
 /** Glow (tired-night vision) above this makes hidden things collectible. */
 export const GLOW_VISIBLE = 0.5;
+/** Pass 1.0: overcast (full rain) keeps this fraction of sun / hemisphere, thickens fog by this factor, greys toward this haze. */
+export const OVERCAST_SUN_KEEP = 0.35;
+export const OVERCAST_HEMI_KEEP = 0.72;
+export const OVERCAST_FOG_THICKEN = 1.8;
+export const OVERCAST_HAZE = 0x6f7680;
+/** Lightning: extra hemisphere light at full flash. */
+export const FLASH_HEMI = 2.5;
 // -------------------------------------------------------------------------------
 
 export interface DaylightRig {
@@ -51,10 +58,15 @@ export class DayCycle {
   private readonly skyNight = new THREE.Color(NIGHT_SKY_TINT);
   private readonly hemiVision = new THREE.Color(NIGHT_VISION_HEMI_COLOR);
 
+  private readonly baseFogDensity: number;
+  private readonly overcastHaze = new THREE.Color(OVERCAST_HAZE);
+  private readonly white = new THREE.Color(0xffffff);
+
   constructor(private readonly rig: DaylightRig, startTime = START_TIME) {
     this.time = startTime;
     this.dayHaze.setHex(rig.dayHaze);
     this.hemiDay.setHex(rig.dayHemiSky);
+    this.baseFogDensity = rig.fog.density;
   }
 
   /** Sun height, -1 (midnight) .. 1 (noon). */
@@ -77,20 +89,26 @@ export class DayCycle {
     this.time = (this.time + dtMs / DAY_LENGTH_MS) % 1;
   }
 
-  /** Paint the sky, sun and fog for the current time, lit for eyes with this much night vision (0..1). */
-  apply(nightVision = 0): void {
+  /**
+   * Paint the sky, sun and fog for the current time, lit for eyes with this
+   * much night vision (0..1). Pass 1.0: `overcast` (0..1, from the weather)
+   * dims the sun and hemisphere, greys the haze and thickens the fog;
+   * `flash` (0..1) is lightning: everything goes white for a frame or two.
+   */
+  apply(nightVision = 0, overcast = 0, flash = 0): void {
     const day = this.day;
     const night = 1 - day;
     const r = this.rig;
     r.sun.position.copy(this.sunDirection).multiplyScalar(40);
-    r.sun.intensity = 1.6 * day;
-    r.moon.intensity = NIGHT_VISION_MOON * night * nightVision;
-    r.hemi.intensity = THREE.MathUtils.lerp(0.18, 1.1, day) + NIGHT_VISION_HEMI * night * nightVision;
-    r.hemi.color.copy(this.scratch.copy(this.hemiNight).lerp(this.hemiVision, night * nightVision).lerp(this.hemiDay, day));
-    this.scratch.copy(this.nightHaze).lerp(this.dayHaze, day);
+    r.sun.intensity = 1.6 * day * (1 - overcast * (1 - OVERCAST_SUN_KEEP));
+    r.moon.intensity = NIGHT_VISION_MOON * night * nightVision * (1 - 0.7 * overcast);
+    r.hemi.intensity = (THREE.MathUtils.lerp(0.18, 1.1, day) + NIGHT_VISION_HEMI * night * nightVision) * (1 - overcast * (1 - OVERCAST_HEMI_KEEP)) + FLASH_HEMI * flash;
+    r.hemi.color.copy(this.scratch.copy(this.hemiNight).lerp(this.hemiVision, night * nightVision).lerp(this.hemiDay, day)).lerp(this.white, flash);
+    this.scratch.copy(this.nightHaze).lerp(this.dayHaze, day).lerp(this.overcastHaze, overcast * 0.7 * (0.35 + 0.65 * day)).lerp(this.white, flash * 0.8);
     r.fog.color.copy(this.scratch);
     r.background.copy(this.scratch);
-    r.skyMaterial.color.copy(this.scratch.copy(this.skyNight).lerp(new THREE.Color(0xffffff), day));
+    r.fog.density = this.baseFogDensity * (1 + overcast * (OVERCAST_FOG_THICKEN - 1));
+    r.skyMaterial.color.copy(this.scratch.copy(this.skyNight).lerp(this.white, day)).lerp(this.overcastHaze, overcast * 0.6 * day).lerp(this.white, flash);
   }
 
   /**

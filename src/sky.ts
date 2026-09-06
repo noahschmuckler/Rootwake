@@ -132,7 +132,8 @@ export class Sky {
    * @param day    1 full day .. 0 full night
    * @param dtSec  frame time for cloud drift
    */
-  update(cameraPosition: THREE.Vector3, sunDir: THREE.Vector3, day: number, timeOfDay: number, dtSec: number): void {
+  update(cameraPosition: THREE.Vector3, sunDir: THREE.Vector3, day: number, timeOfDay: number, dtSec: number, overcast = 0): void {
+    const clear = 1 - overcast; // Pass 1.0: a shower hides the sun, moon and stars behind swollen, darker clouds
     this.group.position.copy(cameraPosition);
 
     this.sun.position.copy(sunDir).multiplyScalar(SKY_RADIUS * 0.96);
@@ -143,24 +144,26 @@ export class Sky {
     (this.sun.material as THREE.SpriteMaterial).color.copy(this.sunColor);
     (this.sunGlow.material as THREE.SpriteMaterial).color.copy(this.sunColor);
     const above = THREE.MathUtils.smoothstep(sunDir.y, -0.08, 0.02);
-    (this.sun.material as THREE.SpriteMaterial).opacity = above;
-    (this.sunGlow.material as THREE.SpriteMaterial).opacity = above * (0.3 + 0.5 * (1 - THREE.MathUtils.smoothstep(height, 0, 0.5)));
+    (this.sun.material as THREE.SpriteMaterial).opacity = above * clear;
+    (this.sunGlow.material as THREE.SpriteMaterial).opacity = above * (0.3 + 0.5 * (1 - THREE.MathUtils.smoothstep(height, 0, 0.5))) * clear;
 
     this.moon.position.copy(sunDir).multiplyScalar(-SKY_RADIUS * 0.96);
-    (this.moon.material as THREE.SpriteMaterial).opacity = THREE.MathUtils.smoothstep(-sunDir.y, -0.08, 0.05) * (1 - 0.6 * day);
+    (this.moon.material as THREE.SpriteMaterial).opacity = THREE.MathUtils.smoothstep(-sunDir.y, -0.08, 0.05) * (1 - 0.6 * day) * clear;
 
     // Stars: in at dusk, turning with the sky about the sun's axis.
-    this.starMaterial.opacity = (1 - day) * 0.95;
+    this.starMaterial.opacity = (1 - day) * 0.95 * clear;
     this.stars.rotation.z = timeOfDay * Math.PI * 2;
 
     // Clouds: white by day, a dim grey by night; drift and wrap.
-    const cloudColor = 0.25 + 0.75 * day;
+    const cloudColor = (0.25 + 0.75 * day) * (1 - 0.5 * overcast);
+    const swell = 1 + 0.9 * overcast;
     for (let i = 0; i < this.clouds.length; i++) {
       const c = this.clouds[i];
-      c.position.z += CLOUD_DRIFT * dtSec;
+      c.position.z += CLOUD_DRIFT * dtSec * (1 + overcast);
       if (c.position.z > 1700) c.position.z = -1700;
+      c.scale.set(swell, swell, 1);
       this.cloudMaterials[i].color.setRGB(cloudColor, cloudColor, cloudColor * 1.02);
-      this.cloudMaterials[i].opacity = 0.55 + 0.35 * day;
+      this.cloudMaterials[i].opacity = Math.min(1, 0.55 + 0.35 * day + 0.4 * overcast);
     }
   }
 }

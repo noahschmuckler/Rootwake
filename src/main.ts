@@ -50,7 +50,8 @@ import { CraftSession } from './craft';
 import { recipesFor, type Recipe } from './recipes';
 import { OBJECT_TYPES, HANDS, handsToLift, type WorldObject } from './objects';
 import { Structures } from './structures';
-import type { RestQuality } from './vitality';
+import { GROUND_REST, type RestQuality } from './vitality';
+import { Weather, DRAIN_RAIN_PER_SECOND, LIGHTNING_SAP_TO } from './weather';
 import { lichenMaterial } from './objects';
 import { mulberry32 } from './colors';
 import { HAZE_COLOR, HEMI_SKY_COLOR } from './world';
@@ -67,6 +68,8 @@ const slowmo = Math.max(1, Number.parseFloat(params.get('slowmo') ?? '') || 1);
 const debug = params.has('debug');
 // `?time=0.75` starts at midnight (0 dawn, 0.25 noon, 0.5 dusk).
 const startTime = Number.parseFloat(params.get('time') ?? '') || START_TIME;
+/** `?rain=1`: the first shower starts at once (testing, and for meeting the rain on a short phone session). */
+const forceRain = params.has('rain');
 
 // ---- Scene / camera / renderer ---------------------------------------------
 const scene = new THREE.Scene();
@@ -132,7 +135,7 @@ const structures = new Structures(scene, GROUND_Y);
 hands.onRelease = (obj) => {
   const s = structures.trySnap(obj, objects);
   if (!s) return;
-  hint.textContent = 'The notched logs fit together: a bed frame. Lay sticks across it.';
+  hint.textContent = structures.lastSays;
   tooFarUntil = animClock + 3000;
 };
 // Sticks released over a bed frame are laid across it; seeds over a tilled patch plant it (0.6c).
@@ -277,15 +280,23 @@ hands.onEat = (type) => {
   return true;
 };
 player.onHop = () => vitality.drain(hands.dragging ? DRAIN_DRAG_HOP : DRAIN_HOP);
-let restQuality: RestQuality = 'ground';
+let restQuality: RestQuality = GROUND_REST;
 player.onRestHold = () => {
   if (cameraRig.mode !== 'free' || vitality.busy) return;
-  // Pass 0.9: beside a bed you made, the same hold is a night in it.
-  restQuality = structures.bedNear(player.position.x, player.position.z) ? 'bed' : 'ground';
+  // Pass 0.9: beside a bed you made, the same hold is a night in it. Pass 1.0: a roof over it counts too.
+  restQuality = { bed: !!structures.bedNear(player.position.x, player.position.z), shelter: structures.shelterAt(player.position.x, player.position.z) };
   vitality.rest(animClock, restQuality);
 };
 vitality.onEvent = (what) => {
-  const rested = restQuality === 'bed' ? 'You sleep in your bed, and wake rested.' : 'You rest.';
+  const rested = restQuality.bed
+    ? restQuality.shelter >= 1
+      ? 'You sleep in your bed under your roof, and wake whole.'
+      : restQuality.shelter > 0
+        ? 'You sleep in your bed under a patchy roof, and wake rested.'
+        : 'You sleep in your bed, and wake rested.'
+    : restQuality.shelter > 0
+      ? 'You rest under the roof.'
+      : 'You rest.';
   const text = { collapse: 'You collapse.', wake: 'You wake, still tired.', rest: rested, ate: '' }[what];
   if (text) {
     hint.textContent = text;
@@ -449,6 +460,25 @@ const dayCycle = new DayCycle(
 dayCycle.apply();
 const sky = new Sky(scene);
 
+// ---- Weather (Pass 1.0) -----------------------------------------------------------
+const weather = new Weather(scene, seed, 0, forceRain);
+weather.onRain = (raining) => {
+  const sheltered = structures.shelterAt(player.position.x, player.position.z) > 0;
+  hint.textContent = raining ? (sheltered ? 'Rain on the roof.' : 'Rain. It wears at you out here.') : 'The rain passes.';
+  tooFarUntil = animClock + 3200;
+};
+weather.onLightning = (near) => {
+  shakeUntil = animClock + SHAKE_MS; // the crack
+  if (!near) return;
+  if (structures.shelterAt(player.position.x, player.position.z) > 0) {
+    hint.textContent = 'Lightning, close. The roof holds.';
+  } else {
+    vitality.sap(LIGHTNING_SAP_TO);
+    hint.textContent = 'Lightning strikes close by.';
+  }
+  tooFarUntil = animClock + 3200;
+};
+
 // Lichen on the rock: near the outer trees and toward the lip. Rock-coloured by day.
 {
   const rand = mulberry32(seed * 7 + 3);
@@ -594,7 +624,7 @@ function updateHud(): void {
   const parts = [`seed ${seed}`, `cleared ${resolved}/${voxels.length}`, `tilled ${tilled}/${patches.length}`];
   if (planted) parts.push(`planted ${planted}`);
   if (slowmo > 1) parts.push(`slowmo ×${slowmo}`);
-  if (debug) parts.push(`vit ${vitality.value.toFixed(2)} ${vitality.band}`, `time ${dayCycle.time.toFixed(2)} day ${dayCycle.day.toFixed(2)}`);
+  if (debug) parts.push(`vit ${vitality.value.toFixed(2)} ${vitality.band}`, `time ${dayCycle.time.toFixed(2)} day ${dayCycle.day.toFixed(2)}`, `rain ${weather.rain.toFixed(2)} roof ${structures.shelterAt(player.position.x, player.position.z).toFixed(2)}`);
   if (locked && cameraRig.mode === 'locked' && locked.status === 'growing') {
     parts.push(locked.poolText());
   }
@@ -630,6 +660,7 @@ function castFrom(clientX: number, clientY: number): void {
 }
 
 let tooFarUntil = 0;
+let lastDebugHud = -1;
 player.onTap = (x, y) => {
   castFrom(x, y);
   if (cameraRig.mode === 'free') {
@@ -686,7 +717,7 @@ function animate(now: number): void {
   requestAnimationFrame(animate);
 
 // Debug handle for headless/console poking. Not part of the design surface.
-(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, vitality, dayCycle, world, cameraRig, boardView, structures, get craft() { return craft; }, startCraft, get shake() { return { shakeUntil, animClock, offset: shakeOffset.clone() }; } };
+(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, vitality, dayCycle, world, cameraRig, boardView, structures, weather, get craft() { return craft; }, startCraft, get shake() { return { shakeUntil, animClock, offset: shakeOffset.clone() }; } };
   // Clamped at zero: the first rAF timestamp can predate the module's own init time, and a
   // negative delta once sent the animation clock negative — which armed the thud shake at load.
   const dt = Math.min(0.1, Math.max(0, (now - lastFrame) / 1000));
@@ -705,8 +736,15 @@ function animate(now: number): void {
   vitality.update(animClock);
   applyVitality();
   dayCycle.advance((dt * 1000) / slowmo);
-  dayCycle.apply(vitality.effects(animClock).vision);
-  sky.update(camera.position, dayCycle.sunDirection, dayCycle.day, dayCycle.time, dt);
+  weather.update(animClock, camera.position);
+  if (debug && animClock - lastDebugHud > 500) {
+    lastDebugHud = animClock;
+    updateHud(); // the debug readouts (vitality, time, rain, roof) move on their own
+  }
+  // Out in the rain, vitality drains (SYSTEMS §1.1, §4); under a roof it doesn't.
+  if (weather.rain > 0 && !vitality.busy && structures.shelterAt(player.position.x, player.position.z) <= 0) vitality.drain(DRAIN_RAIN_PER_SECOND * weather.rain * dt);
+  dayCycle.apply(vitality.effects(animClock).vision, weather.overcast, weather.flash);
+  sky.update(camera.position, dayCycle.sunDirection, dayCycle.day, dayCycle.time, dt, weather.overcast);
   applyNight();
   const vfx = vitality.effects(animClock);
   // Encumbrance: dragging shortens and slows hops; straining stops them. Fatigue shortens them too.
@@ -773,4 +811,4 @@ function animate(now: number): void {
 requestAnimationFrame(animate);
 
 // Debug handle for headless/console poking. Not part of the design surface.
-(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, vitality, dayCycle, world, cameraRig, boardView, structures, get craft() { return craft; }, startCraft, get shake() { return { shakeUntil, animClock, offset: shakeOffset.clone() }; } };
+(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, vitality, dayCycle, world, cameraRig, boardView, structures, weather, get craft() { return craft; }, startCraft, get shake() { return { shakeUntil, animClock, offset: shakeOffset.clone() }; } };
