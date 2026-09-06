@@ -515,10 +515,29 @@ what was built and why.
 
 ## Status
 
-Repo scaffolded 2026-09-03. Passes 0 through 0.8 built and confirmed on
-phone playtests (plus the sky). **Pass 0.9 (shaping logs and the first bed)
-built 2026-09-06, awaiting evaluation.** Next per ROADMAP.md: 1.0 (weather,
-the reason for the roof).
+Repo scaffolded 2026-09-03. Passes 0 through 0.9 built and confirmed on
+phone playtests (plus the sky). **Pass 1.0 (weather: rain, lightning, and a
+roof over the bed) built 2026-09-06, awaiting evaluation.** Next per
+ROADMAP.md: 1.1 (fire, kindling, cooking).
+
+What 1.0 adds: showers. The first comes about a minute in (`?rain=1` for
+at once); the day greys and dims, the fog thickens, rain streaks fall, and
+out in it vitality drains — a full shower costs a good part of a meal. In
+the thick of it lightning flashes and cracks, and a close strike saps you
+to the edge of exhaustion. The bed frame is the first shelter's
+foundation: a notched log let go by it stacks onto a side log as a wall,
+one per side; with both up, timber let go by it lies across the top, four
+to a whole roof. Under the roof the rain doesn't wear at you, the strike
+is held, and sleep in the bed reaches full vitality. The question for the
+phone: does the first rain make you want the wall you built to have a roof
+— and is a roof over a bed enough of a roof, for now? Open, flagged in
+code: shower timing against the four-minute day, the drain rate, lightning
+odds, and "under a roof" as a footprint test rather than an up-ray.
+
+Designer note after 0.9: a dragged log now leads with the end nearer the
+player (it used to turn a fixed end toward the pull, which put end-notched
+logs the wrong way round). More log positioning may be needed once other
+builds exist — to be judged then.
 
 What 0.9 adds: with the hand axe in hand, long-press a log for four
 shapings — notch both ends, notch one end, an offset cut, cut into timber.

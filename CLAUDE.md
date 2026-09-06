@@ -23,9 +23,10 @@ don't add structure the prototype doesn't need yet.
 
 ## Status
 
-**Passes 0 through 0.8 judged satisfying on phone; Pass 0.9 (shaping logs
-with the hand axe, the notched-log bed frame, sleeping in a bed) built
-2026-09-06, awaiting evaluation. Standing rules: confinement→vista,
+**Passes 0 through 0.9 judged satisfying on phone; Pass 1.0 (rain that
+drains you outdoors, lightning, walls and a timber roof over the bed frame,
+rest by shelter) built 2026-09-06, awaiting evaluation. Standing rules:
+confinement→vista,
 objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
 `src/` holds:
 
@@ -51,20 +52,27 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
   the board plays it, strikes step its look and scatter chips, results land
   in a hand or where the target lay; progress lives on the target across
   back-outs.
-- `structures.ts` — fittings and fills as data: a notched log let go
-  beside another snaps parallel into a bed frame; sticks laid on the frame
-  make a bed; `bedNear()` for the rest gesture. Pieces stop being
-  collectible (taking a structure apart is not built).
+- `structures.ts` — fittings, slots and fills as data: a notched log let
+  go beside another snaps parallel into a bed frame; sticks laid on the
+  frame make a bed; a notched log let go by the frame stacks onto a side
+  log (walls), timber laid across both walls is the roof (quality =
+  timbers/4); `bedNear()` and `shelterAt()` for rest and weather. Pieces
+  stop being collectible (taking a structure apart is not built).
+- `weather.ts` — dry spells and showers on a clock (`?rain=1` forces the
+  first), rain streaks around the camera, `overcast` for the day cycle and
+  sky, lightning (flash, delayed crack, near strikes that sap outdoors).
+  Tuning constants at the top.
 - `growth.ts` — the sapling: three authored stages over GROW_MS;
   PLANT_SEEDS.
 - `daylight.ts` — the day cycle: sun/moon/hemisphere/sky/fog by time of
   day; night vision (fed = moonlit and washed, tired = dark with glow);
-  `sunDirection`.
+  overcast and lightning flash from the weather; `sunDirection`.
 - `sky.ts` — the visible sky: sun disc + glow, moon opposite, a turning
   star field that fades in at dusk, drifting cloud sprites; rides on the
   camera at dome distance. Generated textures, unlit, unfogged.
-- `vitality.ts` — the one stat: drains, food, rest by quality (ground
-  ceiling 0.7, bed 0.9), collapse with diminishing wake-ups; bands →
+- `vitality.ts` — the one stat: drains, food, rest by quality ({bed,
+  shelter}: ground ceiling 0.7, bed 0.9, +0.1 for a whole roof), `sap()`
+  for lightning, collapse with diminishing wake-ups; bands →
   strength / caps / hands / fan reach; halo, saturation, exposure, blackout
   curves. Tuning constants at the top.
 - `objects.ts` — the weight rule: size class (20/5/1 per hand), mass,
@@ -109,11 +117,13 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
   rule, auto back-out, edge FOV/dip, felling aftermath (shake, scatter,
   footprint), blocked evaluation, hands wiring, vitality wiring (drains,
   halo/filter/exposure/blackout, hints), day cycle + night vision + lichen
-  scatter, rock spawning, the recipe menu and craft sessions, HUD,
-  `?seed=` / `?slowmo=` / `?debug=` / `?time=`, `window.__rootwake`. UI
+  scatter, rock spawning, the recipe menu and craft sessions, structures
+  and weather wiring (snap hints, rain drain, lightning, rest quality), HUD,
+  `?seed=` / `?slowmo=` / `?debug=` / `?time=` / `?rain=`,
+  `window.__rootwake`. UI
   layers have explicit z-indexes above the canvas.
 
-The next pass is whatever `ROADMAP.md` lists next (1.0 once 0.9 is
+The next pass is whatever `ROADMAP.md` lists next (1.1 once 1.0 is
 judged); do not skip ahead in that order without the designer — each pass
 exists to answer a question the previous one raised.
 
