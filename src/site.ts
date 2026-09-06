@@ -30,6 +30,8 @@ export const GHOST_COLOR = 0x9fd8ff;
 export const GHOST_OPACITY = 0.28;
 /** The camera looks this far above the ground at the site's centre. */
 export const SITE_LOOK_UP = 0.2;
+/** The board's lowest corner stays this far above the highest piece the site will place. */
+export const BOARD_ABOVE_PIECES = 0.25;
 // -------------------------------------------------------------------------------
 
 interface Flight {
@@ -62,6 +64,8 @@ export class BuildSite implements Interactable {
   readonly group = new THREE.Group();
   readonly center: THREE.Vector3;
   readonly ringRadius: number;
+  /** The board clears what stands here: the walls being raised, or the floor and furniture (designer, after 1.0c). */
+  readonly floorY: number;
   private readonly ring: THREE.Mesh;
   private readonly ghosts: THREE.Object3D[] = [];
   private readonly base: number;
@@ -82,6 +86,7 @@ export class BuildSite implements Interactable {
     this.center = structure.center.clone();
     this.center.y = groundY;
     this.base = structure.baseFor(blueprint);
+    this.floorY = groundY + this.base + Math.max(...blueprint.pieces.map((p) => p.y)) + BOARD_ABOVE_PIECES;
     this.board = new Board(BOARD_ROWS, BOARD_COLS, seed ^ 0x51e7);
     this.hintLocked = `${blueprint.label}: tap a gem, then a neighbour. Each match sets a piece in place.`;
     this.ringRadius = Math.hypot(blueprint.half[0], blueprint.half[1]) + RING_PADDING;
@@ -253,6 +258,7 @@ export class Deconstruct implements Interactable {
   onDone: (it: Interactable) => void = () => {};
   onRemoved: (left: number) => void = () => {};
   readonly center: THREE.Vector3;
+  readonly floorY: number;
   private readonly flights: Flight[] = [];
   private taken = 0;
 
@@ -265,6 +271,7 @@ export class Deconstruct implements Interactable {
     this.index = 9500 + Math.floor(Math.random() * 100000);
     this.center = structure.center.clone();
     this.center.y = groundY;
+    this.floorY = groundY + Math.max(0, ...structure.pieces.map((p) => p.y)) + BOARD_ABOVE_PIECES;
     this.board = new Board(BOARD_ROWS, BOARD_COLS, seed ^ 0x2b7d);
   }
 

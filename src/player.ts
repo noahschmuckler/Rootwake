@@ -35,6 +35,18 @@ export const MOVE_BASE_MS = 320;
 export const MOVE_MS_PER_UNIT = 170;
 /** A still hold on the look side this long is "lie down here" (Pass 0.7a rest). */
 export const REST_HOLD_MS = 900;
+/**
+ * Pass 1.0d: the third-person view (designer: first person gets disorienting;
+ * a moderate zoom-out reads the surroundings at a glance, like turning your
+ * head). The camera sits this far behind and above the eye and looks this
+ * far ahead; a tree in the way pulls it in.
+ */
+export const THIRD_BACK = 2.6;
+export const THIRD_UP = 1.2;
+export const THIRD_AHEAD = 2.0;
+export const THIRD_TREE_CLEARANCE = 0.45; // from a tree's centre: the trunk and its core
+/** Drag-to-orbit sensitivity while the camera is locked (radians per pixel). */
+export const ORBIT_SENSITIVITY = 0.006;
 /** A still hold on a world object this long opens its recipes (Pass 0.8). */
 export const LONG_PRESS_MS = 450;
 // -------------------------------------------------------------------------------
@@ -102,6 +114,14 @@ export class Player {
   onHop: (distance: number) => void = () => {};
   /** A still hold on the look side: rest here. */
   onRestHold: () => void = () => {};
+  /** Pass 1.0d: a drag while the player is disabled (the camera is locked) — main orbits the locked framing. */
+  onOrbit: (dx: number, dy: number) => void = () => {};
+  /** First or third person (Pass 1.0d). */
+  view: 'first' | 'third' = 'first';
+  /** Main shrinks the third-person distance inside a structure. */
+  thirdBackScale = 1;
+  /** The figure you see in third person: a stocky body and a head, facing your yaw. */
+  readonly avatar = new THREE.Group();
   /** Pass 0.8: is there a pressable world object under this screen point? main.ts answers. */
   objectAt: (clientX: number, clientY: number) => boolean = () => false;
   /** A still hold on a world object. */
@@ -142,6 +162,19 @@ export class Player {
     canvas.addEventListener('pointerup', this.onUp);
     canvas.addEventListener('pointercancel', this.onUp);
 
+    // The avatar: a stocky figure the height of the eye, seen only in third person.
+    const skin = new THREE.MeshStandardMaterial({ color: 0x8a6a4a, roughness: 0.9, flatShading: true });
+    const cloth = new THREE.MeshStandardMaterial({ color: 0x4a5a3a, roughness: 0.95, flatShading: true });
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.17, 0.42, 8), cloth);
+    body.position.y = 0.26;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), skin);
+    head.position.y = EYE_HEIGHT;
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.035, 0.08, 5), skin);
+    nose.rotation.x = -Math.PI / 2;
+    nose.position.set(0, EYE_HEIGHT - 0.01, -0.12); // the face looks along -Z: forward at yaw 0
+    this.avatar.add(body, head, nose);
+    this.avatar.visible = false;
+
     const ring = new THREE.RingGeometry(0.15, 0.22, 24);
     for (let i = 0; i < WAYPOINT_DISTANCES.length * WAYPOINT_ANGLE_FRACTIONS.length; i++) {
       const marker = new THREE.Mesh(ring, this.markerMaterial);
@@ -169,10 +202,52 @@ export class Player {
     );
   }
 
-  /** Where the camera should be in the free view. */
+  /** Where the camera should be in the free view: at the eye, or behind and above it in third person. */
   applyCamera(camera: THREE.Camera): void {
-    camera.position.copy(this.eye());
-    camera.lookAt(this.eye().add(this.forward()));
+    const eye = this.eye();
+    this.avatar.position.set(this.position.x, this.position.y, this.position.z);
+    this.avatar.rotation.y = this.yaw;
+    this.avatar.visible = this.view === 'third';
+    if (this.view === 'first') {
+      camera.position.copy(eye);
+      camera.lookAt(eye.add(this.forward()));
+      return;
+    }
+    const fx = -Math.sin(this.yaw);
+    const fz = -Math.cos(this.yaw);
+    const back = THIRD_BACK * this.thirdBackScale;
+    const up = THIRD_UP * this.thirdBackScale;
+    const want = new THREE.Vector3(eye.x - fx * back, eye.y + up, eye.z - fz * back);
+    // The camera inside a trunk: pull it in along the line until it clears. Trees merely in the
+    // way are faded by main.ts (the locked-view rule), so the view stays a moderate zoom-out.
+    let t = 1;
+    for (let guard = 0; guard < 8; guard++) {
+      const px = eye.x + (want.x - eye.x) * t;
+      const pz = eye.z + (want.z - eye.z) * t;
+      const inside = this.colliders.some((c) => !('x1' in c) && Math.hypot(px - c.x, pz - c.z) < THIRD_TREE_CLEARANCE);
+      if (!inside || t <= 0.35) break;
+      t -= 0.1;
+    }
+    camera.position.set(eye.x + (want.x - eye.x) * t, eye.y + (want.y - eye.y) * t, eye.z + (want.z - eye.z) * t);
+    camera.lookAt(eye.add(this.forward().multiplyScalar(THIRD_AHEAD)));
+  }
+
+  /** The walk button (Pass 1.0d): a hold that opens the fan wherever it lands — no object under it can turn it into a press. */
+  startMove(e: PointerEvent): void {
+    if (this.pointers.has(e.pointerId)) return;
+    this.pointers.set(e.pointerId, { role: 'move', startX: e.clientX, startY: e.clientY, lastX: e.clientX, lastY: e.clientY, downMs: performance.now(), moved: false });
+    if (this.enabled && !this.move) {
+      window.setTimeout(() => {
+        if (this.pointers.get(e.pointerId)?.role === 'move') this.fanOpen = true;
+      }, HOLD_MS);
+    }
+  }
+  /** Forwarded pointer events from the walk button. */
+  pointerMove(e: PointerEvent): void {
+    this.onMove(e);
+  }
+  pointerUp(e: PointerEvent): void {
+    this.onUp(e);
   }
 
   /**
@@ -362,6 +437,8 @@ export class Player {
     if (p.role === 'look' && this.enabled) {
       this.yaw -= (e.clientX - p.lastX) * LOOK_SENSITIVITY;
       this.pitch = THREE.MathUtils.clamp(this.pitch - (e.clientY - p.lastY) * LOOK_SENSITIVITY, -PITCH_LIMIT, PITCH_LIMIT);
+    } else if (!this.enabled && p.moved) {
+      this.onOrbit((e.clientX - p.lastX) * ORBIT_SENSITIVITY, (e.clientY - p.lastY) * ORBIT_SENSITIVITY);
     }
     p.lastX = e.clientX;
     p.lastY = e.clientY;

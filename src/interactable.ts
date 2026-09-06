@@ -33,6 +33,8 @@ export interface Interactable {
   lockPose(viewer: Viewer): CameraPose;
   /** The lock framing had to be lifted by dy to keep the board above ground — follow it if you hover. */
   onPoseLifted?(dy: number): void;
+  /** World height the board must clear in this lock, when it isn't the ground (a site's walls and floor). */
+  readonly floorY?: number;
   distanceTo(p: THREE.Vector3): number;
   /** Which target a run feeds (via its targeting strategy), or null. */
   targetFor(run: Run): number | null;

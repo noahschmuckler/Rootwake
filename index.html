@@ -20,7 +20,17 @@
       #blackout { z-index: 6; }
       #links { z-index: 8; }
       #text { z-index: 9; }
-      #hands, #back { z-index: 10; }
+      #hands, #back, #tools { z-index: 10; }
+      /* Pass 1.0d: bottom-right tools — walk (a hold opens the fan wherever you point), 1st/3rd person, zoom while locked. */
+      #tools { position: fixed; right: 12px; bottom: 16px; display: flex; flex-direction: column; gap: 10px; touch-action: none; user-select: none; }
+      #tools button {
+        width: 60px; height: 60px; border-radius: 10px; border: 2px solid rgba(200, 220, 200, 0.45); background: rgba(30, 42, 30, 0.75);
+        color: #dfe8df; font: 12px/1.15 system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+        cursor: pointer; touch-action: none; -webkit-tap-highlight-color: transparent;
+      }
+      #tools button b { font-size: 20px; line-height: 1; }
+      #tools button.active { border-color: #dff5c8; box-shadow: 0 0 12px rgba(190, 255, 170, 0.6); }
+      #tools button[hidden] { display: none; }
       #menu {
         position: fixed; z-index: 11; display: flex; flex-direction: column; gap: 6px; width: 220px;
         background: rgba(20, 28, 20, 0.92); border: 1px solid #3a4a3a; border-radius: 8px; padding: 8px;
@@ -127,6 +137,12 @@
     <svg id="links" xmlns="http://www.w3.org/2000/svg"></svg>
     <div id="hands"><div class="hand" data-hand="0"></div><div class="hand" data-hand="1"></div></div>
     <button id="back" type="button" hidden>Back out</button>
+    <div id="tools">
+      <button id="zoom-in" type="button" hidden><b>+</b>closer</button>
+      <button id="zoom-out" type="button" hidden><b>−</b>further</button>
+      <button id="view" type="button"><b>◎</b>3rd</button>
+      <button id="walk" type="button"><b>⇡</b>walk</button>
+    </div>
     <div id="menu" hidden></div>
     <div id="blueprints" hidden>
       <div class="row"><button class="arrow" id="bp-prev" type="button">‹</button><canvas id="bp-plan" width="240" height="150"></canvas><button class="arrow" id="bp-next" type="button">›</button></div>

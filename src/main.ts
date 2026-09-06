@@ -158,7 +158,7 @@ function lockOnto(it: Interactable): void {
     pose.position.lerp(pose.target, 0.25);
   }
   const lowest = boardView.lowestWorldY(pose.position, pose.target, it.board.cols, it.board.rows);
-  const lift = GROUND_Y + BOARD_GROUND_CLEARANCE - lowest;
+  const lift = (it.floorY ?? GROUND_Y) + BOARD_GROUND_CLEARANCE - lowest;
   if (lift > 0) {
     pose.position.y += lift;
     pose.target.y += lift;
@@ -167,6 +167,73 @@ function lockOnto(it: Interactable): void {
   locked = it;
   lockedPose = pose;
   cameraRig.lock(animClock, pose);
+}
+
+// ---- Orbit and zoom while locked (Pass 1.0d) ------------------------------------
+// Designer: reposition in match-3 mode — a drag orbits the framing around what you
+// are working, the zoom buttons move in and out, and the board comes along (it
+// lives on the camera). The board keeps its ground/floor clearance throughout.
+const ORBIT_PITCH_MIN = 0.12; // radians from straight down
+const ORBIT_PITCH_MAX = 1.5;
+const ZOOM_MIN = 1.1;
+const ZOOM_MAX = 7;
+function reframeLocked(fn: (offset: THREE.Spherical) => void): void {
+  if (cameraRig.mode !== 'locked' || !locked || !lockedPose) return;
+  const offset = new THREE.Spherical().setFromVector3(lockedPose.position.clone().sub(lockedPose.target));
+  fn(offset);
+  offset.phi = THREE.MathUtils.clamp(offset.phi, ORBIT_PITCH_MIN, ORBIT_PITCH_MAX);
+  offset.radius = THREE.MathUtils.clamp(offset.radius, ZOOM_MIN, ZOOM_MAX);
+  const position = lockedPose.target.clone().add(new THREE.Vector3().setFromSpherical(offset));
+  const target = lockedPose.target.clone();
+  // Keep the board above the ground (or the site's floor): lift the whole framing, as lockOnto does.
+  const lowest = boardView.lowestWorldY(position, target, locked.board.cols, locked.board.rows);
+  const lift = (locked.floorY ?? GROUND_Y) + BOARD_GROUND_CLEARANCE - lowest;
+  if (lift > 0) {
+    position.y += lift;
+    target.y += lift;
+  }
+  lockedPose = { position, target };
+  camera.position.copy(position);
+  camera.lookAt(target);
+}
+player.onOrbit = (dx, dy) =>
+  reframeLocked((o) => {
+    o.theta -= dx;
+    o.phi -= dy;
+  });
+const zoomInButton = document.getElementById('zoom-in') as HTMLButtonElement;
+const zoomOutButton = document.getElementById('zoom-out') as HTMLButtonElement;
+for (const [el, k] of [
+  [zoomInButton, 0.8],
+  [zoomOutButton, 1.25],
+] as const) {
+  el.addEventListener('pointerdown', (e) => e.stopPropagation());
+  el.addEventListener('click', () => reframeLocked((o) => (o.radius *= k)));
+}
+
+// ---- Third person and the walk button (Pass 1.0d) --------------------------------
+scene.add(player.avatar);
+const viewButton = document.getElementById('view') as HTMLButtonElement;
+viewButton.addEventListener('pointerdown', (e) => e.stopPropagation());
+viewButton.addEventListener('click', () => {
+  player.view = player.view === 'first' ? 'third' : 'first';
+  viewButton.innerHTML = player.view === 'third' ? '<b>◉</b>1st' : '<b>◎</b>3rd';
+  viewButton.classList.toggle('active', player.view === 'third');
+});
+const walkButton = document.getElementById('walk') as HTMLButtonElement;
+walkButton.addEventListener('pointerdown', (e) => {
+  e.stopPropagation();
+  e.preventDefault();
+  walkButton.setPointerCapture(e.pointerId);
+  walkButton.classList.add('active');
+  player.startMove(e);
+});
+walkButton.addEventListener('pointermove', (e) => player.pointerMove(e));
+for (const ev of ['pointerup', 'pointercancel'] as const) {
+  walkButton.addEventListener(ev, (e) => {
+    walkButton.classList.remove('active');
+    player.pointerUp(e);
+  });
 }
 
 // ---- Recipes and crafting (Pass 0.8) --------------------------------------------
@@ -656,6 +723,27 @@ const FADE_CORRIDOR = 2.6;
  */
 /** For a look-down lock on a patch, voxels this close to the patch would loom into the frame. */
 const FADE_NEAR_PATCH = 2.3;
+/** Third person: a tree near the camera, or in the corridor from the camera to the player, is in the way. */
+const THIRD_PERSON_FADE = 0.22;
+const THIRD_NEAR_CAMERA = 1.5;
+const THIRD_CORRIDOR = 1.1;
+function obstructsThirdPerson(v: Voxel): boolean {
+  if (v.status === 'resolved') return false;
+  const c = v.center;
+  const eye = player.eye();
+  if (Math.hypot(c.x - camera.position.x, c.z - camera.position.z) < THIRD_NEAR_CAMERA) return true;
+  const ax = eye.x - camera.position.x;
+  const az = eye.z - camera.position.z;
+  const len = Math.hypot(ax, az);
+  if (len < 1e-3) return false;
+  const rx = c.x - camera.position.x;
+  const rz = c.z - camera.position.z;
+  const along = (rx * ax + rz * az) / len;
+  if (along < 0 || along > len + 0.3) return false;
+  const lateral = Math.abs(rx * az - rz * ax) / len;
+  return lateral < THIRD_CORRIDOR;
+}
+
 function obstructsLockedView(v: Voxel, target: Interactable): boolean {
   if (target.kind === 'craft' || target.kind === 'site') {
     // The camera backs off and lifts from the player: a neighbouring tree (or its
@@ -767,6 +855,11 @@ function updateHud(): void {
   parts.push('R: new arrangement');
   hud.textContent = parts.join(' · ');
   backButton.hidden = !(cameraRig.mode === 'locked' && locked?.status === 'growing');
+  const lockedNow = cameraRig.mode === 'locked' && locked?.status === 'growing';
+  zoomInButton.hidden = !lockedNow;
+  zoomOutButton.hidden = !lockedNow;
+  walkButton.hidden = cameraRig.mode !== 'free';
+  viewButton.hidden = cameraRig.mode !== 'free';
 }
 
 // ---- Vertigo at the lip (Pass 0.5, nice-to-have) ----------------------------
@@ -871,6 +964,7 @@ function animate(now: number): void {
   if (cameraRig.mode === 'free') {
     const colliders = [...voxels.flatMap((v) => v.collider() ?? []), ...structures.colliders()];
     player.update(now, colliders, world.isWalkable);
+    player.thirdBackScale = structures.list.some((st) => st.inside(player.position.x, player.position.z)) ? 0.45 : 1;
     player.applyCamera(camera);
     const k = edgeCloseness();
     setFov(BASE_FOV + EDGE_FOV_WIDEN * k);
@@ -945,8 +1039,11 @@ function animate(now: number): void {
   // are clearing must keep blocking the light until you clear it too, or
   // the locked view gives the vista away.
   const lockedness = cameraRig.lockedness();
+  const third = player.view === 'third' && cameraRig.mode === 'free';
   for (const v of voxels) {
-    const fade = locked && v !== locked && obstructsLockedView(v, locked) ? 1 - lockedness : 1;
+    let fade = locked && v !== locked && obstructsLockedView(v, locked) ? 1 - lockedness : 1;
+    // Third person (1.0d): trees between the camera and you, or around the camera, go translucent.
+    if (third && fade === 1 && obstructsThirdPerson(v)) fade = THIRD_PERSON_FADE;
     v.setFade(fade);
   }
   for (const it of interactables) it.update(animClock);
