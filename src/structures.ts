@@ -27,13 +27,34 @@ export const SNAP_REACH = 0.9;
 export const BED_STICKS = 5;
 /** Standing within this of a bed's centre, the rest gesture is a night in bed. */
 export const BED_REST_REACH = 1.3;
-/** Pass 1.0: timbers a roof takes to be whole; how high a stacked wall log sits; the roof's height above ground. */
+/**
+ * Pass 1.0: timbers a roof takes to be whole; wall courses stacked on each
+ * side log before the roof goes on; how high a course sits; the roof's height.
+ * Designer, after the first 1.0 playtest: "it's not a roof unless I can walk
+ * underneath it and look out at the rain" — so two courses (roof at ~1.0 m,
+ * eye height is 0.55), not one. Tuning: WALL_COURSES against the build cost
+ * (each course is two shaped logs).
+ */
 export const ROOF_TIMBERS = 4;
+export const WALL_COURSES = 2;
 export const WALL_COURSE_HEIGHT = 0.34; // a log's diameter: the next log rests on the one below
-export const ROOF_HEIGHT = 0.18 + WALL_COURSE_HEIGHT + 0.17; // ground → top of the wall log, where timber rests
+export const ROOF_HEIGHT = 0.18 + WALL_COURSE_HEIGHT * WALL_COURSES + 0.17; // ground → top of the wall, where timber rests
+/** Timber is 1.2 long across the frame and 0.24 wide along it: what one timber keeps dry. */
+export const TIMBER_HALF_ACROSS = 0.6;
+export const TIMBER_HALF_ALONG = 0.12;
 /** "Under the roof" is the frame's footprint plus this margin (SYSTEMS §4 working definition, simplified from an up-ray). */
 export const SHELTER_MARGIN = 0.35;
 // -------------------------------------------------------------------------------
+
+/** A patch of ground a roof keeps dry: an oriented rectangle at height y (rain stops there). */
+export interface DryStrip {
+  x: number;
+  z: number;
+  yaw: number;
+  halfAlong: number;
+  halfAcross: number;
+  y: number;
+}
 
 /** A place a structure offers a piece: where it will rest, and what taking it means. */
 export interface Slot {
@@ -80,8 +101,8 @@ export class Structure {
   readonly group = new THREE.Group();
   readonly center: THREE.Vector3;
   readonly yaw: number;
-  /** Pass 1.0: a wall log stacked on each side log, and the timbers laid across them. */
-  readonly walls: (WorldObject | null)[] = [null, null];
+  /** Pass 1.0: wall logs stacked on each side log (WALL_COURSES per side), and the timbers laid across them. */
+  readonly walls: WorldObject[][] = [[], []];
   readonly roof: WorldObject[] = [];
 
   constructor(kind: StructureKind, pieces: WorldObject[], yaw: number) {
@@ -102,9 +123,29 @@ export class Structure {
     return FILLS.find((f) => f.structure === this.kind) ?? null;
   }
 
+  get wallsUp(): boolean {
+    return this.walls.every((w) => w.length >= WALL_COURSES);
+  }
+
   /** Roof over it, 0..1. */
   get shelter(): number {
-    return this.walls.every(Boolean) ? this.roof.length / ROOF_TIMBERS : 0;
+    return this.wallsUp ? this.roof.length / ROOF_TIMBERS : 0;
+  }
+
+  /**
+   * What the roof keeps dry, for the rain: one strip per timber until the roof
+   * is whole, then the whole footprint. Rain comes through the gaps until then.
+   */
+  dryStrips(groundY: number): DryStrip[] {
+    if (this.roof.length === 0 || !this.wallsUp) return [];
+    const y = groundY + ROOF_HEIGHT;
+    if (this.roof.length >= ROOF_TIMBERS) return [{ x: this.center.x, z: this.center.z, yaw: this.yaw, halfAlong: 0.62, halfAcross: TIMBER_HALF_ACROSS, y }];
+    const along = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
+    return this.roof.map((_, k) => {
+      const t = -0.45 + (0.9 * k) / (ROOF_TIMBERS - 1);
+      const at = this.center.clone().addScaledVector(along, t);
+      return { x: at.x, z: at.z, yaw: this.yaw, halfAlong: TIMBER_HALF_ALONG, halfAcross: TIMBER_HALF_ACROSS, y };
+    });
   }
 
   /** Is a ground point under this structure's roof (footprint plus margin)? */
@@ -121,24 +162,27 @@ export class Structure {
   slots(groundY: number): Slot[] {
     const out: Slot[] = [];
     const along = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw));
-    // Walls: a notched log on top of each side log.
+    // Walls: notched logs stacked on each side log, WALL_COURSES high.
     this.walls.forEach((w, i) => {
-      if (w) return;
+      if (w.length >= WALL_COURSES) return;
       const base = this.pieces[i];
+      const course = w.length + 1;
+      const laid = this.walls[0].length + this.walls[1].length + 1;
+      const total = WALL_COURSES * 2;
       out.push({
         type: 'log_notched',
         x: base.position.x,
         z: base.position.z,
-        groundY: groundY + WALL_COURSE_HEIGHT,
+        groundY: groundY + WALL_COURSE_HEIGHT * course,
         yaw: this.yaw,
         take: (piece) => {
-          this.walls[i] = piece;
+          this.walls[i].push(piece);
         },
-        says: this.walls.some(Boolean) ? 'The second wall log. Now timber across the top.' : 'A wall log, stacked on the frame. Another on the other side.',
+        says: laid >= total ? 'The walls are up. Now timber across the top.' : `A wall log, stacked: ${laid} of ${total}. Two courses a side, then a roof.`,
       });
     });
     // Roof: with both walls up, timber lies across them, spread along the frame.
-    if (this.walls.every(Boolean) && this.roof.length < ROOF_TIMBERS) {
+    if (this.wallsUp && this.roof.length < ROOF_TIMBERS) {
       const k = this.roof.length;
       const t = -0.45 + (0.9 * k) / (ROOF_TIMBERS - 1);
       const at = this.center.clone().addScaledVector(along, t);
@@ -250,11 +294,16 @@ export class Structures {
     const out: THREE.Object3D[] = [];
     for (const s of this.list) {
       for (const p of s.pieces) out.push(p.mesh);
-      for (const w of s.walls) if (w) out.push(w.mesh);
+      for (const side of s.walls) for (const w of side) out.push(w.mesh);
       for (const r of s.roof) out.push(r.mesh);
       out.push(s.group);
     }
     return out;
+  }
+
+  /** Everything the roofs keep dry, for the rain. */
+  dryStrips(): DryStrip[] {
+    return this.list.flatMap((s) => s.dryStrips(this.groundY));
   }
 
   /** Roof over a ground point, 0 (open sky) .. 1 (a whole roof). */

@@ -463,6 +463,7 @@ const sky = new Sky(scene);
 // ---- Weather (Pass 1.0) -----------------------------------------------------------
 const weather = new Weather(scene, seed, 0, forceRain);
 const rainSheet = document.getElementById('rain')!;
+let wasRoofed = false;
 /** The screen rain sheet at full shower. Designer, after 1.0: rain must read even tired at night. */
 const RAIN_SHEET_OPACITY = 0.55;
 weather.onRain = (raining) => {
@@ -741,8 +742,15 @@ function animate(now: number): void {
   vitality.update(animClock);
   applyVitality();
   dayCycle.advance((dt * 1000) / slowmo);
-  weather.update(animClock, camera.position);
-  rainSheet.style.opacity = (weather.rain * RAIN_SHEET_OPACITY).toFixed(3);
+  weather.update(animClock, camera.position, structures.dryStrips());
+  // The rain sheet is rain on your face: none under a roof — there you look out at it.
+  const roofed = structures.shelterAt(player.position.x, player.position.z) > 0;
+  rainSheet.style.opacity = (roofed ? 0 : weather.rain * RAIN_SHEET_OPACITY).toFixed(3);
+  if (weather.rain > 0.3 && roofed !== wasRoofed && animClock > tooFarUntil) {
+    hint.textContent = roofed ? 'Under the roof. The rain falls outside.' : 'Out in the rain again.';
+    tooFarUntil = animClock + 2600;
+  }
+  wasRoofed = roofed;
   if (debug && animClock - lastDebugHud > 500) {
     lastDebugHud = animClock;
     updateHud(); // the debug readouts (vitality, time, rain, roof) move on their own

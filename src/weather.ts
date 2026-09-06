@@ -10,6 +10,7 @@
 
 import * as THREE from 'three';
 import { mulberry32 } from './colors';
+import type { DryStrip } from './structures';
 
 // ---- Tuning constants ---------------------------------------------------------
 /** Dry spell before a shower, and shower length (ms of animation time). */
@@ -86,7 +87,8 @@ export class Weather {
     }
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.BufferAttribute(this.positions, 3));
-    this.material = new THREE.LineBasicMaterial({ color: 0xdde6f2, transparent: true, opacity: 0, depthWrite: false, fog: false });
+    // Not tone-mapped: the streaks keep their brightness at night and when tired, so rain reads from under a roof too.
+    this.material = new THREE.LineBasicMaterial({ color: 0xdde6f2, transparent: true, opacity: 0, depthWrite: false, fog: false, toneMapped: false });
     this.lines = new THREE.LineSegments(geo, this.material);
     this.lines.frustumCulled = false;
     this.lines.visible = false;
@@ -99,7 +101,22 @@ export class Weather {
     return this.phase.kind === 'rain';
   }
 
-  update(nowMs: number, cameraPosition: THREE.Vector3): void {
+  /** Is this point under one of the dry strips, below its roof? */
+  private static dry(x: number, y: number, z: number, strips: DryStrip[]): boolean {
+    for (const r of strips) {
+      if (y >= r.y) continue;
+      const dx = x - r.x;
+      const dz = z - r.z;
+      const along = dx * Math.cos(r.yaw) - dz * Math.sin(r.yaw);
+      if (Math.abs(along) > r.halfAlong) continue;
+      const across = dx * Math.sin(r.yaw) + dz * Math.cos(r.yaw);
+      if (Math.abs(across) <= r.halfAcross) return true;
+    }
+    return false;
+  }
+
+  /** @param dryStrips where roofs stop the rain (streaks under them vanish at roof height) */
+  update(nowMs: number, cameraPosition: THREE.Vector3, dryStrips: DryStrip[] = []): void {
     const dt = this.lastMs < 0 ? 0 : Math.min(0.1, Math.max(0, (nowMs - this.lastMs) / 1000));
     this.lastMs = nowMs;
 
@@ -154,9 +171,16 @@ export class Weather {
         p[i * 6] = x;
         p[i * 6 + 1] = y;
         p[i * 6 + 2] = z;
-        p[i * 6 + 3] = x + RAIN_WIND * RAIN_STREAK;
-        p[i * 6 + 4] = y + RAIN_STREAK;
-        p[i * 6 + 5] = z;
+        if (dryStrips.length && Weather.dry(x, y, z, dryStrips)) {
+          // Under a roof: the drop stopped on the timber. A zero-length segment draws nothing.
+          p[i * 6 + 3] = x;
+          p[i * 6 + 4] = y;
+          p[i * 6 + 5] = z;
+        } else {
+          p[i * 6 + 3] = x + RAIN_WIND * RAIN_STREAK;
+          p[i * 6 + 4] = y + RAIN_STREAK;
+          p[i * 6 + 5] = z;
+        }
       }
       (this.lines.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true;
     }
