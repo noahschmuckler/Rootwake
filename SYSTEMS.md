@@ -154,8 +154,8 @@ segments; "under a roof" is a ray cast straight up from the player hitting a
 roof piece. Quality is a property of what the pieces are made of and how
 many gaps there are. Refine once the log-cabin pieces exist (§5).
 
-As built (1.0b): the roof is the cabin's (§5.4): six timber slats across
-the long walls; quality = slats laid / 6. Rain stops at the slats and comes
+As built (1.0c): the roof is the cabin's slat roof (§5.4): eight long
+timbers across the side walls; quality = slats laid / 8. Rain stops at the slats and comes
 through the gaps until the roof is whole; the rain sheet on the screen is
 off while you are under it. "Under the roof" is the cabin's footprint (the
 up-ray, simplified). Rain drains you only outdoors; a close strike is held
@@ -222,7 +222,10 @@ log per course; ends overhang the crossing. Nothing ever stacks parallel.
 
 - **Notch it** — three notches on a long log, two on a short: the blocks.
 - **Cut in half** — a long log into two short.
-- **Cut into timber** — squared quarter-logs: roof slats and floorboards.
+- **Cut into timber** — squared quarter-logs, in the two log lengths: long
+  timber for roofs and floors, short for furniture.
+- **Cut into stubs** — a short notched log into two stubs: a portable notch
+  to end a wall on without a wall sticking out at 90°.
 
 Working a log **spawns wood chips**, kindling for the fire (§6, 1.1). Every
 operation leaves something physical behind that answers another need.
@@ -232,25 +235,36 @@ doors and windows; the half-round that levels a wall's top; gable ends and
 a ridge; door and window frames of timber; a chimney — of rocks, where the
 hearth goes; fences and rails.
 
-**The cabin (as built, 1.0b).** Two bays long, one wide, three courses high:
+**Blueprints (as built, 1.0c).** Building is by blueprint, not by fitting
+notches by hand (designer, after 1.0b: freeform notch-fitting on a phone is
+fiddling; modules a thumb can site are a building system). A blueprint is a
+known structure or a module of one, as data: its pieces and where each sits
+in the site's frame. Long-press any building material (a log of any kind,
+timber, a stick) → **Blueprints…** → a menu with a plan drawing, arrows to
+cycle, what it needs, a checkbox to keep the needs in the HUD, and *Build
+here*. The pressed material becomes the site: a luminous ring on the
+ground, sized to hold the ingredients loosely piled, and a translucent ghost
+of what will stand there, open front toward you. Haul the ingredients
+inside the ring and it turns green. Tap inside to lock in: the board plays
+the site, and each match flies one ingredient from the pile into its place
+in the ghost, costing vitality like any work. Back out and the site keeps
+its progress.
 
-1. Two long notched logs let go a bay apart are the **sills**.
-2. A short notched log across one end is the first **cross log** — and that
-   end is the back wall. The other end stays open: the **doorway**.
-3. Long logs on the sides and cross logs on the back, course by course,
-   each resting in the notches of the course below.
-4. One cross log over the doorway, up top: the **lintel**.
-5. Timber across the long walls, six to a whole **roof**. Rain stops at the
-   slats and comes through the gaps until it is whole.
-6. Timber inside, six to a **floor**; a hand of sticks on the floor is the
-   **bed**. Roof before floor, floor before bed: shelter first, furniture
-   after.
+Long-press a *built* structure for the blueprints that add to it (they take
+its frame: on top of its walls, or inside on its floor) and for **Take
+apart** — the same session backwards: each match lifts the last piece off
+onto a pile out the front. Nothing is permanent.
 
-Wall logs block you; the doorway does not. Under the roof no rain falls,
-the screen rain sheet is off, and you look out at the rain. Sleep in the bed
-reaches full vitality. Cost, at one long and one short log per tree: nine
-trees for the walls, two for the roof, two for the floor — a third of the
-thicket, which is also how the vista gets opened.
+The first blueprint set, the cabin: a **cabin course** (three long notched
+logs in a U, two bays each way, open toward you), **another course** on top,
+a **door wall course** (a stub as a portable notch and a short notched log
+on it, leaving the doorway), a **slat roof** (eight long timbers across the
+side walls), a **timber floor** (seven long timbers inside), and a **bed**
+(two short timbers and a hand of sticks, inside). Wall logs block you; rain
+stops at the slats and comes through the gaps until the roof is whole; the
+rain sheet is off under it; sleep in the bed reaches full vitality. Cost, at
+one long and one short log per tree: about thirteen trees — a third of the
+thicket, which is also how the vista opens.
 
 ---
 

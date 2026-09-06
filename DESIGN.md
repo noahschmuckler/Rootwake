@@ -534,6 +534,16 @@ phone: does the first rain make you want the wall you built to have a roof
 code: shower timing against the four-minute day, the drain rate, lightning
 odds, and "under a roof" as a footprint test rather than an up-ray.
 
+Designer, after 1.0b: positioning logs by dragging was awkward, and a
+structure must be deconstructable. Two ways forward were weighed — freeform
+Lincoln-Log fitting (drag one notched log onto another at 90°) against
+pre-determined blueprints (long-press a material → blueprint menu → a
+luminous build area → a match-3 that assembles it). Blueprints won as more
+doable on a phone and closer to SYSTEMS §5's original vision; 1.0c
+(2026-09-06) built them with modules (cabin course, another course, door
+wall, slat roof, floor, bed) so it stays a building system, plus Take
+apart. Pieces: long/short logs, notched or raw; long/short timber; the stub.
+
 Designer, same playtest, in two steps: "it's not a roof unless I can walk
 underneath it and look out at the rain falling outside" — and then "an
 interior, walkable floor: a cabin. The bed is furniture inside. No sane

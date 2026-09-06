@@ -24,9 +24,9 @@ don't add structure the prototype doesn't need yet.
 ## Status
 
 **Passes 0 through 0.9 judged satisfying on phone; Pass 1.0 (rain that
-drains you outdoors, lightning, the Lincoln Log cabin with a walkable
-floor, rest by shelter) built 2026-09-06, awaiting evaluation. Standing
-rules: confinement→vista,
+drains you outdoors, lightning, blueprints and the cabin built at a site,
+rest by shelter) built 2026-09-06, awaiting evaluation. Standing rules:
+confinement→vista,
 objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
 `src/` holds:
 
@@ -47,21 +47,26 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
 - `recipes.ts` — the recipe table (target, required held object, result
   and count, chips, HP, staged looks, drain) and the filter by what's in
   hand: knapping, and the log recipes behind the hand axe (notch, cut in
-  half, cut into timber, for long and short logs).
+  half, cut into long/short timber, cut a notched short log into stubs).
 - `craft.ts` — a crafting session: a liftable target hovers ahead, a heavy
   one (a log) is worked where it lies under the patch look-down framing;
   the board plays it, strikes step its look and scatter chips, results land
   in a hand or where the target lay; progress lives on the target across
   back-outs.
-- `structures.ts` — Lincoln Logs: the notch grid and the cabin. Two long
-  notched logs a bay apart found it (sills); it then offers *slots* — cross
-  logs and long logs course by course (the first cross log names the back
-  wall, the other end is the doorway, a lintel over it), roof slats, then
-  floorboards, then sticks on the floor for the bed — and a released piece
-  takes the nearest slot within SNAP_REACH. `colliders()` (wall logs block,
-  the doorway doesn't), `dryStrips()` (where rain stops), `shelterAt()`,
-  `bedNear()`. Pieces stop being collectible (taking a structure apart is
-  not built).
+- `blueprints.ts` — known structures and their modules as data: pieces
+  with a place in the site frame and a tag (course / door / roof / floor /
+  bed), a siting (ground / on top / inside), a fits() rule against a
+  structure; `blueprintsFor`, `ingredientsText`, `drawPlan` (the menu's plan
+  drawing), BUILD_MATERIALS.
+- `site.ts` — `BuildSite`: an Interactable at a blueprint's site — the
+  luminous ring (green when every ingredient lies inside it), the ghost,
+  the board, and each match flying one ingredient from the pile into its
+  place; `Deconstruct`: the same backwards, pieces onto a pile out front.
+- `structures.ts` — a structure is its placed pieces (real objects, no
+  longer collectible) and what the game reads off them: courses / door
+  courses / slats / boards / bed counts, `wallTop`, `colliders()` (low wall
+  logs block), `dryStrips()` (where rain stops), `shelterAt()`,
+  `bedNear()`, `removeLast()`.
 - `weather.ts` — dry spells and showers on a clock (`?rain=1` forces the
   first), rain streaks around the camera, `overcast` for the day cycle and
   sky, lightning (flash, delayed crack, near strikes that sap outdoors).
@@ -81,7 +86,8 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
   curves. Tuning constants at the top.
 - `objects.ts` — the weight rule: size class (20/5/1 per hand), mass,
   strength, hands-to-lift / hands-to-drag; object types (seed, stick, log,
-  lichen, rock, hand_axe, long and short logs raw and notched, timber, chip;
+  lichen, rock, hand_axe, long and short logs raw and notched, the stub,
+  long and short timber, chip;
   seeds are food; the notch grid constants; a felled tree gives a long log
   and a short);
   authored crafting looks and `setLook` (multi-part looks: raycast
@@ -90,8 +96,8 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
 - `hands.ts` — the two hand boxes and the one gesture (drag a box to a
   thing: take / gather / lift / link / place), leashes, fly-to-box, the
   two-hand log drag on a rope, strain; a placeOnTarget hook for things
-  that take a stack (tilled patches take seeds, bed frames take sticks); an
-  onRelease hook for a whole object let go (fittings snap it); a
+  that take a stack (tilled patches take seeds); an onRelease hook for a
+  whole object let go (unused since 1.0c); a
   HandCondition from vitality (strength, caps, usable hands); hold a food
   box to eat.
 - `fell.ts` — the felled-tree ending: release, topple, thud, dust.
@@ -124,8 +130,9 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
   rule, auto back-out, edge FOV/dip, felling aftermath (shake, scatter,
   footprint), blocked evaluation, hands wiring, vitality wiring (drains,
   halo/filter/exposure/blackout, hints), day cycle + night vision + lichen
-  scatter, rock spawning, the recipe menu and craft sessions, structures
-  and weather wiring (snap hints, rain drain, lightning, rest quality), HUD,
+  scatter, rock spawning, the long-press menus (recipes, Blueprints…, Take
+  apart), the blueprint menu, sites, craft sessions, structures and weather
+  wiring (rain drain, lightning, rest quality), HUD,
   `?seed=` / `?slowmo=` / `?debug=` / `?time=` / `?rain=`,
   `window.__rootwake`. UI
   layers have explicit z-indexes above the canvas.
