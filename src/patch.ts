@@ -13,7 +13,7 @@ import { Board, BOARD_COLS, BOARD_ROWS, type Run } from './match3';
 import { single, type TargetingStrategy } from './targeting';
 import { lookDownPoseFor, type CameraPose } from './cameraLock';
 import type { Interactable, InteractableStatus, Viewer } from './interactable';
-import { GROW_MS, PLANT_SEEDS, Sapling } from './growth';
+import { GROW_MS, PLANT_SEEDS, Sapling, WheatStalks, WHEAT_GROW_MS, WHEAT_CAPACITY, WHEAT_YIELD } from './growth';
 
 // ---- Tuning constants ---------------------------------------------------------
 /** Side of the square patch. Roughly one grid cell of the shipped game. */
@@ -72,7 +72,9 @@ export class Patch implements Interactable {
   readonly group = new THREE.Group();
   readonly board: Board;
   readonly lockReach = PATCH_LOCK_REACH;
-  readonly hintLocked = 'Tap a gem, then a neighbour, to swap. Every match tills the ground.';
+  get hintLocked(): string {
+    return this.crop === 'wheat_ripe' ? 'Tap a gem, then a neighbour, to swap. Every match harvests the wheat.' : 'Tap a gem, then a neighbour, to swap. Every match tills the ground.';
+  }
   status: InteractableStatus = 'growing';
   pool = 0;
   targeting: TargetingStrategy = single;
@@ -84,6 +86,11 @@ export class Patch implements Interactable {
   readonly lockTargets: THREE.Object3D[];
   private sapling: Sapling | null = null;
   private plantedAt = 0;
+  /** 1.1c: wheat on this patch — growing, then ripe (lockable to harvest). */
+  private wheat: WheatStalks | null = null;
+  crop: 'none' | 'wheat' | 'wheat_ripe' = 'none';
+  /** Fired when a harvest completes: scatter this many wheat seeds here. */
+  onHarvest: (patch: Patch, seeds: number) => void = () => {};
 
   private readonly stages: THREE.Group[] = [];
   private stage = -1;
@@ -158,6 +165,20 @@ export class Patch implements Interactable {
 
   feed(_target: number, amount: number): void {
     if (this.status !== 'growing') return;
+    if (this.crop === 'wheat_ripe') {
+      // Harvest: the pool fills, the stalks go, wheat seeds scatter, the ground is tilled again.
+      this.pool = Math.min(WHEAT_CAPACITY, this.pool + amount);
+      if (this.pool >= WHEAT_CAPACITY) {
+        if (this.wheat) this.group.remove(this.wheat.group);
+        this.wheat = null;
+        this.crop = 'none';
+        this.pool = PATCH_CAPACITY;
+        this.status = 'resolved';
+        this.onHarvest(this, WHEAT_YIELD);
+        this.onDone(this);
+      }
+      return;
+    }
     this.pool = Math.min(PATCH_CAPACITY, this.pool + amount);
     const before = this.stage;
     this.setStage(this.stageFor(1 - this.pool / PATCH_CAPACITY));
@@ -169,7 +190,8 @@ export class Patch implements Interactable {
   }
 
   poolText(): string {
-    if (this.status === 'planted') return 'planted';
+    if (this.crop === 'wheat_ripe') return `wheat ${this.pool}/${WHEAT_CAPACITY}`;
+    if (this.status === 'planted') return this.crop === 'wheat' ? 'wheat growing' : 'planted';
     if (this.status === 'resolved') return 'tilled';
     if (this.status === 'blocked') return 'blocked — clear the ground';
     return `soil ${this.pool}/${PATCH_CAPACITY}`;
@@ -180,29 +202,49 @@ export class Patch implements Interactable {
     return this.status === 'resolved';
   }
 
-  /** Plant from a hand. Returns the seeds consumed (0 if it can't take them). */
-  plant(seedsAvailable: number, nowMs: number): number {
+  /** Plant from a hand: tree seeds grow a sapling, wheat seeds (1.1c) grow wheat. Returns the seeds consumed (0 if it can't take them). */
+  plant(seedsAvailable: number, nowMs: number, kind: 'tree' | 'wheat' = 'tree'): number {
     if (!this.acceptsSeeds || seedsAvailable < PLANT_SEEDS) return 0;
     this.status = 'planted';
     this.plantedAt = nowMs;
     this.stages.forEach((g) => (g.visible = false));
     this.plantedLook.visible = true;
-    this.sapling = new Sapling();
-    this.sapling.group.position.y = 0.01;
-    this.group.add(this.sapling.group);
+    if (kind === 'wheat') {
+      this.crop = 'wheat';
+      this.wheat = new WheatStalks();
+      this.wheat.group.position.y = 0.01;
+      this.group.add(this.wheat.group);
+    } else {
+      this.sapling = new Sapling();
+      this.sapling.group.position.y = 0.01;
+      this.group.add(this.sapling.group);
+    }
     return PLANT_SEEDS;
   }
 
   /** Grow progress 0..1 (debug/tests read this). */
   get growth(): number {
-    return this.status === 'planted' ? Math.min(1, (this.lastNow - this.plantedAt) / GROW_MS) : 0;
+    if (this.status !== 'planted') return 0;
+    return Math.min(1, (this.lastNow - this.plantedAt) / (this.crop === 'wheat' ? WHEAT_GROW_MS : GROW_MS));
   }
   private lastNow = 0;
 
   update(nowMs: number): void {
     this.lastNow = nowMs;
-    if (this.status !== 'planted' || !this.sapling) return;
+    if (this.status !== 'planted') return;
     const p = this.growth;
+    if (this.wheat) {
+      this.wheat.setProgress(p);
+      if (p >= 1) {
+        // Ripe: lockable again, this time to harvest.
+        this.crop = 'wheat_ripe';
+        this.pool = 0;
+        this.status = 'growing';
+        this.unblockedStatus = 'growing';
+      }
+      return;
+    }
+    if (!this.sapling) return;
     this.sapling.setProgress(p);
     if (p >= 1) {
       this.group.remove(this.sapling.group);

@@ -15,6 +15,7 @@ import { lookDownPoseFor, type CameraPose } from './cameraLock';
 import { OBJECT_TYPES, type ObjectTypeId, type ObjectWorld, type WorldObject } from './objects';
 import { RING_PADDING, type Blueprint, type PiecePlan } from './blueprints';
 import { Structure, type Structures } from './structures';
+import { runeGeometry, RUNE_SEGMENTS, type RuneId } from './runes';
 
 // ---- Tuning constants ---------------------------------------------------------
 /** A piece flies from the pile into place over this long. */
@@ -503,6 +504,124 @@ export class Deconstruct implements Interactable {
         this.flights.splice(i, 1);
         f.onLand();
       }
+    }
+  }
+}
+
+
+/**
+ * Transmuting (1.1c): long-press seeds on the ground and choose a rune. A
+ * tangram-style constellation of the thing they will become floats over
+ * them; each match charges one of its angles; when the last lights, the
+ * seeds change — every plain seed within TRANSMUTE_RADIUS of the pressed one.
+ * (DiggyDwarves' transmutation, by the board instead of crystals; the same
+ * charge-then-release shape combat will use.)
+ */
+export const TRANSMUTE_RADIUS = 0.7;
+export const TRANSMUTE_HOVER = 0.55;
+export const DRAIN_TRANSMUTE = 0.012;
+const runeDim = new THREE.MeshBasicMaterial({ color: 0x3a4a5a, transparent: true, opacity: 0.55, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
+const runeLit = new THREE.MeshBasicMaterial({ color: 0xffe07a, transparent: true, opacity: 0.95, depthWrite: false, toneMapped: false, side: THREE.DoubleSide });
+
+export class Transmute implements Interactable {
+  readonly kind = 'site' as const;
+  readonly index: number;
+  readonly board: Board;
+  readonly lockReach = 3.5;
+  readonly hintLocked: string;
+  readonly lockTargets: THREE.Object3D[] = [];
+  status: InteractableStatus = 'growing';
+  onDone: (it: Interactable) => void = () => {};
+  onCharged: (charged: number, total: number) => void = () => {};
+  readonly center: THREE.Vector3;
+  readonly group = new THREE.Group();
+  private readonly segments: THREE.Mesh[] = [];
+  private charged = 0;
+  private readonly seeds: WorldObject[];
+  private doneAt = -1;
+
+  constructor(
+    readonly rune: RuneId,
+    readonly result: ObjectTypeId,
+    anchor: WorldObject,
+    private readonly objects: ObjectWorld,
+    private readonly groundY: number,
+    seed: number
+  ) {
+    this.index = 9900 + Math.floor(Math.random() * 100000);
+    this.center = anchor.position.clone();
+    this.center.y = groundY;
+    this.seeds = objects.objects.filter((o) => o.collectible && o.type.id === anchor.type.id && Math.hypot(o.position.x - this.center.x, o.position.z - this.center.z) <= TRANSMUTE_RADIUS);
+    for (const s of this.seeds) s.collectible = false; // spoken for
+    this.board = new Board(BOARD_ROWS, BOARD_COLS, seed ^ 0x7e11);
+    this.hintLocked = `The ${rune} rune: tap a gem, then a neighbour. Each match charges an angle.`;
+    // The constellation, lying flat a little above the seeds, facing up.
+    for (const geo of runeGeometry(rune)) {
+      const m = new THREE.Mesh(geo, runeDim);
+      this.segments.push(m);
+      this.group.add(m);
+    }
+    this.group.position.set(this.center.x, groundY + TRANSMUTE_HOVER, this.center.z);
+    this.group.rotation.x = -Math.PI / 2;
+  }
+
+  get total(): number {
+    return RUNE_SEGMENTS;
+  }
+  lockPose(viewer: Viewer): CameraPose {
+    const pose = lookDownPoseFor(this.center, viewer.position, viewer.forward);
+    pose.target.y += TRANSMUTE_HOVER;
+    return pose;
+  }
+  distanceTo(p: THREE.Vector3): number {
+    return Math.hypot(p.x - this.center.x, p.z - this.center.z);
+  }
+  targetFor(run: Run): number | null {
+    if (this.status !== 'growing') return null;
+    return single.target(run, { targetCount: 1, boardCols: this.board.cols, colorOfTarget: () => -1 });
+  }
+  targetWorldPosition(): THREE.Vector3 {
+    return this.group.position.clone();
+  }
+  feed(_target: number, _amount: number, nowMs: number): void {
+    if (this.status !== 'growing') return;
+    if (this.charged < this.segments.length) this.segments[this.charged].material = runeLit;
+    this.charged++;
+    this.onCharged(this.charged, this.total);
+    if (this.charged >= this.total) {
+      // The change: every seed becomes the result where it lies; the rune flares and goes.
+      for (const s of this.seeds) {
+        const at = s.position.clone();
+        const yaw = s.group.rotation.y;
+        this.objects.remove(s);
+        this.objects.spawn(this.result, at.x, this.groundY, at.z, yaw).waggle(nowMs);
+      }
+      this.doneAt = nowMs;
+      this.status = 'resolved';
+      this.onDone(this);
+    }
+  }
+  /** Backed out: the seeds are loose again; the charge stays on this session only. */
+  cancel(): void {
+    for (const s of this.seeds) s.collectible = true;
+  }
+  dispose(): void {
+    this.group.removeFromParent();
+  }
+  poolText(): string {
+    return `${this.rune} rune ${this.charged}/${this.total}`;
+  }
+  update(nowMs: number): void {
+    // A slow turn while charging; a flare and fade once done.
+    this.group.rotation.z = nowMs / 4000;
+    if (this.doneAt >= 0) {
+      const k = Math.min(1, (nowMs - this.doneAt) / 700);
+      this.group.scale.setScalar(1 + k * 1.6);
+      for (const m of this.segments) (m.material as THREE.MeshBasicMaterial).opacity = 0.95 * (1 - k);
+      if (k >= 1) this.dispose();
+    } else {
+      const pulse = 0.55 + 0.1 * Math.sin(nowMs / 300);
+      runeDim.opacity = pulse;
     }
   }
 }

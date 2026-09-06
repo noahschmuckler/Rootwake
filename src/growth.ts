@@ -60,3 +60,56 @@ export class Sapling {
     this.stages[k].scale.setScalar(0.85 + 0.15 * Math.min(1, within));
   }
 }
+
+
+// ---- 1.1c: wheat ------------------------------------------------------------------
+/** Wheat grows from four wheat seeds to four ripe stalks over this long, then waits to be harvested. */
+export const WHEAT_GROW_MS = 60_000;
+/** Seeds a harvest gives. */
+export const WHEAT_YIELD = 10;
+/** Board pool a harvest fills. */
+export const WHEAT_CAPACITY = 18;
+
+const stalkMaterial = new THREE.MeshStandardMaterial({ color: 0x8fb04a, roughness: 0.9, flatShading: true });
+const ripeMaterial = new THREE.MeshStandardMaterial({ color: 0xd9b23a, roughness: 0.8, flatShading: true });
+const headMaterial = new THREE.MeshStandardMaterial({ color: 0xe0b437, roughness: 0.7, flatShading: true });
+
+/** Four stalks at the patch's quarters: thin stems that lengthen, heads that fill out and turn gold. */
+export class WheatStalks {
+  readonly group = new THREE.Group();
+  private readonly stems: THREE.Mesh[] = [];
+  private readonly heads: THREE.Mesh[] = [];
+
+  constructor() {
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + 0.4;
+      const x = Math.cos(a) * 0.28;
+      const z = Math.sin(a) * 0.28;
+      const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.02, 1, 5), stalkMaterial);
+      stem.position.set(x, 0.5, z);
+      stem.rotation.z = 0.08 * Math.sin(i * 2.3);
+      const head = new THREE.Mesh(new THREE.CapsuleGeometry(0.035, 0.16, 2, 6), headMaterial);
+      head.position.set(x, 1.05, z);
+      head.rotation.z = 0.25 * Math.sin(i * 1.7);
+      this.stems.push(stem);
+      this.heads.push(head);
+      this.group.add(stem, head);
+    }
+    this.setProgress(0);
+  }
+
+  /** 0 → 1 over WHEAT_GROW_MS. */
+  setProgress(p: number): void {
+    const h = 0.15 + 0.85 * Math.min(1, p / 0.8); // stems reach full height by 80%
+    const ripe = Math.max(0, (p - 0.6) / 0.4); // heads swell and turn gold in the last 40%
+    this.stems.forEach((s, i) => {
+      s.scale.set(1, h, 1);
+      s.position.y = h / 2;
+      s.material = p >= 1 ? ripeMaterial : stalkMaterial;
+      const head = this.heads[i];
+      head.visible = p > 0.5;
+      head.scale.setScalar(0.3 + 0.7 * ripe);
+      head.position.y = h + 0.08;
+    });
+  }
+}

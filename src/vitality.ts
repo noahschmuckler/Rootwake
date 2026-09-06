@@ -59,6 +59,8 @@ export const TIRED = 0.45;
 export const EXHAUSTED = 0.2;
 /** The halo and greying start creeping in from here, well before the tired band, so the first sign of fatigue is what you see. */
 export const HALO_ONSET = 0.6;
+/** 1.1c: nourished (wheat, popcorn) — every drain, idle and effort alike, is multiplied by this. */
+export const NOURISHED_DRAIN = 0.6;
 // -------------------------------------------------------------------------------
 
 export type Band = 'wellfed' | 'normal' | 'tired' | 'exhausted' | 'floor';
@@ -123,9 +125,18 @@ export class Vitality {
     return this.phase.kind !== 'awake';
   }
 
+  /** 1.1c: while nourished (wheat, popcorn), every drain is scaled by this. */
+  private nourishedUntil = -1;
+  nourished(nowMs: number): boolean {
+    return nowMs < this.nourishedUntil;
+  }
+  private drainScale(): number {
+    return this.lastMs < this.nourishedUntil ? NOURISHED_DRAIN : 1;
+  }
+
   drain(amount: number): void {
     if (this.phase.kind !== 'awake') return;
-    this.value = Math.max(0, this.value - amount);
+    this.value = Math.max(0, this.value - amount * this.drainScale());
   }
 
   /** Pass 1.0: a near lightning strike. Drops you to `to` at once (never raises), and (1.0e) blacks you out for a moment. */
@@ -135,10 +146,11 @@ export class Vitality {
     if (nowMs !== undefined) this.phase = { kind: 'struck', startMs: nowMs };
   }
 
-  /** Eat one unit of food worth `amount`. Resets the diminishing counter. */
-  eat(amount: number): void {
+  /** Eat one unit of food worth `amount`. Resets the diminishing counter. Nourishing food (1.1c) also slows drains for `nourishMs`. */
+  eat(amount: number, nourishMs = 0): void {
     this.value = Math.min(VITALITY_MAX, this.value + amount);
     this.sinceEating = 0;
+    if (nourishMs > 0) this.nourishedUntil = Math.max(this.nourishedUntil, this.lastMs) + nourishMs;
     this.onEvent('ate');
   }
 
@@ -153,7 +165,7 @@ export class Vitality {
     this.lastMs = nowMs;
     switch (this.phase.kind) {
       case 'awake':
-        this.value = Math.max(0, this.value - DRAIN_PER_SECOND * dt);
+        this.value = Math.max(0, this.value - DRAIN_PER_SECOND * dt * this.drainScale());
         if (this.value <= COLLAPSE_FLOOR * VITALITY_MAX) {
           this.phase = { kind: 'fading', to: 'collapse', quality: GROUND_REST, startMs: nowMs };
           this.onEvent('collapse');
