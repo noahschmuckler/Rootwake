@@ -13,8 +13,11 @@ roof, must want a roof before there are shaped logs.
 
 ## Where we are
 
-Built and judged: Passes 0 → 0.9 (and the sky). Built, awaiting
-judgement: 1.0 (rain, lightning, walls and a roof over the bed). Next: 1.1.
+Built and judged: Passes 0 → 1.0 (rain, lightning, blueprints and the
+cabin). Built, awaiting judgement: 1.1 (the doorway cut and knuckles, the
+campfire, wheat by the rune, harvest, nourishment, popcorn). Next: what
+1.1 raises — cooking beyond popcorn, the reserve-and-release shape for
+combat, a second rune.
 
 ## Pass 0.6c — planting and the first tension
 

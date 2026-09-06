@@ -136,6 +136,20 @@ auras, one runs strong for ranged work, others stay balanced.
 
 ---
 
+**As built (1.1c).** The first better food is **wheat**, and it comes from
+the seeds you already have by **transmutation**: the character starts
+knowing one rune, the wheat rune. Long-press seeds on the ground →
+*Transmute…* → a tangram-style constellation of a wheat stalk floats over
+them; each match charges one of its angles, and when the last lights every
+plain seed within reach turns gold. Wheat seeds are food that **nourishes**:
+eating one restores a little more than a tree seed and slows every drain —
+idle, effort, rain — to 60% for a minute and a half. Four wheat seeds on
+tilled ground grow four stalks in a minute; when ripe the patch locks like
+any other and a board session harvests ten wheat seeds. Wheat seeds on a
+lit campfire pop, a moment later, into giant **popcorn** kernels: twice the
+food and a longer nourishment. (The rune is the shape combat will reuse:
+charge a reserve by the board, release it through an act.)
+
 ## 4. Shelter: why you need a roof
 
 Aesthetics aside, shelter answers environmental hazards.
@@ -267,6 +281,24 @@ one long and one short log per tree: about thirteen trees — a third of the
 thicket, which is also how the vista opens.
 
 ---
+
+### 5.5 Openings and the fire (as built, 1.1)
+
+**Cutting a doorway.** A second U beside the first makes an enclosed room,
+so walls open: with the hand axe in hand, long-press a wall log → *Cut a
+doorway here*. Each match cuts one course through: the middle of the log
+comes out as a **knuckle** (the short single-notched piece; also what "Cut
+into knuckles" makes from a notched short log) and two **half logs** stay
+either side, each keeping its outer notch. Nothing else is spent.
+
+**The campfire.** A blueprint like any other: two knuckles crossed, four
+sticks stood against each other over them, five wood shavings in the
+middle. Long-press it → *Light it*: a board session with no ingredients —
+five sparks and it catches. Lit, it is a light (a flickering point light
+and flames) that dwindles as its fuel burns down: a fresh lighting is two
+and a half minutes; drag shavings, sticks or a knuckle onto it to feed it.
+Out, it is embers; light it again. Light only for now — cooking is wheat
+popping on it (§3).
 
 ## 6. Open questions (deliberately unresolved)
 

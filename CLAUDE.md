@@ -23,10 +23,10 @@ don't add structure the prototype doesn't need yet.
 
 ## Status
 
-**Passes 0 through 0.9 judged satisfying on phone; Pass 1.0 (rain that
-drains you outdoors, lightning, blueprints and the cabin built at a site,
-rest by shelter) built 2026-09-06, awaiting evaluation. Standing rules:
-confinement→vista,
+**Passes 0 through 1.0 judged satisfying on phone; Pass 1.1 (the doorway
+cut and knuckles, the campfire, wheat by the rune with harvest,
+nourishment and popcorn) built 2026-09-06, awaiting evaluation. Standing
+rules: confinement→vista,
 objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
 `src/` holds:
 
@@ -59,10 +59,18 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
   bed), a siting (ground / on top / inside), a fits() rule against a
   structure; `blueprintsFor`, `ingredientsText`, `drawPlan` (the menu's plan
   drawing), BUILD_MATERIALS.
-- `site.ts` — `BuildSite`: an Interactable at a blueprint's site — the
-  luminous ring (green when every ingredient lies inside it), the ghost,
-  the board, and each match flying one ingredient from the pile into its
-  place; `Deconstruct`: the same backwards, pieces onto a pile out front.
+- `site.ts` — the board sessions on structures and piles: `BuildSite` (a
+  blueprint's site — the luminous ring, green when every ingredient lies
+  inside it, the ghost, each match flying one ingredient into place),
+  `Deconstruct` (backwards, pieces onto a pile out front), `CutDoorway`
+  (with the axe: each match cuts a wall course, the middle out as a
+  knuckle, half logs left), `Ignite` (five sparks light a campfire),
+  `Transmute` (a rune charges angle by angle over a seed pile, then the
+  seeds change).
+- `fire.ts` — the campfire's light and flames, fuel that burns down and is
+  fed shavings / sticks / knuckles (FUEL_MS), embers when out.
+- `runes.ts` — runes as tangram geometry (wheat: a stalk of parallelograms
+  and grain triangles), RUNE_SEGMENTS.
 - `structures.ts` — a structure is its placed pieces (real objects, no
   longer collectible) and what the game reads off them: courses / door
   courses / slats / boards / bed counts, `wallTop`, `colliders()` (low wall
@@ -73,7 +81,8 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
   sky, lightning (flash, delayed crack, near strikes that sap outdoors).
   Tuning constants at the top.
 - `growth.ts` — the sapling: three authored stages over GROW_MS;
-  PLANT_SEEDS.
+  PLANT_SEEDS; `WheatStalks` (four stems that lengthen and turn gold over
+  WHEAT_GROW_MS), WHEAT_YIELD, WHEAT_CAPACITY.
 - `daylight.ts` — the day cycle: sun/moon/hemisphere/sky/fog by time of
   day; night vision (fed = moonlit and washed, tired = dark with glow);
   overcast and lightning flash from the weather; `sunDirection`.
@@ -82,16 +91,17 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
   camera at dome distance. Generated textures, unlit, unfogged.
 - `vitality.ts` — the one stat: drains, food, rest by quality ({bed,
   shelter}: ground ceiling 0.7, bed 0.9, +0.1 for a whole roof), `sap()`
-  for lightning (with a 'struck' blackout), collapse with diminishing
-  wake-ups (never below WAKE_MIN); bands →
+  for lightning (with a 'struck' blackout), nourishment (every drain ×
+  NOURISHED_DRAIN while it lasts), collapse with diminishing wake-ups
+  (never below WAKE_MIN); bands →
   strength / caps / hands / fan reach; halo, saturation, exposure, blackout
   curves. Tuning constants at the top.
 - `objects.ts` — the weight rule: size class (20/5/1 per hand), mass,
   strength, hands-to-lift / hands-to-drag; object types (seed, stick, log,
-  lichen, rock, hand_axe, long and short logs raw and notched, the stub,
-  long and short timber, chip;
-  seeds are food; the notch grid constants; a felled tree gives a long log
-  and a short);
+  wheat_seed, popcorn, lichen, rock, hand_axe, long and short logs raw and
+  notched, the knuckle (log_stub), the half log, long and short timber,
+  chip; seeds are food, wheat and popcorn nourish; the notch grid constants;
+  a felled tree gives a long log and a short);
   authored crafting looks and `setLook` (multi-part looks: raycast
   recursively); `collectible` flag; the in-the-way waggle; WorldObject/
   ObjectWorld and the felled-tree scatter.
@@ -113,8 +123,10 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
   (`fell` or `sink`); locks from whichever side face is nearest.
 - `patch.ts` — one tillable ground patch: board + one shared pool + four
   authored stages (X-standee grass tufts → dry tufts + clods → clods), a
-  blocked state while objects lie on it (look unchanged, lock refused), and
-  a planted state that grows a sapling into a tree. Never collides.
+  blocked state while objects lie on it (look unchanged, lock refused), a
+  planted state that grows a sapling into a tree — or, from wheat seeds, a
+  wheat crop that ripens into a lockable harvest (`crop`, `onHarvest`).
+  Never collides.
 - `cameraLock.ts` — pose-to-pose lock/unlock tween; `lockedPoseFor()` is
   the Pass 0 face framing, `lookDownPoseFor()` the patch framing,
   `craftPoseFor()` the hovering-target framing.
@@ -145,8 +157,8 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
   `window.__rootwake`. UI
   layers have explicit z-indexes above the canvas.
 
-The next pass is whatever `ROADMAP.md` lists next (1.1 once 1.0 is
-judged); do not skip ahead in that order without the designer — each pass
+The next pass is whatever `ROADMAP.md` lists next (once 1.1 is judged);
+do not skip ahead in that order without the designer — each pass
 exists to answer a question the previous one raised.
 
 ## Headless checking

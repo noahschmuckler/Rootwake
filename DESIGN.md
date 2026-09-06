@@ -515,10 +515,25 @@ what was built and why.
 
 ## Status
 
-Repo scaffolded 2026-09-03. Passes 0 through 0.9 built and confirmed on
-phone playtests (plus the sky). **Pass 1.0 (weather: rain, lightning, and a
-roof over the bed) built 2026-09-06, awaiting evaluation.** Next per
-ROADMAP.md: 1.1 (fire, kindling, cooking).
+Repo scaffolded 2026-09-03. Passes 0 through 1.0 built and confirmed on
+phone playtests (plus the sky). **Pass 1.1 (the doorway cut and knuckles,
+the campfire, wheat: rune, planting, harvest, nourishment, popcorn) built
+2026-09-06, awaiting evaluation.**
+
+What 1.1 adds (designer's brief after building the cabin twice): with the
+axe in hand, long-press a wall log to cut a doorway through it, course by
+course — the middles come out as knuckles, half logs stay either side. A
+campfire blueprint (two knuckles, four sticks, five shavings), lit by a
+five-spark board session, a light that dwindles and is fed by hand. And
+better food by way of DiggyDwarves' transmutation, done with the board
+instead of crystals: the character starts with the wheat rune; long-press
+seeds → Transmute… → a tangram wheat stalk charges angle by angle and the
+seeds turn gold. Wheat seeds nourish (all drains ×0.6 for 90 s), plant
+like tree seeds into four stalks, harvest by the board for ten more, and
+pop on a lit fire into popcorn (twice the food, 150 s). The rune is the
+first sketch of the reserve-and-release shape the designer wants for
+combat. Open, flagged in code: grow time, yields, nourish factor and
+durations, fire fuel numbers, the fixed rune size.
 
 What 1.0 adds: showers. The first comes about a minute in (`?rain=1` for
 at once); the day greys and dims, the fog thickens, rain streaks fall, and
