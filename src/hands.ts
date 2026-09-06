@@ -74,6 +74,8 @@ export class Hands {
    * consumed, or null if nothing there took it.
    */
   placeOnTarget: (clientX: number, clientY: number, type: ObjectType, count: number) => number | null = () => null;
+  /** Pass 0.9: a whole object was let go into the world (a drag released, a held thing put down) — fittings may snap it. */
+  onRelease: (obj: WorldObject) => void = () => {};
   /** Pass 0.7a: eat one unit of a food type. Return false to refuse. */
   onEat: (type: ObjectType) => boolean = () => false;
   condition: HandCondition = { strength: 1, capScale: 1, handsAvailable: HANDS };
@@ -361,11 +363,12 @@ export class Hands {
       }
       this.state[hand] = { kind: 'empty' };
     } else if (s.kind === 'held') {
-      this.objects.spawn(s.type.id, at.x, this.groundY, at.z, this.player.yaw);
+      const placed = this.objects.spawn(s.type.id, at.x, this.groundY, at.z, this.player.yaw);
       for (let i = 0; i < HANDS; i++) {
         const o = this.state[i];
         if (o.kind === 'held' && o.type === s.type) this.state[i] = { kind: 'empty' };
       }
+      this.onRelease(placed);
     }
   }
 
@@ -374,6 +377,7 @@ export class Hands {
       const s = this.state[i];
       if (s.kind === 'linked' && s.obj === obj) this.state[i] = { kind: 'empty' };
     }
+    this.onRelease(obj);
   }
 
   private fly(obj: WorldObject, hand: number): void {
@@ -404,7 +408,7 @@ export class Hands {
   /** The object under the pointer, else the nearest on screen within SNAP_RADIUS_PX (in front of the camera). */
   private pickObject(clientX: number, clientY: number): WorldObject | null {
     this.raycaster.setFromCamera(this.ndc(clientX, clientY), this.camera);
-    const hit = this.raycaster.intersectObjects(this.objects.raycastTargets(), false)[0];
+    const hit = this.raycaster.intersectObjects(this.objects.raycastTargets(), true)[0];
     if (hit) return hit.object.userData.object as WorldObject;
     let best: WorldObject | null = null;
     let bestD = SNAP_RADIUS_PX;

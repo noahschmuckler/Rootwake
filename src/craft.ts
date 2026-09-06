@@ -4,14 +4,19 @@
 // hand out to strike it. As its HP dwindles its look steps down through the
 // recipe's stages; at zero it becomes the result, which lands in a free hand.
 // Backing out mid-way sets the target back down with its progress kept.
+//
+// Pass 0.9: a target too heavy to lift (a log) stays where it lies — objects
+// have weight, so it is worked on the ground, and the camera frames it there.
+// Recipes can scatter leavings (wood chips) around the work as it proceeds.
 
 import * as THREE from 'three';
 import type { Interactable, InteractableStatus, Viewer } from './interactable';
 import { Board, BOARD_COLS, BOARD_ROWS, type Run } from './match3';
 import { single } from './targeting';
-import { craftPoseFor, type CameraPose } from './cameraLock';
+import { craftPoseFor, lookDownPoseFor, type CameraPose } from './cameraLock';
 import type { ObjectWorld, WorldObject } from './objects';
 import type { Recipe } from './recipes';
+import { mulberry32 } from './colors';
 
 // ---- Tuning constants ---------------------------------------------------------
 /** Where the target hovers: ahead of the eye, about level with it (the board sits beneath). */
@@ -19,6 +24,15 @@ export const HOVER_AHEAD = 1.25;
 export const HOVER_DROP = 0.05;
 /** Idle bob of the hovering target. */
 export const HOVER_BOB = 0.02;
+/**
+ * A grounded target is framed by the patch look-down pose, aimed this far below
+ * it so it sits above the board's top row; strikes land GROUND_STRIKE_UP above its centre.
+ */
+export const GROUND_LOOK_BELOW = 0.3;
+export const GROUND_STRIKE_UP = 0.15;
+/** Where leavings fall: a ring around the work. */
+export const CHIP_RADIUS_MIN = 0.35;
+export const CHIP_RADIUS_MAX = 0.8;
 // -------------------------------------------------------------------------------
 
 export class CraftSession implements Interactable {
@@ -34,20 +48,29 @@ export class CraftSession implements Interactable {
   result: string | null = null;
 
   private readonly hover = new THREE.Vector3();
-  private readonly restPosition = new THREE.Vector3();
+  private readonly strikePoint = new THREE.Vector3();
+  /** Where the target lay (and lies again if you back out; where results and leavings land). */
+  readonly restPosition = new THREE.Vector3();
+  readonly restYaw: number;
   private readonly restRotation = new THREE.Euler();
   private hp: number;
   private stage: number;
+  private chipsSpawned = 0;
+  private readonly rand: () => number;
 
   constructor(
     readonly target: WorldObject,
     readonly recipe: Recipe,
     private readonly objects: ObjectWorld,
     viewer: Viewer,
-    seed: number
+    seed: number,
+    /** Can the hands lift it? A liftable target hovers in front of you; a heavy one is worked where it lies. */
+    readonly lifts: boolean,
+    private readonly groundY: number
   ) {
     this.index = target.id;
-    this.hintLocked = `${recipe.label}: tap a gem, then a neighbour. Each match strikes the stone.`;
+    this.hintLocked = `${recipe.label}: tap a gem, then a neighbour. Each match strikes the ${target.type.label}.`;
+    this.rand = mulberry32(seed ^ 0x9e37);
     // Progress lives on the target so leaving and returning keeps it.
     if (!target.craft || target.craft.recipeId !== recipe.id) {
       target.craft = { recipeId: recipe.id, hp: recipe.hp, stage: 0, board: new Board(BOARD_ROWS, BOARD_COLS, seed ^ 0xc4a7) };
@@ -57,12 +80,19 @@ export class CraftSession implements Interactable {
     this.stage = target.craft.stage;
 
     this.restPosition.copy(target.position);
+    this.restYaw = target.group.rotation.y;
     this.restRotation.copy(target.group.rotation);
-    const fwd = viewer.forward;
-    this.hover.set(viewer.position.x + fwd.x * HOVER_AHEAD, viewer.position.y + 0.55 - HOVER_DROP, viewer.position.z + fwd.z * HOVER_AHEAD);
-    target.group.position.copy(this.hover);
-    target.group.rotation.set(0, Math.atan2(fwd.x, fwd.z) + Math.PI / 2, 0.15);
-    target.collectible = false; // hands can't grab it while it hovers
+    if (lifts) {
+      const fwd = viewer.forward;
+      this.hover.set(viewer.position.x + fwd.x * HOVER_AHEAD, viewer.position.y + 0.55 - HOVER_DROP, viewer.position.z + fwd.z * HOVER_AHEAD);
+      this.strikePoint.copy(this.hover);
+      target.group.position.copy(this.hover);
+      target.group.rotation.set(0, Math.atan2(fwd.x, fwd.z) + Math.PI / 2, 0.15);
+    } else {
+      this.hover.copy(target.position);
+      this.strikePoint.copy(target.position).add(new THREE.Vector3(0, GROUND_STRIKE_UP, 0));
+    }
+    target.collectible = false; // hands can't grab it while it is being worked
   }
 
   get center(): THREE.Vector3 {
@@ -70,6 +100,13 @@ export class CraftSession implements Interactable {
   }
 
   lockPose(viewer: Viewer): CameraPose {
+    // A grounded target is framed like a patch: from high on the viewer's side,
+    // looking down, so the work sits above the board rather than under it.
+    if (!this.lifts) {
+      const pose = lookDownPoseFor(this.target.position, viewer.position, viewer.forward);
+      pose.target.y -= GROUND_LOOK_BELOW; // the work sits in the upper frame, clear of the board's top row
+      return pose;
+    }
     const eye = viewer.position.clone();
     eye.y += 0.55;
     return craftPoseFor(this.hover, eye, viewer.forward);
@@ -85,13 +122,27 @@ export class CraftSession implements Interactable {
   }
 
   targetWorldPosition(): THREE.Vector3 {
-    return this.hover.clone();
+    return this.strikePoint.clone();
   }
 
-  /** The framing was lifted to clear the ground: the target hovers higher too. */
+  /** The framing was lifted to clear the ground: a hovering target rises with it; a grounded one stays put. */
   onPoseLifted(dy: number): void {
+    if (!this.lifts) return;
     this.hover.y += dy;
+    this.strikePoint.y += dy;
     this.target.group.position.y = this.hover.y;
+  }
+
+  /** Leavings so far should be `fraction` of the recipe's total: scatter the difference around the work. */
+  private scatterChips(fraction: number): void {
+    const total = this.recipe.chips ?? 0;
+    const want = Math.round(total * fraction);
+    while (this.chipsSpawned < want) {
+      const a = this.rand() * Math.PI * 2;
+      const r = CHIP_RADIUS_MIN + this.rand() * (CHIP_RADIUS_MAX - CHIP_RADIUS_MIN);
+      this.objects.spawn('chip', this.restPosition.x + Math.cos(a) * r, this.groundY, this.restPosition.z + Math.sin(a) * r, this.rand() * Math.PI);
+      this.chipsSpawned++;
+    }
   }
 
   /** A strike landed. */
@@ -106,11 +157,13 @@ export class CraftSession implements Interactable {
     if (stage !== this.stage) {
       this.stage = stage;
       this.target.setLook(this.recipe.stages[stage - 1]);
+      this.scatterChips(stage / (n + 1));
     }
     this.target.craft = { ...this.target.craft!, hp: this.hp, stage: this.stage };
     if (this.hp <= 0) {
       this.status = 'resolved';
       this.result = this.recipe.result;
+      this.scatterChips(1);
       this.objects.remove(this.target);
       this.onDone(this);
     }
@@ -119,8 +172,10 @@ export class CraftSession implements Interactable {
   /** Backed out before finishing: set the target down where it was, progress kept. */
   cancel(): void {
     if (this.status !== 'growing') return;
-    this.target.group.position.copy(this.restPosition);
-    this.target.group.rotation.copy(this.restRotation);
+    if (this.lifts) {
+      this.target.group.position.copy(this.restPosition);
+      this.target.group.rotation.copy(this.restRotation);
+    }
     this.target.collectible = true;
     this.status = 'resolved'; // this session is over; a new long-press makes a new one
   }
@@ -130,7 +185,7 @@ export class CraftSession implements Interactable {
   }
 
   update(nowMs: number): void {
-    if (this.status !== 'growing') return;
+    if (this.status !== 'growing' || !this.lifts) return;
     this.target.group.position.y = this.hover.y + Math.sin(nowMs / 400) * HOVER_BOB;
   }
 }

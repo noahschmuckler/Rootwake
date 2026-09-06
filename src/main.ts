@@ -48,7 +48,9 @@ import { DayCycle, GLOW_VISIBLE, START_TIME } from './daylight';
 import { Sky } from './sky';
 import { CraftSession } from './craft';
 import { recipesFor, type Recipe } from './recipes';
-import { OBJECT_TYPES, type WorldObject } from './objects';
+import { OBJECT_TYPES, HANDS, handsToLift, type WorldObject } from './objects';
+import { Structures } from './structures';
+import type { RestQuality } from './vitality';
 import { lichenMaterial } from './objects';
 import { mulberry32 } from './colors';
 import { HAZE_COLOR, HEMI_SKY_COLOR } from './world';
@@ -124,6 +126,39 @@ hands.placeOnTarget = (x, y, type, count) => {
   return used;
 };
 
+// ---- Structures (Pass 0.9) --------------------------------------------------------
+const structures = new Structures(scene, GROUND_Y);
+// A whole object let go beside a piece it fits: it snaps into place.
+hands.onRelease = (obj) => {
+  const s = structures.trySnap(obj, objects);
+  if (!s) return;
+  hint.textContent = 'The notched logs fit together: a bed frame. Lay sticks across it.';
+  tooFarUntil = animClock + 3000;
+};
+// Sticks released over a bed frame are laid across it; seeds over a tilled patch plant it (0.6c).
+const placeSeeds = hands.placeOnTarget;
+hands.placeOnTarget = (x, y, type, count) => {
+  if (type.id === 'stick') {
+    castFrom(x, y);
+    const hit = raycaster.intersectObjects(structures.raycastTargets(), true)[0];
+    if (!hit) return null;
+    const s = hit.object.userData.structure as Structures['list'][number];
+    if (Math.hypot(s.center.x - player.position.x, s.center.z - player.position.z) > 2.6) {
+      hands.notice = 'Out of reach.';
+      return 0;
+    }
+    const used = structures.addFill(s, 'stick', count);
+    if (used === 0) {
+      hands.notice = s.kind === 'bed' ? 'The bed is made.' : 'It takes no more.';
+      return 0;
+    }
+    hint.textContent = s.kind === 'bed' ? 'A bed. Hold still on the look side beside it to sleep.' : `Sticks laid across the frame.`;
+    tooFarUntil = animClock + 3000;
+    return used;
+  }
+  return placeSeeds(x, y, type, count);
+};
+
 // ---- Lock framing safety ---------------------------------------------------------
 /** The board's lowest corner must stay this far above the ground in any lock. */
 const BOARD_GROUND_CLEARANCE = 0.12;
@@ -167,7 +202,7 @@ function viewerNow() {
 player.objectAt = (x, y) => {
   if (cameraRig.mode !== 'free') return false;
   castFrom(x, y);
-  const hit = raycaster.intersectObjects(objects.raycastTargets(), false)[0];
+  const hit = raycaster.intersectObjects(objects.raycastTargets(), true)[0];
   if (!hit) return false;
   const obj = hit.object.userData.object as WorldObject;
   return Math.hypot(obj.position.x - player.position.x, obj.position.z - player.position.z) <= 3;
@@ -175,7 +210,7 @@ player.objectAt = (x, y) => {
 
 player.onLongPress = (x, y) => {
   castFrom(x, y);
-  const hit = raycaster.intersectObjects(objects.raycastTargets(), false)[0];
+  const hit = raycaster.intersectObjects(objects.raycastTargets(), true)[0];
   if (!hit) return;
   const obj = hit.object.userData.object as WorldObject;
   const rows = recipesFor(obj.type.id, hands.heldTypes());
@@ -205,18 +240,27 @@ player.onLongPress = (x, y) => {
 renderer.domElement.addEventListener('pointerdown', () => (menu.hidden = true));
 
 function startCraft(target: WorldObject, recipe: Recipe): void {
-  craft = new CraftSession(target, recipe, objects, viewerNow(), seed * 17 + target.id);
+  const strength = vitality.effects(animClock).strength;
+  // A target the hands could lift hovers in front of you; a heavier one (a log) is worked where it lies.
+  const lifts = handsToLift(target.type.mass, strength) <= HANDS;
+  craft = new CraftSession(target, recipe, objects, viewerNow(), seed * 17 + target.id, lifts, GROUND_Y);
   craft.onDone = (it) => {
     const session = it as CraftSession;
-    // The result lands in a free hand; otherwise it drops at your feet.
     const type = OBJECT_TYPES[session.result as keyof typeof OBJECT_TYPES];
-    const free = hands.freeHand();
-    if (free >= 0) hands.give(free, type);
-    else {
-      const f = player.forward();
-      objects.spawn(type.id, player.position.x + f.x * 0.6, GROUND_Y, player.position.z + f.z * 0.6, player.yaw);
+    const count = session.recipe.resultCount ?? 1;
+    // Each result lands in a free hand if one hand can take it; otherwise it lies where the target lay.
+    const perp = new THREE.Vector3(Math.sin(session.restYaw), 0, Math.cos(session.restYaw));
+    for (let i = 0; i < count; i++) {
+      const free = hands.freeHand();
+      if (free >= 0 && handsToLift(type.mass, strength) === 1) {
+        hands.give(free, type);
+        continue;
+      }
+      const off = (i - (count - 1) / 2) * 0.5;
+      const at = session.restPosition.clone().addScaledVector(perp, off);
+      objects.spawn(type.id, at.x, GROUND_Y, at.z, session.restYaw);
     }
-    hint.textContent = `A ${type.label}.`;
+    hint.textContent = count > 1 ? `${count} ${type.label}.` : `A ${type.label}.`;
     tooFarUntil = animClock + 1800;
     onInteractableDone(it);
   };
@@ -233,11 +277,16 @@ hands.onEat = (type) => {
   return true;
 };
 player.onHop = () => vitality.drain(hands.dragging ? DRAIN_DRAG_HOP : DRAIN_HOP);
+let restQuality: RestQuality = 'ground';
 player.onRestHold = () => {
-  if (cameraRig.mode === 'free' && !vitality.busy) vitality.rest(animClock);
+  if (cameraRig.mode !== 'free' || vitality.busy) return;
+  // Pass 0.9: beside a bed you made, the same hold is a night in it.
+  restQuality = structures.bedNear(player.position.x, player.position.z) ? 'bed' : 'ground';
+  vitality.rest(animClock, restQuality);
 };
 vitality.onEvent = (what) => {
-  const text = { collapse: 'You collapse.', wake: 'You wake, still tired.', rest: 'You rest.', ate: '' }[what];
+  const rested = restQuality === 'bed' ? 'You sleep in your bed, and wake rested.' : 'You rest.';
+  const text = { collapse: 'You collapse.', wake: 'You wake, still tired.', rest: rested, ate: '' }[what];
   if (text) {
     hint.textContent = text;
     tooFarUntil = animClock + 1800;
@@ -637,7 +686,7 @@ function animate(now: number): void {
   requestAnimationFrame(animate);
 
 // Debug handle for headless/console poking. Not part of the design surface.
-(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, vitality, dayCycle, world, cameraRig, boardView, get craft() { return craft; }, startCraft, get shake() { return { shakeUntil, animClock, offset: shakeOffset.clone() }; } };
+(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, vitality, dayCycle, world, cameraRig, boardView, structures, get craft() { return craft; }, startCraft, get shake() { return { shakeUntil, animClock, offset: shakeOffset.clone() }; } };
   // Clamped at zero: the first rAF timestamp can predate the module's own init time, and a
   // negative delta once sent the animation clock negative — which armed the thud shake at load.
   const dt = Math.min(0.1, Math.max(0, (now - lastFrame) / 1000));
@@ -724,4 +773,4 @@ function animate(now: number): void {
 requestAnimationFrame(animate);
 
 // Debug handle for headless/console poking. Not part of the design surface.
-(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, vitality, dayCycle, world, cameraRig, boardView, get craft() { return craft; }, startCraft, get shake() { return { shakeUntil, animClock, offset: shakeOffset.clone() }; } };
+(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, vitality, dayCycle, world, cameraRig, boardView, structures, get craft() { return craft; }, startCraft, get shake() { return { shakeUntil, animClock, offset: shakeOffset.clone() }; } };

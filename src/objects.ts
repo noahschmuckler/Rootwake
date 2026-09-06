@@ -27,7 +27,7 @@ export function handsToDrag(mass: number, strength = STRENGTH): number {
 }
 // -------------------------------------------------------------------------------
 
-export type ObjectTypeId = 'seed' | 'stick' | 'log' | 'lichen' | 'rock' | 'hand_axe';
+export type ObjectTypeId = 'seed' | 'stick' | 'log' | 'lichen' | 'rock' | 'hand_axe' | 'log_notched' | 'log_notched_end' | 'log_offset' | 'timber' | 'chip';
 
 export interface ObjectType {
   id: ObjectTypeId;
@@ -51,6 +51,8 @@ const stone = new THREE.MeshStandardMaterial({ color: 0x7c7a74, roughness: 1, fl
 /** Lichen: rock-coloured and unlit by day; the day cycle raises its emissive for tired eyes at night. */
 export const lichenMaterial = new THREE.MeshStandardMaterial({ color: 0x6f6e68, emissive: 0x7ff0c8, emissiveIntensity: 0, roughness: 1, flatShading: true });
 const stickMaterial = new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughness: 0.95 });
+/** Freshly cut wood (notches, split faces, chips): paler than bark. */
+const cutWood = new THREE.MeshStandardMaterial({ color: 0xb8925a, roughness: 0.9, flatShading: true });
 const seedMaterial = new THREE.MeshStandardMaterial({ color: 0xe6d38f, roughness: 0.6 });
 
 export const OBJECT_TYPES: Record<ObjectTypeId, ObjectType> = {
@@ -135,13 +137,101 @@ export const OBJECT_TYPES: Record<ObjectTypeId, ObjectType> = {
     radius: 0.62,
     blocks: true,
     restHeight: 0.18,
+    build: () => logMesh(),
+  },
+  // ---- Pass 0.9: shaped logs (SYSTEMS.md §5.4). Same mass as the log they were: shaping removes little. ----
+  log_notched: {
+    id: 'log_notched',
+    label: 'notched log',
+    size: 'large',
+    mass: 4,
+    color: 0x5a3f2a,
+    radius: 0.62,
+    blocks: true,
+    restHeight: 0.18,
+    build: () => buildLook('log_notched'),
+  },
+  log_notched_end: {
+    id: 'log_notched_end',
+    label: 'end-notched log',
+    size: 'large',
+    mass: 4,
+    color: 0x5a3f2a,
+    radius: 0.62,
+    blocks: true,
+    restHeight: 0.18,
+    build: () => buildLook('log_notched_end'),
+  },
+  log_offset: {
+    id: 'log_offset',
+    label: 'offset-cut log',
+    size: 'large',
+    mass: 4,
+    color: 0x5a3f2a,
+    radius: 0.62,
+    blocks: true,
+    restHeight: 0.18,
+    build: () => buildLook('log_offset'),
+  },
+  timber: {
+    id: 'timber',
+    label: 'timber',
+    size: 'large',
+    mass: 1, // half a log, squared: lifts one-handed
+    color: 0xb8925a,
+    radius: 0.6,
+    blocks: true,
+    restHeight: 0.05,
+    build: () => buildLook('timber'),
+  },
+  chip: {
+    id: 'chip',
+    label: 'wood chips',
+    size: 'tiny',
+    mass: 0,
+    color: 0xb8925a,
+    radius: 0.05,
+    blocks: false, // like seeds: chips don't stop the ground being tilled
+    restHeight: 0.02,
     build: () => {
-      const m = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.19, 1.25, 10), wood);
-      m.rotation.z = Math.PI / 2;
+      const m = new THREE.Mesh(new THREE.TetrahedronGeometry(0.06, 0), cutWood);
+      m.scale.set(1.3, 0.4, 1);
       return m;
     },
   },
 };
+
+/** The plain log body every log look starts from: lies along local X. */
+function logMesh(length = 1.25): THREE.Mesh {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.19, length, 10), wood);
+  m.rotation.z = Math.PI / 2;
+  return m;
+}
+
+/** A notch cut into a log: a pale wedge set into the bark at x, on top (up) or underneath. */
+function notch(x: number, up: boolean): THREE.Mesh {
+  const n = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 0.4), cutWood);
+  n.position.set(x, up ? 0.13 : -0.13, 0);
+  return n;
+}
+
+/** Axe marks: thin pale slashes lying on the top of the bark. */
+function scoreMarks(count: number, parent: THREE.Object3D): void {
+  for (let i = 0; i < count; i++) {
+    const s = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.015, 0.24), cutWood);
+    const t = (i / Math.max(1, count - 1) - 0.5) * 0.9;
+    s.position.set(t, 0.165, 0);
+    s.rotation.y = 0.35 * Math.sin(i * 1.7);
+    parent.add(s);
+  }
+}
+
+/** A holder mesh so a multi-part look is still one Mesh for raycasting/userData. */
+function holder(material: THREE.Material, ...parts: THREE.Object3D[]): THREE.Mesh {
+  const h = new THREE.Mesh(new THREE.BufferGeometry(), material);
+  h.add(...parts);
+  return h;
+}
 
 /**
  * Authored intermediate looks a crafting target steps through (Pass 0.8).
@@ -160,6 +250,44 @@ export function buildLook(look: string): THREE.Mesh {
       const m = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.16, 0.3, 5), stone);
       m.rotation.z = Math.PI / 2;
       return m;
+    }
+    // ---- Pass 0.9: log shaping (all lie along local X like the log) ----
+    case 'log_scored': {
+      const h = holder(wood, logMesh());
+      scoreMarks(5, h);
+      return h;
+    }
+    case 'log_split': {
+      // Cut most of the way through: a pale split runs the length of the top.
+      const split = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.08, 0.06), cutWood);
+      split.position.y = 0.15;
+      const h = holder(wood, logMesh(), split);
+      scoreMarks(3, h);
+      return h;
+    }
+    case 'log_notched': {
+      const body = logMesh();
+      return holder(wood, body, notch(0.48, true), notch(-0.48, true), notch(0.48, false), notch(-0.48, false));
+    }
+    case 'log_notched_end': {
+      const body = logMesh();
+      return holder(wood, body, notch(0.48, true));
+    }
+    case 'log_offset': {
+      // One end stepped: the top half runs on past the bottom half, to lap the next log.
+      const body = logMesh(0.95);
+      body.position.x = -0.15;
+      const tongue = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.18, 0.55, 10), wood);
+      tongue.rotation.z = Math.PI / 2;
+      tongue.scale.set(1, 1, 0.55);
+      tongue.position.set(0.35, 0.08, 0);
+      const face = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.02, 0.3), cutWood);
+      face.position.set(0.35, -0.01, 0);
+      return holder(wood, body, tongue, face);
+    }
+    case 'timber': {
+      const plank = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.1, 0.24), cutWood);
+      return holder(cutWood, plank);
     }
     case 'hand_axe':
     default: {
@@ -218,8 +346,13 @@ export class WorldObject {
 
   constructor(readonly type: ObjectType) {
     this.mesh = type.build();
-    this.mesh.userData.object = this;
+    this.own(this.mesh);
     this.group.add(this.mesh);
+  }
+
+  /** Tag a look (and every part of a multi-part look) as this object, for recursive raycasts. */
+  private own(mesh: THREE.Object3D): void {
+    mesh.traverse((m) => (m.userData.object = this));
   }
 
   get position(): THREE.Vector3 {
@@ -230,7 +363,7 @@ export class WorldObject {
   setLook(look: string): void {
     this.group.remove(this.mesh);
     this.mesh = buildLook(look);
-    this.mesh.userData.object = this;
+    this.own(this.mesh);
     this.group.add(this.mesh);
   }
 
@@ -268,7 +401,7 @@ export class ObjectWorld {
     for (const o of this.objects) o.updateWaggle(nowMs);
   }
 
-  /** Meshes for raycasting; each carries userData.object. */
+  /** Meshes for raycasting (cast recursively: looks can be multi-part); every part carries userData.object. */
   raycastTargets(): THREE.Object3D[] {
     return this.objects.filter((o) => o.collectible).map((o) => o.mesh);
   }

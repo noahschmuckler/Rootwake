@@ -19,9 +19,20 @@ export const DRAIN_PER_SECOND = 0.0015; // awake, idle: full → empty in ~11 mi
 /** Food. Seeds are poor food. */
 export const SEED_VITALITY = 0.04;
 export const EAT_INTERVAL_MS = 260; // one seed per this while the box is held
-/** Rest (outdoors, no shelter yet): restores this much, to at most the outdoor ceiling. */
-export const REST_RESTORE = 0.35;
-export const REST_CEILING_OUTDOORS = 0.7;
+/**
+ * Rest restores this much, to at most a ceiling, by where you lie (SYSTEMS §1.2, §4).
+ * On the ground the ceiling is 0.7. Pass 0.9: a bed you fitted yourself raises it
+ * toward 0.9 (above WELL_FED, so the warm rim is the first thing a good sleep shows)
+ * and restores more. Open question (SYSTEMS §6): ceiling vs slower drain — this
+ * picks the ceiling, as ROADMAP 0.9 asks.
+ */
+export type RestQuality = 'ground' | 'bed';
+export const REST: Record<RestQuality, { restore: number; ceiling: number }> = {
+  ground: { restore: 0.35, ceiling: 0.7 },
+  bed: { restore: 0.5, ceiling: 0.9 },
+};
+export const REST_RESTORE = REST.ground.restore;
+export const REST_CEILING_OUTDOORS = REST.ground.ceiling;
 /** Collapse: the floor, the wake level, and how each collapse/rest without food shrinks it. */
 export const COLLAPSE_FLOOR = 0.05;
 export const WAKE_LEVEL = 0.35;
@@ -65,7 +76,10 @@ export interface VitalityEffects {
   vision: number;
 }
 
-type Phase = { kind: 'awake' } | { kind: 'fading'; to: 'collapse' | 'rest'; startMs: number } | { kind: 'waking'; startMs: number };
+type Phase =
+  | { kind: 'awake' }
+  | { kind: 'fading'; to: 'collapse' | 'rest'; quality: RestQuality; startMs: number }
+  | { kind: 'waking'; startMs: number };
 
 export class Vitality {
   value = START_VITALITY;
@@ -102,10 +116,10 @@ export class Vitality {
     this.onEvent('ate');
   }
 
-  /** Lie down where you are. */
-  rest(nowMs: number): void {
+  /** Lie down where you are — on the ground, or in a bed (Pass 0.9). */
+  rest(nowMs: number, quality: RestQuality = 'ground'): void {
     if (this.phase.kind !== 'awake') return;
-    this.phase = { kind: 'fading', to: 'rest', startMs: nowMs };
+    this.phase = { kind: 'fading', to: 'rest', quality, startMs: nowMs };
   }
 
   update(nowMs: number): void {
@@ -115,7 +129,7 @@ export class Vitality {
       case 'awake':
         this.value = Math.max(0, this.value - DRAIN_PER_SECOND * dt);
         if (this.value <= COLLAPSE_FLOOR * VITALITY_MAX) {
-          this.phase = { kind: 'fading', to: 'collapse', startMs: nowMs };
+          this.phase = { kind: 'fading', to: 'collapse', quality: 'ground', startMs: nowMs };
           this.onEvent('collapse');
         }
         break;
@@ -126,8 +140,9 @@ export class Vitality {
           if (this.phase.to === 'collapse') {
             this.value = Math.max(this.value, WAKE_LEVEL * factor * VITALITY_MAX);
           } else {
-            const ceiling = REST_CEILING_OUTDOORS * VITALITY_MAX;
-            this.value = Math.min(Math.max(this.value, ceiling), this.value + REST_RESTORE * factor);
+            const rest = REST[this.phase.quality];
+            const ceiling = rest.ceiling * VITALITY_MAX;
+            this.value = Math.min(Math.max(this.value, ceiling), this.value + rest.restore * factor);
             this.value = Math.max(this.value, COLLAPSE_FLOOR * VITALITY_MAX + 0.02);
           }
           const was = this.phase.to;
