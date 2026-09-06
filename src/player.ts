@@ -12,7 +12,12 @@ import * as THREE from 'three';
 export const EYE_HEIGHT = 0.55;
 export const PLAYER_RADIUS = 0.25;
 /** Fraction of the screen width (from the left) where a press becomes a move, not a look. */
-export const MOVE_ZONE = 0.42;
+/**
+ * Fraction of the screen (from the left) where a hold is a move. 0 since 1.0e:
+ * the walk button moves you, so the whole screen is look / tap / press
+ * (designer, after the buttons playtest). The constant stays as the knob.
+ */
+export const MOVE_ZONE = 0;
 export const LOOK_SENSITIVITY = 0.0042; // radians per px
 export const PITCH_LIMIT = Math.PI * 0.42;
 /** A press that moves less than this and lifts within TAP_MS counts as a tap. */
@@ -47,6 +52,11 @@ export const THIRD_AHEAD = 2.0;
 export const THIRD_TREE_CLEARANCE = 0.45; // from a tree's centre: the trunk and its core
 /** Drag-to-orbit sensitivity while the camera is locked (radians per pixel). */
 export const ORBIT_SENSITIVITY = 0.006;
+/** How far a close strike throws you. */
+export const KNOCK_DISTANCE = 0.7;
+/** Third-person zoom range (the zoom buttons). */
+export const THIRD_ZOOM_MIN = 0.55;
+export const THIRD_ZOOM_MAX = 2.2;
 /** A still hold on a world object this long opens its recipes (Pass 0.8). */
 export const LONG_PRESS_MS = 450;
 // -------------------------------------------------------------------------------
@@ -120,6 +130,10 @@ export class Player {
   view: 'first' | 'third' = 'first';
   /** Main shrinks the third-person distance inside a structure. */
   thirdBackScale = 1;
+  /** The zoom buttons scale the third-person distance (Pass 1.0e). */
+  thirdZoom = 1;
+  /** Height of what you stand on above the ground plane (a timber floor): main provides it. Eye and fan follow. */
+  standHeightAt: (x: number, z: number) => number = () => 0;
   /** The figure you see in third person: a stocky body and a head, facing your yaw. */
   readonly avatar = new THREE.Group();
   /** Pass 0.8: is there a pressable world object under this screen point? main.ts answers. */
@@ -191,7 +205,16 @@ export class Player {
   }
 
   eye(): THREE.Vector3 {
-    return new THREE.Vector3(this.position.x, this.position.y + EYE_HEIGHT, this.position.z);
+    return new THREE.Vector3(this.position.x, this.position.y + this.standHeightAt(this.position.x, this.position.z) + EYE_HEIGHT, this.position.z);
+  }
+
+  /** Pass 1.0e: a close lightning strike throws you a step. Colliders and the edge still apply next frame. */
+  knock(): void {
+    const a = Math.random() * Math.PI * 2;
+    const to = new THREE.Vector3(this.position.x + Math.cos(a) * KNOCK_DISTANCE, this.position.y, this.position.z + Math.sin(a) * KNOCK_DISTANCE);
+    if (this.isWalkable && !this.isWalkable(to)) return;
+    this.move = null;
+    this.position.copy(to);
   }
 
   forward(): THREE.Vector3 {
@@ -215,8 +238,8 @@ export class Player {
     }
     const fx = -Math.sin(this.yaw);
     const fz = -Math.cos(this.yaw);
-    const back = THIRD_BACK * this.thirdBackScale;
-    const up = THIRD_UP * this.thirdBackScale;
+    const back = THIRD_BACK * this.thirdBackScale * this.thirdZoom;
+    const up = THIRD_UP * this.thirdBackScale * this.thirdZoom;
     const want = new THREE.Vector3(eye.x - fx * back, eye.y + up, eye.z - fz * back);
     // The camera inside a trunk: pull it in along the line until it clears. Trees merely in the
     // way are faded by main.ts (the locked-view rule), so the view stays a moderate zoom-out.
@@ -331,7 +354,7 @@ export class Player {
         cand.point.set(this.position.x + (fx * cos + fz * sin) * dist, this.position.y, this.position.z + (-fx * sin + fz * cos) * dist);
         const ok = this.isFree(cand.point) && this.pathClear(this.position, cand.point);
         cand.marker.visible = ok;
-        cand.marker.position.set(cand.point.x, this.position.y + 0.02, cand.point.z);
+        cand.marker.position.set(cand.point.x, this.position.y + this.standHeightAt(cand.point.x, cand.point.z) + 0.02, cand.point.z);
       }
     }
     this.refreshPick();

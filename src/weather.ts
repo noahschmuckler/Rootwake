@@ -14,12 +14,12 @@ import type { DryStrip } from './structures';
 
 // ---- Tuning constants ---------------------------------------------------------
 /** Dry spell before a shower, and shower length (ms of animation time). */
-export const DRY_MIN_MS = 70_000;
-export const DRY_MAX_MS = 150_000;
+export const DRY_MIN_MS = 150_000;
+export const DRY_MAX_MS = 300_000;
 export const RAIN_MIN_MS = 30_000;
 export const RAIN_MAX_MS = 55_000;
 /** The first shower comes sooner than a dry spell: the phone session should meet rain. */
-export const FIRST_DRY_MS = 55_000;
+export const FIRST_DRY_MS = 110_000;
 /** Ramp in/out of a shower. */
 export const RAIN_RAMP_MS = 8_000;
 /**
@@ -29,10 +29,12 @@ export const RAIN_RAMP_MS = 8_000;
  */
 export const DRAIN_RAIN_PER_SECOND = 0.0015;
 /** Lightning: mean interval at full rain, how often a strike is close, what it saps you to. */
-export const LIGHTNING_MEAN_MS = 16_000;
-export const LIGHTNING_NEAR_CHANCE = 0.3;
+export const LIGHTNING_MEAN_MS = 40_000;
+export const LIGHTNING_NEAR_CHANCE = 0.12;
 export const LIGHTNING_SAP_TO = 0.16; // just under the exhausted band (0.2): dangerously low, not the floor
 export const FLASH_MS = 160;
+/** A close strike's flash lasts longer, and the screen goes white with it (main's #flash). */
+export const NEAR_FLASH_MS = 420;
 export const THUNDER_DELAY_MS = 600;
 /** Overcast: how much a full shower dims the sun / hemisphere and thickens the fog. */
 export const OVERCAST_SUN = 0.35;
@@ -70,6 +72,7 @@ export class Weather {
   private lastMs = -1;
   private thunderAt = -1;
   private thunderNear = false;
+  private flashMs = FLASH_MS;
 
   /** How overcast the day is: follows the rain. */
   get overcast(): number {
@@ -141,11 +144,12 @@ export class Weather {
     }
 
     // Lightning, in the thick of a shower.
-    this.flash = Math.max(0, this.flash - (dt * 1000) / FLASH_MS);
+    this.flash = Math.max(0, this.flash - (dt * 1000) / this.flashMs);
     if (this.rain > 0.6 && this.rand() < (dt * 1000) / LIGHTNING_MEAN_MS) {
       this.flash = 1;
-      this.thunderAt = nowMs + THUNDER_DELAY_MS;
       this.thunderNear = this.rand() < LIGHTNING_NEAR_CHANCE;
+      this.flashMs = this.thunderNear ? NEAR_FLASH_MS : FLASH_MS;
+      this.thunderAt = nowMs + (this.thunderNear ? 120 : THUNDER_DELAY_MS); // a close one cracks almost at once
     }
     if (this.thunderAt >= 0 && nowMs >= this.thunderAt) {
       this.thunderAt = -1;

@@ -35,7 +35,7 @@
 
 import * as THREE from 'three';
 import { CameraRig, lockedPoseFor, type CameraMode, type CameraPose } from './cameraLock';
-import { Player } from './player';
+import { Player, THIRD_ZOOM_MIN, THIRD_ZOOM_MAX } from './player';
 import { Voxel } from './voxel';
 import { Patch } from './patch';
 import type { Interactable } from './interactable';
@@ -208,17 +208,23 @@ for (const [el, k] of [
   [zoomOutButton, 1.25],
 ] as const) {
   el.addEventListener('pointerdown', (e) => e.stopPropagation());
-  el.addEventListener('click', () => reframeLocked((o) => (o.radius *= k)));
+  el.addEventListener('click', () => {
+    if (cameraRig.mode === 'free') player.thirdZoom = THREE.MathUtils.clamp(player.thirdZoom * k, THIRD_ZOOM_MIN, THIRD_ZOOM_MAX);
+    else reframeLocked((o) => (o.radius *= k));
+  });
 }
 
 // ---- Third person and the walk button (Pass 1.0d) --------------------------------
 scene.add(player.avatar);
+// A timber floor is ground you stand on (1.0e): the eye and the waypoint fan rise onto it.
+player.standHeightAt = (x, z) => (structures.list.some((st) => st.floorBoards > 0 && st.inside(x, z)) ? 0.1 : 0);
 const viewButton = document.getElementById('view') as HTMLButtonElement;
 viewButton.addEventListener('pointerdown', (e) => e.stopPropagation());
 viewButton.addEventListener('click', () => {
   player.view = player.view === 'first' ? 'third' : 'first';
   viewButton.innerHTML = player.view === 'third' ? '<b>◉</b>1st' : '<b>◎</b>3rd';
   viewButton.classList.toggle('active', player.view === 'third');
+  updateHud(); // the zoom buttons follow the view
 });
 const walkButton = document.getElementById('walk') as HTMLButtonElement;
 walkButton.addEventListener('pointerdown', (e) => {
@@ -668,16 +674,23 @@ weather.onRain = (raining) => {
   tooFarUntil = animClock + 3200;
   updateHud();
 };
+const flashSheet = document.getElementById('flash')!;
+let flashUntil = -1;
+const FLASH_SHEET_MS = 380;
 weather.onLightning = (near) => {
   shakeUntil = animClock + SHAKE_MS; // the crack
   if (!near) return;
   if (structures.shelterAt(player.position.x, player.position.z) > 0) {
     hint.textContent = 'Lightning, close. The roof holds.';
   } else {
-    vitality.sap(LIGHTNING_SAP_TO);
-    hint.textContent = 'Lightning strikes close by.';
+    // Struck (1.0e): the screen goes white, you are thrown a step, everything goes black,
+    // and it comes back up on what the strike left you with.
+    flashUntil = animClock + FLASH_SHEET_MS;
+    player.knock();
+    vitality.sap(LIGHTNING_SAP_TO, animClock + FLASH_SHEET_MS * 0.5);
+    hint.textContent = 'Struck. You come to on the ground, shaking.';
   }
-  tooFarUntil = animClock + 3200;
+  tooFarUntil = animClock + 4200;
 };
 
 // Lichen on the rock: near the outer trees and toward the lip. Rock-coloured by day.
@@ -779,7 +792,7 @@ const hint = document.getElementById('hint')!;
 const backButton = document.getElementById('back') as HTMLButtonElement;
 
 const HINTS: Record<CameraMode, string> = {
-  free: 'Hold on the left to move, drag to look, tap growth or grass to lock in. Drag a hand box to a thing to take or place it.',
+  free: 'Hold walk to move, drag to look, tap growth or grass to lock in, long-press a thing for what it can become. Drag a hand box to a thing to take or place it.',
   locking: '',
   locked: '',
   unlocking: '',
@@ -856,8 +869,9 @@ function updateHud(): void {
   hud.textContent = parts.join(' · ');
   backButton.hidden = !(cameraRig.mode === 'locked' && locked?.status === 'growing');
   const lockedNow = cameraRig.mode === 'locked' && locked?.status === 'growing';
-  zoomInButton.hidden = !lockedNow;
-  zoomOutButton.hidden = !lockedNow;
+  const zoomable = lockedNow || (cameraRig.mode === 'free' && player.view === 'third');
+  zoomInButton.hidden = !zoomable;
+  zoomOutButton.hidden = !zoomable;
   walkButton.hidden = cameraRig.mode !== 'free';
   viewButton.hidden = cameraRig.mode !== 'free';
 }
@@ -978,6 +992,7 @@ function animate(now: number): void {
   // The rain sheet is rain on your face: none under a roof — there you look out at it.
   const roofed = structures.shelterAt(player.position.x, player.position.z) > 0;
   rainSheet.style.opacity = (roofed ? 0 : weather.rain * RAIN_SHEET_OPACITY).toFixed(3);
+  flashSheet.style.opacity = flashUntil > animClock ? Math.min(1, (flashUntil - animClock) / (FLASH_SHEET_MS * 0.6)).toFixed(3) : '0';
   if (weather.rain > 0.3 && roofed !== wasRoofed && animClock > tooFarUntil) {
     hint.textContent = roofed ? 'Under your roof. The rain falls outside.' : 'Out in the rain again.';
     tooFarUntil = animClock + 2600;

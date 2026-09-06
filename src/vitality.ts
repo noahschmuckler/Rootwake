@@ -94,7 +94,11 @@ export interface VitalityEffects {
 type Phase =
   | { kind: 'awake' }
   | { kind: 'fading'; to: 'collapse' | 'rest'; quality: RestQuality; startMs: number }
+  | { kind: 'struck'; startMs: number }
   | { kind: 'waking'; startMs: number };
+
+/** Pass 1.0e: a close strike — the screen is black this long before it comes up on your new, low level. */
+export const STRIKE_BLACK_MS = 1100;
 
 export class Vitality {
   value = START_VITALITY;
@@ -124,10 +128,11 @@ export class Vitality {
     this.value = Math.max(0, this.value - amount);
   }
 
-  /** Pass 1.0: a near lightning strike. Drops you to `to` at once (never raises). */
-  sap(to: number): void {
+  /** Pass 1.0: a near lightning strike. Drops you to `to` at once (never raises), and (1.0e) blacks you out for a moment. */
+  sap(to: number, nowMs?: number): void {
     if (this.phase.kind !== 'awake') return;
     this.value = Math.min(this.value, to * VITALITY_MAX);
+    if (nowMs !== undefined) this.phase = { kind: 'struck', startMs: nowMs };
   }
 
   /** Eat one unit of food worth `amount`. Resets the diminishing counter. */
@@ -172,6 +177,9 @@ export class Vitality {
           this.onEvent(was === 'rest' ? 'rest' : 'wake');
         }
         break;
+      case 'struck':
+        if (nowMs - this.phase.startMs >= STRIKE_BLACK_MS) this.phase = { kind: 'waking', startMs: nowMs };
+        break;
       case 'waking':
         if (nowMs - this.phase.startMs >= BLACKOUT_MS) this.phase = { kind: 'awake' };
         break;
@@ -187,6 +195,7 @@ export class Vitality {
     const haloLight = clamp01((v - WELL_FED) / (1 - WELL_FED));
     let blackout = 0;
     if (this.phase.kind === 'fading') blackout = clamp01((nowMs - this.phase.startMs) / BLACKOUT_MS);
+    else if (this.phase.kind === 'struck') blackout = 1;
     else if (this.phase.kind === 'waking') blackout = 1 - clamp01((nowMs - this.phase.startMs) / BLACKOUT_MS);
     const tiers: Record<Band, [number, number, number, number]> = {
       // strength, capScale, hands (always 2 — see VitalityEffects), fanScale
