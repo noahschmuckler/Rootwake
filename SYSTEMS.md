@@ -54,7 +54,8 @@ movement, and *what you can see*.
   what you have on day one. Better food later (crops from planted seeds,
   foraged things, cooked things) restores more and raises the ceiling.
 - **Rest.** Sleeping restores vitality. How much, and how high the ceiling
-  goes, depends on shelter (§4).
+  goes, depends on shelter (§4). As built (0.9): on the ground the ceiling
+  is 0.7; in a bed you made it is 0.9, and the restore is larger.
 - **Collapse.** When vitality hits the floor you collapse and wake still
   tired. **Each collapse without eating in between restores less.** You are
   never dead. At the extreme you can only look around, move once, and
@@ -215,6 +216,14 @@ operation leaves something physical behind that answers another need
 Fitted logs stack into walls log-cabin style; timber makes roof pieces
 (§4). The pieces are objects with weight: a wall segment is placed by
 dragging the shaped log to where it goes, and it stays heavy.
+
+**Fittings and fills (0.9).** A shaped piece let go beside a piece it fits
+snaps into place — the first fitting is two both-ends-notched logs side by
+side, a stick's length apart: a **bed frame**. Structures then take fills:
+a hand of sticks laid across the frame is the lattice, and the frame is a
+**bed** — the first thing sleep quality can key off (§1.2). Fittings and
+fills are rows of data (`structures.ts`), not code paths, so walls and
+roofs (1.0) add rows.
 
 ---
 

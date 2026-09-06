@@ -23,9 +23,9 @@ don't add structure the prototype doesn't need yet.
 
 ## Status
 
-**Passes 0 through 0.7b judged satisfying on phone; Pass 0.8 (rocks, the
-long-press recipe menu, the knapped hand axe) built 2026-09-05, awaiting
-evaluation. Standing rules: confinement→vista,
+**Passes 0 through 0.8 judged satisfying on phone; Pass 0.9 (shaping logs
+with the hand axe, the notched-log bed frame, sleeping in a bed) built
+2026-09-06, awaiting evaluation. Standing rules: confinement→vista,
 objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
 `src/` holds:
 
@@ -43,11 +43,18 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
 - `interactable.ts` — what main.ts needs from anything it can lock onto
   and feed; implemented by `Voxel`, `Patch` and `CraftSession`. Status
   includes 'blocked' and 'planted'.
-- `recipes.ts` — the recipe table (target, required held object, result,
-  HP, staged looks, drain) and the filter by what's in hand.
-- `craft.ts` — a crafting session: the target hovers ahead, the board plays
-  it, strikes step its look, the result lands in a hand; progress lives on
-  the target across back-outs.
+- `recipes.ts` — the recipe table (target, required held object, result
+  and count, chips, HP, staged looks, drain) and the filter by what's in
+  hand: knapping, and the four log-shaping recipes behind the hand axe.
+- `craft.ts` — a crafting session: a liftable target hovers ahead, a heavy
+  one (a log) is worked where it lies under the patch look-down framing;
+  the board plays it, strikes step its look and scatter chips, results land
+  in a hand or where the target lay; progress lives on the target across
+  back-outs.
+- `structures.ts` — fittings and fills as data: a notched log let go
+  beside another snaps parallel into a bed frame; sticks laid on the frame
+  make a bed; `bedNear()` for the rest gesture. Pieces stop being
+  collectible (taking a structure apart is not built).
 - `growth.ts` — the sapling: three authored stages over GROW_MS;
   PLANT_SEEDS.
 - `daylight.ts` — the day cycle: sun/moon/hemisphere/sky/fog by time of
@@ -56,19 +63,23 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
 - `sky.ts` — the visible sky: sun disc + glow, moon opposite, a turning
   star field that fades in at dusk, drifting cloud sprites; rides on the
   camera at dome distance. Generated textures, unlit, unfogged.
-- `vitality.ts` — the one stat: drains, food, rest, collapse with
-  diminishing wake-ups; bands → strength / caps / hands / fan reach; halo,
-  saturation, exposure, blackout curves. Tuning constants at the top.
+- `vitality.ts` — the one stat: drains, food, rest by quality (ground
+  ceiling 0.7, bed 0.9), collapse with diminishing wake-ups; bands →
+  strength / caps / hands / fan reach; halo, saturation, exposure, blackout
+  curves. Tuning constants at the top.
 - `objects.ts` — the weight rule: size class (20/5/1 per hand), mass,
   strength, hands-to-lift / hands-to-drag; object types (seed, stick, log,
-  lichen, rock, hand_axe; seeds are food); authored crafting looks and
-  `setLook`; `collectible` flag; the in-the-way waggle; WorldObject/
+  lichen, rock, hand_axe, the shaped logs, timber, chip; seeds are food);
+  authored crafting looks and `setLook` (multi-part looks: raycast
+  recursively); `collectible` flag; the in-the-way waggle; WorldObject/
   ObjectWorld and the felled-tree scatter.
 - `hands.ts` — the two hand boxes and the one gesture (drag a box to a
   thing: take / gather / lift / link / place), leashes, fly-to-box, the
   two-hand log drag on a rope, strain; a placeOnTarget hook for things
-  that take a stack (tilled patches take seeds); a HandCondition from
-  vitality (strength, caps, usable hands); hold a food box to eat.
+  that take a stack (tilled patches take seeds, bed frames take sticks); an
+  onRelease hook for a whole object let go (fittings snap it); a
+  HandCondition from vitality (strength, caps, usable hands); hold a food
+  box to eat.
 - `fell.ts` — the felled-tree ending: release, topple, thud, dust.
 - `rig.ts` — hand-placed trunk/branch curves/flowers, instanced per side
   face (1 or 4) around a seeded dark foliage core; invisible hit spheres,
@@ -102,7 +113,7 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
   `?seed=` / `?slowmo=` / `?debug=` / `?time=`, `window.__rootwake`. UI
   layers have explicit z-indexes above the canvas.
 
-The next pass is whatever `ROADMAP.md` lists next (0.9 once 0.8 is
+The next pass is whatever `ROADMAP.md` lists next (1.0 once 0.9 is
 judged); do not skip ahead in that order without the designer — each pass
 exists to answer a question the previous one raised.
 

@@ -515,10 +515,23 @@ what was built and why.
 
 ## Status
 
-Repo scaffolded 2026-09-03. Passes 0 through 0.7b built and confirmed on
-phone playtests (plus the sky). **Pass 0.8 (rocks and the stone hand axe)
-built 2026-09-05, awaiting evaluation.** Next per ROADMAP.md: 0.9 (shaping
-logs and the first bed).
+Repo scaffolded 2026-09-03. Passes 0 through 0.8 built and confirmed on
+phone playtests (plus the sky). **Pass 0.9 (shaping logs and the first bed)
+built 2026-09-06, awaiting evaluation.** Next per ROADMAP.md: 1.0 (weather,
+the reason for the roof).
+
+What 0.9 adds: with the hand axe in hand, long-press a log for four
+shapings — notch both ends, notch one end, an offset cut, cut into timber.
+A log is too heavy to lift, so it is worked where it lies, framed like a
+patch from above; each strike chips it and wood chips (kindling, later)
+scatter round the work. Drag a notched log beside another notched log and
+let go: they snap parallel into a bed frame. Lay a hand of sticks across
+the frame and it is a bed. The rest gesture beside it is a night in bed:
+vitality climbs to 0.9 instead of the ground's 0.7 — above the well-fed
+line, so the warm rim is the first thing a good sleep shows. The question
+for the phone: does a bed you fitted yourself feel like the answer to the
+fatigue you have been living with? Open, flagged in code: structures can't
+be taken apart yet; the exact restore/ceiling numbers.
 
 What 0.8 adds: tilling turns up rocks. Long-press a rock and its recipes
 appear; with a rock in hand, "Knap a hand axe" is available. The target

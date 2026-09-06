@@ -13,8 +13,8 @@ roof, must want a roof before there are shaped logs.
 
 ## Where we are
 
-Built and judged: Passes 0 → 0.7b (and the sky). Built, awaiting
-judgement: 0.8 (rocks, recipe menu, hand axe). Next: 0.9.
+Built and judged: Passes 0 → 0.8 (and the sky). Built, awaiting
+judgement: 0.9 (log shaping, the bed frame, sleeping in a bed). Next: 1.0.
 
 ## Pass 0.6c — planting and the first tension
 
