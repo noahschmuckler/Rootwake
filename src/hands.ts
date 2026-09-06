@@ -76,6 +76,8 @@ export class Hands {
   placeOnTarget: (clientX: number, clientY: number, type: ObjectType, count: number) => number | null = () => null;
   /** Pass 0.9: a whole object was let go into the world (a drag released, a held thing put down) — fittings may snap it. */
   onRelease: (obj: WorldObject) => void = () => {};
+  /** Which end of the dragged object leads: decided once per drag from where the player stood. */
+  private dragLead: { obj: WorldObject | null; sign: 1 | -1 } = { obj: null, sign: 1 };
   /** Pass 0.7a: eat one unit of a food type. Return false to refuse. */
   onEat: (type: ObjectType) => boolean = () => false;
   condition: HandCondition = { strength: 1, capScale: 1, handsAvailable: HANDS };
@@ -191,9 +193,17 @@ export class Hands {
     }
     this.flies = keep;
 
-    // A dragged object trails the player on a rope and turns to face the pull.
+    // A dragged object trails the player on a rope and turns to face the pull,
+    // led by whichever end was nearer the player when the drag began (designer,
+    // after 0.9: a fixed leading end made end-notched logs land the wrong way round).
     const drag = this.dragging;
     if (drag) {
+      if (this.dragLead.obj !== drag) {
+        const axisX = Math.cos(drag.group.rotation.y);
+        const axisZ = -Math.sin(drag.group.rotation.y); // the object's local +X in the ground plane
+        const toPlayer = (this.player.position.x - drag.position.x) * axisX + (this.player.position.z - drag.position.z) * axisZ;
+        this.dragLead = { obj: drag, sign: toPlayer >= 0 ? 1 : -1 };
+      }
       const dx = this.player.position.x - drag.position.x;
       const dz = this.player.position.z - drag.position.z;
       const d = Math.hypot(dx, dz);
@@ -201,7 +211,8 @@ export class Hands {
         const k = (d - DRAG_ROPE) / d;
         drag.position.x += dx * k * Math.min(1, dt * 12);
         drag.position.z += dz * k * Math.min(1, dt * 12);
-        drag.group.rotation.y = Math.atan2(dx, dz) + Math.PI / 2;
+        // Turn so the leading end points at the pull: local +X toward the player for sign +1.
+        drag.group.rotation.y = Math.atan2(dx, dz) + Math.PI / 2 + (this.dragLead.sign > 0 ? Math.PI : 0);
       }
     }
     this.drawLines();
