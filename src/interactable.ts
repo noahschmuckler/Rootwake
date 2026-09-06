@@ -18,7 +18,7 @@ export interface Viewer {
 }
 
 export interface Interactable {
-  readonly kind: 'voxel' | 'patch' | 'craft';
+  readonly kind: 'voxel' | 'patch' | 'craft' | 'site';
   readonly index: number;
   readonly board: Board;
   readonly center: THREE.Vector3;

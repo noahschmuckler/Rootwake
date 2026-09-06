@@ -27,7 +27,7 @@ export function handsToDrag(mass: number, strength = STRENGTH): number {
 }
 // -------------------------------------------------------------------------------
 
-export type ObjectTypeId = 'seed' | 'stick' | 'log' | 'log_short' | 'lichen' | 'rock' | 'hand_axe' | 'log_long_notched' | 'log_notched' | 'timber' | 'chip';
+export type ObjectTypeId = 'seed' | 'stick' | 'log' | 'log_short' | 'lichen' | 'rock' | 'hand_axe' | 'log_long_notched' | 'log_notched' | 'log_stub' | 'timber' | 'timber_short' | 'chip';
 
 export interface ObjectType {
   id: ObjectTypeId;
@@ -66,6 +66,10 @@ export const LOG_OVERHANG = 0.15;
 export const LOG_RADIUS = 0.17;
 export const LONG_LOG_LENGTH = NOTCH_PITCH * 2 + LOG_OVERHANG * 2;
 export const SHORT_LOG_LENGTH = NOTCH_PITCH + LOG_OVERHANG * 2;
+/** The stub: half a short log with one notch in the middle — a portable notch to end a wall on. */
+export const STUB_LENGTH = 0.55;
+export const TIMBER_THICK = 0.1;
+export const TIMBER_WIDE = 0.24;
 
 export const OBJECT_TYPES: Record<ObjectTypeId, ObjectType> = {
   seed: {
@@ -190,17 +194,42 @@ export const OBJECT_TYPES: Record<ObjectTypeId, ObjectType> = {
     restHeight: 0.17,
     build: () => buildLook('log_notched'),
   },
+  log_stub: {
+    id: 'log_stub',
+    halfLength: STUB_LENGTH / 2,
+    label: 'stub',
+    size: 'large',
+    mass: 1, // half a short log: a portable notch. Lifts one-handed.
+    color: 0x5a3f2a,
+    radius: 0.3,
+    blocks: true,
+    restHeight: 0.17,
+    build: () => buildLook('log_stub'),
+  },
+  // Timber comes in the two log lengths: long slats span the cabin, short ones are furniture.
   timber: {
     id: 'timber',
-    halfLength: 0.6,
-    label: 'timber',
+    halfLength: LONG_LOG_LENGTH / 2,
+    label: 'long timber',
     size: 'large',
-    mass: 1, // a squared quarter of a log: lifts one-handed. Roof slats and floorboards.
+    mass: 2, // a squared quarter of a long log: two hands to lift
     color: 0xb8925a,
-    radius: 0.6,
+    radius: 1.15,
     blocks: true,
     restHeight: 0.05,
     build: () => buildLook('timber'),
+  },
+  timber_short: {
+    id: 'timber_short',
+    halfLength: SHORT_LOG_LENGTH / 2,
+    label: 'short timber',
+    size: 'large',
+    mass: 1,
+    color: 0xb8925a,
+    radius: 0.65,
+    blocks: true,
+    restHeight: 0.05,
+    build: () => buildLook('timber_short'),
   },
   chip: {
     id: 'chip',
@@ -316,8 +345,22 @@ export function buildLook(look: string): THREE.Mesh {
     case 'log_notched':
       return notched(SHORT_LOG_LENGTH, [-NOTCH_PITCH / 2, NOTCH_PITCH / 2]);
     case 'timber': {
-      const plank = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.1, 0.24), cutWood);
+      const plank = new THREE.Mesh(new THREE.BoxGeometry(LONG_LOG_LENGTH, TIMBER_THICK, TIMBER_WIDE), cutWood);
       return holder(cutWood, plank);
+    }
+    case 'timber_short': {
+      const plank = new THREE.Mesh(new THREE.BoxGeometry(SHORT_LOG_LENGTH, TIMBER_THICK, TIMBER_WIDE), cutWood);
+      return holder(cutWood, plank);
+    }
+    case 'log_stub':
+      return notched(STUB_LENGTH, [0]);
+    case 'log_stubbed': {
+      // A short log cut through the middle: two stubs' worth, still lying end to end.
+      const a = logMesh(STUB_LENGTH);
+      a.position.x = -STUB_LENGTH / 2 - 0.03;
+      const b = logMesh(STUB_LENGTH);
+      b.position.x = STUB_LENGTH / 2 + 0.03;
+      return holder(wood, a, b);
     }
     case 'hand_axe':
     default: {

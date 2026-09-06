@@ -49,7 +49,9 @@ import { Sky } from './sky';
 import { CraftSession } from './craft';
 import { recipesFor, type Recipe } from './recipes';
 import { OBJECT_TYPES, HANDS, handsToLift, type WorldObject } from './objects';
-import { Structures } from './structures';
+import { Structure, Structures } from './structures';
+import { BuildSite, Deconstruct, DRAIN_BUILD, DRAIN_UNBUILD } from './site';
+import { blueprintsFor, BUILD_MATERIALS, drawPlan, ingredientsText, type Blueprint } from './blueprints';
 import { GROUND_REST, type RestQuality } from './vitality';
 import { Weather, DRAIN_RAIN_PER_SECOND, LIGHTNING_SAP_TO } from './weather';
 import { lichenMaterial } from './objects';
@@ -129,38 +131,12 @@ hands.placeOnTarget = (x, y, type, count) => {
   return used;
 };
 
-// ---- Structures (Pass 0.9) --------------------------------------------------------
-const structures = new Structures(scene, GROUND_Y);
-// A whole object let go beside a piece it fits: it snaps into place.
-hands.onRelease = (obj) => {
-  const s = structures.trySnap(obj, objects);
-  if (!s) return;
-  hint.textContent = structures.lastSays;
-  tooFarUntil = animClock + 3000;
-};
-// Sticks released over a cabin's floor make its bed; seeds over a tilled patch plant it (0.6c).
-const placeSeeds = hands.placeOnTarget;
-hands.placeOnTarget = (x, y, type, count) => {
-  if (type.id === 'stick') {
-    castFrom(x, y);
-    const hit = raycaster.intersectObjects(structures.raycastTargets(), true)[0];
-    if (!hit) return null;
-    const s = hit.object.userData.structure as Structures['list'][number];
-    if (Math.hypot(s.center.x - player.position.x, s.center.z - player.position.z) > 2.6) {
-      hands.notice = 'Out of reach.';
-      return 0;
-    }
-    const used = structures.addSticks(s, count);
-    if (used === 0) {
-      hands.notice = s.bed ? 'The bed is made.' : s.floored ? 'It takes no more.' : 'Lay a floor first.';
-      return 0;
-    }
-    hint.textContent = structures.lastSays;
-    tooFarUntil = animClock + 3000;
-    return used;
-  }
-  return placeSeeds(x, y, type, count);
-};
+// ---- Structures (Pass 0.9 → 1.0c) ------------------------------------------------
+// Structures are built by blueprints at a site (site.ts); nothing snaps on release any more.
+const structures = new Structures(GROUND_Y);
+const sites: (BuildSite | Deconstruct)[] = [];
+/** A blueprint whose needs the HUD shows (the checkbox in the blueprint menu). */
+let trackedBlueprint: Blueprint | null = null;
 
 // ---- Lock framing safety ---------------------------------------------------------
 /** The board's lowest corner must stay this far above the ground in any lock. */
@@ -202,31 +178,23 @@ function viewerNow() {
 }
 
 /** Is there a world object under this point, within reach, that a long-press could act on? */
+/** Structure pieces you can long-press: not those of the structure you are standing inside — in there, a still hold is rest. */
+function pressableStructureTargets(): THREE.Object3D[] {
+  return structures.list.filter((s) => !s.inside(player.position.x, player.position.z)).flatMap((s) => s.pieces.map((p) => p.obj.mesh));
+}
 player.objectAt = (x, y) => {
   if (cameraRig.mode !== 'free') return false;
   castFrom(x, y);
-  const hit = raycaster.intersectObjects(objects.raycastTargets(), true)[0];
+  const hit = raycaster.intersectObjects([...objects.raycastTargets(), ...pressableStructureTargets()], true)[0];
   if (!hit) return false;
   const obj = hit.object.userData.object as WorldObject;
-  return Math.hypot(obj.position.x - player.position.x, obj.position.z - player.position.z) <= 3;
+  return Math.hypot(obj.position.x - player.position.x, obj.position.z - player.position.z) <= 3.5;
 };
 
-player.onLongPress = (x, y) => {
-  castFrom(x, y);
-  const hit = raycaster.intersectObjects(objects.raycastTargets(), true)[0];
-  if (!hit) return;
-  const obj = hit.object.userData.object as WorldObject;
-  const rows = recipesFor(obj.type.id, hands.heldTypes());
-  if (rows.length === 0) {
-    hint.textContent = `Nothing to make from a ${obj.type.label} yet.`;
-    tooFarUntil = animClock + 1400;
-    return;
-  }
+/** Show the recipe-style menu at a screen point with these rows. */
+function showMenu(x: number, y: number, rows: { label: string; small?: string; disabled?: boolean; onPick: () => void }[]): void {
   menu.innerHTML = rows
-    .map(
-      (r, i) =>
-        `<button type="button" data-i="${i}" ${r.available ? '' : 'disabled'}>${r.recipe.label}${r.available ? '' : `<small>${r.reason}</small>`}</button>`
-    )
+    .map((r, i) => `<button type="button" data-i="${i}" ${r.disabled ? 'disabled' : ''}>${r.label}${r.small ? `<small>${r.small}</small>` : ''}</button>`)
     .join('');
   menu.style.left = `${Math.min(window.innerWidth - 230, Math.max(10, x - 100))}px`;
   menu.style.top = `${Math.min(window.innerHeight - 40 - rows.length * 52, Math.max(90, y - 30))}px`;
@@ -235,12 +203,172 @@ player.onLongPress = (x, y) => {
     b.addEventListener('pointerdown', (e) => e.stopPropagation());
     b.addEventListener('click', () => {
       menu.hidden = true;
-      startCraft(obj, rows[Number(b.dataset.i)].recipe);
+      rows[Number(b.dataset.i)].onPick();
     });
   });
+}
+
+player.onLongPress = (x, y) => {
+  castFrom(x, y);
+  // A piece of a structure: what can be added to it, or take it apart.
+  const structHit = raycaster.intersectObjects(pressableStructureTargets(), true)[0];
+  if (structHit) {
+    const s = structHit.object.userData.structure as Structure;
+    const pending = sites.find((site) => site.structure === s && site.status === 'growing');
+    const rows: Parameters<typeof showMenu>[2] = [];
+    if (pending) {
+      rows.push({ label: pending instanceof BuildSite ? `Building: ${pending.blueprint.label}` : 'Taking apart', small: 'tap inside the ring to continue', disabled: true, onPick: () => {} });
+      rows.push({ label: 'Abandon that', onPick: () => abandonSite(pending) });
+    } else {
+      rows.push({ label: 'Blueprints…', small: 'add to this', onPick: () => openBlueprints(s, null) });
+      rows.push({ label: 'Take apart', small: `${s.pieces.length} pieces`, onPick: () => startDeconstruct(s) });
+    }
+    showMenu(x, y, rows);
+    return;
+  }
+  const hit = raycaster.intersectObjects(objects.raycastTargets(), true)[0];
+  if (!hit) return;
+  const obj = hit.object.userData.object as WorldObject;
+  const rows: Parameters<typeof showMenu>[2] = recipesFor(obj.type.id, hands.heldTypes()).map((r) => ({
+    label: r.recipe.label,
+    small: r.available ? undefined : r.reason,
+    disabled: !r.available,
+    onPick: () => startCraft(obj, r.recipe),
+  }));
+  if (BUILD_MATERIALS.includes(obj.type.id)) {
+    // Inside a pending site's ring, the material's menu can abandon that site; otherwise it can start one here.
+    const pending = sites.find((site) => site instanceof BuildSite && site.status === 'growing' && site.distanceTo(obj.position) <= site.ringRadius) as BuildSite | undefined;
+    if (pending) rows.push({ label: `Abandon: ${pending.blueprint.label}`, small: 'the site here', onPick: () => abandonSite(pending) });
+    else rows.push({ label: 'Blueprints…', small: 'build here, from this', onPick: () => openBlueprints(null, obj) });
+  }
+  if (rows.length === 0) {
+    hint.textContent = `Nothing to make from ${obj.type.label} yet.`;
+    tooFarUntil = animClock + 1400;
+    return;
+  }
+  showMenu(x, y, rows);
 };
-// Any other press closes the menu.
-renderer.domElement.addEventListener('pointerdown', () => (menu.hidden = true));
+// Any other press closes the menus.
+renderer.domElement.addEventListener('pointerdown', () => {
+  menu.hidden = true;
+  blueprintMenu.hidden = true;
+});
+
+// ---- Blueprints (Pass 1.0c) ----------------------------------------------------------
+const blueprintMenu = document.getElementById('blueprints')!;
+const bpPlan = document.getElementById('bp-plan') as HTMLCanvasElement;
+const bpName = document.getElementById('bp-name')!;
+const bpBlurb = document.getElementById('bp-blurb')!;
+const bpNeeds = document.getElementById('bp-needs')!;
+const bpTrack = document.getElementById('bp-track') as HTMLInputElement;
+const bpBuild = document.getElementById('bp-build') as HTMLButtonElement;
+let bpRows: { bp: Blueprint; reason: string | null }[] = [];
+let bpIndex = 0;
+let bpOn: Structure | null = null;
+let bpAnchor: WorldObject | null = null;
+
+function openBlueprints(on: Structure | null, anchor: WorldObject | null): void {
+  bpRows = blueprintsFor(on);
+  if (bpRows.length === 0) return;
+  bpOn = on;
+  bpAnchor = anchor;
+  bpIndex = 0;
+  renderBlueprint();
+  blueprintMenu.hidden = false;
+}
+function renderBlueprint(): void {
+  const row = bpRows[bpIndex];
+  drawPlan(row.bp, bpPlan);
+  bpName.textContent = `${row.bp.label}  (${bpIndex + 1}/${bpRows.length})`;
+  bpBlurb.textContent = row.bp.blurb;
+  bpNeeds.textContent = `Needs: ${ingredientsText(row.bp)}`;
+  bpTrack.checked = trackedBlueprint === row.bp;
+  bpBuild.disabled = !!row.reason;
+  bpBuild.textContent = row.reason ?? (bpOn ? 'Add it here' : 'Build here');
+}
+for (const el of [blueprintMenu]) el.addEventListener('pointerdown', (e) => e.stopPropagation());
+document.getElementById('bp-prev')!.addEventListener('click', () => {
+  bpIndex = (bpIndex + bpRows.length - 1) % bpRows.length;
+  renderBlueprint();
+});
+document.getElementById('bp-next')!.addEventListener('click', () => {
+  bpIndex = (bpIndex + 1) % bpRows.length;
+  renderBlueprint();
+});
+document.getElementById('bp-close')!.addEventListener('click', () => (blueprintMenu.hidden = true));
+bpTrack.addEventListener('change', () => {
+  trackedBlueprint = bpTrack.checked ? bpRows[bpIndex].bp : null;
+  updateHud();
+});
+bpBuild.addEventListener('click', () => {
+  blueprintMenu.hidden = true;
+  const bp = bpRows[bpIndex].bp;
+  let structure = bpOn;
+  if (!structure) {
+    // A new structure where the pressed material lies, its open front toward you.
+    const at = bpAnchor ? bpAnchor.position.clone() : player.position.clone();
+    const dx = player.position.x - at.x;
+    const dz = player.position.z - at.z;
+    const yaw = Math.hypot(dx, dz) > 1e-3 ? Math.atan2(-dz, dx) : 0;
+    structure = new Structure(new THREE.Vector3(at.x, GROUND_Y, at.z), yaw);
+    structures.add(structure);
+  }
+  startSite(bp, structure);
+});
+
+function startSite(bp: Blueprint, structure: Structure): void {
+  const site = new BuildSite(bp, structure, objects, GROUND_Y, seed * 977 + sites.length * 31);
+  scene.add(site.group);
+  sites.push(site);
+  interactables.push(site);
+  site.onMissing = (type) => {
+    hint.textContent = `Needs ${OBJECT_TYPES[type].label} inside the ring.`;
+    tooFarUntil = animClock + 1600;
+  };
+  site.onPlaced = () => updateHud();
+  site.onDone = (it) => {
+    finishSite(site);
+    hint.textContent = `${bp.label}: built.`;
+    tooFarUntil = animClock + 2200;
+    onInteractableDone(it);
+  };
+  hint.textContent = `A site. Bring ${ingredientsText(bp)} inside the ring; it turns green. Tap inside to build.`;
+  tooFarUntil = animClock + 4500;
+  updateHud();
+}
+function finishSite(site: BuildSite | Deconstruct): void {
+  if (site instanceof BuildSite) site.dispose();
+  sites.splice(sites.indexOf(site), 1);
+  const i = interactables.indexOf(site);
+  if (i >= 0) interactables.splice(i, 1);
+}
+function abandonSite(site: BuildSite | Deconstruct): void {
+  site.status = 'resolved';
+  finishSite(site);
+  if (site instanceof BuildSite && site.structure.pieces.length === 0) structures.remove(site.structure);
+  hint.textContent = 'Site abandoned. What was placed stays.';
+  tooFarUntil = animClock + 2000;
+  updateHud();
+}
+function startDeconstruct(s: Structure): void {
+  const site = new Deconstruct(s, structures, GROUND_Y, seed * 611 + sites.length * 17);
+  sites.push(site);
+  interactables.push(site);
+  site.onRemoved = () => updateHud();
+  site.onDone = (it) => {
+    finishSite(site);
+    hint.textContent = 'Taken apart. The pieces lie out the front.';
+    tooFarUntil = animClock + 2200;
+    onInteractableDone(it);
+  };
+  if (site.distanceTo(player.position) > site.lockReach) {
+    hint.textContent = 'Closer.';
+    tooFarUntil = animClock + 900;
+    finishSite(site);
+    return;
+  }
+  lockOnto(site);
+}
 
 function startCraft(target: WorldObject, recipe: Recipe): void {
   const strength = vitality.effects(animClock).strength;
@@ -529,7 +657,7 @@ const FADE_CORRIDOR = 2.6;
 /** For a look-down lock on a patch, voxels this close to the patch would loom into the frame. */
 const FADE_NEAR_PATCH = 2.3;
 function obstructsLockedView(v: Voxel, target: Interactable): boolean {
-  if (target.kind === 'craft') {
+  if (target.kind === 'craft' || target.kind === 'site') {
     // The camera backs off and lifts from the player: a neighbouring tree (or its
     // flowers) can end up beside or ahead of it, over the board. Fade what is
     // near the camera or in the corridor between camera and board.
@@ -609,7 +737,7 @@ boardView.onRun = (run, origin) => {
   }
   projectiles.fire(origin, it.targetWorldPosition(target), PALETTE[run.type].hex, animClock, () => {
     it.feed(target, amount, animClock);
-    vitality.drain(it.kind === 'voxel' ? DRAIN_TREE_HIT : DRAIN_TILL_HIT);
+    vitality.drain(it.kind === 'voxel' ? DRAIN_TREE_HIT : it.kind === 'patch' ? DRAIN_TILL_HIT : it instanceof Deconstruct ? DRAIN_UNBUILD : DRAIN_BUILD);
     updateHud();
   });
 };
@@ -630,6 +758,7 @@ function updateHud(): void {
   const parts = [`seed ${seed}`, `cleared ${resolved}/${voxels.length}`, `tilled ${tilled}/${patches.length}`];
   if (planted) parts.push(`planted ${planted}`);
   if (weather.raining) parts.push('rain');
+  if (trackedBlueprint) parts.push(`${trackedBlueprint.label}: ${ingredientsText(trackedBlueprint)}`);
   if (slowmo > 1) parts.push(`slowmo ×${slowmo}`);
   if (debug) parts.push(`vit ${vitality.value.toFixed(2)} ${vitality.band}`, `time ${dayCycle.time.toFixed(2)} day ${dayCycle.day.toFixed(2)}`, `rain ${weather.rain.toFixed(2)} roof ${structures.shelterAt(player.position.x, player.position.z).toFixed(2)}`);
   if (locked && cameraRig.mode === 'locked' && locked.status === 'growing') {
@@ -671,8 +800,10 @@ let lastDebugHud = -1;
 player.onTap = (x, y) => {
   castFrom(x, y);
   if (cameraRig.mode === 'free') {
-    const targets = interactables.filter((it) => it.status === 'growing').flatMap((it) => it.lockTargets);
-    const hit = raycaster.intersectObjects(targets, false)[0];
+    // A pending site's ring wins over the ground (patches) and trees inside it.
+    const siteTargets = sites.filter((it) => it.status === 'growing').flatMap((it) => it.lockTargets);
+    const targets = interactables.filter((it) => it.status === 'growing' && it.kind !== 'site').flatMap((it) => it.lockTargets);
+    const hit = raycaster.intersectObjects(siteTargets, false)[0] ?? raycaster.intersectObjects(targets, false)[0];
     if (!hit) {
       // Tapping blocked ground: the thing in the way waggles. That is the whole hint.
       const blockedHit = raycaster.intersectObjects(patches.filter((p) => p.status === 'blocked').flatMap((p) => p.lockTargets), false)[0];
@@ -688,6 +819,12 @@ player.onTap = (x, y) => {
     if (it.distanceTo(player.position) > it.lockReach) {
       hint.textContent = 'Closer.';
       tooFarUntil = animClock + 900;
+      return;
+    }
+    if (it instanceof BuildSite && !it.isReady) {
+      const missing = it.missing();
+      hint.textContent = `Not yet: bring ${missing.map((m) => `${m.count} ${OBJECT_TYPES[m.type].label}`).join(', ')} inside the ring.`;
+      tooFarUntil = animClock + 2600;
       return;
     }
     lockOnto(it);
@@ -724,7 +861,7 @@ function animate(now: number): void {
   requestAnimationFrame(animate);
 
 // Debug handle for headless/console poking. Not part of the design surface.
-(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, vitality, dayCycle, world, cameraRig, boardView, structures, weather, get craft() { return craft; }, startCraft, get shake() { return { shakeUntil, animClock, offset: shakeOffset.clone() }; } };
+(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, vitality, dayCycle, world, cameraRig, boardView, structures, sites, weather, startSite, get craft() { return craft; }, startCraft, get shake() { return { shakeUntil, animClock, offset: shakeOffset.clone() }; } };
   // Clamped at zero: the first rAF timestamp can predate the module's own init time, and a
   // negative delta once sent the animation clock negative — which armed the thud shake at load.
   const dt = Math.min(0.1, Math.max(0, (now - lastFrame) / 1000));
@@ -826,4 +963,4 @@ function animate(now: number): void {
 requestAnimationFrame(animate);
 
 // Debug handle for headless/console poking. Not part of the design surface.
-(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, vitality, dayCycle, world, cameraRig, boardView, structures, weather, get craft() { return craft; }, startCraft, get shake() { return { shakeUntil, animClock, offset: shakeOffset.clone() }; } };
+(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, vitality, dayCycle, world, cameraRig, boardView, structures, sites, weather, startSite, get craft() { return craft; }, startCraft, get shake() { return { shakeUntil, animClock, offset: shakeOffset.clone() }; } };
