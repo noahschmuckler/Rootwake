@@ -51,7 +51,7 @@ import { recipesFor, type Recipe } from './recipes';
 import { OBJECT_TYPES, HANDS, handsToLift, type WorldObject } from './objects';
 import { Structure, Structures } from './structures';
 import { BuildSite, Deconstruct, DRAIN_BUILD, DRAIN_UNBUILD } from './site';
-import { blueprintsFor, BUILD_MATERIALS, drawPlan, ingredientsText, type Blueprint } from './blueprints';
+import { BLUEPRINTS, blueprintsFor, BUILD_MATERIALS, drawPlan, ingredientsText, type Blueprint } from './blueprints';
 import { GROUND_REST, type RestQuality } from './vitality';
 import { Weather, DRAIN_RAIN_PER_SECOND, LIGHTNING_SAP_TO } from './weather';
 import { lichenMaterial } from './objects';
@@ -861,7 +861,7 @@ function animate(now: number): void {
   requestAnimationFrame(animate);
 
 // Debug handle for headless/console poking. Not part of the design surface.
-(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, vitality, dayCycle, world, cameraRig, boardView, structures, sites, weather, startSite, get craft() { return craft; }, startCraft, get shake() { return { shakeUntil, animClock, offset: shakeOffset.clone() }; } };
+(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, vitality, dayCycle, world, cameraRig, boardView, structures, sites, weather, startSite, blueprints: BLUEPRINTS, Structure, get craft() { return craft; }, startCraft, get shake() { return { shakeUntil, animClock, offset: shakeOffset.clone() }; } };
   // Clamped at zero: the first rAF timestamp can predate the module's own init time, and a
   // negative delta once sent the animation clock negative — which armed the thud shake at load.
   const dt = Math.min(0.1, Math.max(0, (now - lastFrame) / 1000));
@@ -963,4 +963,4 @@ function animate(now: number): void {
 requestAnimationFrame(animate);
 
 // Debug handle for headless/console poking. Not part of the design surface.
-(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, vitality, dayCycle, world, cameraRig, boardView, structures, sites, weather, startSite, get craft() { return craft; }, startCraft, get shake() { return { shakeUntil, animClock, offset: shakeOffset.clone() }; } };
+(window as unknown as { __rootwake: unknown }).__rootwake = { scene, camera, renderer, player, voxels, patches, objects, hands, vitality, dayCycle, world, cameraRig, boardView, structures, sites, weather, startSite, blueprints: BLUEPRINTS, Structure, get craft() { return craft; }, startCraft, get shake() { return { shakeUntil, animClock, offset: shakeOffset.clone() }; } };

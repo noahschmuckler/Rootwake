@@ -255,18 +255,99 @@ function logMesh(length: number): THREE.Mesh {
   return m;
 }
 
-/** A notch cut into a log: a pale saddle set into the bark at x, on top (up) or underneath — where a cross log sits. */
-function notch(x: number, up: boolean): THREE.Mesh {
-  const n = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.1, 0.42), cutWood);
-  n.position.set(x, up ? 0.14 : -0.14, 0);
-  return n;
+/** Notch width (a cross log's diameter and a little) and how deep it is cut, top and bottom. */
+export const NOTCH_WIDTH = 0.38;
+export const NOTCH_DEPTH = LOG_RADIUS * 0.5;
+/** Bark and freshly cut wood, as vertex colours on the notched-log mesh. */
+const barkColor = new THREE.Color(0x5a3f2a);
+const cutColor = new THREE.Color(0xb8925a);
+const notchedWood = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, flatShading: true });
+
+/**
+ * A log with real notches (designer, after 1.0c: "subtract them, show physical
+ * notches"). One swept mesh along X: the cross-section is the full circle
+ * between notches and, across each notch, the circle clipped flat top and
+ * bottom by NOTCH_DEPTH — so a cross log sits down into it. Rings are
+ * doubled at each notch edge for a vertical cut face. Cut faces and end
+ * grain are pale; bark is bark.
+ */
+function notchedLogGeometry(length: number, notchXs: number[], radius = LOG_RADIUS): THREE.BufferGeometry {
+  const SEG = 14;
+  const clip = radius - NOTCH_DEPTH;
+  const positions: number[] = [];
+  const colors: number[] = [];
+  const index: number[] = [];
+  // Ring stations along X. Each notch edge has three coincident rings: the bark
+  // ring (so bark stays bark up to the cut), a pale full ring and the pale
+  // clipped ring (so the vertical cut face and the flat are all cut wood).
+  const stations: { x: number; clipped: boolean; pale: boolean }[] = [{ x: -length / 2, clipped: false, pale: false }];
+  for (const nx of [...notchXs].sort((a, b) => a - b)) {
+    const a = nx - NOTCH_WIDTH / 2;
+    const b = nx + NOTCH_WIDTH / 2;
+    stations.push(
+      { x: a, clipped: false, pale: false },
+      { x: a, clipped: false, pale: true },
+      { x: a, clipped: true, pale: true },
+      { x: b, clipped: true, pale: true },
+      { x: b, clipped: false, pale: true },
+      { x: b, clipped: false, pale: false }
+    );
+  }
+  stations.push({ x: length / 2, clipped: false, pale: false });
+  const ringStart: number[] = [];
+  for (const st of stations) {
+    ringStart.push(positions.length / 3);
+    for (let i = 0; i < SEG; i++) {
+      const th = (i / SEG) * Math.PI * 2;
+      let y = radius * Math.sin(th);
+      const z = radius * Math.cos(th);
+      const inCut = Math.abs(y) > clip;
+      if (st.clipped && inCut) y = Math.sign(y) * clip;
+      positions.push(st.x, y, z);
+      const c = st.pale && inCut ? cutColor : barkColor;
+      colors.push(c.r, c.g, c.b);
+    }
+  }
+  // Side quads between consecutive rings.
+  for (let r = 0; r < stations.length - 1; r++) {
+    const a = ringStart[r];
+    const b = ringStart[r + 1];
+    for (let i = 0; i < SEG; i++) {
+      const j = (i + 1) % SEG;
+      index.push(a + i, b + j, b + i, a + i, a + j, b + j); // outward-facing along +X
+    }
+  }
+  // End caps: pale end grain, fanned from a centre vertex.
+  for (const [r, sign] of [
+    [0, -1],
+    [stations.length - 1, 1],
+  ] as const) {
+    const centre = positions.length / 3;
+    positions.push(stations[r].x, 0, 0);
+    colors.push(cutColor.r, cutColor.g, cutColor.b);
+    const ring = ringStart[r];
+    for (let i = 0; i < SEG; i++) {
+      const j = (i + 1) % SEG;
+      // Duplicate the ring vertices so the cap can be pale and flat-shaded on its own.
+      const vi = positions.length / 3;
+      positions.push(positions[(ring + i) * 3], positions[(ring + i) * 3 + 1], positions[(ring + i) * 3 + 2]);
+      positions.push(positions[(ring + j) * 3], positions[(ring + j) * 3 + 1], positions[(ring + j) * 3 + 2]);
+      colors.push(cutColor.r, cutColor.g, cutColor.b, cutColor.r, cutColor.g, cutColor.b);
+      if (sign < 0) index.push(centre, vi, vi + 1);
+      else index.push(centre, vi + 1, vi);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+  geo.setIndex(index);
+  geo.computeVertexNormals();
+  return geo;
 }
 
-/** Notches top and bottom at each grid point along a log. */
+/** Notches top and bottom at each grid point along a log: one solid mesh, lying along local X. */
 function notched(length: number, points: number[]): THREE.Mesh {
-  const parts: THREE.Object3D[] = [logMesh(length)];
-  for (const x of points) parts.push(notch(x, true), notch(x, false));
-  return holder(wood, ...parts);
+  return new THREE.Mesh(notchedLogGeometry(length, points), notchedWood);
 }
 
 /** Axe marks: thin pale slashes lying on the top of the bark. */
