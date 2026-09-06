@@ -71,6 +71,20 @@ const uCourse = (): PiecePlan[] => [
 
 export const BLUEPRINTS: Blueprint[] = [
   {
+    id: 'campfire',
+    label: 'Campfire',
+    blurb: 'Two knuckles crossed, four sticks stood against each other over them, a handful of shavings in the middle. Light it, and feed it.',
+    pieces: [
+      { type: 'log_stub', along: 0, across: 0, y: T / 2, yaw: 0, tag: 'fire' },
+      { type: 'log_stub', along: 0, across: 0, y: T / 2 + 0.12, yaw: Math.PI / 2, tag: 'fire' },
+      ...[0, 1, 2, 3].map((k) => ({ type: 'stick' as ObjectTypeId, along: Math.cos((k * Math.PI) / 2) * 0.16, across: Math.sin((k * Math.PI) / 2) * 0.16, y: 0.52, yaw: (k * Math.PI) / 2, tilt: 1.15, tag: 'fire' as const })),
+      ...[0, 1, 2, 3, 4].map((k) => ({ type: 'chip' as ObjectTypeId, along: Math.cos(k * 1.26) * 0.06, across: Math.sin(k * 1.26) * 0.06, y: 0.42, yaw: k, tag: 'fire' as const })),
+    ],
+    siting: 'ground',
+    half: [0.6, 0.6],
+    fits: () => null,
+  },
+  {
     id: 'u-course',
     label: 'Cabin course',
     blurb: 'Three long notched logs in a U, two bays each way, open toward you. Each course raises the walls a log. Three make a wall you stand behind.',

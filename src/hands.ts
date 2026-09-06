@@ -76,6 +76,8 @@ export class Hands {
   placeOnTarget: (clientX: number, clientY: number, type: ObjectType, count: number) => number | null = () => null;
   /** Pass 0.9: a whole object was let go into the world (a drag released, a held thing put down) — fittings may snap it. */
   onRelease: (obj: WorldObject) => void = () => {};
+  /** 1.1b: a held whole object released over something that takes it (a knuckle onto a fire). Return true to consume it. */
+  placeHeldOnTarget: (clientX: number, clientY: number, type: ObjectType) => boolean = () => false;
   /** Which end of the dragged object leads: decided once per drag from where the player stood. */
   private dragLead: { obj: WorldObject | null; sign: 1 | -1 } = { obj: null, sign: 1 };
   /** Pass 0.7a: eat one unit of a food type. Return false to refuse. */
@@ -308,6 +310,13 @@ export class Hands {
         }
         return;
       }
+    }
+    if (s.kind === 'held' && this.placeHeldOnTarget(g.x, g.y, s.type)) {
+      for (let i = 0; i < HANDS; i++) {
+        const o = this.state[i];
+        if (o.kind === 'held' && o.type === s.type) this.state[i] = { kind: 'empty' };
+      }
+      return;
     }
     // …else onto the ground where the pointer points.
     const ground = this.pickGround(g.x, g.y);

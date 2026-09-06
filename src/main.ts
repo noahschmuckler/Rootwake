@@ -50,7 +50,8 @@ import { CraftSession } from './craft';
 import { recipesFor, type Recipe } from './recipes';
 import { OBJECT_TYPES, HANDS, handsToLift, type WorldObject } from './objects';
 import { Structure, Structures } from './structures';
-import { BuildSite, CutDoorway, Deconstruct, DRAIN_BUILD, DRAIN_UNBUILD } from './site';
+import { BuildSite, CutDoorway, Deconstruct, Ignite, DRAIN_BUILD, DRAIN_UNBUILD } from './site';
+import { Fire, FUEL_MS } from './fire';
 import { BLUEPRINTS, blueprintsFor, BUILD_MATERIALS, drawPlan, ingredientsText, type Blueprint } from './blueprints';
 import { GROUND_REST, type RestQuality } from './vitality';
 import { Weather, DRAIN_RAIN_PER_SECOND, LIGHTNING_SAP_TO } from './weather';
@@ -134,9 +135,47 @@ hands.placeOnTarget = (x, y, type, count) => {
 // ---- Structures (Pass 0.9 → 1.0c) ------------------------------------------------
 // Structures are built by blueprints at a site (site.ts); nothing snaps on release any more.
 const structures = new Structures(GROUND_Y);
-const sites: (BuildSite | Deconstruct | CutDoorway)[] = [];
+const sites: (BuildSite | Deconstruct | CutDoorway | Ignite)[] = [];
 /** A blueprint whose needs the HUD shows (the checkbox in the blueprint menu). */
 let trackedBlueprint: Blueprint | null = null;
+
+// ---- Feeding a fire (1.1b): shavings and sticks from a stack, a knuckle from a hand ----
+/** The campfire under a screen point, within reach, or null. */
+function fireUnder(x: number, y: number): Fire | null {
+  castFrom(x, y);
+  const hit = raycaster.intersectObjects(structures.raycastTargets(), true)[0];
+  if (!hit) return null;
+  const s = hit.object.userData.structure as Structure;
+  if (!s.fire) return null;
+  if (Math.hypot(s.center.x - player.position.x, s.center.z - player.position.z) > 2.6) {
+    hands.notice = 'Out of reach.';
+    return null;
+  }
+  return s.fire;
+}
+const placeSeeds = hands.placeOnTarget;
+hands.placeOnTarget = (x, y, type, count) => {
+  if (FUEL_MS[type.id]) {
+    const fire = fireUnder(x, y);
+    if (fire) {
+      let took = 0;
+      for (let i = 0; i < count; i++) if (fire.feed(type.id)) took++;
+      hint.textContent = `The fire takes it: ${Math.ceil(fire.fuelMs / 1000)} s of burn.`;
+      tooFarUntil = animClock + 2000;
+      return took;
+    }
+  }
+  return placeSeeds(x, y, type, count);
+};
+hands.placeHeldOnTarget = (x, y, type) => {
+  if (!FUEL_MS[type.id]) return false;
+  const fire = fireUnder(x, y);
+  if (!fire) return false;
+  fire.feed(type.id);
+  hint.textContent = `The fire takes the ${type.label}: ${Math.ceil(fire.fuelMs / 1000)} s of burn.`;
+  tooFarUntil = animClock + 2000;
+  return true;
+};
 
 // ---- Lock framing safety ---------------------------------------------------------
 /** The board's lowest corner must stay this far above the ground in any lock. */
@@ -292,6 +331,11 @@ player.onLongPress = (x, y) => {
     if (pending) {
       rows.push({ label: pending instanceof BuildSite ? `Building: ${pending.blueprint.label}` : 'Taking apart', small: 'tap inside the ring to continue', disabled: true, onPick: () => {} });
       rows.push({ label: 'Abandon that', onPick: () => abandonSite(pending) });
+    } else if (s.isCampfire) {
+      const fire = s.fire;
+      if (fire && !fire.lit) rows.push({ label: 'Light it', small: fire.fuelMs > 0 ? 'a few matches' : 'a few matches; then feed it', onPick: () => startIgnite(s) });
+      else rows.push({ label: 'Burning', small: `${Math.ceil((fire?.fuelMs ?? 0) / 1000)} s of fuel — drag shavings, sticks or a knuckle onto it`, disabled: true, onPick: () => {} });
+      rows.push({ label: 'Take apart', small: `${s.pieces.length} pieces`, onPick: () => startDeconstruct(s) });
     } else {
       rows.push({ label: 'Blueprints…', small: 'add to this', onPick: () => openBlueprints(s, null) });
       // A wall of whole long logs can have a doorway cut through it — with the axe in hand.
@@ -413,7 +457,11 @@ function startSite(bp: Blueprint, structure: Structure): void {
   site.onPlaced = () => updateHud();
   site.onDone = (it) => {
     finishSite(site);
-    hint.textContent = `${bp.label}: built.`;
+    if (bp.id === 'campfire' && !structure.fire) {
+      structure.fire = new Fire(structure.center, GROUND_Y);
+      scene.add(structure.fire.group);
+    }
+    hint.textContent = bp.id === 'campfire' ? 'A campfire, unlit. Long-press it to light it.' : `${bp.label}: built.`;
     tooFarUntil = animClock + 2200;
     onInteractableDone(it);
   };
@@ -421,19 +469,38 @@ function startSite(bp: Blueprint, structure: Structure): void {
   tooFarUntil = animClock + 4500;
   updateHud();
 }
-function finishSite(site: BuildSite | Deconstruct | CutDoorway): void {
+function finishSite(site: BuildSite | Deconstruct | CutDoorway | Ignite): void {
   if (site instanceof BuildSite) site.dispose();
   sites.splice(sites.indexOf(site), 1);
   const i = interactables.indexOf(site);
   if (i >= 0) interactables.splice(i, 1);
 }
-function abandonSite(site: BuildSite | Deconstruct | CutDoorway): void {
+function abandonSite(site: BuildSite | Deconstruct | CutDoorway | Ignite): void {
   site.status = 'resolved';
   finishSite(site);
   if (site instanceof BuildSite && site.structure.pieces.length === 0) structures.remove(site.structure);
   hint.textContent = 'Site abandoned. What was placed stays.';
   tooFarUntil = animClock + 2000;
   updateHud();
+}
+function startIgnite(s: Structure): void {
+  const site = new Ignite(s, GROUND_Y, seed * 389 + sites.length * 7);
+  sites.push(site);
+  interactables.push(site);
+  site.onSpark = () => updateHud();
+  site.onDone = (it) => {
+    finishSite(site);
+    hint.textContent = 'It catches. Feed it shavings, sticks or a knuckle to keep it going.';
+    tooFarUntil = animClock + 3000;
+    onInteractableDone(it);
+  };
+  if (site.distanceTo(player.position) > site.lockReach) {
+    hint.textContent = 'Closer.';
+    tooFarUntil = animClock + 900;
+    finishSite(site);
+    return;
+  }
+  lockOnto(site);
 }
 function startCut(s: Structure, wall: 'A' | 'B' | 'back'): void {
   const site = new CutDoorway(s, wall, objects, GROUND_Y, seed * 743 + sites.length * 13);
@@ -461,6 +528,10 @@ function startDeconstruct(s: Structure): void {
   site.onRemoved = () => updateHud();
   site.onDone = (it) => {
     finishSite(site);
+    if (s.fire) {
+      s.fire.group.removeFromParent();
+      s.fire = null;
+    }
     hint.textContent = 'Taken apart. The pieces lie out the front.';
     tooFarUntil = animClock + 2200;
     onInteractableDone(it);
@@ -1094,6 +1165,7 @@ function animate(now: number): void {
     v.setFade(fade);
   }
   for (const it of interactables) it.update(animClock);
+  for (const st of structures.list) st.fire?.update(animClock);
   if (craft) craft.update(animClock);
   objects.update(animClock);
 

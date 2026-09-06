@@ -116,13 +116,14 @@ export class BuildSite implements Interactable {
       const at = this.placeOf(plan);
       holder.position.copy(at.position);
       holder.rotation.y = at.yaw;
+      if (plan.tilt) holder.rotation.z = plan.tilt;
       this.group.add(holder);
       this.ghosts.push(holder);
     }
   }
 
   /** World position and yaw for a piece of this blueprint. */
-  private placeOf(plan: PiecePlan): { position: THREE.Vector3; yaw: number } {
+  placeOf(plan: PiecePlan): { position: THREE.Vector3; yaw: number } {
     const p = this.structure.world(plan.along, plan.across);
     p.y = this.groundY + this.base + plan.y;
     return { position: p, yaw: this.structure.yaw + plan.yaw };
@@ -196,6 +197,7 @@ export class BuildSite implements Interactable {
       toYaw: to.yaw,
       startMs: nowMs,
       onLand: () => {
+        if (plan.tilt) obj.group.rotation.z = plan.tilt;
         this.structure.place(obj, plan, this.base + plan.y);
         this.onPlaced(this.placed, this.total);
         if (this.placed >= this.total && this.flights.length === 0) {
@@ -347,6 +349,65 @@ function flyAll(flights: Flight[], nowMs: number): void {
       f.onLand();
     }
   }
+}
+
+/** Lighting a campfire (1.1b): no ingredients — the board is the spark. A few matches and it catches. */
+export const IGNITE_MATCHES = 5;
+export class Ignite implements Interactable {
+  readonly kind = 'site' as const;
+  readonly index: number;
+  readonly board: Board;
+  readonly lockReach = 4;
+  readonly hintLocked = 'Lighting the fire: tap a gem, then a neighbour. Every match is a spark.';
+  readonly lockTargets: THREE.Object3D[] = [];
+  status: InteractableStatus = 'growing';
+  onDone: (it: Interactable) => void = () => {};
+  onSpark: (sparks: number) => void = () => {};
+  readonly center: THREE.Vector3;
+  readonly floorY: number;
+  sparks = 0;
+
+  constructor(
+    readonly structure: Structure,
+    groundY: number,
+    seed: number
+  ) {
+    this.index = 9800 + Math.floor(Math.random() * 100000);
+    this.center = structure.center.clone();
+    this.center.y = groundY;
+    this.floorY = groundY + 0.7 + BOARD_ABOVE_PIECES;
+    this.board = new Board(BOARD_ROWS, BOARD_COLS, seed ^ 0x3f1a);
+  }
+  lockPose(viewer: Viewer): CameraPose {
+    const pose = lookDownPoseFor(this.center, viewer.position, viewer.forward);
+    pose.target.y += SITE_LOOK_UP;
+    return pose;
+  }
+  distanceTo(p: THREE.Vector3): number {
+    return Math.hypot(p.x - this.center.x, p.z - this.center.z);
+  }
+  targetFor(run: Run): number | null {
+    if (this.status !== 'growing') return null;
+    return single.target(run, { targetCount: 1, boardCols: this.board.cols, colorOfTarget: () => -1 });
+  }
+  targetWorldPosition(): THREE.Vector3 {
+    return this.center.clone().add(new THREE.Vector3(0, 0.45, 0));
+  }
+  feed(): void {
+    if (this.status !== 'growing') return;
+    this.sparks++;
+    this.onSpark(this.sparks);
+    if (this.sparks >= IGNITE_MATCHES) {
+      this.structure.fire?.ignite();
+      this.status = 'resolved';
+      this.onDone(this);
+    }
+  }
+  cancel(): void {}
+  poolText(): string {
+    return `sparks ${this.sparks}/${IGNITE_MATCHES}`;
+  }
+  update(): void {}
 }
 
 /** Taking a structure apart: each match lifts the last piece off onto a pile at the open front. */

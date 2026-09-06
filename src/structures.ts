@@ -9,6 +9,7 @@
 import * as THREE from 'three';
 import { DOOR_GAP, HALF_LOG_LENGTH, type ObjectWorld, type WorldObject } from './objects';
 import type { SegmentCollider } from './player';
+import type { Fire } from './fire';
 import { P, ROOF_SLATS, T, type Blueprint, type PiecePlan, type StructureLike } from './blueprints';
 
 // ---- Tuning constants ---------------------------------------------------------
@@ -40,6 +41,11 @@ export interface DryStrip {
 
 export class Structure implements StructureLike {
   readonly pieces: Placed[] = [];
+  /** 1.1b: set once a campfire blueprint has been assembled here. */
+  fire: Fire | null = null;
+  get isCampfire(): boolean {
+    return this.pieces.some((p) => p.plan.tag === 'fire');
+  }
 
   constructor(
     readonly center: THREE.Vector3,
