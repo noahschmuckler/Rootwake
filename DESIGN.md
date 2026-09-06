@@ -534,6 +534,17 @@ phone: does the first rain make you want the wall you built to have a roof
 code: shower timing against the four-minute day, the drain rate, lightning
 odds, and "under a roof" as a footprint test rather than an up-ray.
 
+Designer, after 1.0c (quality of life, built as 1.0d): first person gets
+disorienting and a cluttered floor makes the move-hold land on objects
+(the crafting menu) — so a **walk button** bottom right (a hold there opens
+the fan wherever you point; nothing under it can turn it into a press) and
+a **third-person toggle** (a moderate zoom-out behind and above, the avatar
+visible, a tree in the way pulls the camera in; closer inside a cabin). And
+you must be able to reposition in match-3 mode: a drag **orbits** the
+locked framing, **zoom** buttons move in and out, the board comes along,
+and its ground clearance holds — now against a site's walls and floor too,
+since the bed's board was hidden under the timber floor.
+
 Designer, after 1.0b: positioning logs by dragging was awkward, and a
 structure must be deconstructable. Two ways forward were weighed — freeform
 Lincoln-Log fitting (drag one notched log onto another at 90°) against

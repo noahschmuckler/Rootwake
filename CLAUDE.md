@@ -42,8 +42,9 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
 - `projectiles.ts` — the shot from a cleared run to its target; the hit
   feeds the pool. `strike()` sends a held object out and back.
 - `interactable.ts` — what main.ts needs from anything it can lock onto
-  and feed; implemented by `Voxel`, `Patch` and `CraftSession`. Status
-  includes 'blocked' and 'planted'.
+  and feed; implemented by `Voxel`, `Patch`, `CraftSession`, `BuildSite`
+  and `Deconstruct`. Status includes 'blocked' and 'planted'; `floorY` is
+  what the board must clear when it isn't the ground.
 - `recipes.ts` — the recipe table (target, required held object, result
   and count, chips, HP, staged looks, drain) and the filter by what's in
   hand: knapping, and the log recipes behind the hand axe (notch, cut in
@@ -116,11 +117,13 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
 - `cameraLock.ts` — pose-to-pose lock/unlock tween; `lockedPoseFor()` is
   the Pass 0 face framing, `lookDownPoseFor()` the patch framing,
   `craftPoseFor()` the hovering-target framing.
-- `player.ts` — first-person look plus waypoint-fan movement; candidates
-  filtered by colliders (circles for trees, segments for wall logs) and the
-  world's isWalkable(); encumbrance hooks;
-  per-frame push-out from colliders; onHop, a still-hold rest gesture, and
-  a 'press' role on world objects that becomes a long-press.
+- `player.ts` — first- or third-person view (the avatar, a tree pulls the
+  camera in) plus waypoint-fan movement; candidates filtered by colliders
+  (circles for trees, segments for wall logs) and the world's
+  isWalkable(); encumbrance hooks; per-frame push-out from colliders;
+  onHop, a still-hold rest gesture, a 'press' role on world objects that
+  becomes a long-press, `startMove()` for the walk button, and `onOrbit`
+  for drags while the camera is locked.
 - `world.ts` — the rock plateau cut on a curving cliff line, the cliff
   face, the never-walked landscape 400 below (forest floor, canopies,
   river, three mountain layers), FogExp2, sky dome; isWalkable() and
@@ -132,7 +135,9 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
   halo/filter/exposure/blackout, hints), day cycle + night vision + lichen
   scatter, rock spawning, the long-press menus (recipes, Blueprints…, Take
   apart), the blueprint menu, sites, craft sessions, structures and weather
-  wiring (rain drain, lightning, rest quality), HUD,
+  wiring (rain drain, lightning, rest quality), the bottom-right tools
+  (walk, 1st/3rd, zoom in/out while locked), orbit and zoom of the locked
+  framing with the board's clearance kept, HUD,
   `?seed=` / `?slowmo=` / `?debug=` / `?time=` / `?rain=`,
   `window.__rootwake`. UI
   layers have explicit z-indexes above the canvas.
