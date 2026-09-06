@@ -534,6 +534,16 @@ phone: does the first rain make you want the wall you built to have a roof
 code: shower timing against the four-minute day, the drain rate, lightning
 odds, and "under a roof" as a footprint test rather than an up-ray.
 
+Designer, after the buttons playtest (1.0e): with a walk button the whole
+screen can be the look side — drag anywhere to look, tap and long-press
+anywhere — so MOVE_ZONE is 0. Fatigue dialled down: rain about half as
+often (dry spells 150–300 s, the first at 110 s), lightning in a shower
+every ~40 s instead of ~16, and a close strike rarer (12%) but dramatic:
+the screen goes white, you are thrown a step, everything goes black for a
+second and comes back up on what the strike left you with. A timber floor
+is ground: the eye and the waypoint circles rise onto it. The zoom buttons
+also work in third person.
+
 Designer, after 1.0c (quality of life, built as 1.0d): first person gets
 disorienting and a cluttered floor makes the move-hold land on objects
 (the crafting menu) — so a **walk button** bottom right (a hold there opens

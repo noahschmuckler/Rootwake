@@ -82,7 +82,8 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
   camera at dome distance. Generated textures, unlit, unfogged.
 - `vitality.ts` — the one stat: drains, food, rest by quality ({bed,
   shelter}: ground ceiling 0.7, bed 0.9, +0.1 for a whole roof), `sap()`
-  for lightning, collapse with diminishing wake-ups; bands →
+  for lightning (with a 'struck' blackout), collapse with diminishing
+  wake-ups (never below WAKE_MIN); bands →
   strength / caps / hands / fan reach; halo, saturation, exposure, blackout
   curves. Tuning constants at the top.
 - `objects.ts` — the weight rule: size class (20/5/1 per hand), mass,
@@ -122,8 +123,10 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
   (circles for trees, segments for wall logs) and the world's
   isWalkable(); encumbrance hooks; per-frame push-out from colliders;
   onHop, a still-hold rest gesture, a 'press' role on world objects that
-  becomes a long-press, `startMove()` for the walk button, and `onOrbit`
-  for drags while the camera is locked.
+  becomes a long-press, `startMove()` for the walk button (the whole screen
+  is look/tap/press: MOVE_ZONE 0), `standHeightAt` (a timber floor lifts
+  the eye and the fan), `knock()` for a strike, third-person zoom, and
+  `onOrbit` for drags while the camera is locked.
 - `world.ts` — the rock plateau cut on a curving cliff line, the cliff
   face, the never-walked landscape 400 below (forest floor, canopies,
   river, three mountain layers), FogExp2, sky dome; isWalkable() and
