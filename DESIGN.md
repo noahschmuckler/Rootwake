@@ -515,10 +515,11 @@ what was built and why.
 
 ## Status
 
-Repo scaffolded 2026-09-03. Passes 0 through 1.0 built and confirmed on
-phone playtests (plus the sky). **Pass 1.1 (the doorway cut and knuckles,
-the campfire, wheat: rune, planting, harvest, nourishment, popcorn) built
-2026-09-06, awaiting evaluation.**
+Repo scaffolded 2026-09-03. Passes 0 through 1.1 built and confirmed on
+phone playtests (plus the sky); 1.1 (the doorway cut and knuckles, the
+campfire, wheat: rune, planting, harvest, nourishment, popcorn) judged
+2026-09-07 — "loving it". **Next: the designer picks from ROADMAP.md's open
+directions.**
 
 What 1.1 adds (designer's brief after building the cabin twice): with the
 axe in hand, long-press a wall log to cut a doorway through it, course by

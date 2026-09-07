@@ -23,10 +23,10 @@ don't add structure the prototype doesn't need yet.
 
 ## Status
 
-**Passes 0 through 1.0 judged satisfying on phone; Pass 1.1 (the doorway
-cut and knuckles, the campfire, wheat by the rune with harvest,
-nourishment and popcorn) built 2026-09-06, awaiting evaluation. Standing
-rules: confinement→vista,
+**Passes 0 through 1.1 judged satisfying on phone (1.1: the doorway cut
+and knuckles, the campfire, wheat by the rune with harvest, nourishment
+and popcorn; judged 2026-09-07). Next: the designer picks from the open
+directions in ROADMAP.md. Standing rules: confinement→vista,
 objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
 `src/` holds:
 
@@ -157,8 +157,8 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
   `window.__rootwake`. UI
   layers have explicit z-indexes above the canvas.
 
-The next pass is whatever `ROADMAP.md` lists next (once 1.1 is judged);
-do not skip ahead in that order without the designer — each pass
+The next pass is whatever the designer picks from `ROADMAP.md`'s open
+directions; do not skip ahead in that order without the designer — each pass
 exists to answer a question the previous one raised.
 
 ## Headless checking

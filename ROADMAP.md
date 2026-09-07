@@ -13,11 +13,36 @@ roof, must want a roof before there are shaped logs.
 
 ## Where we are
 
-Built and judged: Passes 0 → 1.0 (rain, lightning, blueprints and the
-cabin). Built, awaiting judgement: 1.1 (the doorway cut and knuckles, the
-campfire, wheat by the rune, harvest, nourishment, popcorn). Next: what
-1.1 raises — cooking beyond popcorn, the reserve-and-release shape for
-combat, a second rune.
+Built and judged: Passes 0 → 1.1 (through the doorway cut, the campfire,
+wheat by the rune, harvest, nourishment, popcorn; judged 2026-09-07).
+
+## Open directions after 1.1
+
+Not a sequence — the designer picks the next one. Each is one question,
+one or two commits, judged on the phone before the next.
+
+- **The character.** A rigged, animated avatar for third person (KayKit or
+  Quaternius CC0 glTF, Mixamo for missing clips), the loader pipeline
+  (glTF Transform, GLTFLoader, AnimationMixer), clips keyed off hop, drag,
+  rest, work. Parked by the designer; art, not mechanics.
+- **Combat's shape.** The rune is the sketch: charge a reserve by the board,
+  release it through an act. What is the first thing to release it at, and
+  what does `byColumn` targeting become?
+- **A second rune.** What else do seeds (or stones, or chips) become, and
+  how is a rune learned rather than started with?
+- **Cooking beyond popcorn.** The fire as a place: what else goes on it,
+  and does the sourdough loop (DESIGN) start here — wheat → flour → dough
+  → bread?
+- **More of the cabin.** Windows and a door frame (the half-length log),
+  half-round levelling, a gable roof and ridge, a chimney and hearth of
+  rocks where the campfire's heat comes indoors; taking blueprints apart
+  selectively.
+- **The bag chain (SYSTEMS §5.3b).** Plant fibres → twisting → string →
+  weaving → cloth → a bag; each link a board session at a place.
+- **The vista.** The plateau's edge is still a wall. What the first way
+  down is, and what the underworld pivot (DESIGN) looks like as a pass.
+- **Weather's second act.** Wind, snow or cold that make the cabin and the
+  fire answer more than rain.
 
 ## Pass 0.6c — planting and the first tension
 
