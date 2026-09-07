@@ -100,8 +100,10 @@ export class Hands {
     scene: THREE.Scene,
     private readonly boxes: HTMLElement[],
     private readonly overlay: SVGSVGElement,
-    private readonly groundY: number,
-    private readonly isWalkable: (p: THREE.Vector3) => boolean
+    groundY: number,
+    private readonly isWalkable: (p: THREE.Vector3) => boolean,
+    /** U1: the ground is not one height everywhere (a ramp, a raised chamber). Defaults to groundY. */
+    private readonly groundAt: (x: number, z: number) => number = () => groundY
   ) {
     scene.add(this.flyGroup);
     this.groundPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -groundY);
@@ -164,6 +166,7 @@ export class Hands {
   update(nowMs: number): void {
     const dt = Math.min(0.1, Math.max(0, (nowMs - this.lastMs) / 1000));
     this.lastMs = nowMs;
+    this.groundPlane.constant = -this.groundAt(this.player.position.x, this.player.position.z);
 
     // Eating: hold a food box, one unit at a time.
     if (this.eating && nowMs >= this.eating.nextMs) {
@@ -280,7 +283,7 @@ export class Hands {
       return;
     }
     const fwd = this.player.forward();
-    const at = new THREE.Vector3(this.player.position.x + fwd.x * 0.6, this.groundY, this.player.position.z + fwd.z * 0.6);
+    const at = new THREE.Vector3(this.player.position.x + fwd.x * 0.6, this.groundAt(this.player.position.x, this.player.position.z), this.player.position.z + fwd.z * 0.6);
     this.placeHand(hand, at);
   }
 
@@ -379,11 +382,11 @@ export class Hands {
       for (let i = 0; i < s.count; i++) {
         const a = (i / s.count) * Math.PI * 2 + 0.7;
         const r = s.count === 1 ? 0 : 0.12 + 0.18 * Math.sqrt(i / s.count);
-        this.objects.spawn(s.type.id, at.x + Math.cos(a) * r, this.groundY, at.z + Math.sin(a) * r, a);
+        this.objects.spawn(s.type.id, at.x + Math.cos(a) * r, this.groundAt(at.x, at.z), at.z + Math.sin(a) * r, a);
       }
       this.state[hand] = { kind: 'empty' };
     } else if (s.kind === 'held') {
-      const placed = this.objects.spawn(s.type.id, at.x, this.groundY, at.z, this.player.yaw);
+      const placed = this.objects.spawn(s.type.id, at.x, this.groundAt(at.x, at.z), at.z, this.player.yaw);
       for (let i = 0; i < HANDS; i++) {
         const o = this.state[i];
         if (o.kind === 'held' && o.type === s.type) this.state[i] = { kind: 'empty' };

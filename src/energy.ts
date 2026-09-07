@@ -22,6 +22,8 @@ export const SIGHT_AT_FLOOR = 3.5;
 export const SIGHT_AT_FULL = 16;
 /** The tunnel: fraction of the screen radius left clear at the floor (never closes). */
 export const TUNNEL_CLEAR_AT_FLOOR = 0.3;
+/** U1: while nourished, every drain (idle, hop, heat) is multiplied by the food's factor (this if it has none). */
+export const NOURISHED_DRAIN = 0.6;
 // -------------------------------------------------------------------------------
 
 export interface EnergyEffects {
@@ -42,7 +44,29 @@ export class Energy {
   value = ENERGY_START;
   private phase: Phase = { kind: 'awake' };
   private lastMs = 0;
-  onEvent: (what: 'rested') => void = () => {};
+  private nourishedUntil = -1;
+  private nourishFactor = NOURISHED_DRAIN;
+  onEvent: (what: 'rested' | 'ate') => void = () => {};
+
+  nourished(nowMs: number): boolean {
+    return nowMs < this.nourishedUntil;
+  }
+  private drainScale(): number {
+    return this.lastMs < this.nourishedUntil ? this.nourishFactor : 1;
+  }
+
+  /** U1: eat one unit of food worth `amount`; nourishing food slows every drain by `factor` for `nourishMs`. */
+  eat(amount: number, nourishMs = 0, factor = NOURISHED_DRAIN): void {
+    if (this.busy) return;
+    this.value = Math.min(1, this.value + amount);
+    if (nourishMs > 0) {
+      // A stronger food takes over; a weaker one only extends what is already there.
+      const until = Math.max(this.nourishedUntil, this.lastMs) + nourishMs;
+      if (!this.nourished(this.lastMs) || factor <= this.nourishFactor) this.nourishFactor = factor;
+      this.nourishedUntil = until;
+    }
+    this.onEvent('ate');
+  }
 
   get busy(): boolean {
     return this.phase.kind !== 'awake';
@@ -50,7 +74,7 @@ export class Energy {
 
   drain(amount: number): void {
     if (this.busy) return;
-    this.value = Math.max(ENERGY_MIN, this.value - amount);
+    this.value = Math.max(ENERGY_MIN, this.value - amount * this.drainScale());
   }
 
   rest(nowMs: number): void {
@@ -62,7 +86,7 @@ export class Energy {
     const dt = this.lastMs ? Math.min(0.25, (nowMs - this.lastMs) / 1000) : 0;
     this.lastMs = nowMs;
     if (this.phase.kind === 'awake') {
-      this.value = Math.max(ENERGY_MIN, this.value - DRAIN_PER_SECOND * dt);
+      this.value = Math.max(ENERGY_MIN, this.value - DRAIN_PER_SECOND * dt * this.drainScale());
     } else if (nowMs - this.phase.startMs >= REST_MS) {
       this.value = Math.min(1, this.value + REST_RESTORE);
       this.phase = { kind: 'awake' };

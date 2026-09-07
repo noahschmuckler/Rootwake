@@ -27,7 +27,7 @@ export function handsToDrag(mass: number, strength = STRENGTH): number {
 }
 // -------------------------------------------------------------------------------
 
-export type ObjectTypeId = 'seed' | 'wheat_seed' | 'popcorn' | 'stick' | 'log' | 'log_short' | 'lichen' | 'rock' | 'hand_axe' | 'log_long_notched' | 'log_notched' | 'log_stub' | 'log_half' | 'timber' | 'timber_short' | 'chip' | 'ingot' | 'dagger';
+export type ObjectTypeId = 'seed' | 'wheat_seed' | 'popcorn' | 'stick' | 'log' | 'log_short' | 'lichen' | 'rock' | 'hand_axe' | 'log_long_notched' | 'log_notched' | 'log_stub' | 'log_half' | 'timber' | 'timber_short' | 'chip' | 'ingot' | 'dagger' | 'haunch' | 'potato';
 
 export interface ObjectType {
   id: ObjectTypeId;
@@ -45,6 +45,8 @@ export interface ObjectType {
   food?: number;
   /** 1.1c: eating one also slows every drain for this long (SYSTEMS §3: better food). */
   nourishMs?: number;
+  /** While nourished by this, every drain is multiplied by this (default: the stat's own factor). Lower = more potent. */
+  nourishDrain?: number;
   /** For long things: half their length along local X, so hands and ropes aim at the nearer end. */
   halfLength?: number;
   build: () => THREE.Mesh;
@@ -64,6 +66,10 @@ const metalHot = new THREE.MeshStandardMaterial({ color: 0xffb060, emissive: 0xf
 const grip = new THREE.MeshStandardMaterial({ color: 0x3a2a1c, roughness: 0.95, flatShading: true });
 const wheatMaterial = new THREE.MeshStandardMaterial({ color: 0xe0b437, roughness: 0.55 });
 const popcornMaterial = new THREE.MeshStandardMaterial({ color: 0xfff3d6, roughness: 0.9, flatShading: true });
+const meat = new THREE.MeshStandardMaterial({ color: 0x7a3524, roughness: 0.75, flatShading: true });
+const bone = new THREE.MeshStandardMaterial({ color: 0xe6dcc4, roughness: 0.8, flatShading: true });
+const potatoSkin = new THREE.MeshStandardMaterial({ color: 0x8a6a42, roughness: 1, flatShading: true });
+const potatoFlesh = new THREE.MeshStandardMaterial({ color: 0xf2e6b8, roughness: 0.9, flatShading: true });
 
 /**
  * The notch grid (structures.ts): notches a bay apart, log ends overhanging the
@@ -133,6 +139,53 @@ export const OBJECT_TYPES: Record<ObjectTypeId, ObjectType> = {
       const m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.09, 1), popcornMaterial);
       m.scale.set(1.15, 0.9, 1);
       return m;
+    },
+  },
+  // U1: the food on the tables in the second chamber. More potent than popcorn: a bigger boost and a
+  // stronger, longer slowing of every drain. Tuning: food, nourishMs, nourishDrain.
+  haunch: {
+    id: 'haunch',
+    label: 'haunches of meat',
+    size: 'small',
+    mass: 0.3,
+    color: 0x7a3524,
+    radius: 0.13,
+    blocks: false,
+    restHeight: 0.07,
+    food: 0.4,
+    nourishMs: 300_000,
+    nourishDrain: 0.4,
+    build: () => {
+      const flesh = new THREE.Mesh(new THREE.IcosahedronGeometry(0.1, 1), meat);
+      flesh.scale.set(1.5, 0.8, 1);
+      flesh.position.x = -0.04;
+      const shank = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.024, 0.2, 6), bone);
+      shank.rotation.z = Math.PI / 2;
+      shank.position.set(0.19, 0.015, 0);
+      const knob = new THREE.Mesh(new THREE.SphereGeometry(0.035, 6, 5), bone);
+      knob.position.set(0.29, 0.015, 0);
+      return holder(meat, flesh, shank, knob);
+    },
+  },
+  potato: {
+    id: 'potato',
+    label: 'baked potatoes',
+    size: 'small',
+    mass: 0.1,
+    color: 0x8a6a42,
+    radius: 0.085,
+    blocks: false,
+    restHeight: 0.05,
+    food: 0.22,
+    nourishMs: 240_000,
+    nourishDrain: 0.5,
+    build: () => {
+      const skin = new THREE.Mesh(new THREE.IcosahedronGeometry(0.075, 1), potatoSkin);
+      skin.scale.set(1.35, 0.75, 1);
+      // split open, the flesh showing
+      const split = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.025, 0.04), potatoFlesh);
+      split.position.y = 0.052;
+      return holder(potatoSkin, skin, split);
     },
   },
   stick: {

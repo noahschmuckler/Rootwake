@@ -22,6 +22,7 @@ import { PALETTE } from './colors';
 import { CraftSession } from './craft';
 import { recipesFor, type Recipe } from './recipes';
 import { Cave, GROUND_Y, CELL, BOULDER_RADIUS } from './cave';
+import { mulberry32 } from './colors';
 import { Energy, DRAIN_HEAT, DRAIN_HOP } from './energy';
 
 // ---- URL params -------------------------------------------------------------
@@ -35,7 +36,8 @@ const scene = new THREE.Scene();
 const BASE_FOV = 40;
 const camera = new THREE.PerspectiveCamera(BASE_FOV, window.innerWidth / window.innerHeight, 0.05, 200);
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.toneMapping = THREE.LinearToneMapping;
+// Filmic roll-off: the darksight rides the camera, and physical falloff blows out anything at arm's length otherwise.
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1;
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -54,7 +56,7 @@ scene.add(player.avatar);
 // He is a metallurgist: darker cloth, a broader frame.
 player.avatar.scale.set(1.15, 1, 1.15);
 
-const hands = new Hands(camera, player, objects, scene, [...document.querySelectorAll<HTMLElement>('#hands .hand')], document.getElementById('links') as unknown as SVGSVGElement, GROUND_Y, cave.isWalkable);
+const hands = new Hands(camera, player, objects, scene, [...document.querySelectorAll<HTMLElement>('#hands .hand')], document.getElementById('links') as unknown as SVGSVGElement, GROUND_Y, cave.isWalkable, (x, z) => GROUND_Y + cave.groundHeight(x, z));
 
 const energy = new Energy();
 const interactables: Interactable[] = [...cave.boulders];
@@ -252,7 +254,7 @@ renderer.domElement.addEventListener('pointerdown', () => (menu.hidden = true));
 
 function startCraft(target: WorldObject, recipe: Recipe): void {
   const lifts = handsToLift(target.type.mass, 1) <= HANDS;
-  craft = new CraftSession(target, recipe, objects, viewerNow(), seed * 17 + target.id, lifts, GROUND_Y, 'heats');
+  craft = new CraftSession(target, recipe, objects, viewerNow(), seed * 17 + target.id, lifts, GROUND_Y + cave.groundHeight(target.position.x, target.position.z), 'heats');
   craft.onDone = (it) => {
     const session = it as CraftSession;
     const type = OBJECT_TYPES[session.result as keyof typeof OBJECT_TYPES];
@@ -260,7 +262,7 @@ function startCraft(target: WorldObject, recipe: Recipe): void {
     for (let i = 0; i < count; i++) {
       const free = hands.freeHand();
       if (free >= 0 && handsToLift(type.mass, 1) === 1) hands.give(free, type);
-      else objects.spawn(type.id, session.restPosition.x + i * 0.3, GROUND_Y, session.restPosition.z, session.restYaw);
+      else objects.spawn(type.id, session.restPosition.x + i * 0.3, GROUND_Y + cave.groundHeight(session.restPosition.x, session.restPosition.z), session.restPosition.z, session.restYaw);
     }
     hint.textContent = type.id === 'dagger' ? 'A dagger, still warm.' : `An ${type.label}.`;
     tooFarUntil = animClock + 2000;
@@ -333,6 +335,7 @@ function updateHud(): void {
   const parts = [`seed ${seed}`, `ore ${ore}/${cave.boulders.length}`, `ingots ${objects.objects.filter((o) => o.type.id === 'ingot').length}`];
   if (slowmo > 1) parts.push(`slowmo ×${slowmo}`);
   if (debug) parts.push(`energy ${energy.value.toFixed(2)}`);
+  if (energy.nourished(animClock)) parts.push('nourished');
   if (locked && cameraRig.mode === 'locked' && locked.status === 'growing') parts.push(locked.poolText());
   hud.textContent = parts.join(' · ');
   const lockedNow = cameraRig.mode === 'locked' && locked?.status === 'growing';
@@ -350,11 +353,39 @@ player.onHop = () => energy.drain(DRAIN_HOP);
 player.onRestHold = () => {
   if (cameraRig.mode === 'free' && !energy.busy) energy.rest(animClock);
 };
-energy.onEvent = () => {
+energy.onEvent = (what) => {
+  if (what === 'ate') {
+    hint.textContent = 'Warm food. Your strength comes back, and stays.';
+    tooFarUntil = animClock + 2200;
+    updateHud();
+    return;
+  }
   hint.textContent = 'You gather yourself. The dark opens out again.';
   tooFarUntil = animClock + 2200;
 };
-hands.onEat = () => false; // nothing to eat down here yet
+// U1: the food on the tables. Eating boosts energy and slows every drain for a while.
+hands.onEat = (type) => {
+  if (!type.food || energy.busy) return false;
+  energy.eat(type.food, type.nourishMs ?? 0, type.nourishDrain);
+  return true;
+};
+player.standHeightAt = cave.groundHeight;
+player.cameraClear = cave.cameraClear;
+// Laid out on the tables in the second chamber: haunches of meat and baked potatoes.
+{
+  const rand = mulberry32(seed ^ 0xf00d);
+  const spread: ('haunch' | 'potato')[][] = [['haunch', 'potato', 'potato', 'haunch'], ['potato', 'haunch', 'potato']];
+  cave.tables.forEach((t, i) => {
+    const items = spread[i % spread.length];
+    items.forEach((id, k) => {
+      const along = ((k + 0.5) / items.length - 0.5) * 2 * (t.halfLength - 0.12);
+      const across = (rand() - 0.5) * 2 * (t.halfWidth - 0.12);
+      const x = t.x + Math.cos(t.yaw) * along + Math.sin(t.yaw) * across;
+      const z = t.z - Math.sin(t.yaw) * along + Math.cos(t.yaw) * across;
+      objects.spawn(id, x, t.y, z, rand() * Math.PI * 2);
+    });
+  });
+}
 
 function applyEnergy(): void {
   const fx = energy.effects(animClock);
