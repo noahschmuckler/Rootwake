@@ -24,6 +24,12 @@ export const SIGHT_AT_FULL = 16;
 export const TUNNEL_CLEAR_AT_FLOOR = 0.3;
 /** U1: while nourished, every drain (idle, hop, heat) is multiplied by the food's factor (this if it has none). */
 export const NOURISHED_DRAIN = 0.6;
+/** U2: the suit. Putting a piece on imparts this much of his energy into it (and it comes back when it is
+ *  taken off); the piece then sustains its effect no matter how low he runs. The helm holds darksight
+ *  at HELM_SIGHT and the tunnel open. Balancing to come. */
+export const CHEST_CHARGE = 0.3;
+export const HELM_CHARGE = 0.1;
+export const HELM_SIGHT = 30;
 // -------------------------------------------------------------------------------
 
 export interface EnergyEffects {
@@ -46,6 +52,20 @@ export class Energy {
   private lastMs = 0;
   private nourishedUntil = -1;
   private nourishFactor = NOURISHED_DRAIN;
+  /** U2: sustained by worn pieces — darksight never below this, and the tunnel held open. */
+  sightFloor = 0;
+  holdVision = false;
+
+  /** Impart energy into a piece being put on. False (and nothing spent) if it would leave him at the floor. */
+  impart(amount: number): boolean {
+    if (this.busy || this.value - amount < ENERGY_MIN + 0.05) return false;
+    this.value -= amount;
+    return true;
+  }
+  /** The energy in a piece taken off flows back. */
+  giveBack(amount: number): void {
+    this.value = Math.min(1, this.value + amount);
+  }
   onEvent: (what: 'rested' | 'ate') => void = () => {};
 
   nourished(nowMs: number): boolean {
@@ -105,8 +125,8 @@ export class Energy {
       level,
       slowdown: SLOW_AT_FLOOR + (1 - SLOW_AT_FLOOR) * level,
       fanScale: FAN_AT_FLOOR + (FAN_AT_FULL - FAN_AT_FLOOR) * level,
-      sight: SIGHT_AT_FLOOR + (SIGHT_AT_FULL - SIGHT_AT_FLOOR) * level,
-      tunnel: 1 - level,
+      sight: Math.max(this.sightFloor, SIGHT_AT_FLOOR + (SIGHT_AT_FULL - SIGHT_AT_FLOOR) * level),
+      tunnel: this.holdVision ? 0 : 1 - level,
       blackout: Math.max(0, Math.min(1, blackout)),
     };
   }

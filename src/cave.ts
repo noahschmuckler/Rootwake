@@ -259,14 +259,16 @@ export class Cave {
     return this.group.children.filter((m) => m.userData.bareRock);
   }
 
-  /** Per frame: the darksight's reach. */
-  setSight(cameraPosition: THREE.Vector3, sight: number): void {
+  /** Per frame: the darksight's reach. `boost` (U2, the helm) brightens the light and the ambient beyond full. */
+  setSight(cameraPosition: THREE.Vector3, sight: number, boost = 1): void {
     this.fog.density = 1.5 / sight;
     this.darksight.position.copy(cameraPosition);
     this.darksight.distance = sight * 1.3;
     const k = Math.min(1, sight / SIGHT_AT_FULL_REF);
-    this.darksight.intensity = DARKSIGHT_INTENSITY * (0.55 + 0.45 * k);
-    this.hemi.intensity = DARKSIGHT_AMBIENT * (0.5 + 0.5 * k);
+    this.darksight.intensity = DARKSIGHT_INTENSITY * (0.55 + 0.45 * k) * boost;
+    // Boosted, the light also falls off more gently, so the far walls of a room are lit, not just reached.
+    this.darksight.decay = boost > 1 ? 1.3 : 2;
+    this.hemi.intensity = DARKSIGHT_AMBIENT * (0.5 + 0.5 * k) * boost;
   }
 }
 const SIGHT_DEFAULT = 16;

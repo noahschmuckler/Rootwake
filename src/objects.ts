@@ -27,7 +27,7 @@ export function handsToDrag(mass: number, strength = STRENGTH): number {
 }
 // -------------------------------------------------------------------------------
 
-export type ObjectTypeId = 'seed' | 'wheat_seed' | 'popcorn' | 'stick' | 'log' | 'log_short' | 'lichen' | 'rock' | 'hand_axe' | 'log_long_notched' | 'log_notched' | 'log_stub' | 'log_half' | 'timber' | 'timber_short' | 'chip' | 'ingot' | 'dagger' | 'haunch' | 'potato';
+export type ObjectTypeId = 'seed' | 'wheat_seed' | 'popcorn' | 'stick' | 'log' | 'log_short' | 'lichen' | 'rock' | 'hand_axe' | 'log_long_notched' | 'log_notched' | 'log_stub' | 'log_half' | 'timber' | 'timber_short' | 'chip' | 'ingot' | 'dagger' | 'haunch' | 'potato' | 'chestpiece' | 'helm';
 
 export interface ObjectType {
   id: ObjectTypeId;
@@ -47,6 +47,8 @@ export interface ObjectType {
   nourishMs?: number;
   /** While nourished by this, every drain is multiplied by this (default: the stat's own factor). Lower = more potent. */
   nourishDrain?: number;
+  /** U2: a piece of the suit — worn, not carried. The chest is the attachment point for the rest. */
+  wear?: 'chest' | 'helm';
   /** For long things: half their length along local X, so hands and ropes aim at the nearer end. */
   halfLength?: number;
   build: () => THREE.Mesh;
@@ -64,6 +66,10 @@ const seedMaterial = new THREE.MeshStandardMaterial({ color: 0xe6d38f, roughness
 const metal = new THREE.MeshStandardMaterial({ color: 0x9aa0a8, metalness: 0.85, roughness: 0.35, flatShading: true });
 const metalHot = new THREE.MeshStandardMaterial({ color: 0xffb060, emissive: 0xff7a1a, emissiveIntensity: 1.8, metalness: 0.4, roughness: 0.5, flatShading: true });
 const grip = new THREE.MeshStandardMaterial({ color: 0x3a2a1c, roughness: 0.95, flatShading: true });
+/** The suit: darker plate than an ingot, and the light in it — the core, the helm's eyes. */
+const plate = new THREE.MeshStandardMaterial({ color: 0x6e737a, metalness: 0.9, roughness: 0.4, flatShading: true });
+const plateDark = new THREE.MeshStandardMaterial({ color: 0x3c4046, metalness: 0.9, roughness: 0.5, flatShading: true });
+export const suitLight = new THREE.MeshStandardMaterial({ color: 0xbff4ff, emissive: 0x8fe6ff, emissiveIntensity: 3.2, roughness: 0.3, toneMapped: false });
 const wheatMaterial = new THREE.MeshStandardMaterial({ color: 0xe0b437, roughness: 0.55 });
 const popcornMaterial = new THREE.MeshStandardMaterial({ color: 0xfff3d6, roughness: 0.9, flatShading: true });
 const meat = new THREE.MeshStandardMaterial({ color: 0x7a3524, roughness: 0.75, flatShading: true });
@@ -140,6 +146,31 @@ export const OBJECT_TYPES: Record<ObjectTypeId, ObjectType> = {
       m.scale.set(1.15, 0.9, 1);
       return m;
     },
+  },
+  // U2: the suit. Both lift with one hand to carry to where they are put on; worn, they weigh nothing on the hands.
+  chestpiece: {
+    id: 'chestpiece',
+    label: 'chestpiece',
+    size: 'large',
+    mass: 1,
+    color: 0x6e737a,
+    radius: 0.2,
+    blocks: false,
+    restHeight: 0.16,
+    wear: 'chest',
+    build: () => buildLook('chestpiece'),
+  },
+  helm: {
+    id: 'helm',
+    label: 'helm',
+    size: 'large',
+    mass: 1,
+    color: 0x6e737a,
+    radius: 0.14,
+    blocks: false,
+    restHeight: 0.13,
+    wear: 'helm',
+    build: () => buildLook('helm'),
   },
   // U1: the food on the tables in the second chamber. More potent than popcorn: a bigger boost and a
   // stronger, longer slowing of every drain. Tuning: food, nourishMs, nourishDrain.
@@ -607,6 +638,38 @@ export function buildLook(look: string): THREE.Mesh {
       const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 5), m);
       pommel.position.x = -0.23;
       return holder(m, blade, guard, handle, pommel);
+    }
+    case 'chestpiece': {
+      // A torso shell, open top and bottom, with the core set in its front (−Z, the way the avatar faces).
+      const shell = new THREE.Mesh(new THREE.CylinderGeometry(0.165, 0.2, 0.32, 8, 1, true), plate);
+      shell.material = plate.clone();
+      (shell.material as THREE.MeshStandardMaterial).side = THREE.DoubleSide;
+      const collar = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.025, 6, 10), plateDark);
+      collar.rotation.x = Math.PI / 2;
+      collar.position.y = 0.16;
+      const socket = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.075, 0.03, 12), plateDark);
+      socket.rotation.x = Math.PI / 2;
+      socket.position.set(0, 0.04, -0.17);
+      const core = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.035, 12), suitLight);
+      core.rotation.x = Math.PI / 2;
+      core.position.set(0, 0.04, -0.18);
+      // The core gives light: on the floor ahead of him, on whatever it lies beside.
+      const glow = new THREE.PointLight(0x8fe6ff, 5, 3.5, 2);
+      glow.position.set(0, 0.04, -0.24);
+      return holder(plate, shell, collar, socket, core, glow);
+    }
+    case 'helm': {
+      // A head shell with a faceplate and two slit eyes that give their own light.
+      const dome = new THREE.Mesh(new THREE.SphereGeometry(0.14, 10, 8, 0, Math.PI * 2, 0, Math.PI * 0.62), plate);
+      const face = new THREE.Mesh(new THREE.BoxGeometry(0.17, 0.15, 0.05), plateDark);
+      face.position.set(0, -0.02, -0.11);
+      const chin = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.06, 0.2), plateDark);
+      chin.position.y = -0.09;
+      const eyeL = new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.014, 0.012), suitLight);
+      eyeL.position.set(-0.04, 0.015, -0.14);
+      const eyeR = eyeL.clone();
+      eyeR.position.x = 0.04;
+      return holder(plate, dome, face, chin, eyeL, eyeR);
     }
     case 'hand_axe':
     default: {
