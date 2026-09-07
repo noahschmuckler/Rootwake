@@ -15,6 +15,7 @@ roof, must want a roof before there are shaped logs.
 
 Built and judged: Passes 0 → 1.1 (through the doorway cut, the campfire,
 wheat by the rune, harvest, nourishment, popcorn; judged 2026-09-07).
+Built, awaiting judgement: **U0**, the underworld's first pass (below).
 
 ## Open directions after 1.1
 
@@ -147,10 +148,36 @@ roof?*
   and cooking (seeds → better food; later crops).
 - Touches: `recipes.ts`, `objects.ts`, `world.ts` (point light), `vitality.ts`.
 
+## The underworld — U passes (a second entry, `/under.html`)
+
+A second character in a second place, on the same engine and the same
+board. Numbered apart from the plateau's passes because they answer a
+different question: what confinement → vista means when the confinement
+is rock and the release is heat.
+
+**U0 — the metallurgist wakes (built 2026-09-07).** *Question: does
+vaporizing a boulder with the board, and watching the metal set into an
+ingot you can then make something from, feel like the right first act
+down here?* He wakes in the centre cell of a 3×3 ring of ore-bearing
+boulders inside a 5×5 chamber of bare rock; fully energized, seeing in
+the dark. Tap a boulder's shining veins to lock; each match superheats
+the ore; at full heat the rock vaporizes into a molten pool that cools
+into an ingot. The chamber walls bear no ore and refuse him. Long-press an
+ingot → Blueprint: dagger (one ingot); long-press a dagger → melt it back.
+Energy scales movement speed, the fan's reach, the darksight's distance
+and the width of the tunnel — but he is never blinded and never collapses.
+Open, flagged in code: ORE_HP, the energy floor and drains, the sight and
+tunnel curves, cell pitch vs boulder radius (the gap must stay narrower
+than the player), the ingot's metal colour.
+
+**U1 (designer's call).** What the dagger is for; more blueprints from
+more ingots; whether ore types (the five colours?) differ; what lies past
+the chamber.
+
 ## Later, in no order yet
 
-- Underworld / the ore character (the second scale phase). The vision
-  regimes are built for it.
+- Underworld / the ore character beyond U0 (the second scale phase). The
+  vision regimes are built for it.
 - Combat: energy meters filled by matches, spent on abilities and
   in-combat movement; `byColumn` targeting; held objects as weapons via the
   weight rule (a strong character swings a log).

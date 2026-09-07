@@ -20,14 +20,18 @@ don't add structure the prototype doesn't need yet.
   network URL).
 - `npm run build` — type-checks (`tsc --noEmit`) then builds via Vite.
 - `npm run preview` — serve the production build locally.
+- Two entries: `/` (index.html → `src/main.ts`, the plateau) and
+  `/under.html` (→ `src/under.ts`, the underworld). Vite builds both.
 
 ## Status
 
 **Passes 0 through 1.1 judged satisfying on phone (1.1: the doorway cut
 and knuckles, the campfire, wheat by the rune with harvest, nourishment
-and popcorn; judged 2026-09-07). Next: the designer picks from the open
-directions in ROADMAP.md. Standing rules: confinement→vista,
-objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
+and popcorn; judged 2026-09-07). The underworld's first pass, U0 (the
+metallurgist wakes in a ring of ore boulders; heat → vaporize → ingot →
+dagger and back; energy that never collapses), is built and awaits the
+phone judgement. Standing rules: confinement→vista, objects have weight,
+nothing "just because" (DESIGN.md, SYSTEMS.md).**
 `src/` holds:
 
 - `colors.ts` — five colours = five gem types = five flowers; seeded
@@ -47,8 +51,9 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
   what the board must clear when it isn't the ground.
 - `recipes.ts` — the recipe table (target, required held object, result
   and count, chips, HP, staged looks, drain) and the filter by what's in
-  hand: knapping, and the log recipes behind the hand axe (notch, cut in
-  half, cut into long/short timber, cut a notched short log into stubs).
+  hand: knapping, the log recipes behind the hand axe (notch, cut in
+  half, cut into long/short timber, cut a notched short log into stubs),
+  and the metallurgist's forge-dagger / melt-dagger pair.
 - `craft.ts` — a crafting session: a liftable target hovers ahead, a heavy
   one (a log) is worked where it lies under the patch look-down framing;
   the board plays it, strikes step its look and scatter chips, results land
@@ -100,7 +105,8 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
   strength, hands-to-lift / hands-to-drag; object types (seed, stick, log,
   wheat_seed, popcorn, lichen, rock, hand_axe, long and short logs raw and
   notched, the knuckle (log_stub), the half log, long and short timber,
-  chip; seeds are food, wheat and popcorn nourish; the notch grid constants;
+  chip, and the underworld's ingot and dagger with their hot looks; seeds
+  are food, wheat and popcorn nourish; the notch grid constants;
   a felled tree gives a long log and a short);
   authored crafting looks and `setLook` (multi-part looks: raycast
   recursively); `collectible` flag; the in-the-way waggle; WorldObject/
@@ -143,6 +149,29 @@ objects have weight, nothing "just because" (DESIGN.md, SYSTEMS.md).**
   face, the never-walked landscape 400 below (forest floor, canopies,
   river, three mountain layers), FogExp2, sky dome; isWalkable() and
   distanceToEdge(); exposes sun/moon/hemi/sky/fog for the day cycle.
+- `energy.ts` — the metallurgist's one stat (underworld): drains per heat
+  match and hop, a floor it never falls below (he never collapses), a rest
+  hold that restores, and the effects it scales — move slowdown, fan reach,
+  darksight distance, tunnel width. Tuning constants at the top.
+- `cave.ts` — the chamber: a 5×5-cell room of bare rock (floor, roof, four
+  immune walls), the 3×3 ring of ore boulders around the centre cell (the
+  gap between boulders is narrower than the player: confinement), black
+  fog whose density is the darksight's reach, the cool light on the camera,
+  `isWalkable`, `colliders`, `bareRock()`, `setSight`. Vertex-jittered
+  slabs (merge vertices first or the jitter cracks them).
+- `ore.ts` — `OreBoulder`, an Interactable: a merged-and-jittered
+  icosahedron with ore veins walked over its actual surface by raycast
+  (plates merged into one mesh); the board heats the veins gold → white
+  (`applyHeat`), at ORE_HP the rock vaporizes, a molten pool cools and sets,
+  `onIngot` spawns the ingot; its own lock framing (ORE_VIEW_DISTANCE keeps
+  the board out of the rock); collider gone once vaporized, with a
+  `cameraClearance` so third person pulls in past the whole boulder.
+- `under.ts` — the underworld entry (under.html): cave, player, hands,
+  energy, ore locks (tap; bare rock answers "nothing in it to heat"),
+  long-press menus on ingots (Blueprint: dagger) and daggers (melt back),
+  craft sessions with the 'heats' verb and orange bolts, the tunnel halo
+  (centre never dark), tools, HUD, `?seed=` / `?slowmo=` / `?debug=`,
+  `window.__rootwake` (with `THREE` for headless probes).
 - `main.ts` — hex-lattice thicket, patch placement, mode-aware input over
   all interactables, board bind/show/hide, shots → pools, locked-view fade
   rule, auto back-out, edge FOV/dip, felling aftermath (shake, scatter,
@@ -166,7 +195,11 @@ exists to answer a question the previous one raised.
 The app can be driven under Playwright with the pre-installed Chromium
 (`--use-angle=swiftshader`). `npm run build && npx vite preview --port 4173`
 then screenshot; `?slowmo=N` slows animations for frame capture, and
-`window.__rootwake` exposes scene/camera/player/voxels for poking.
+`window.__rootwake` exposes scene/camera/player/voxels for poking (the
+underworld at `/under.html` exposes cave/boulders/energy and `THREE`).
+Portrait phones have a ~20° horizontal field of view: at arm's length only
+a strip of a boulder is on screen, so judge detail density by screenshots
+at the real aspect, not by counts.
 
 ## Conventions carried over from DiggyDwarves (the sibling project)
 

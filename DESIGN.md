@@ -504,6 +504,53 @@ log is dragged off and the sticks carried away; then it is tillable. The
 **Explicitly not this pass:** planting and growth, any recipe, payout
 counters, fatigue/food, combat use of held objects, physics.
 
+## The underworld: U0 — the metallurgist wakes (2026-09-07)
+
+The second scale phase begins as a second entry (`/under.html`) on the
+same engine: a new character in a new place, built to the same rules.
+Designer's brief: a metallurgist warrior awakens underground, surrounded
+by boulders, rock roof overhead, fully energized, seeing in the dark. All
+four walls bear ore as shining streaks. Playing the board superheats the
+ore; at the boulder's HP the rock vaporizes and leaves molten metal that
+cools into an ingot. He stands in the centre of a 3×3 set of ore-bearing
+boulders; beyond is a 5×5 chamber whose walls are bare rock, immune to
+him. Long-pressing an ingot opens blueprints; the first is a dagger, one
+ingot; a dagger can be melted back. As energy depletes his vision narrows
+to a tunnel, but he always sees in the dark, is never blinded by
+non-magical darkness or fatigue, never collapses; energy scales movement
+speed, vision width and darksight distance.
+
+What was built, and the decisions taken in building it:
+
+- **Confinement is geometry.** Cell pitch 3.0 and boulder radius 1.3 leave
+  a 0.4 gap between neighbours, narrower than the player (0.5): the ring
+  holds until one boulder is gone. The first vaporization is the first
+  release — the room beyond, the bare walls, and nothing yet past them.
+- **The board must clear the rock.** The plateau's lock distance put the
+  boulder inside the board; the ore framing stands the camera 4.2 from the
+  boulder's centre, raised 0.55, so the board hangs in the air between
+  them. That distance is what forced the cells to 3.0 — the centre cell has
+  to be wide enough to stand back in.
+- **Ore as veins, not bars.** Streaks are chains of small plates raycast
+  onto the actual jittered rock surface and merged into one mesh, so they
+  lie in the rock. Heat is theirs: gold → white, glow rising with the
+  square of the pool; the rock itself only warms. Portrait phones see
+  ~20° of width, so sixteen veins per boulder in the eye band.
+- **Darksight is light plus fog.** A cool point light rides the camera and
+  a grey-blue hemisphere makes the room read; black exponential fog whose
+  density is 1.5 / sight is the reach. Energy moves both, and the tunnel
+  is the halo sheet's ring — its centre never darker than clear.
+- **One stat, no death.** `energy.ts` is vitality's shape without the
+  collapse: a floor, a rest hold, and four effects. Whether that is enough
+  tension without food is the open question U1 has to answer.
+- **The metal loop.** Forge (10 gems) and melt (8) are recipes in the same
+  table as knapping, played by the same craft session with the verb
+  'heats'; the ingot hovers and glows, the dagger comes back warm.
+
+Status: built and headless-tested (lock, heat, vaporize, pool, ingot, bare
+rock refusal, forge, melt, energy scaling, rest, third person, tools);
+awaiting the phone judgement.
+
 ## Beyond the passes: SYSTEMS.md and ROADMAP.md (2026-09-05)
 
 The designer's systems notes — the "nothing just because" philosophy,
@@ -518,8 +565,9 @@ what was built and why.
 Repo scaffolded 2026-09-03. Passes 0 through 1.1 built and confirmed on
 phone playtests (plus the sky); 1.1 (the doorway cut and knuckles, the
 campfire, wheat: rune, planting, harvest, nourishment, popcorn) judged
-2026-09-07 — "loving it". **Next: the designer picks from ROADMAP.md's open
-directions.**
+2026-09-07 — "loving it". The underworld's U0 is built (section above) and
+awaits judgement; `/under.html` is its entry. **Next: the designer judges
+U0 and adds to it, or picks from ROADMAP.md's open directions.**
 
 What 1.1 adds (designer's brief after building the cabin twice): with the
 axe in hand, long-press a wall log to cut a doorway through it, course by

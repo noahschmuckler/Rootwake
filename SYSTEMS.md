@@ -300,7 +300,30 @@ and a half minutes; drag shavings, sticks or a knuckle onto it to feed it.
 Out, it is embers; light it again. Light only for now — cooking is wheat
 popping on it (§3).
 
-## 6. Open questions (deliberately unresolved)
+## 6. The underworld: the metallurgist (as built, U0)
+
+A second character with his own stat, in a place where the plateau's
+rules invert: no weather, no day, no food yet — heat instead of harvest.
+
+- **Energy, not vitality.** One stat, but it never collapses him and never
+  blinds him: it has a floor (ENERGY_MIN). Every heat match and every hop
+  drains it; a still hold restores a step. What it scales: movement speed
+  (slower at the floor), the movement fan's reach (shorter), the
+  darksight's distance (fog closes in) and the width of his vision (a
+  tunnel — the centre stays clear). Non-magical darkness and fatigue are
+  never blindness for him.
+- **Ore, not trees.** Rock that bears ore shows it as shining veins. Only
+  ore-bearing rock answers the board: each match superheats the veins,
+  gold to white; at the boulder's HP the rock vaporizes, molten metal pools
+  where it stood, cools, and sets into an ingot. Bare rock is immune — the
+  chamber's walls are the first confinement he cannot burn through.
+- **Ingots are the material.** Long-press an ingot for its blueprints; the
+  first is a dagger (one ingot). Long-press a dagger to melt it back into
+  an ingot by the board. Nothing is lost in the loop; heat is the cost.
+- **The weight rule holds.** An ingot lifts with one hand; a dagger too.
+  Piles of ingots are the stored potential, as logs are above.
+
+## 7. Open questions (deliberately unresolved)
 
 - Exact vitality drain per action and per hop; how fast time drains it.
 - Whether collapse restoring less is a curve or steps; how eating resets it.
@@ -312,3 +335,6 @@ popping on it (§3).
   patches (probably not: those are taps; long-press is a hold in place on
   an object — the same distinction the movement fan already uses).
 - How many recipe menus a phone screen can carry before it is a menu game.
+- Underworld: whether ore comes in the five colours (five metals), what
+  the dagger's first use is, and how the darksight and the plateau's two
+  vision regimes relate when the characters meet.
