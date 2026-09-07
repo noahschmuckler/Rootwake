@@ -136,6 +136,8 @@ export class Player {
   thirdZoom = 1;
   /** Height of what you stand on above the ground plane (a timber floor): main provides it. Eye and fan follow. */
   standHeightAt: (x: number, z: number) => number = () => 0;
+  /** U1: where the third-person camera may be at all (inside a cave's air, not its rock). null = anywhere. */
+  cameraClear: ((p: THREE.Vector3) => boolean) | null = null;
   /** The figure you see in third person: a stocky body and a head, facing your yaw. */
   readonly avatar = new THREE.Group();
   /** Pass 0.8: is there a pressable world object under this screen point? main.ts answers. */
@@ -230,7 +232,7 @@ export class Player {
   /** Where the camera should be in the free view: at the eye, or behind and above it in third person. */
   applyCamera(camera: THREE.Camera): void {
     const eye = this.eye();
-    this.avatar.position.set(this.position.x, this.position.y, this.position.z);
+    this.avatar.position.set(this.position.x, this.position.y + this.standHeightAt(this.position.x, this.position.z), this.position.z);
     this.avatar.rotation.y = this.yaw;
     this.avatar.visible = this.view === 'third';
     if (this.view === 'first') {
@@ -246,13 +248,16 @@ export class Player {
     // The camera inside a trunk: pull it in along the line until it clears. Trees merely in the
     // way are faded by main.ts (the locked-view rule), so the view stays a moderate zoom-out.
     let t = 1;
-    for (let guard = 0; guard < 8; guard++) {
-      const px = eye.x + (want.x - eye.x) * t;
-      const pz = eye.z + (want.z - eye.z) * t;
-      const inside = this.colliders.some((c) => !('x1' in c) && Math.hypot(px - c.x, pz - c.z) < (c.cameraClearance ?? THIRD_TREE_CLEARANCE));
-      if (!inside || t <= 0.35) break;
-      t -= 0.1;
+    const probe = new THREE.Vector3();
+    for (let guard = 0; guard < 20; guard++) {
+      probe.set(eye.x + (want.x - eye.x) * t, eye.y + (want.y - eye.y) * t, eye.z + (want.z - eye.z) * t);
+      const inside = this.colliders.some((c) => !('x1' in c) && Math.hypot(probe.x - c.x, probe.z - c.z) < (c.cameraClearance ?? THIRD_TREE_CLEARANCE)) || (this.cameraClear !== null && !this.cameraClear(probe));
+      if (!inside || t <= 0.05) break;
+      t -= 0.05;
     }
+    // No room behind him (his back to a cave wall): the camera collapses toward the eye, and the
+    // avatar gets out of its own way rather than filling the screen.
+    if (t < 0.3) this.avatar.visible = false;
     camera.position.set(eye.x + (want.x - eye.x) * t, eye.y + (want.y - eye.y) * t, eye.z + (want.z - eye.z) * t);
     camera.lookAt(eye.add(this.forward().multiplyScalar(THIRD_AHEAD)));
   }
