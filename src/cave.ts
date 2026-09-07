@@ -29,8 +29,12 @@ export const ROCK_COLOR = 0x5a534c;
 export const ROCK_DARK = 0x453f39;
 /** The darksight: a cool light on the camera (physical units — three r155+), and the ambient
  *  that makes the room read as grey-blue rather than black. Its reach is the fog. */
-export const DARKSIGHT_INTENSITY = 34;
+export const DARKSIGHT_INTENSITY = 15;
 export const DARKSIGHT_AMBIENT = 1.1;
+/** Its falloff: gentler than the inverse square, so a wall at arm's length doesn't flare white and the
+ *  far side of a room still gets some of it. The helm's boost softens it further. */
+export const DARKSIGHT_DECAY = 1.35;
+export const DARKSIGHT_DECAY_HELM = 1.0;
 /** U1: the hallway out of the +x wall — long enough to fade into the dark at full sight (16),
  *  rising HALL_RISE over its length; and the second chamber at its top. */
 export const HALL_LENGTH = 26;
@@ -91,7 +95,7 @@ export class Cave {
     this.hemi = new THREE.HemisphereLight(0x6c7c94, 0x1e1a16, DARKSIGHT_AMBIENT);
     scene.add(this.hemi);
     // The darksight: a cool light that goes where he looks, reaching as far as his energy lets him see.
-    this.darksight = new THREE.PointLight(0xb8c8e8, DARKSIGHT_INTENSITY, SIGHT_DEFAULT, 2);
+    this.darksight = new THREE.PointLight(0xb8c8e8, DARKSIGHT_INTENSITY, SIGHT_DEFAULT, DARKSIGHT_DECAY);
     scene.add(this.darksight);
 
     // The first chamber, with the hallway's opening in its +x wall.
@@ -267,7 +271,7 @@ export class Cave {
     const k = Math.min(1, sight / SIGHT_AT_FULL_REF);
     this.darksight.intensity = DARKSIGHT_INTENSITY * (0.55 + 0.45 * k) * boost;
     // Boosted, the light also falls off more gently, so the far walls of a room are lit, not just reached.
-    this.darksight.decay = boost > 1 ? 1.3 : 2;
+    this.darksight.decay = boost > 1 ? DARKSIGHT_DECAY_HELM : DARKSIGHT_DECAY;
     this.hemi.intensity = DARKSIGHT_AMBIENT * (0.5 + 0.5 * k) * boost;
   }
 }
