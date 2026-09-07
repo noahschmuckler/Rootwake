@@ -40,7 +40,7 @@ export interface HandCondition {
 export type HandState =
   | { kind: 'empty' }
   | { kind: 'stack'; type: ObjectType; count: number }
-  | { kind: 'held'; type: ObjectType }
+  | { kind: 'held'; type: ObjectType; lift: number } // `lift` ties the hands holding one object together
   | { kind: 'linked'; obj: WorldObject };
 
 interface Fly {
@@ -83,6 +83,7 @@ export class Hands {
   /** Pass 0.7a: eat one unit of a food type. Return false to refuse. */
   onEat: (type: ObjectType) => boolean = () => false;
   condition: HandCondition = { strength: 1, capScale: 1, handsAvailable: HANDS };
+  private liftToken = 0;
   private eating: { hand: number; nextMs: number; ate: boolean } | null = null;
 
   private gesture: Gesture | null = null;
@@ -111,8 +112,13 @@ export class Hands {
       box.addEventListener('pointerdown', (e) => this.onDown(e, i));
       box.addEventListener('pointermove', (e) => this.onMove(e));
       box.addEventListener('pointerup', (e) => this.onUp(e));
-      box.addEventListener('pointercancel', (e) => this.onUp(e));
+      box.addEventListener('pointercancel', (e) => this.cancelGesture(e.pointerId));
+      box.addEventListener('lostpointercapture', (e) => this.cancelGesture(e.pointerId));
     });
+    // A release the box never hears (capture lost, a second finger, the browser taking the touch) used to
+    // leave the gesture set for good — every later box touch was refused and the live line stayed drawn.
+    window.addEventListener('pointerup', (e) => this.onUp(e), true);
+    window.addEventListener('pointercancel', (e) => this.cancelGesture(e.pointerId), true);
     this.render();
   }
 
@@ -167,6 +173,12 @@ export class Hands {
     const dt = Math.min(0.1, Math.max(0, (nowMs - this.lastMs) / 1000));
     this.lastMs = nowMs;
     this.groundPlane.constant = -this.groundAt(this.player.position.x, this.player.position.z);
+    // An object that left the world (crafted into something else, drawn into a forge) can't be held to.
+    for (let i = 0; i < HANDS; i++) {
+      const st = this.state[i];
+      if (st.kind === 'linked' && !this.objects.objects.includes(st.obj)) this.state[i] = { kind: 'empty' };
+    }
+    if (this.gesture?.target && !this.objects.objects.includes(this.gesture.target)) this.gesture.target = null;
 
     // Eating: hold a food box, one unit at a time.
     if (this.eating && nowMs >= this.eating.nextMs) {
@@ -226,6 +238,8 @@ export class Hands {
   // ---- the gesture ------------------------------------------------------------------
 
   private onDown(e: PointerEvent, hand: number): void {
+    // A gesture from another pointer that never ended is stale: let it go rather than refuse every touch.
+    if (this.gesture && this.gesture.pointerId !== e.pointerId) this.cancelGesture(this.gesture.pointerId);
     if (this.gesture) return;
     e.preventDefault();
     if (hand >= this.condition.handsAvailable) {
@@ -253,6 +267,21 @@ export class Hands {
     g.y = e.clientY;
     if (Math.hypot(g.x - g.startX, g.y - g.startY) > TAP_SLOP_PX) g.moved = true;
     g.target = g.moved ? this.pickObject(g.x, g.y) : null;
+  }
+
+  /** The gesture ends without doing anything (the pointer was cancelled or its capture lost). */
+  private cancelGesture(pointerId: number): void {
+    const g = this.gesture;
+    if (!g || g.pointerId !== pointerId) return;
+    this.gesture = null;
+    if (this.holdTimer !== null) {
+      window.clearTimeout(this.holdTimer);
+      this.holdTimer = null;
+    }
+    this.eating = null;
+    this.boxes[g.hand].classList.remove('active');
+    this.render();
+    this.onChange();
   }
 
   private onUp(e: PointerEvent): void {
@@ -317,7 +346,7 @@ export class Hands {
     if (s.kind === 'held' && this.placeHeldOnTarget(g.x, g.y, s.type)) {
       for (let i = 0; i < HANDS; i++) {
         const o = this.state[i];
-        if (o.kind === 'held' && o.type === s.type) this.state[i] = { kind: 'empty' };
+        if (o.kind === 'held' && o.lift === s.lift) this.state[i] = { kind: 'empty' };
       }
       return;
     }
@@ -341,10 +370,12 @@ export class Hands {
       // Lift: the object leaves the world and lives in this hand (and any others it needs).
       this.fly(target, hand);
       this.objects.remove(target);
-      let needed = lift;
+      const token = ++this.liftToken;
+      this.state[hand] = { kind: 'held', type: t, lift: token };
+      let needed = lift - 1;
       for (let i = 0; i < HANDS && needed > 0; i++) {
-        if (i === hand || this.state[i].kind === 'empty') {
-          this.state[i] = { kind: 'held', type: t };
+        if (i !== hand && this.state[i].kind === 'empty') {
+          this.state[i] = { kind: 'held', type: t, lift: token };
           needed--;
         }
       }
@@ -389,7 +420,7 @@ export class Hands {
       const placed = this.objects.spawn(s.type.id, at.x, this.groundAt(at.x, at.z), at.z, this.player.yaw);
       for (let i = 0; i < HANDS; i++) {
         const o = this.state[i];
-        if (o.kind === 'held' && o.type === s.type) this.state[i] = { kind: 'empty' };
+        if (o.kind === 'held' && o.lift === s.lift) this.state[i] = { kind: 'empty' };
       }
       this.onRelease(placed);
     }
@@ -477,7 +508,7 @@ export class Hands {
 
   /** Put a whole object into a hand (the crafting result arriving). */
   give(hand: number, type: ObjectType): void {
-    this.state[hand] = { kind: 'held', type };
+    this.state[hand] = { kind: 'held', type, lift: ++this.liftToken };
     this.render();
     this.onChange();
   }
