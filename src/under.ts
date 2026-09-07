@@ -26,6 +26,7 @@ import { Cave, GROUND_Y, CELL, BOULDER_RADIUS } from './cave';
 import { mulberry32 } from './colors';
 import { Energy, DRAIN_HEAT, DRAIN_HOP, CHEST_CHARGE, HELM_CHARGE, HELM_SIGHT } from './energy';
 import { EYE_HEIGHT } from './player';
+import { Greblins } from './greblins';
 
 // ---- URL params -------------------------------------------------------------
 const params = new URLSearchParams(window.location.search);
@@ -61,6 +62,9 @@ player.avatar.scale.set(1.15, 1, 1.15);
 const hands = new Hands(camera, player, objects, scene, [...document.querySelectorAll<HTMLElement>('#hands .hand')], document.getElementById('links') as unknown as SVGSVGElement, GROUND_Y, cave.isWalkable, (x, z) => GROUND_Y + cave.groundHeight(x, z));
 
 const energy = new Energy();
+// U3: the miners who left the food, cowering at the top of the stairs.
+const greblins = new Greblins(scene, seed);
+let greblinsSeen = false;
 const interactables: Interactable[] = [...cave.boulders];
 
 // ---- DOM ---------------------------------------------------------------------
@@ -515,6 +519,14 @@ function applyEnergy(): void {
   player.moveSlowdown = fx.slowdown;
   player.fanScale = fx.fanScale;
   cave.setSight(camera.position, fx.sight, worn.helm ? HELM_LIGHT_BOOST : 1);
+  // The greblins read his light: where it is and which way it looks.
+  const before = greblins.flights;
+  greblins.update(animClock, camera.position, camera.getWorldDirection(new THREE.Vector3()), fx.sight, player.position);
+  if (!greblinsSeen && greblins.flights > before) {
+    greblinsSeen = true;
+    hint.textContent = 'Small shapes scatter from your light. Miners — and they want none of you.';
+    tooFarUntil = animClock + 3600;
+  }
 }
 
 // ---- Loop -------------------------------------------------------------------------
@@ -565,4 +577,4 @@ applyMode('free');
 requestAnimationFrame(animate);
 
 // Debug handle. Not part of the design surface.
-(window as unknown as { __rootwake: unknown }).__rootwake = { THREE, scene, camera, renderer, player, cave, boulders: cave.boulders, objects, hands, energy, cameraRig, boardView, get craft() { return craft; }, startCraft, get forge() { return forge; }, startForge, FORGE_PLANS, worn, equip, takeOff, get shake() { return { animClock }; }, CELL };
+(window as unknown as { __rootwake: unknown }).__rootwake = { THREE, scene, camera, renderer, player, cave, boulders: cave.boulders, objects, hands, energy, cameraRig, boardView, get craft() { return craft; }, startCraft, get forge() { return forge; }, startForge, FORGE_PLANS, worn, equip, takeOff, greblins, get shake() { return { animClock }; }, CELL };
