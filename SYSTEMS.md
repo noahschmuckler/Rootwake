@@ -327,7 +327,15 @@ rules invert: no weather, no day, no food yet — heat instead of harvest.
   are more potent than anything on the plateau: a bigger boost and a
   stronger, longer slowing of every drain. Each food carries its own factor
   (`nourishDrain`); a stronger food takes over a weaker one's nourishment,
-  a weaker one only extends it. Who laid the table is U2's question.
+  a weaker one only extends it. Who laid the table is an open question.
+- **The suit (U2).** His constructions are magical: he imparts energy into
+  a piece as he puts it on, and the piece sustains its effect no matter how
+  low he runs; the energy flows back when it comes off. The chestpiece is
+  the attachment point and powers the rest — nothing else can be worn
+  without it, and taking it off takes everything off. The helm sustains
+  darksight (reach, light and the tunnel held open). To come: legs sustain
+  walk distance; gauntlet / arm / pauldrons sustain carrying. Pieces are
+  made at a forge ring from ingots and are worn, not carried.
 
 ## 7. Open questions (deliberately unresolved)
 

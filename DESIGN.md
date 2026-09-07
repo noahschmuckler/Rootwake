@@ -587,6 +587,46 @@ Status: built and headless-tested (camera clear at a wall and in the
 hall, the ramp's heights and walkability, the chamber, take and eat,
 drain scaled while nourished); awaiting the phone judgement.
 
+### U2 — the suit (2026-09-07)
+
+The designer, unable to find the hall: "vision is so low". Not a mapping
+bug — every heat match costs energy, so by the time the ring is open he
+is near the floor and sees 3.5, and the doorway is 7.5 away behind the
++x boulder. A need, and the designer's answer to it: this character's
+origin is Iron Man in the cave. His constructions are inherently magical
+— he imparts energy into them and it is sustained there. A chestpiece
+is the attachment point and powers the rest; a helm sustains darksight;
+legs, walk distance; gauntlet / arm / pauldrons, carrying. Six ingots for
+the chest, two for the helm: the eight boulders exactly. Equip is a
+long-press row — worn, not carried — and the third-person figure shows
+it, with the helm's glowing slit eyes and the chest's glowing core.
+
+Built:
+
+- **A blueprint that yields equipment.** `forge.ts` is the plateau's
+  BuildSite without a structure: a ring on the floor around the ingot
+  you long-pressed, green when the plan's ingots lie inside it (the
+  weight rule still applies — he carries them there one per hand), a
+  tap inside to play, and every three gems one ingot flies into the heat
+  at the centre until the piece sets where the ring was.
+- **Worn, not carried.** Equip removes the piece from the world and
+  dresses the avatar with the same look; the suit tool (bottom right,
+  only while something is worn) takes pieces off, back onto the floor.
+  The helm needs the chest on; taking the chest off takes the helm.
+- **Energy in the metal.** Putting a piece on imparts 0.3 / 0.1 of his
+  energy into it — refused if that would leave him at the floor — and it
+  flows back when it comes off. The helm holds darksight at 30 whatever
+  his energy, holds the tunnel open, and makes the darksight brighter
+  with a gentler falloff, so from the centre at the floor the room's far
+  corner reads. Without it the same view is black.
+- **The look.** Plate darker than an ingot; the core a cyan disc set in
+  the chest's front with a point light of its own, so it shows on the
+  floor around him even from behind; the helm a dome with a faceplate
+  and two slit eyes that give their own light.
+
+Open: the charges and HELM_SIGHT are first guesses; the remaining pieces
+need ingots the chamber no longer has.
+
 ## Beyond the passes: SYSTEMS.md and ROADMAP.md (2026-09-05)
 
 The designer's systems notes — the "nothing just because" philosophy,
@@ -601,8 +641,8 @@ what was built and why.
 Repo scaffolded 2026-09-03. Passes 0 through 1.1 built and confirmed on
 phone playtests (plus the sky); 1.1 (the doorway cut and knuckles, the
 campfire, wheat: rune, planting, harvest, nourishment, popcorn) judged
-2026-09-07 — "loving it". The underworld's U0 is built (section above) and
-awaits judgement; `/under.html` is its entry. **Next: the designer judges
+2026-09-07 — "loving it". The underworld's U0, U1 and U2 are built
+(sections above) and await judgement; `/under.html` is its entry. **Next: the designer judges
 U0 and adds to it, or picks from ROADMAP.md's open directions.**
 
 What 1.1 adds (designer's brief after building the cabin twice): with the

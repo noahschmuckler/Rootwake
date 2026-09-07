@@ -15,8 +15,8 @@ roof, must want a roof before there are shaped logs.
 
 Built and judged: Passes 0 → 1.1 (through the doorway cut, the campfire,
 wheat by the rune, harvest, nourishment, popcorn; judged 2026-09-07).
-Built, awaiting judgement: **U0** and **U1**, the underworld's first two
-passes (below).
+Built, awaiting judgement: **U0**, **U1** and **U2**, the underworld's
+first three passes (below).
 
 ## Open directions after 1.1
 
@@ -185,9 +185,28 @@ kept in the air — pulled in past a boulder's whole radius and out of the
 walls, collapsing to the eye when his back is to the rock. Open, flagged:
 hall length and rise, food values, furniture at his scale (eye 0.55).
 
-**U2 (designer's call).** Who set the table; what the dagger is for; more
-blueprints from more ingots; whether ore types (the five colours?)
-differ; what lies past the second chamber.
+**U2 — the suit (built 2026-09-07).** *Question: is forging a suit out of
+the ring that held him — and wearing it, with his own energy in it — the
+origin this character wants?* The designer's brief: Iron Man in the cave.
+His constructions are inherently magical: he imparts energy into them and
+it is sustained there. A chestpiece (six ingots) is the attachment point
+and powers the rest; a helm (two) sustains darksight. The eight ingots
+of the ring are exactly enough. Built as forge rings (`forge.ts`): long-
+press an ingot, pick a piece, gather the ingots inside the ring, tap in,
+and the heat draws them one by one into the piece that sets there. Equip
+is a long-press row on the piece; the helm needs the chest on; the suit
+tool takes pieces off (the chest takes the helm with it). The avatar
+wears them: a shell with a glowing core that throws light, a helm with
+glowing slit eyes. Putting a piece on imparts 0.3 / 0.1 of his energy,
+returned when it comes off; the helm holds darksight at 30 with the
+tunnel open and the light brighter and gentler, so the whole room reads
+at the energy floor. Open, flagged: charges, HELM_SIGHT, the light boost,
+HEAT_PER_INGOT, and the pieces still to come (legs: walk distance;
+gauntlet / arm / pauldrons: carrying) with the ingots to make them.
+
+**U3 (designer's call).** Where more ingots come from (ore past the
+chamber?); the legs and arms; whether the dagger belongs to the suit;
+who set the table; what lies past the second chamber.
 
 ## Later, in no order yet
 

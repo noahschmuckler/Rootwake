@@ -29,10 +29,12 @@ don't add structure the prototype doesn't need yet.
 and knuckles, the campfire, wheat by the rune with harvest, nourishment
 and popcorn; judged 2026-09-07). The underworld's first pass, U0 (the
 metallurgist wakes in a ring of ore boulders; heat → vaporize → ingot →
-dagger and back; energy that never collapses) and U1 (the sloping hall
+dagger and back; energy that never collapses), U1 (the sloping hall
 out of the chamber to a second room with tables, chairs and food that
 nourishes harder than popcorn; the third-person camera kept out of the
-rock) are built and await the phone judgement. Standing rules: confinement→vista, objects have weight,
+rock) and U2 (the suit: forge rings that turn six ingots into a chestpiece
+and two into a helm, worn not carried, the helm holding darksight open)
+are built and await the phone judgement. Standing rules: confinement→vista, objects have weight,
 nothing "just because" (DESIGN.md, SYSTEMS.md).**
 `src/` holds:
 
@@ -108,9 +110,11 @@ nothing "just because" (DESIGN.md, SYSTEMS.md).**
   wheat_seed, popcorn, lichen, rock, hand_axe, long and short logs raw and
   notched, the knuckle (log_stub), the half log, long and short timber,
   chip, and the underworld's ingot and dagger with their hot looks, haunch
-  of meat and baked potato); seeds are food, wheat and popcorn nourish,
-  the haunch and potato nourish harder (`nourishDrain`); the notch grid
-  constants;
+  of meat and baked potato, the chestpiece and helm — `wear` marks a piece
+  of the suit, `suitLight` is the core and the eyes, and the chest look
+  carries the core's point light); seeds are food, wheat and popcorn
+  nourish, the haunch and potato nourish harder (`nourishDrain`); the
+  notch grid constants;
   a felled tree gives a long log and a short);
   authored crafting looks and `setLook` (multi-part looks: raycast
   recursively); `collectible` flag; the in-the-way waggle; WorldObject/
@@ -160,9 +164,10 @@ nothing "just because" (DESIGN.md, SYSTEMS.md).**
 - `energy.ts` — the metallurgist's one stat (underworld): drains per heat
   match and hop, a floor it never falls below (he never collapses), a rest
   hold that restores, eating (`eat`: a boost, and every drain scaled by the
-  food's own factor for a while — a stronger food takes over), and the
-  effects it scales — move slowdown, fan reach, darksight distance, tunnel
-  width. Tuning constants at the top.
+  food's own factor for a while — a stronger food takes over), the suit
+  (`impart` / `giveBack` a piece's charge; `sightFloor` and `holdVision`
+  sustained by the helm), and the effects it scales — move slowdown, fan
+  reach, darksight distance, tunnel width. Tuning constants at the top.
 - `cave.ts` — the place: a 5×5-cell chamber of bare rock (floor, roof,
   four immune walls, a doorway in the +x wall), the 3×3 ring of ore
   boulders around the centre cell (the gap between boulders is narrower
@@ -171,7 +176,8 @@ nothing "just because" (DESIGN.md, SYSTEMS.md).**
   furniture colliders), black fog whose density is the darksight's reach,
   the cool light on the camera; `isWalkable`, `groundHeight` (the ramp),
   `cameraClear` (the air the third-person camera may occupy), `colliders`,
-  `bareRock()`, `setSight`. Vertex-jittered slabs (merge vertices first or
+  `bareRock()`, `setSight` (with the helm's boost: brighter, gentler
+  falloff). Vertex-jittered slabs (merge vertices first or
   the jitter cracks them).
 - `ore.ts` — `OreBoulder`, an Interactable: a merged-and-jittered
   icosahedron with ore veins walked over its actual surface by raycast
@@ -180,12 +186,22 @@ nothing "just because" (DESIGN.md, SYSTEMS.md).**
   `onIngot` spawns the ingot; its own lock framing (ORE_VIEW_DISTANCE keeps
   the board out of the rock); collider gone once vaporized, with a
   `cameraClearance` so third person pulls in past the whole boulder.
+- `forge.ts` — `ForgeSite`, a blueprint that yields equipment: a ring on
+  the floor around an ingot, green once the plan's ingots lie inside it;
+  locked by a tap inside; every HEAT_PER_INGOT gems one ingot flies into
+  the heat at the centre; when all are in, the piece sets there. FORGE_PLANS
+  (chestpiece 6, helm 2).
 - `under.ts` — the underworld entry (under.html): cave, player, hands,
   energy, ore locks (tap; bare rock answers "nothing in it to heat"),
-  long-press menus on ingots (Blueprint: dagger) and daggers (melt back),
-  craft sessions with the 'heats' verb and orange bolts, the tunnel halo
-  (centre never dark), tools, HUD, `?seed=` / `?slowmo=` / `?debug=`,
-  `window.__rootwake` (with `THREE` for headless probes).
+  long-press menus on ingots (Blueprint: dagger / chestpiece / helm),
+  daggers (melt back) and suit pieces (Equip — the helm needs the chest
+  on first), craft sessions with the 'heats' verb and orange bolts, the
+  forge ring's tap, the suit (`worn`, `equip`, `takeOff`, `dress` the
+  avatar; energy imparted on and returned off; the helm sets energy's
+  `sightFloor` / `holdVision` and the cave's light boost), the `#gear`
+  tool for taking pieces off, the tunnel halo (centre never dark), tools,
+  HUD, `?seed=` / `?slowmo=` / `?debug=`, `window.__rootwake` (with
+  `THREE` for headless probes).
 - `main.ts` — hex-lattice thicket, patch placement, mode-aware input over
   all interactables, board bind/show/hide, shots → pools, locked-view fade
   rule, auto back-out, edge FOV/dip, felling aftermath (shake, scatter,
