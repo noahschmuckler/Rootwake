@@ -15,8 +15,8 @@ roof, must want a roof before there are shaped logs.
 
 Built and judged: Passes 0 → 1.1 (through the doorway cut, the campfire,
 wheat by the rune, harvest, nourishment, popcorn; judged 2026-09-07).
-Built, awaiting judgement: **U0**, **U1** and **U2**, the underworld's
-first three passes (below).
+Built, awaiting judgement: **U0** to **U3**, the underworld's first four
+passes (below).
 
 ## Open directions after 1.1
 
@@ -204,9 +204,20 @@ at the energy floor. Open, flagged: charges, HELM_SIGHT, the light boost,
 HEAT_PER_INGOT, and the pieces still to come (legs: walk distance;
 gauntlet / arm / pauldrons: carrying) with the ingots to make them.
 
-**U3 (designer's call).** Where more ingots come from (ore past the
-chamber?); the legs and arms; whether the dagger belongs to the suit;
-who set the table; what lies past the second chamber.
+**U3 — the greblins (built 2026-09-07).** *Question: do small things that
+run from him read as harmless — and make the dark feel inhabited?* The
+designer's answer to "who set the table": greblin miners, cutting the
+vein he woke in, who fled up the stairs when he stirred and cower at the
+top. Four of them in the upper chamber: dead still in the dark, watching
+him, trembling; when his light touches one, or he comes close, it bolts
+along the walls to a far corner out of his light and holds again. Eyes
+that catch the light are the first thing he sees of them. No colliders,
+no threat. "Get that working and we'll add another part." Open, flagged:
+count, run speed, the lit fraction and the in-view cone, near distance.
+
+**U4 (designer's call).** The next part of the greblins; where more
+ingots come from; the legs and arms; whether the dagger belongs to the
+suit; what lies past the second chamber.
 
 ## Later, in no order yet
 

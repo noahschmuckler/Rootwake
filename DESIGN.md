@@ -627,6 +627,36 @@ Built:
 Open: the charges and HELM_SIGHT are first guesses; the remaining pieces
 need ingots the chamber no longer has.
 
+### U3 — the greblins (2026-09-07)
+
+Designer's brief: the food was placed by greblin miners, a snack for
+mining out the vein where he awakened. They fled on his awakening and are
+cowering at the top of the stairs. They should run around the room in
+fear so the player gets a sense that they aren't a threat — holding
+still until his light touches them, then running to a different corner.
+
+Built (`greblins.ts`): four small figures — green skin, big ears, a
+ragged cone of a body, a pick slung on the back, and eyes that give their
+own light, so the first he sees of them is two points in the dark. Eight
+hiding spots around the upper chamber's perimeter (corners and
+mid-walls); they start by the doorway at the top of the stairs. Hiding,
+one faces him and trembles. His light touches it when it is in front of
+him (a ~40° cone) within three quarters of his darksight reach — or he
+simply comes within 1.6 — and it bolts along the walls (the shorter way
+round) to the spot furthest from him that his light doesn't reach, then
+holds again. Running is faster than his hops, so they are never caught.
+They have no colliders: they keep out of his way themselves. The first
+flight says "Small shapes scatter from your light. Miners — and they
+want none of you."
+
+Also in this pass: the darksight's falloff is gentler than inverse
+square (DARKSIGHT_DECAY 1.35, intensity 15), because a wall at arm's
+length flared white under a point light on the camera.
+
+Status: built and headless-tested (holding beside him out of the light's
+front, bolting when he turns on them, settling in far corners, holding in
+the dark across the room); awaiting the phone judgement.
+
 ## Beyond the passes: SYSTEMS.md and ROADMAP.md (2026-09-05)
 
 The designer's systems notes — the "nothing just because" philosophy,
@@ -641,8 +671,8 @@ what was built and why.
 Repo scaffolded 2026-09-03. Passes 0 through 1.1 built and confirmed on
 phone playtests (plus the sky); 1.1 (the doorway cut and knuckles, the
 campfire, wheat: rune, planting, harvest, nourishment, popcorn) judged
-2026-09-07 — "loving it". The underworld's U0, U1 and U2 are built
-(sections above) and await judgement; `/under.html` is its entry. **Next: the designer judges
+2026-09-07 — "loving it". The underworld's U0 to U3 are built (sections
+above) and await judgement; `/under.html` is its entry. **Next: the designer judges
 U0 and adds to it, or picks from ROADMAP.md's open directions.**
 
 What 1.1 adds (designer's brief after building the cabin twice): with the

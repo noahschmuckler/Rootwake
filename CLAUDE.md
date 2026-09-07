@@ -34,7 +34,9 @@ out of the chamber to a second room with tables, chairs and food that
 nourishes harder than popcorn; the third-person camera kept out of the
 rock) and U2 (the suit: forge rings that turn six ingots into a chestpiece
 and two into a helm, worn not carried, the helm holding darksight open)
-are built and await the phone judgement. Standing rules: confinement→vista, objects have weight,
+and U3 (the greblin miners who left the food: cowering in the upper
+chamber's corners, bolting along the walls from his light) are built and
+await the phone judgement. Standing rules: confinement→vista, objects have weight,
 nothing "just because" (DESIGN.md, SYSTEMS.md).**
 `src/` holds:
 
@@ -176,8 +178,9 @@ nothing "just because" (DESIGN.md, SYSTEMS.md).**
   furniture colliders), black fog whose density is the darksight's reach,
   the cool light on the camera; `isWalkable`, `groundHeight` (the ramp),
   `cameraClear` (the air the third-person camera may occupy), `colliders`,
-  `bareRock()`, `setSight` (with the helm's boost: brighter, gentler
-  falloff). Vertex-jittered slabs (merge vertices first or
+  `bareRock()`, `setSight` (DARKSIGHT_DECAY gentler than inverse-square so
+  a wall at arm's length doesn't flare; the helm's boost brighter and
+  gentler still). Vertex-jittered slabs (merge vertices first or
   the jitter cracks them).
 - `ore.ts` — `OreBoulder`, an Interactable: a merged-and-jittered
   icosahedron with ore veins walked over its actual surface by raycast
@@ -191,6 +194,13 @@ nothing "just because" (DESIGN.md, SYSTEMS.md).**
   locked by a tap inside; every HEAT_PER_INGOT gems one ingot flies into
   the heat at the centre; when all are in, the piece sets there. FORGE_PLANS
   (chestpiece 6, helm 2).
+- `greblins.ts` — the miners: four small figures (green, big ears, eyes
+  that give their own light, a pick on the back) with hiding spots around
+  the upper chamber's perimeter; hiding = still, watching him, trembling;
+  when his light touches one (within LIT_FRACTION of his darksight reach
+  and in front of him) or he comes within NEAR_DISTANCE, it bolts along
+  the walls (`routeBetween`) to a far, unlit spot. No colliders. Tuning
+  constants at the top.
 - `under.ts` — the underworld entry (under.html): cave, player, hands,
   energy, ore locks (tap; bare rock answers "nothing in it to heat"),
   long-press menus on ingots (Blueprint: dagger / chestpiece / helm),
