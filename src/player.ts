@@ -65,6 +65,8 @@ export interface CircleCollider {
   x: number;
   z: number;
   radius: number;
+  /** How close the third-person camera may come to the centre before it is pulled in (default THIRD_TREE_CLEARANCE: a trunk). Boulders set their whole radius. */
+  cameraClearance?: number;
 }
 /** Pass 1.0b: a wall log — a thick segment on the ground plane. */
 export interface SegmentCollider {
@@ -247,7 +249,7 @@ export class Player {
     for (let guard = 0; guard < 8; guard++) {
       const px = eye.x + (want.x - eye.x) * t;
       const pz = eye.z + (want.z - eye.z) * t;
-      const inside = this.colliders.some((c) => !('x1' in c) && Math.hypot(px - c.x, pz - c.z) < THIRD_TREE_CLEARANCE);
+      const inside = this.colliders.some((c) => !('x1' in c) && Math.hypot(px - c.x, pz - c.z) < (c.cameraClearance ?? THIRD_TREE_CLEARANCE));
       if (!inside || t <= 0.35) break;
       t -= 0.1;
     }

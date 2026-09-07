@@ -66,10 +66,12 @@ export class CraftSession implements Interactable {
     seed: number,
     /** Can the hands lift it? A liftable target hovers in front of you; a heavy one is worked where it lies. */
     readonly lifts: boolean,
-    private readonly groundY: number
+    private readonly groundY: number,
+    /** What a match does to it, for the hint: the plateau strikes, the underworld heats. */
+    verb = 'strikes'
   ) {
     this.index = target.id;
-    this.hintLocked = `${recipe.label}: tap a gem, then a neighbour. Each match strikes the ${target.type.label}.`;
+    this.hintLocked = `${recipe.label}: tap a gem, then a neighbour. Each match ${verb} the ${target.type.label}.`;
     this.rand = mulberry32(seed ^ 0x9e37);
     // Progress lives on the target so leaving and returning keeps it.
     if (!target.craft || target.craft.recipeId !== recipe.id) {

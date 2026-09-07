@@ -4,4 +4,10 @@ export default defineConfig({
   server: {
     host: true,
   },
+  build: {
+    rollupOptions: {
+      // Two entries: the plateau (index.html) and the underworld (under.html).
+      input: { index: 'index.html', under: 'under.html' },
+    },
+  },
 });

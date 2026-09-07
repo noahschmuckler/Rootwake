@@ -110,6 +110,25 @@ export const RECIPES: Recipe[] = [
     stages: ['log_stubbed'],
     drain: 0.014,
   },
+  // ---- Underworld (U0): the metallurgist's forge. No tool in hand — the heat is his. ----
+  {
+    id: 'forge-dagger',
+    label: 'Blueprint: dagger',
+    target: 'ingot',
+    result: 'dagger',
+    hp: 10,
+    stages: ['ingot_hot'],
+    drain: 0.012,
+  },
+  {
+    id: 'melt-dagger',
+    label: 'Melt back into an ingot',
+    target: 'dagger',
+    result: 'ingot',
+    hp: 8,
+    stages: ['dagger_hot'],
+    drain: 0.01,
+  },
 ];
 
 /** Recipes for a long-pressed target, with whether the hands allow them right now. */

@@ -27,7 +27,7 @@ export function handsToDrag(mass: number, strength = STRENGTH): number {
 }
 // -------------------------------------------------------------------------------
 
-export type ObjectTypeId = 'seed' | 'wheat_seed' | 'popcorn' | 'stick' | 'log' | 'log_short' | 'lichen' | 'rock' | 'hand_axe' | 'log_long_notched' | 'log_notched' | 'log_stub' | 'log_half' | 'timber' | 'timber_short' | 'chip';
+export type ObjectTypeId = 'seed' | 'wheat_seed' | 'popcorn' | 'stick' | 'log' | 'log_short' | 'lichen' | 'rock' | 'hand_axe' | 'log_long_notched' | 'log_notched' | 'log_stub' | 'log_half' | 'timber' | 'timber_short' | 'chip' | 'ingot' | 'dagger';
 
 export interface ObjectType {
   id: ObjectTypeId;
@@ -58,6 +58,10 @@ const stickMaterial = new THREE.MeshStandardMaterial({ color: 0x6b4a2e, roughnes
 /** Freshly cut wood (notches, split faces, chips): paler than bark. */
 const cutWood = new THREE.MeshStandardMaterial({ color: 0xb8925a, roughness: 0.9, flatShading: true });
 const seedMaterial = new THREE.MeshStandardMaterial({ color: 0xe6d38f, roughness: 0.6 });
+/** Underworld metal (U0): dull steel, and the same white-hot. */
+const metal = new THREE.MeshStandardMaterial({ color: 0x9aa0a8, metalness: 0.85, roughness: 0.35, flatShading: true });
+const metalHot = new THREE.MeshStandardMaterial({ color: 0xffb060, emissive: 0xff7a1a, emissiveIntensity: 1.8, metalness: 0.4, roughness: 0.5, flatShading: true });
+const grip = new THREE.MeshStandardMaterial({ color: 0x3a2a1c, roughness: 0.95, flatShading: true });
 const wheatMaterial = new THREE.MeshStandardMaterial({ color: 0xe0b437, roughness: 0.55 });
 const popcornMaterial = new THREE.MeshStandardMaterial({ color: 0xfff3d6, roughness: 0.9, flatShading: true });
 
@@ -175,6 +179,29 @@ export const OBJECT_TYPES: Record<ObjectTypeId, ObjectType> = {
       m.scale.set(1.15, 0.8, 1);
       return m;
     },
+  },
+  // ---- Underworld (U0): what the metallurgist makes. ----
+  ingot: {
+    id: 'ingot',
+    label: 'ingot',
+    size: 'large',
+    mass: 1, // a bar you lift one-handed
+    color: 0x9aa0a8,
+    radius: 0.2,
+    blocks: true,
+    restHeight: 0.07,
+    build: () => buildLook('ingot'),
+  },
+  dagger: {
+    id: 'dagger',
+    label: 'dagger',
+    size: 'large',
+    mass: 1,
+    color: 0x9aa0a8,
+    radius: 0.22,
+    blocks: true,
+    restHeight: 0.04,
+    build: () => buildLook('dagger'),
   },
   hand_axe: {
     id: 'hand_axe',
@@ -501,6 +528,32 @@ export function buildLook(look: string): THREE.Mesh {
       const b = logMesh(STUB_LENGTH);
       b.position.x = STUB_LENGTH / 2 + 0.03;
       return holder(wood, a, b);
+    }
+    case 'ingot':
+    case 'ingot_hot': {
+      // A bar, slightly tapered: wider at the base.
+      const g = new THREE.BoxGeometry(0.36, 0.13, 0.15);
+      const pos = g.attributes.position as THREE.BufferAttribute;
+      for (let i = 0; i < pos.count; i++) if (pos.getY(i) > 0) pos.setZ(i, pos.getZ(i) * 0.8), pos.setX(i, pos.getX(i) * 0.9);
+      g.computeVertexNormals();
+      return new THREE.Mesh(g, look === 'ingot_hot' ? metalHot : metal);
+    }
+    case 'dagger':
+    case 'dagger_hot': {
+      const m = look === 'dagger_hot' ? metalHot : metal;
+      const blade = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.02, 0.07), m);
+      const pos = blade.geometry.attributes.position as THREE.BufferAttribute;
+      for (let i = 0; i < pos.count; i++) if (pos.getX(i) > 0) pos.setZ(i, pos.getZ(i) * 0.15), pos.setY(i, pos.getY(i) * 0.4); // to a point
+      blade.geometry.computeVertexNormals();
+      blade.position.x = 0.1;
+      const guard = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.03, 0.14), m);
+      guard.position.x = -0.07;
+      const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.026, 0.14, 6), grip);
+      handle.rotation.z = Math.PI / 2;
+      handle.position.x = -0.15;
+      const pommel = new THREE.Mesh(new THREE.SphereGeometry(0.03, 6, 5), m);
+      pommel.position.x = -0.23;
+      return holder(m, blade, guard, handle, pommel);
     }
     case 'hand_axe':
     default: {
