@@ -14,7 +14,8 @@ import * as THREE from 'three';
 import { CameraRig, type CameraMode, type CameraPose } from './cameraLock';
 import { Player, THIRD_ZOOM_MIN, THIRD_ZOOM_MAX } from './player';
 import type { Interactable } from './interactable';
-import { ObjectWorld, OBJECT_TYPES, HANDS, handsToLift, type WorldObject } from './objects';
+import { ObjectWorld, OBJECT_TYPES, HANDS, handsToLift, buildLook, type WorldObject } from './objects';
+import { ForgeSite, FORGE_PLANS, type ForgePlan } from './forge';
 import { Hands } from './hands';
 import { BoardView } from './board3d';
 import { Projectiles } from './projectiles';
@@ -23,7 +24,8 @@ import { CraftSession } from './craft';
 import { recipesFor, type Recipe } from './recipes';
 import { Cave, GROUND_Y, CELL, BOULDER_RADIUS } from './cave';
 import { mulberry32 } from './colors';
-import { Energy, DRAIN_HEAT, DRAIN_HOP } from './energy';
+import { Energy, DRAIN_HEAT, DRAIN_HOP, CHEST_CHARGE, HELM_CHARGE, HELM_SIGHT } from './energy';
+import { EYE_HEIGHT } from './player';
 
 // ---- URL params -------------------------------------------------------------
 const params = new URLSearchParams(window.location.search);
@@ -73,6 +75,7 @@ const zoomInButton = document.getElementById('zoom-in') as HTMLButtonElement;
 const zoomOutButton = document.getElementById('zoom-out') as HTMLButtonElement;
 const viewButton = document.getElementById('view') as HTMLButtonElement;
 const walkButton = document.getElementById('walk') as HTMLButtonElement;
+const gearButton = document.getElementById('gear') as HTMLButtonElement;
 // The plateau-only panels stay hidden here.
 for (const id of ['rain', 'blueprints']) document.getElementById(id)?.setAttribute('hidden', '');
 
@@ -84,6 +87,8 @@ let lastFrame = -1;
 let locked: Interactable | null = null;
 let lockedPose: CameraPose | null = null;
 let craft: CraftSession | null = null;
+/** U2: the one forge ring, if a piece is being made. */
+let forge: ForgeSite | null = null;
 let autoUnlockAt: number | null = null;
 const RELEASE_HOLD_MS = 900;
 const BOARD_GROUND_CLEARANCE = 0.12;
@@ -185,6 +190,20 @@ let tooFarUntil = 0;
 player.onTap = (x, y) => {
   castFrom(x, y);
   if (cameraRig.mode === 'free') {
+    // The forge ring wins over what lies inside it.
+    if (forge && forge.status !== 'resolved') {
+      const ringHit = raycaster.intersectObjects(forge.lockTargets, false)[0];
+      if (ringHit) {
+        if (forge.distanceTo(player.position) > forge.lockReach) {
+          hint.textContent = 'Closer.';
+          tooFarUntil = animClock + 900;
+        } else if (!forge.isReady) {
+          hint.textContent = forge.readyText();
+          tooFarUntil = animClock + 1600;
+        } else lockOnto(forge);
+        return;
+      }
+    }
     const targets = interactables.filter((it) => it.status === 'growing').flatMap((it) => it.lockTargets);
     const hit = raycaster.intersectObjects(targets, false)[0];
     if (!hit) {
@@ -237,12 +256,20 @@ player.onLongPress = (x, y) => {
   const hit = raycaster.intersectObjects(objects.raycastTargets(), true)[0];
   if (!hit) return;
   const obj = hit.object.userData.object as WorldObject;
-  const rows = recipesFor(obj.type.id, hands.heldTypes()).map((r) => ({
+  const rows: { label: string; small?: string; disabled?: boolean; onPick: () => void }[] = recipesFor(obj.type.id, hands.heldTypes()).map((r) => ({
     label: r.recipe.label,
     small: r.available ? (r.recipe.id === 'forge-dagger' ? 'one ingot' : undefined) : r.reason,
     disabled: !r.available,
     onPick: () => startCraft(obj, r.recipe),
   }));
+  // U2: the suit's blueprints on any ingot; a piece lying there can be put on.
+  if (obj.type.id === 'ingot') {
+    for (const plan of FORGE_PLANS) rows.push({ label: plan.label, small: plan.blurb, onPick: () => startForge(obj, plan) });
+  }
+  if (obj.type.wear) {
+    const why = equipBlocker(obj);
+    rows.push({ label: `Equip ${obj.type.label}`, small: why ?? (obj.type.wear === 'chest' ? `takes ${CHEST_CHARGE} of your energy into its core` : `takes ${HELM_CHARGE} of your energy · darksight held`), disabled: !!why, onPick: () => equip(obj) });
+  }
   if (rows.length === 0) {
     hint.textContent = `Nothing to make from ${obj.type.label} yet.`;
     tooFarUntil = animClock + 1400;
@@ -271,6 +298,93 @@ function startCraft(target: WorldObject, recipe: Recipe): void {
   lockOnto(craft);
 }
 
+/** U2: a forge ring around an ingot for a piece of the suit. One ring at a time. */
+function startForge(anchor: WorldObject, plan: ForgePlan): void {
+  if (forge) forge.cancel();
+  const groundY = GROUND_Y + cave.groundHeight(anchor.position.x, anchor.position.z);
+  forge = new ForgeSite(1000 + anchor.id, new THREE.Vector3(anchor.position.x, groundY, anchor.position.z), plan, objects, groundY, seed * 29 + anchor.id);
+  scene.add(forge.group);
+  forge.evaluate();
+  forge.onResult = (obj) => {
+    hint.textContent = `The ${obj.type.label} sets. Long-press it to put it on.`;
+    tooFarUntil = animClock + 3200;
+  };
+  forge.onDone = (it) => {
+    onInteractableDone(it);
+    forge?.cancel();
+    forge = null;
+  };
+  hint.textContent = forge.isReady ? `${plan.label}: tap inside the ring.` : `${plan.label}: ${forge.readyText()} Bring the rest inside it.`;
+  tooFarUntil = animClock + 3600;
+}
+
+// ---- U2: the suit — worn, not carried; the chest is the attachment point and powers the rest ----
+const worn: { chest: boolean; helm: boolean } = { chest: false, helm: false };
+const gearMeshes: { chest: THREE.Object3D | null; helm: THREE.Object3D | null } = { chest: null, helm: null };
+function equipBlocker(obj: WorldObject): string | null {
+  const which = obj.type.wear!;
+  if (worn[which]) return `already wearing a ${obj.type.label}`;
+  if (which !== 'chest' && !worn.chest) return 'needs a chestpiece to attach to';
+  const charge = which === 'chest' ? CHEST_CHARGE : HELM_CHARGE;
+  if (energy.value - charge < 0.17) return 'not enough energy in you to power it';
+  return null;
+}
+function equip(obj: WorldObject): void {
+  const why = equipBlocker(obj);
+  if (why) {
+    hint.textContent = why[0].toUpperCase() + why.slice(1) + '.';
+    tooFarUntil = animClock + 1600;
+    return;
+  }
+  const which = obj.type.wear!;
+  if (!energy.impart(which === 'chest' ? CHEST_CHARGE : HELM_CHARGE)) return;
+  objects.remove(obj);
+  worn[which] = true;
+  dress();
+  hint.textContent = which === 'chest' ? 'The core takes your energy and holds it. The rest of the suit can hang from this.' : 'The helm wakes. The dark opens out — and stays open.';
+  tooFarUntil = animClock + 3200;
+  updateHud();
+}
+function takeOff(which: 'chest' | 'helm'): void {
+  if (!worn[which]) return;
+  if (which === 'chest' && worn.helm) takeOff('helm'); // nothing hangs from nothing
+  worn[which] = false;
+  energy.giveBack(which === 'chest' ? CHEST_CHARGE : HELM_CHARGE);
+  const fwd = player.forward();
+  const x = player.position.x + fwd.x * 0.6 + (which === 'helm' ? 0.25 : 0);
+  const z = player.position.z + fwd.z * 0.6;
+  objects.spawn(which === 'chest' ? 'chestpiece' : 'helm', x, GROUND_Y + cave.groundHeight(x, z), z, player.yaw);
+  dress();
+  hint.textContent = which === 'chest' ? 'The core goes dark; its energy flows back into you.' : 'The dark closes back in to what your own eyes can do.';
+  tooFarUntil = animClock + 2600;
+  updateHud();
+}
+/** The avatar wears what he wears; energy sustains what the pieces sustain. */
+function dress(): void {
+  for (const which of ['chest', 'helm'] as const) {
+    const has = worn[which];
+    if (has && !gearMeshes[which]) {
+      const look = buildLook(which === 'chest' ? 'chestpiece' : 'helm');
+      look.position.y = which === 'chest' ? 0.3 : EYE_HEIGHT + 0.005;
+      player.avatar.add(look);
+      gearMeshes[which] = look;
+    } else if (!has && gearMeshes[which]) {
+      gearMeshes[which]!.removeFromParent();
+      gearMeshes[which] = null;
+    }
+  }
+  energy.sightFloor = worn.helm ? HELM_SIGHT : 0;
+  energy.holdVision = worn.helm;
+}
+gearButton.addEventListener('click', () => {
+  if (cameraRig.mode !== 'free') return;
+  const r = gearButton.getBoundingClientRect();
+  const rows: { label: string; small?: string; onPick: () => void }[] = [];
+  if (worn.helm) rows.push({ label: 'Take off the helm', small: 'darksight back to your own', onPick: () => takeOff('helm') });
+  if (worn.chest) rows.push({ label: 'Take off the chestpiece', small: worn.helm ? 'and the helm with it' : 'its energy flows back', onPick: () => takeOff('chest') });
+  showMenu(r.left - 120, r.top - 20, rows);
+});
+
 function onInteractableDone(done: Interactable): void {
   if (done === locked && cameraRig.mode === 'locked') autoUnlockAt = animClock + RELEASE_HOLD_MS;
   updateHud();
@@ -292,7 +406,7 @@ boardView.onRun = (run, origin) => {
   const target = it.targetFor(run);
   if (target === null) return;
   const amount = run.cells.length;
-  const color = it.kind === 'craft' ? 0xffa030 : PALETTE[run.type].hex;
+  const color = it.kind === 'craft' || it.kind === 'site' ? 0xffa030 : PALETTE[run.type].hex;
   projectiles.fire(origin, it.targetWorldPosition(target), color, animClock, () => {
     it.feed(target, amount, animClock);
     energy.drain(it.kind === 'craft' ? (it as CraftSession).recipe.drain : DRAIN_HEAT);
@@ -336,6 +450,8 @@ function updateHud(): void {
   if (slowmo > 1) parts.push(`slowmo ×${slowmo}`);
   if (debug) parts.push(`energy ${energy.value.toFixed(2)}`);
   if (energy.nourished(animClock)) parts.push('nourished');
+  const wearing = [worn.chest ? 'chestpiece' : '', worn.helm ? 'helm' : ''].filter(Boolean);
+  if (wearing.length) parts.push(`wearing ${wearing.join(' + ')}`);
   if (locked && cameraRig.mode === 'locked' && locked.status === 'growing') parts.push(locked.poolText());
   hud.textContent = parts.join(' · ');
   const lockedNow = cameraRig.mode === 'locked' && locked?.status === 'growing';
@@ -345,6 +461,7 @@ function updateHud(): void {
   zoomOutButton.hidden = !zoomable;
   walkButton.hidden = cameraRig.mode !== 'free';
   viewButton.hidden = cameraRig.mode !== 'free';
+  gearButton.hidden = cameraRig.mode !== 'free' || !(worn.chest || worn.helm);
   tools.classList.toggle('locked', lockedNow);
 }
 
@@ -387,6 +504,8 @@ player.cameraClear = cave.cameraClear;
   });
 }
 
+/** With the helm on, the light and the ambient go up as well as the reach: the whole room reads. Tuning. */
+const HELM_LIGHT_BOOST = 1.8;
 function applyEnergy(): void {
   const fx = energy.effects(animClock);
   // The tunnel: a dark ring closing in — but the centre is always clear (he is never blind).
@@ -395,7 +514,7 @@ function applyEnergy(): void {
   blackout.style.opacity = fx.blackout.toFixed(3);
   player.moveSlowdown = fx.slowdown;
   player.fanScale = fx.fanScale;
-  cave.setSight(camera.position, fx.sight);
+  cave.setSight(camera.position, fx.sight, worn.helm ? HELM_LIGHT_BOOST : 1);
 }
 
 // ---- Loop -------------------------------------------------------------------------
@@ -420,6 +539,10 @@ function animate(now: number): void {
   hands.update(animClock);
   for (const it of interactables) it.update(animClock);
   if (craft) craft.update(animClock);
+  if (forge) {
+    forge.evaluate();
+    forge.update(animClock);
+  }
   objects.update(animClock);
   if (locked && locked.status !== 'growing') boardView.hide();
   boardView.update(animClock);
@@ -442,4 +565,4 @@ applyMode('free');
 requestAnimationFrame(animate);
 
 // Debug handle. Not part of the design surface.
-(window as unknown as { __rootwake: unknown }).__rootwake = { THREE, scene, camera, renderer, player, cave, boulders: cave.boulders, objects, hands, energy, cameraRig, boardView, get craft() { return craft; }, startCraft, get shake() { return { animClock }; }, CELL };
+(window as unknown as { __rootwake: unknown }).__rootwake = { THREE, scene, camera, renderer, player, cave, boulders: cave.boulders, objects, hands, energy, cameraRig, boardView, get craft() { return craft; }, startCraft, get forge() { return forge; }, startForge, FORGE_PLANS, worn, equip, takeOff, get shake() { return { animClock }; }, CELL };
