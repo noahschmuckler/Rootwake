@@ -322,6 +322,12 @@ rules invert: no weather, no day, no food yet — heat instead of harvest.
   an ingot by the board. Nothing is lost in the loop; heat is the cost.
 - **The weight rule holds.** An ingot lifts with one hand; a dagger too.
   Piles of ingots are the stored potential, as logs are above.
+- **Food down here is found, not grown (U1).** Haunches of meat and baked
+  potatoes on the tables in the second chamber, eaten as popcorn is. They
+  are more potent than anything on the plateau: a bigger boost and a
+  stronger, longer slowing of every drain. Each food carries its own factor
+  (`nourishDrain`); a stronger food takes over a weaker one's nourishment,
+  a weaker one only extends it. Who laid the table is U2's question.
 
 ## 7. Open questions (deliberately unresolved)
 

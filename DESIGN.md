@@ -551,6 +551,42 @@ Status: built and headless-tested (lock, heat, vaporize, pool, ingot, bare
 rock refusal, forge, melt, energy scaling, rest, third person, tools);
 awaiting the phone judgement.
 
+### U1 — the hall and the table (2026-09-07)
+
+Designer's brief, after U0: in third person the camera clipped into the
+wall and showed bright light; add a long hallway leaving the outer room,
+sloping up, emerging in a chamber with crude wooden tables and chairs and
+food on the tables — haunches of meat, baked potatoes — more potent than
+popcorn in boosting energy and reducing drain.
+
+- **The camera stays in the air.** The bright light was the darksight
+  itself: a point light on a camera inside the rock lights the slab's
+  inner faces point-blank. The cave now says where the camera may be
+  (`cameraClear`: the rooms' and the hall's air) and the player pulls the
+  third-person camera in along its line until it is clear — past a
+  boulder's whole radius too — collapsing to the eye and hiding the avatar
+  when his back is to a wall. Filmic tone mapping takes the edge off
+  anything else at arm's length.
+- **The hall is the first vista.** A doorway in the +x wall, behind the
+  boulder whose vaporizing opens the way. Twenty-six long, climbing five;
+  at full sight its far end is black, so the climb is toward something
+  unseen. The floor is a ramp the player, avatar, fan and hands all
+  follow (`groundHeight`, `standHeightAt`, `groundAt`).
+- **The table at his scale.** His eye is 0.55 above the floor, so a table
+  top is 0.42 and a chair seat 0.24; the first build at human scale put
+  the camera under the table. Two tables, six chairs, a little off square,
+  all colliders. Food lies on the tops and is taken and eaten with the
+  plateau's gesture.
+- **Food that outranks popcorn.** The haunch boosts 0.4 and slows every
+  drain to ×0.4 for 300 s; the potato 0.22 and ×0.5 for 240 s; popcorn is
+  0.12 and ×0.6 for 150 s. Energy gained `eat`, and a stronger food takes
+  over a weaker one's nourishment while a weaker one only extends it. Who
+  set the table is the question this leaves.
+
+Status: built and headless-tested (camera clear at a wall and in the
+hall, the ramp's heights and walkability, the chamber, take and eat,
+drain scaled while nourished); awaiting the phone judgement.
+
 ## Beyond the passes: SYSTEMS.md and ROADMAP.md (2026-09-05)
 
 The designer's systems notes — the "nothing just because" philosophy,

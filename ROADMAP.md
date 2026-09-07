@@ -15,7 +15,8 @@ roof, must want a roof before there are shaped logs.
 
 Built and judged: Passes 0 → 1.1 (through the doorway cut, the campfire,
 wheat by the rune, harvest, nourishment, popcorn; judged 2026-09-07).
-Built, awaiting judgement: **U0**, the underworld's first pass (below).
+Built, awaiting judgement: **U0** and **U1**, the underworld's first two
+passes (below).
 
 ## Open directions after 1.1
 
@@ -170,9 +171,23 @@ Open, flagged in code: ORE_HP, the energy floor and drains, the sight and
 tunnel curves, cell pitch vs boulder radius (the gap must stay narrower
 than the player), the ingot's metal colour.
 
-**U1 (designer's call).** What the dagger is for; more blueprints from
-more ingots; whether ore types (the five colours?) differ; what lies past
-the chamber.
+**U1 — the hall and the table (built 2026-09-07).** *Question: does a long
+climb through the dark to a lit table of real food make the chamber feel
+like a beginning rather than the whole world?* A doorway in the chamber's
++x wall (the first vaporized boulder opens the way to it); a hall 26 long
+and 2.2 wide that climbs 5 into the dark — at full sight its far end is
+black; a second chamber at the top with two crude tables, six chairs, and
+haunches of meat and baked potatoes laid out. Both are eaten like popcorn
+(take a stack, hold the box) and are more potent: a bigger boost and a
+stronger, longer slowing of every drain (haunch ×0.4 for 300 s, potato
+×0.5 for 240 s, against popcorn's ×0.6). Also: the third-person camera is
+kept in the air — pulled in past a boulder's whole radius and out of the
+walls, collapsing to the eye when his back is to the rock. Open, flagged:
+hall length and rise, food values, furniture at his scale (eye 0.55).
+
+**U2 (designer's call).** Who set the table; what the dagger is for; more
+blueprints from more ingots; whether ore types (the five colours?)
+differ; what lies past the second chamber.
 
 ## Later, in no order yet
 

@@ -29,8 +29,10 @@ don't add structure the prototype doesn't need yet.
 and knuckles, the campfire, wheat by the rune with harvest, nourishment
 and popcorn; judged 2026-09-07). The underworld's first pass, U0 (the
 metallurgist wakes in a ring of ore boulders; heat → vaporize → ingot →
-dagger and back; energy that never collapses), is built and awaits the
-phone judgement. Standing rules: confinement→vista, objects have weight,
+dagger and back; energy that never collapses) and U1 (the sloping hall
+out of the chamber to a second room with tables, chairs and food that
+nourishes harder than popcorn; the third-person camera kept out of the
+rock) are built and await the phone judgement. Standing rules: confinement→vista, objects have weight,
 nothing "just because" (DESIGN.md, SYSTEMS.md).**
 `src/` holds:
 
@@ -105,8 +107,10 @@ nothing "just because" (DESIGN.md, SYSTEMS.md).**
   strength, hands-to-lift / hands-to-drag; object types (seed, stick, log,
   wheat_seed, popcorn, lichen, rock, hand_axe, long and short logs raw and
   notched, the knuckle (log_stub), the half log, long and short timber,
-  chip, and the underworld's ingot and dagger with their hot looks; seeds
-  are food, wheat and popcorn nourish; the notch grid constants;
+  chip, and the underworld's ingot and dagger with their hot looks, haunch
+  of meat and baked potato); seeds are food, wheat and popcorn nourish,
+  the haunch and potato nourish harder (`nourishDrain`); the notch grid
+  constants;
   a felled tree gives a long log and a short);
   authored crafting looks and `setLook` (multi-part looks: raycast
   recursively); `collectible` flag; the in-the-way waggle; WorldObject/
@@ -117,7 +121,8 @@ nothing "just because" (DESIGN.md, SYSTEMS.md).**
   that take a stack (tilled patches take seeds); an onRelease hook for a
   whole object let go (unused since 1.0c); a
   HandCondition from vitality (strength, caps, usable hands); hold a food
-  box to eat.
+  box to eat; an optional `groundAt(x, z)` so placing follows a ramp or a
+  raised floor.
 - `fell.ts` — the felled-tree ending: release, topple, thud, dust.
 - `rig.ts` — hand-placed trunk/branch curves/flowers, instanced per side
   face (1 or 4) around a seeded dark foliage core; invisible hit spheres,
@@ -142,23 +147,32 @@ nothing "just because" (DESIGN.md, SYSTEMS.md).**
   isWalkable(); encumbrance hooks; per-frame push-out from colliders;
   onHop, a still-hold rest gesture, a 'press' role on world objects that
   becomes a long-press, `startMove()` for the walk button (the whole screen
-  is look/tap/press: MOVE_ZONE 0), `standHeightAt` (a timber floor lifts
-  the eye and the fan), `knock()` for a strike, third-person zoom, and
-  `onOrbit` for drags while the camera is locked.
+  is look/tap/press: MOVE_ZONE 0), `standHeightAt` (a timber floor or a
+  cave ramp lifts the eye, the avatar and the fan), `knock()` for a strike,
+  third-person zoom with pull-in past colliders' `cameraClearance` and an
+  optional `cameraClear(p)` (the camera collapses to the eye and hides the
+  avatar when there is no room behind), and `onOrbit` for drags while the
+  camera is locked.
 - `world.ts` — the rock plateau cut on a curving cliff line, the cliff
   face, the never-walked landscape 400 below (forest floor, canopies,
   river, three mountain layers), FogExp2, sky dome; isWalkable() and
   distanceToEdge(); exposes sun/moon/hemi/sky/fog for the day cycle.
 - `energy.ts` — the metallurgist's one stat (underworld): drains per heat
   match and hop, a floor it never falls below (he never collapses), a rest
-  hold that restores, and the effects it scales — move slowdown, fan reach,
-  darksight distance, tunnel width. Tuning constants at the top.
-- `cave.ts` — the chamber: a 5×5-cell room of bare rock (floor, roof, four
-  immune walls), the 3×3 ring of ore boulders around the centre cell (the
-  gap between boulders is narrower than the player: confinement), black
-  fog whose density is the darksight's reach, the cool light on the camera,
-  `isWalkable`, `colliders`, `bareRock()`, `setSight`. Vertex-jittered
-  slabs (merge vertices first or the jitter cracks them).
+  hold that restores, eating (`eat`: a boost, and every drain scaled by the
+  food's own factor for a while — a stronger food takes over), and the
+  effects it scales — move slowdown, fan reach, darksight distance, tunnel
+  width. Tuning constants at the top.
+- `cave.ts` — the place: a 5×5-cell chamber of bare rock (floor, roof,
+  four immune walls, a doorway in the +x wall), the 3×3 ring of ore
+  boulders around the centre cell (the gap between boulders is narrower
+  than the player: confinement), the long hall that climbs HALL_RISE to a
+  second chamber with crude tables and chairs (`tables` for laying food,
+  furniture colliders), black fog whose density is the darksight's reach,
+  the cool light on the camera; `isWalkable`, `groundHeight` (the ramp),
+  `cameraClear` (the air the third-person camera may occupy), `colliders`,
+  `bareRock()`, `setSight`. Vertex-jittered slabs (merge vertices first or
+  the jitter cracks them).
 - `ore.ts` — `OreBoulder`, an Interactable: a merged-and-jittered
   icosahedron with ore veins walked over its actual surface by raycast
   (plates merged into one mesh); the board heats the veins gold → white
