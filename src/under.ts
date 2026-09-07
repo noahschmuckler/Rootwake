@@ -1,0 +1,414 @@
+// Underworld U0 — the metallurgist. A second character in a second place,
+// on the same engine: the board, the lock, the hands, the walk, the
+// crafting. He wakes in the centre cell of a 3x3 block of ore-bearing
+// boulders inside a 5x5 chamber of bare rock. Fully energized, he sees in
+// the dark; the board superheats the ore in a boulder until the rock
+// vaporizes and leaves molten metal that sets into an ingot; an ingot
+// long-pressed offers the dagger blueprint, and a dagger melts back. Bare
+// rock is immune. As his energy goes his sight narrows to a tunnel and his
+// darksight shortens and he slows — but he is never blind and never falls.
+//
+// This file is the underworld's main.ts: wiring only.
+
+import * as THREE from 'three';
+import { CameraRig, type CameraMode, type CameraPose } from './cameraLock';
+import { Player, THIRD_ZOOM_MIN, THIRD_ZOOM_MAX } from './player';
+import type { Interactable } from './interactable';
+import { ObjectWorld, OBJECT_TYPES, HANDS, handsToLift, type WorldObject } from './objects';
+import { Hands } from './hands';
+import { BoardView } from './board3d';
+import { Projectiles } from './projectiles';
+import { PALETTE } from './colors';
+import { CraftSession } from './craft';
+import { recipesFor, type Recipe } from './recipes';
+import { Cave, GROUND_Y, CELL, BOULDER_RADIUS } from './cave';
+import { Energy, DRAIN_HEAT, DRAIN_HOP } from './energy';
+
+// ---- URL params -------------------------------------------------------------
+const params = new URLSearchParams(window.location.search);
+const seed = Number.parseInt(params.get('seed') ?? '', 10) || 1;
+const slowmo = Math.max(1, Number.parseFloat(params.get('slowmo') ?? '') || 1);
+const debug = params.has('debug');
+
+// ---- Scene / camera / renderer ---------------------------------------------
+const scene = new THREE.Scene();
+const BASE_FOV = 40;
+const camera = new THREE.PerspectiveCamera(BASE_FOV, window.innerWidth / window.innerHeight, 0.05, 200);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.toneMapping = THREE.LinearToneMapping;
+renderer.toneMappingExposure = 1;
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+document.body.appendChild(renderer.domElement);
+
+const cave = new Cave(scene, seed);
+const cameraRig = new CameraRig(camera);
+scene.add(camera);
+const boardView = new BoardView(camera);
+const projectiles = new Projectiles(scene);
+const objects = new ObjectWorld(scene);
+const player = new Player(renderer.domElement, scene, camera);
+player.position.set(0, GROUND_Y, 0);
+player.yaw = 0.6;
+scene.add(player.avatar);
+// He is a metallurgist: darker cloth, a broader frame.
+player.avatar.scale.set(1.15, 1, 1.15);
+
+const hands = new Hands(camera, player, objects, scene, [...document.querySelectorAll<HTMLElement>('#hands .hand')], document.getElementById('links') as unknown as SVGSVGElement, GROUND_Y, cave.isWalkable);
+
+const energy = new Energy();
+const interactables: Interactable[] = [...cave.boulders];
+
+// ---- DOM ---------------------------------------------------------------------
+const hint = document.getElementById('hint')!;
+const hud = document.getElementById('hud')!;
+const backButton = document.getElementById('back') as HTMLButtonElement;
+const menu = document.getElementById('menu')!;
+const halo = document.getElementById('halo')!;
+const blackout = document.getElementById('blackout')!;
+const tools = document.getElementById('tools')!;
+const zoomInButton = document.getElementById('zoom-in') as HTMLButtonElement;
+const zoomOutButton = document.getElementById('zoom-out') as HTMLButtonElement;
+const viewButton = document.getElementById('view') as HTMLButtonElement;
+const walkButton = document.getElementById('walk') as HTMLButtonElement;
+// The plateau-only panels stay hidden here.
+for (const id of ['rain', 'blueprints']) document.getElementById(id)?.setAttribute('hidden', '');
+
+// ---- Clock ------------------------------------------------------------------
+let animClock = 0;
+let lastFrame = -1;
+
+// ---- Locking ------------------------------------------------------------------
+let locked: Interactable | null = null;
+let lockedPose: CameraPose | null = null;
+let craft: CraftSession | null = null;
+let autoUnlockAt: number | null = null;
+const RELEASE_HOLD_MS = 900;
+const BOARD_GROUND_CLEARANCE = 0.12;
+
+function viewerNow() {
+  return { position: player.position.clone(), forward: player.forward() };
+}
+function lockOnto(it: Interactable): void {
+  const pose = it.lockPose(viewerNow());
+  // Inside a boulder, or through a wall: step toward the target.
+  for (let guard = 0; guard < 6; guard++) {
+    const inside = cave.boulders.some((b) => b !== it && b.collider() && Math.hypot(b.center.x - pose.position.x, b.center.z - pose.position.z) < BOULDER_RADIUS + 0.25);
+    if (!inside && cave.isWalkable(pose.position)) break;
+    pose.position.lerp(pose.target, 0.25);
+  }
+  const lowest = boardView.lowestWorldY(pose.position, pose.target, it.board.cols, it.board.rows);
+  const lift = (it.floorY ?? GROUND_Y) + BOARD_GROUND_CLEARANCE - lowest;
+  if (lift > 0) {
+    pose.position.y += lift;
+    pose.target.y += lift;
+    it.onPoseLifted?.(lift);
+  }
+  locked = it;
+  lockedPose = pose;
+  cameraRig.lock(animClock, pose);
+}
+function playerPose(): CameraPose {
+  const eye = player.eye();
+  return { position: eye, target: eye.clone().add(player.forward()) };
+}
+
+// Orbit and zoom while locked; zoom in third person.
+const ORBIT_PITCH_MIN = 0.12;
+const ORBIT_PITCH_MAX = 1.5;
+function reframeLocked(fn: (offset: THREE.Spherical) => void): void {
+  if (cameraRig.mode !== 'locked' || !locked || !lockedPose) return;
+  const offset = new THREE.Spherical().setFromVector3(lockedPose.position.clone().sub(lockedPose.target));
+  fn(offset);
+  offset.phi = THREE.MathUtils.clamp(offset.phi, ORBIT_PITCH_MIN, ORBIT_PITCH_MAX);
+  offset.radius = THREE.MathUtils.clamp(offset.radius, 1.1, 6);
+  const position = lockedPose.target.clone().add(new THREE.Vector3().setFromSpherical(offset));
+  const target = lockedPose.target.clone();
+  const lowest = boardView.lowestWorldY(position, target, locked.board.cols, locked.board.rows);
+  const lift = (locked.floorY ?? GROUND_Y) + BOARD_GROUND_CLEARANCE - lowest;
+  if (lift > 0) {
+    position.y += lift;
+    target.y += lift;
+  }
+  lockedPose = { position, target };
+  camera.position.copy(position);
+  camera.lookAt(target);
+}
+player.onOrbit = (dx, dy) =>
+  reframeLocked((o) => {
+    o.theta -= dx;
+    o.phi -= dy;
+  });
+for (const [el, k] of [
+  [zoomInButton, 0.8],
+  [zoomOutButton, 1.25],
+] as const) {
+  el.addEventListener('pointerdown', (e) => e.stopPropagation());
+  el.addEventListener('click', () => {
+    if (cameraRig.mode === 'free') player.thirdZoom = THREE.MathUtils.clamp(player.thirdZoom * k, THIRD_ZOOM_MIN, THIRD_ZOOM_MAX);
+    else reframeLocked((o) => (o.radius *= k));
+  });
+}
+viewButton.addEventListener('pointerdown', (e) => e.stopPropagation());
+viewButton.addEventListener('click', () => {
+  player.view = player.view === 'first' ? 'third' : 'first';
+  viewButton.innerHTML = player.view === 'third' ? '<b>◉</b>1st' : '<b>◎</b>3rd';
+  viewButton.classList.toggle('active', player.view === 'third');
+  updateHud();
+});
+walkButton.addEventListener('pointerdown', (e) => {
+  e.stopPropagation();
+  e.preventDefault();
+  walkButton.setPointerCapture(e.pointerId);
+  walkButton.classList.add('active');
+  player.startMove(e);
+});
+walkButton.addEventListener('pointermove', (e) => player.pointerMove(e));
+for (const ev of ['pointerup', 'pointercancel'] as const) {
+  walkButton.addEventListener(ev, (e) => {
+    walkButton.classList.remove('active');
+    player.pointerUp(e);
+  });
+}
+
+// ---- Input -----------------------------------------------------------------------
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
+function castFrom(clientX: number, clientY: number): void {
+  pointer.set((clientX / window.innerWidth) * 2 - 1, -(clientY / window.innerHeight) * 2 + 1);
+  raycaster.setFromCamera(pointer, camera);
+}
+let tooFarUntil = 0;
+
+player.onTap = (x, y) => {
+  castFrom(x, y);
+  if (cameraRig.mode === 'free') {
+    const targets = interactables.filter((it) => it.status === 'growing').flatMap((it) => it.lockTargets);
+    const hit = raycaster.intersectObjects(targets, false)[0];
+    if (!hit) {
+      // Bare rock: nothing in it to heat.
+      const rock = raycaster.intersectObjects(cave.bareRock(), false)[0];
+      if (rock && rock.distance < 6) {
+        hint.textContent = 'Bare rock. Nothing in it to heat.';
+        tooFarUntil = animClock + 1400;
+      }
+      return;
+    }
+    const it = hit.object.userData.interactable as Interactable;
+    if (it.distanceTo(player.position) > it.lockReach) {
+      hint.textContent = 'Closer.';
+      tooFarUntil = animClock + 900;
+      return;
+    }
+    lockOnto(it);
+  } else if (cameraRig.mode === 'locked' && locked) {
+    if (boardView.tap(raycaster)) updateHud();
+  }
+};
+
+/** Long-press: an object's recipes (the ingot's blueprint, the dagger's melting). */
+player.objectAt = (x, y) => {
+  if (cameraRig.mode !== 'free') return false;
+  castFrom(x, y);
+  const hit = raycaster.intersectObjects(objects.raycastTargets(), true)[0];
+  if (!hit) return false;
+  const obj = hit.object.userData.object as WorldObject;
+  return Math.hypot(obj.position.x - player.position.x, obj.position.z - player.position.z) <= 3.5;
+};
+function showMenu(x: number, y: number, rows: { label: string; small?: string; disabled?: boolean; onPick: () => void }[]): void {
+  menu.innerHTML = rows
+    .map((r, i) => `<button type="button" data-i="${i}" ${r.disabled ? 'disabled' : ''}>${r.label}${r.small ? `<small>${r.small}</small>` : ''}</button>`)
+    .join('');
+  menu.style.left = `${Math.min(window.innerWidth - 230, Math.max(10, x - 100))}px`;
+  menu.style.top = `${Math.min(window.innerHeight - 40 - rows.length * 52, Math.max(90, y - 30))}px`;
+  menu.hidden = false;
+  menu.querySelectorAll<HTMLButtonElement>('button').forEach((b) => {
+    b.addEventListener('pointerdown', (e) => e.stopPropagation());
+    b.addEventListener('click', () => {
+      menu.hidden = true;
+      rows[Number(b.dataset.i)].onPick();
+    });
+  });
+}
+player.onLongPress = (x, y) => {
+  castFrom(x, y);
+  const hit = raycaster.intersectObjects(objects.raycastTargets(), true)[0];
+  if (!hit) return;
+  const obj = hit.object.userData.object as WorldObject;
+  const rows = recipesFor(obj.type.id, hands.heldTypes()).map((r) => ({
+    label: r.recipe.label,
+    small: r.available ? (r.recipe.id === 'forge-dagger' ? 'one ingot' : undefined) : r.reason,
+    disabled: !r.available,
+    onPick: () => startCraft(obj, r.recipe),
+  }));
+  if (rows.length === 0) {
+    hint.textContent = `Nothing to make from ${obj.type.label} yet.`;
+    tooFarUntil = animClock + 1400;
+    return;
+  }
+  showMenu(x, y, rows);
+};
+renderer.domElement.addEventListener('pointerdown', () => (menu.hidden = true));
+
+function startCraft(target: WorldObject, recipe: Recipe): void {
+  const lifts = handsToLift(target.type.mass, 1) <= HANDS;
+  craft = new CraftSession(target, recipe, objects, viewerNow(), seed * 17 + target.id, lifts, GROUND_Y, 'heats');
+  craft.onDone = (it) => {
+    const session = it as CraftSession;
+    const type = OBJECT_TYPES[session.result as keyof typeof OBJECT_TYPES];
+    const count = session.recipe.resultCount ?? 1;
+    for (let i = 0; i < count; i++) {
+      const free = hands.freeHand();
+      if (free >= 0 && handsToLift(type.mass, 1) === 1) hands.give(free, type);
+      else objects.spawn(type.id, session.restPosition.x + i * 0.3, GROUND_Y, session.restPosition.z, session.restYaw);
+    }
+    hint.textContent = type.id === 'dagger' ? 'A dagger, still warm.' : `An ${type.label}.`;
+    tooFarUntil = animClock + 2000;
+    onInteractableDone(it);
+  };
+  lockOnto(craft);
+}
+
+function onInteractableDone(done: Interactable): void {
+  if (done === locked && cameraRig.mode === 'locked') autoUnlockAt = animClock + RELEASE_HOLD_MS;
+  updateHud();
+}
+for (const b of cave.boulders) {
+  b.onDone = onInteractableDone;
+  b.onIngot = (at) => {
+    objects.spawn('ingot', at.x, GROUND_Y, at.z, Math.random() * Math.PI);
+    hint.textContent = 'The metal sets: an ingot. Long-press it for what it can become.';
+    tooFarUntil = animClock + 3200;
+    updateHud();
+  };
+}
+
+// A run cleared on the board: heat flies to the ore (or the forging).
+boardView.onRun = (run, origin) => {
+  const it = locked;
+  if (!it) return;
+  const target = it.targetFor(run);
+  if (target === null) return;
+  const amount = run.cells.length;
+  const color = it.kind === 'craft' ? 0xffa030 : PALETTE[run.type].hex;
+  projectiles.fire(origin, it.targetWorldPosition(target), color, animClock, () => {
+    it.feed(target, amount, animClock);
+    energy.drain(it.kind === 'craft' ? (it as CraftSession).recipe.drain : DRAIN_HEAT);
+    updateHud();
+  });
+};
+
+// ---- Modes / HUD ------------------------------------------------------------------
+const HINTS: Record<CameraMode, string> = {
+  free: 'Hold walk to move, drag to look. Tap the shining ore in a boulder to heat it. Long-press an ingot for what it can become.',
+  locking: '',
+  locked: '',
+  unlocking: '',
+};
+function applyMode(mode: CameraMode): void {
+  hint.textContent = mode === 'locked' && locked ? locked.hintLocked : HINTS[mode];
+  player.enabled = mode === 'free';
+  if (mode === 'locked' && locked) {
+    boardView.bind(locked.board);
+    boardView.show(animClock);
+    if (locked.status !== 'growing' && autoUnlockAt === null) autoUnlockAt = animClock + RELEASE_HOLD_MS;
+  }
+  if (mode === 'unlocking') {
+    boardView.hide();
+    if (craft && craft.status === 'growing') craft.cancel();
+  }
+  if (mode === 'free') {
+    boardView.unbind();
+    locked = null;
+    craft = null;
+  }
+  updateHud();
+}
+cameraRig.onModeChange = applyMode;
+backButton.addEventListener('click', () => {
+  if (cameraRig.mode === 'locked') cameraRig.unlock(animClock, playerPose());
+});
+function updateHud(): void {
+  const ore = cave.boulders.filter((b) => b.status === 'growing').length;
+  const parts = [`seed ${seed}`, `ore ${ore}/${cave.boulders.length}`, `ingots ${objects.objects.filter((o) => o.type.id === 'ingot').length}`];
+  if (slowmo > 1) parts.push(`slowmo ×${slowmo}`);
+  if (debug) parts.push(`energy ${energy.value.toFixed(2)}`);
+  if (locked && cameraRig.mode === 'locked' && locked.status === 'growing') parts.push(locked.poolText());
+  hud.textContent = parts.join(' · ');
+  const lockedNow = cameraRig.mode === 'locked' && locked?.status === 'growing';
+  backButton.hidden = !lockedNow;
+  const zoomable = lockedNow || (cameraRig.mode === 'free' && player.view === 'third');
+  zoomInButton.hidden = !zoomable;
+  zoomOutButton.hidden = !zoomable;
+  walkButton.hidden = cameraRig.mode !== 'free';
+  viewButton.hidden = cameraRig.mode !== 'free';
+  tools.classList.toggle('locked', lockedNow);
+}
+
+// ---- Energy wiring ------------------------------------------------------------------
+player.onHop = () => energy.drain(DRAIN_HOP);
+player.onRestHold = () => {
+  if (cameraRig.mode === 'free' && !energy.busy) energy.rest(animClock);
+};
+energy.onEvent = () => {
+  hint.textContent = 'You gather yourself. The dark opens out again.';
+  tooFarUntil = animClock + 2200;
+};
+hands.onEat = () => false; // nothing to eat down here yet
+
+function applyEnergy(): void {
+  const fx = energy.effects(animClock);
+  // The tunnel: a dark ring closing in — but the centre is always clear (he is never blind).
+  const clear = 100 - 70 * fx.tunnel; // % radius where the dark is full; never below 30%
+  halo.style.background = fx.tunnel > 0.02 ? `radial-gradient(ellipse at center, rgba(0,0,0,0) ${Math.max(16, clear - 30)}%, rgba(0,0,0,0.96) ${clear}%)` : 'none';
+  blackout.style.opacity = fx.blackout.toFixed(3);
+  player.moveSlowdown = fx.slowdown;
+  player.fanScale = fx.fanScale;
+  cave.setSight(camera.position, fx.sight);
+}
+
+// ---- Loop -------------------------------------------------------------------------
+function animate(now: number): void {
+  requestAnimationFrame(animate);
+  const dt = lastFrame < 0 ? 0 : Math.min(0.1, Math.max(0, (now - lastFrame) / 1000));
+  lastFrame = now;
+  animClock += (dt * 1000) / slowmo;
+
+  if (autoUnlockAt !== null && animClock >= autoUnlockAt) {
+    autoUnlockAt = null;
+    if (cameraRig.mode === 'locked') cameraRig.unlock(animClock, playerPose());
+  }
+  if (cameraRig.mode === 'free') {
+    player.update(now, cave.colliders(), cave.isWalkable);
+    player.applyCamera(camera);
+  }
+  cameraRig.update(animClock);
+  energy.update(animClock);
+  player.enabled = cameraRig.mode === 'free' && !energy.busy;
+  applyEnergy();
+  hands.update(animClock);
+  for (const it of interactables) it.update(animClock);
+  if (craft) craft.update(animClock);
+  objects.update(animClock);
+  if (locked && locked.status !== 'growing') boardView.hide();
+  boardView.update(animClock);
+  projectiles.update(animClock);
+  if (animClock > tooFarUntil && cameraRig.mode === 'free' && !hint.textContent?.startsWith('Hold walk')) hint.textContent = hands.notice ?? HINTS.free;
+  if (hands.notice && animClock > tooFarUntil) {
+    hint.textContent = hands.notice;
+    hands.notice = null;
+    tooFarUntil = animClock + 1400;
+  }
+  renderer.render(scene, camera);
+}
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  boardView.layout();
+});
+applyMode('free');
+requestAnimationFrame(animate);
+
+// Debug handle. Not part of the design surface.
+(window as unknown as { __rootwake: unknown }).__rootwake = { THREE, scene, camera, renderer, player, cave, boulders: cave.boulders, objects, hands, energy, cameraRig, boardView, get craft() { return craft; }, startCraft, get shake() { return { animClock }; }, CELL };
