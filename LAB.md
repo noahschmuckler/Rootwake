@@ -76,3 +76,43 @@ going matte, the fuzz standing up. Scraped, it goes back.
 0.7); plate size and count; feeler thickness, barb density, whip speed;
 whether the legs read as legs or boards; eye size; how much it should
 care about him; whether it should ever leave the veins for him.
+
+## v2 (2026-09-08)
+
+Designer's notes on v1: the feelers clipped through the wall while it
+worked a vein, and the way it stood made it hard to read what it was
+doing. Two asks: a viewing platform — he stands raised, comes to the edge,
+and sees the creature in a lowered area along the far wall, with ore at
+several heights on a moderately tall wall, all in view; and wall climbing
+— on reaching a wall it angles its body up it, silverfish-like, the body
+flexing to hug the corner as it goes from floor to wall, and it circles
+an ore a little before feeding.
+
+**The room.** A platform 2.2 above a pit, from z 4.5 to the near wall,
+with a low lip; he walks only the platform. The far wall is 7.5 tall
+and carries five veins between 1.0 and 5.0 up. Two cool lamps under the
+roof over the pit light the wall — lab fixtures, not game lighting.
+
+**Climbing.** The creature has a surface frame: on the floor its up is
+the world's; on a wall its up is the wall's inward normal and it moves in
+the wall's plane in along-wall / up-wall coordinates with an in-plane
+heading. Its pose is a blend between the floor pose and the wall pose:
+the *mount* runs the blend 0→1 over 1.1 s while the abdomen — now a chain
+of pivots — bends tail-down by up to 0.62 rad spread over the joints,
+peaking mid-way, so the tail lies into the corner while the head is
+already up the wall; the *dismount* runs it back. On the wall it moves in
+bursts and freezes like the floor, at 2.2/s, legs splayed a little
+flatter.
+
+**Feeding on the wall.** Up on the wall it walks a 1.6-turn loop of
+radius 1.05 around the vein, then stops 0.95 below it facing up. The
+feelers now sweep in the wall's plane, and their lifts are only away
+from the rock (a half-wave), so nothing goes through it. Tickle, scrape
+and groom as before; the rust dust falls in the world's down whichever
+way the body is turned. Done, it walks down to just above the floor and
+dismounts.
+
+**Open:** the mount flex amount and whether the tail should trail
+longer; wall speed; how far the feelers overshoot the vein (they are 2.6
+long and the vein is 0.95 above the head, so the tips flail above it);
+whether it should feed from the side rather than below; the lamps.

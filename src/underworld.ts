@@ -53,6 +53,8 @@ export interface BootOptions {
   greblins?: boolean;
   /** The free-view hint, if the place's isn't the cave's. */
   freeHint?: string;
+  /** Where he starts (x, z on the ground; yaw), if not the cave's centre. */
+  spawn?: { x: number; z: number; yaw: number };
   /** Things that live in the place and want a frame each frame (the lab's creature). */
   populate?: (ctx: PopulateContext) => Updatable[];
 }
@@ -94,8 +96,8 @@ const boardView = new BoardView(camera);
 const projectiles = new Projectiles(scene);
 const objects = new ObjectWorld(scene);
 const player = new Player(renderer.domElement, scene, camera);
-player.position.set(0, GROUND_Y, 0);
-player.yaw = 0.6;
+player.position.set(opts.spawn?.x ?? 0, GROUND_Y, opts.spawn?.z ?? 0);
+player.yaw = opts.spawn?.yaw ?? 0.6;
 scene.add(player.avatar);
 // He is a metallurgist: darker cloth, a broader frame.
 player.avatar.scale.set(1.15, 1, 1.15);

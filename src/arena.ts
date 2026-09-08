@@ -1,7 +1,8 @@
-// The lab (lab branch): a place to look at a creature. One wide, high
-// chamber of bare rock and nothing else — no ore, no hall, no tables — so
-// whatever is put in it can be watched from anywhere, in the suit's light.
-// The same World surface as the cave, so the underworld's wiring boots it.
+// The lab (lab branch): a place to look at a creature. v2: a viewing
+// platform, raised at the near end of a wide chamber, over a pit; the far
+// wall is tall and carries silvery ore at several heights, all in view from
+// the platform's edge. He can only walk the platform. The same World
+// surface as the cave, so the underworld's wiring boots it.
 
 import * as THREE from 'three';
 import { mulberry32 } from './colors';
@@ -12,10 +13,27 @@ import type { CircleCollider } from './player';
 import { OreVein } from './orevein';
 
 // ---- Tuning constants ---------------------------------------------------------
-/** Half-width of the arena's interior, and its roof height. Room for something big to move. */
+/** Half-width of the chamber, its roof height above the pit floor, and the platform: where it starts
+ *  (z from PLATFORM_Z0 to the near wall) and how far above the pit floor it stands. */
 export const ARENA_HALF = 9;
-export const ARENA_ROOF = 6;
+export const ARENA_ROOF = 7.5;
+export const PLATFORM_Z0 = 4.5;
+export const PLATFORM_RISE = 2.2;
+/** Lab fixtures: two cool lamps under the roof over the pit, so the feeding wall can be judged from the
+ *  platform. Not part of the game's lighting — the lab is lit because it is a lab. */
+export const LAMP_INTENSITY = 40;
+/** The feeding wall is the far (−z) wall; veins at these x positions and heights above the pit floor. */
+export const FAR_WALL_VEINS: [number, number][] = [
+  [-6.2, 1.0],
+  [-2.6, 3.1],
+  [0.8, 5.0],
+  [4.2, 2.2],
+  [7.0, 3.9],
+];
 // -------------------------------------------------------------------------------
+
+export const PIT_FLOOR = GROUND_Y;
+export const PLATFORM_FLOOR = GROUND_Y + PLATFORM_RISE;
 
 function rockSlab(w: number, h: number, d: number, seed: number, amp = 0.12): THREE.Mesh {
   const geo = mergeVertices(new THREE.BoxGeometry(w, h, d, Math.max(2, Math.round(w / 0.8)), Math.max(2, Math.round(h / 0.8)), Math.max(2, Math.round(d / 0.8))));
@@ -39,7 +57,7 @@ export class Arena {
   readonly fog: THREE.FogExp2;
   readonly darksight: THREE.PointLight;
   readonly hemi: THREE.HemisphereLight;
-  /** Silvery ore on the walls, for the creature. */
+  /** Silvery ore on the far wall, for the creature. */
   readonly veins: OreVein[] = [];
   /** Colliders that move (the creature's); it keeps its own entry up to date. */
   readonly dynamic: CircleCollider[] = [];
@@ -54,48 +72,52 @@ export class Arena {
     scene.add(this.darksight);
 
     const span = ARENA_HALF * 2 + WALL_THICK * 2;
+    const rock = (m: THREE.Mesh, x: number, y: number, z: number, ry = 0): void => {
+      m.position.set(x, y, z);
+      m.rotation.y = ry;
+      m.userData.bareRock = true;
+      this.group.add(m);
+    };
+    // The pit floor, and the roof over everything.
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(span, span), new THREE.MeshStandardMaterial({ color: ROCK_DARK, roughness: 1, flatShading: true }));
     floor.rotation.x = -Math.PI / 2;
-    floor.position.y = GROUND_Y;
-    floor.userData.bareRock = true;
-    this.group.add(floor);
-    const roof = rockSlab(span, 0.5, span, seed ^ 0x51, 0.35);
-    roof.position.y = GROUND_Y + ARENA_ROOF + 0.25;
-    roof.userData.bareRock = true;
-    this.group.add(roof);
-    for (const [i, [x, z, ry]] of [
-      [0, 0, ARENA_HALF + WALL_THICK / 2, 0],
-      [1, 0, -ARENA_HALF - WALL_THICK / 2, 0],
-      [2, ARENA_HALF + WALL_THICK / 2, 0, Math.PI / 2],
-      [3, -ARENA_HALF - WALL_THICK / 2, 0, Math.PI / 2],
-    ].map((w) => [w[0], [w[1], w[2], w[3]]] as [number, [number, number, number]])) {
-      const wall = rockSlab(span, ARENA_ROOF + 0.5, WALL_THICK, seed ^ (0x77 + i), 0.2);
-      wall.position.set(x, GROUND_Y + ARENA_ROOF / 2, z);
-      wall.rotation.y = ry;
-      wall.userData.bareRock = true;
-      this.group.add(wall);
+    rock(floor, 0, PIT_FLOOR, 0);
+    rock(rockSlab(span, 0.5, span, seed ^ 0x51, 0.35), 0, PIT_FLOOR + ARENA_ROOF + 0.25, 0);
+    // The platform: a block from PLATFORM_Z0 to the near wall, its top the floor he walks, its front a cliff.
+    const depth = ARENA_HALF - PLATFORM_Z0;
+    rock(rockSlab(span, PLATFORM_RISE + 0.5, depth + WALL_THICK, seed ^ 0x60, 0.15), 0, PIT_FLOOR + PLATFORM_RISE / 2 - 0.25, PLATFORM_Z0 + (depth + WALL_THICK) / 2);
+    // A low lip along its edge, so the edge reads.
+    rock(rockSlab(span, 0.16, 0.3, seed ^ 0x61, 0.05), 0, PLATFORM_FLOOR + 0.08, PLATFORM_Z0 + 0.15);
+    // Four walls; the far one is the feeding wall.
+    rock(rockSlab(span, ARENA_ROOF + 0.5, WALL_THICK, seed ^ 0x77, 0.2), 0, PIT_FLOOR + ARENA_ROOF / 2, ARENA_HALF + WALL_THICK / 2);
+    rock(rockSlab(span, ARENA_ROOF + 0.5, WALL_THICK, seed ^ 0x78, 0.2), 0, PIT_FLOOR + ARENA_ROOF / 2, -ARENA_HALF - WALL_THICK / 2);
+    rock(rockSlab(span, ARENA_ROOF + 0.5, WALL_THICK, seed ^ 0x79, 0.2), ARENA_HALF + WALL_THICK / 2, PIT_FLOOR + ARENA_ROOF / 2, 0, Math.PI / 2);
+    rock(rockSlab(span, ARENA_ROOF + 0.5, WALL_THICK, seed ^ 0x7a, 0.2), -ARENA_HALF - WALL_THICK / 2, PIT_FLOOR + ARENA_ROOF / 2, 0, Math.PI / 2);
+    // The lamps over the pit.
+    for (const x of [-4.5, 4.5]) {
+      const lamp = new THREE.PointLight(0x9fb4d0, LAMP_INTENSITY, 26, 1.2);
+      lamp.position.set(x, PIT_FLOOR + ARENA_ROOF - 0.6, -3);
+      scene.add(lamp);
     }
-    // Ore on the walls: five clusters at working height, one or two per wall, never in a corner.
-    const H = ARENA_HALF;
-    const spots: [number, number, number, number, number][] = [
-      // x, z, normal x, normal z, height above the floor
-      [-2.5, -H, 0, 1, 0.9],
-      [3.5, -H, 0, 1, 1.3],
-      [H, 1.5, -1, 0, 0.7],
-      [-1.0, H, 0, -1, 1.1],
-      [-H, -3.0, 1, 0, 0.8],
-    ];
-    spots.forEach(([x, z, nx, nz, h], i) => {
-      const v = new OreVein(new THREE.Vector3(x, GROUND_Y + h, z), new THREE.Vector3(nx, 0, nz), seed ^ (0x5e1 + i * 7));
+    // Ore on the far wall at several heights.
+    FAR_WALL_VEINS.forEach(([x, h], i) => {
+      const v = new OreVein(new THREE.Vector3(x, PIT_FLOOR + h, -ARENA_HALF), new THREE.Vector3(0, 0, 1), seed ^ (0x5e1 + i * 7));
       this.veins.push(v);
       this.group.add(v.group);
     });
     scene.add(this.group);
   }
 
-  isWalkable = (p: THREE.Vector3): boolean => Math.abs(p.x) < ARENA_HALF - 0.45 && Math.abs(p.z) < ARENA_HALF - 0.45;
-  groundHeight = (_x: number, _z: number): number => 0;
-  cameraClear = (p: THREE.Vector3): boolean => Math.abs(p.x) < ARENA_HALF - 0.25 && Math.abs(p.z) < ARENA_HALF - 0.25 && p.y > GROUND_Y + 0.1 && p.y < GROUND_Y + ARENA_ROOF - 0.25;
+  /** He walks the platform only. */
+  isWalkable = (p: THREE.Vector3): boolean => Math.abs(p.x) < ARENA_HALF - 0.45 && p.z > PLATFORM_Z0 + 0.35 && p.z < ARENA_HALF - 0.45;
+  /** The creature's ground: the pit floor. */
+  pitWalkable = (p: THREE.Vector3): boolean => Math.abs(p.x) < ARENA_HALF - 0.6 && p.z > -ARENA_HALF + 0.6 && p.z < PLATFORM_Z0 - 0.6;
+  groundHeight = (_x: number, z: number): number => (z > PLATFORM_Z0 ? PLATFORM_RISE : 0);
+  cameraClear = (p: THREE.Vector3): boolean => {
+    if (Math.abs(p.x) > ARENA_HALF - 0.25 || Math.abs(p.z) > ARENA_HALF - 0.25) return false;
+    const floorY = PIT_FLOOR + this.groundHeight(p.x, p.z);
+    return p.y > floorY + 0.1 && p.y < PIT_FLOOR + ARENA_ROOF - 0.25;
+  };
 
   colliders(): CircleCollider[] {
     return this.dynamic;

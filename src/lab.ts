@@ -11,11 +11,12 @@ import { bootUnder } from './underworld';
 bootUnder({
   world: (scene, seed) => new Arena(scene, seed),
   suit: true,
-  freeHint: 'The lab. Hold walk to move, drag to look. Something is working the ore on the walls.',
+  freeHint: 'The lab. Hold walk to move, drag to look. Below, something is working the ore on the far wall.',
+  spawn: { x: 0, z: 7.2, yaw: 0 },
   populate: ({ scene, world, seed, player }) => {
     const arena = world as Arena;
-    // One rust monster, starting at the far side, already at a vein.
-    const monster = new RustMonster(GROUND_Y, new THREE.Vector3(2.5, GROUND_Y, -6.5), arena.veins, arena.isWalkable, seed);
+    // One rust monster in the pit, starting near the far wall.
+    const monster = new RustMonster(GROUND_Y, new THREE.Vector3(2.5, GROUND_Y, -5.5), arena.veins, arena.pitWalkable, seed);
     scene.add(monster.group);
     arena.dynamic.push(monster.collider);
     return [{ update: (nowMs: number) => monster.update(nowMs, player.position), monster } as { update(nowMs: number): void; monster: RustMonster }];
