@@ -7,7 +7,7 @@
 
 import * as THREE from 'three';
 import { mulberry32 } from './colors';
-import { ROOM_B_CX, ROOM_B_HALF, ROOM_B_FLOOR } from './cave';
+import { ROOM_B_CX, ROOM_B_HALF, ROOM_B_FLOOR, TUNNEL_X, TUNNEL_FLOOR, TUNNEL_Z, TUNNEL_LENGTH } from './cave';
 
 // ---- Tuning constants ---------------------------------------------------------
 export const GREBLIN_COUNT = 4;
@@ -23,6 +23,12 @@ export const IN_VIEW_COS = 0.77;
 export const SETTLE_MS = 700;
 /** How far in from the walls the hiding spots lie. */
 export const SPOT_INSET = 0.9;
+/** U4: after this many scares one has had enough — it makes for the wall under the high tunnel, climbs
+ *  it (a thing only they can do), runs down the tunnel out of sight and is gone. */
+export const SCARE_LIMIT = 3;
+export const CLIMB_SPEED = 1.7;
+/** Which hiding spot lies under the tunnel mouth: the +x mid-wall. */
+const TUNNEL_SPOT = 3;
 // -------------------------------------------------------------------------------
 
 const skin = new THREE.MeshStandardMaterial({ color: 0x6f8a4a, roughness: 0.95, flatShading: true });
@@ -65,6 +71,10 @@ interface Greblin {
   route: number[];
   settleAt: number;
   phase: number;
+  /** Times his light has found it. */
+  hits: number;
+  /** U4: had enough — heading for the wall, up it, and away. */
+  mode: 'room' | 'toWall' | 'climb' | 'tunnel' | 'gone';
 }
 
 export class Greblins {
@@ -74,6 +84,8 @@ export class Greblins {
   readonly spots: THREE.Vector3[] = [];
   /** How many times one has bolted from his light. */
   flights = 0;
+  /** How many have climbed away (U4). */
+  climbs = 0;
   private lastMs = 0;
   private readonly rand: () => number;
 
@@ -91,7 +103,7 @@ export class Greblins {
       const p = this.spots[spot];
       mesh.position.set(p.x + (this.rand() - 0.5) * 0.5, p.y, p.z + (this.rand() - 0.5) * 0.5);
       this.group.add(mesh);
-      this.list.push({ mesh, spot, route: [], settleAt: 0, phase: this.rand() * 10 });
+      this.list.push({ mesh, spot, route: [], settleAt: 0, phase: this.rand() * 10, hits: 0, mode: 'room' });
     }
     scene.add(this.group);
   }
@@ -116,7 +128,34 @@ export class Greblins {
     const toG = new THREE.Vector3();
     for (const g of this.list) {
       const p = g.mesh.position;
+      if (g.mode === 'gone') continue;
+      if (g.mode === 'climb') {
+        // Straight up the wall face, belly to the rock, to the tunnel's floor.
+        g.mesh.rotation.set(-0.35, -Math.PI / 2 + Math.PI, 0); // face (−Z) into the +x wall, leaning in
+        p.x = TUNNEL_X - 0.12;
+        p.z = TUNNEL_Z;
+        p.y = Math.min(TUNNEL_FLOOR, p.y + CLIMB_SPEED * dt + Math.abs(Math.sin(nowMs / 60)) * 0.004);
+        if (p.y >= TUNNEL_FLOOR) g.mode = 'tunnel';
+        continue;
+      }
+      if (g.mode === 'tunnel') {
+        // Down the tunnel and out of sight; then it is gone for good.
+        g.mesh.rotation.set(0, -Math.PI / 2 + Math.PI, 0);
+        p.x += RUN_SPEED * dt;
+        p.y = TUNNEL_FLOOR + Math.abs(Math.sin(nowMs / 70 + g.phase)) * 0.035;
+        if (p.x > TUNNEL_X + TUNNEL_LENGTH - 0.6) {
+          g.mode = 'gone';
+          g.mesh.removeFromParent();
+          this.climbs++;
+        }
+        continue;
+      }
       if (g.route.length === 0) {
+        if (g.mode === 'toWall') {
+          // Under the mouth: to the wall, then up it.
+          g.mode = 'climb';
+          continue;
+        }
         // Hiding: watch him, tremble, and bolt if his light or his feet reach here.
         g.mesh.lookAt(player.x, p.y, player.z);
         g.mesh.rotation.y += Math.PI; // the face is −Z; lookAt points +Z at him
@@ -140,7 +179,7 @@ export class Greblins {
         p.z = target.z;
         g.spot = g.route.shift()!;
         if (g.route.length === 0) {
-          g.settleAt = nowMs + SETTLE_MS;
+          g.settleAt = g.mode === 'toWall' ? 0 : nowMs + SETTLE_MS;
           g.mesh.position.y = ROOM_B_FLOOR;
         }
       } else {
@@ -170,7 +209,15 @@ export class Greblins {
       }
     });
     if (best < 0) return;
-    g.route = this.routeBetween(g.spot, best);
+    g.hits++;
     this.flights++;
+    if (g.hits >= SCARE_LIMIT) {
+      // Enough. Along the walls to the spot under the tunnel mouth, whatever the light is doing there.
+      g.mode = 'toWall';
+      g.route = this.routeBetween(g.spot, TUNNEL_SPOT);
+      if (g.route.length === 0) g.mode = 'climb';
+      return;
+    }
+    g.route = this.routeBetween(g.spot, best);
   }
 }

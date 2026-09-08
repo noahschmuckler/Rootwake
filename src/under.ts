@@ -521,11 +521,16 @@ function applyEnergy(): void {
   cave.setSight(camera.position, fx.sight, worn.helm ? HELM_LIGHT_BOOST : 1);
   // The greblins read his light: where it is and which way it looks.
   const before = greblins.flights;
+  const climbsBefore = greblins.climbs;
   greblins.update(animClock, camera.position, camera.getWorldDirection(new THREE.Vector3()), fx.sight, player.position);
   if (!greblinsSeen && greblins.flights > before) {
     greblinsSeen = true;
     hint.textContent = 'Small shapes scatter from your light. Miners — and they want none of you.';
     tooFarUntil = animClock + 3600;
+  }
+  if (climbsBefore === 0 && greblins.climbs > 0) {
+    hint.textContent = 'One goes straight up the wall and into a hole high in the rock. You could fit. You cannot climb.';
+    tooFarUntil = animClock + 4200;
   }
 }
 
