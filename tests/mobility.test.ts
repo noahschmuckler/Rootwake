@@ -181,3 +181,23 @@ test('teleport clears the previous hover ceiling', () => {
   const m=new MobilityMotor();m.powered=true;m.reset(new Vector3());m.ignite();m.reset(new Vector3(0,30,0));
   m.mode='falling';m.update(1/60,flat);assert.ok(m.feet.y>29.9);
 });
+
+test('descent grazing a platform edge settles onto safe full support rather than hovering forever', () => {
+  const pad = NORMAL_PADS[2], m = new MobilityMotor(); m.powered=true;
+  m.reset(new Vector3(pad.x0+.08,pad.top+3,.2)); m.ignite(); m.cutThrusters();
+  simulate(m,course,5);
+  assert.equal(m.mode,'grounded',`${m.mode} at ${m.feet.toArray()}`);
+  assert.notEqual(supportAt(course,m.feet.x,m.feet.z,m.feet.y+.03),null);
+});
+
+
+test('automatic hover landing also resolves partial support along a platform edge', () => {
+  const pad = NORMAL_PADS[2], m = new MobilityMotor(); m.powered=true;
+  m.reset(new Vector3(pad.x0-.08,pad.top+2,.2)); m.ignite();
+  simulate(m,course,10); assert.equal(m.mode,'grounded');
+  assert.notEqual(supportAt(course,m.feet.x,m.feet.z,m.feet.y+.03),null);
+});
+test('cutting thrust over a narrow non-walkable slalom obstacle sheds to safe ground', () => {
+  const m=new MobilityMotor();m.powered=true;m.reset(new Vector3(86,4,6.3));m.ignite();m.cutThrusters();
+  simulate(m,course,6);assert.equal(m.mode,'grounded');near(m.feet.y,1.2);
+});

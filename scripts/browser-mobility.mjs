@@ -22,7 +22,9 @@ async function dispatch(page,selector,type,id,dx=0,dy=0){await page.evaluate(({s
 async function frameStep(page,seconds,input){return page.evaluate(({seconds,input})=>{const r=window.__rootwake,p=r.player;for(let i=0;i<Math.ceil(seconds*120);i++)p.motor.update(1/120,p.movementWorld,input);p.position.x=p.motor.feet.x;p.position.z=p.motor.feet.z;p.yaw=p.motor.yaw;p.applyCamera(r.camera);return{feet:p.feet().toArray(),mode:p.motor.mode};},{seconds,input});}
 try{
  const views=process.env.MOBILITY_SMOKE?[['phone',{width:430,height:932}]]:[['desktop',{width:1440,height:1000}],['phone',{width:430,height:932}],['landscape',{width:932,height:430}]];
- for(const[name,viewport]of views){
+ const selectedViews=process.env.MOBILITY_VIEW?views.filter(([name])=>name===process.env.MOBILITY_VIEW):views;
+ assert.ok(selectedViews.length,'Unknown MOBILITY_VIEW');
+ for(const[name,viewport]of selectedViews){
   const page=await browser.newPage({viewport,deviceScaleFactor:1,isMobile:name!=='desktop',hasTouch:true});
   const errors=[];page.on('pageerror',e=>errors.push(e.stack));page.on('response',r=>{if(r.status()>=400)errors.push(`${r.status()} ${r.url()}`);});
   await page.goto('http://127.0.0.1:4174/lab.html?course=track');await page.waitForFunction(()=>!!window.__rootwake?.extras?.[0]?.course);await rendered(page);
@@ -31,7 +33,7 @@ try{
    await page.selectOption('#lab-view',section);await rendered(page);
    const state=await page.evaluate(()=>{const r=window.__rootwake,p=r.player;let invalid=0;r.scene.traverse(o=>{if(o.matrixWorld.elements.some(v=>!Number.isFinite(v)))invalid++;});return{feet:p.feet().toArray(),valid:p.movementWorld.canOccupy(p.feet(),.25,.72),invalid,mode:p.motor.mode};});
    assert.equal(state.invalid,0);assert.ok(state.valid,`${name} ${section}: ${JSON.stringify(state)}`);assert.equal(state.mode,'grounded');
-   await page.screenshot({path:`${out}/${name}-${section}.png`});results.push({name,section,...state});
+   await page.screenshot({path:`${out}/${name}-${section}.png`});results.push({name,section,...state});console.log(`${name}: ${section} rendered with valid support`);
   }
   if(process.env.MOBILITY_SMOKE){assert.deepEqual(errors,[]);await page.close();continue;}
   await page.selectOption('#lab-view','track');await rendered(page);
@@ -68,7 +70,7 @@ try{
   await dispatch(page,'#flight-stick','pointerup',22);assert.equal(await page.evaluate(()=>window.__rootwake.player.flightStick.held),false);
   const idle={right:0,forward:0,lift:0,turn:0,held:false};
   let flight=await frameStep(page,1.5,idle);assert.equal(flight.mode,'hover');flight=await frameStep(page,1.5,idle);assert.ok(['descending','grounded'].includes(flight.mode));
-  flight=await frameStep(page,20,idle);assert.equal(flight.mode,'grounded');
+  flight=await frameStep(page,20,idle);assert.equal(flight.mode,'grounded',`${name} automatic landing: ${JSON.stringify(flight)}`);
   await page.evaluate(()=>window.__rootwake.takeOff('chest'));assert.equal(await page.evaluate(()=>window.__rootwake.player.poweredLegs),false);
   assert.deepEqual(await page.evaluate(()=>window.__rootwake.worn),{chest:false,helm:false,legs:false});
   assert.deepEqual(errors,[],`${name} browser errors`);await page.close();console.log(`Passed ${name}: sections, analog, cancel, target jump, equipment and multi-touch hover.`);
@@ -83,4 +85,11 @@ try{
   }
  }
  await writeFile(`${out}/browser-results.json`,JSON.stringify({passed:true,results},null,2));console.log(`Mobility browser verification passed: ${results.length} course views.`);
+}catch(error){
+ for(const context of browser.contexts())for(const page of context.pages()){
+  await page.screenshot({path:`${out}/failure-${page.viewportSize()?.width??0}.png`}).catch(()=>{});
+  const state=await page.evaluate(()=>{const r=window.__rootwake,p=r?.player;return p?{feet:p.feet().toArray(),mode:p.motor.mode,yaw:p.yaw,gesture:p.gesture,flight:p.flightStick}:null;}).catch(()=>null);
+  await writeFile(`${out}/failure-state.json`,JSON.stringify({error:String(error),state},null,2));
+ }
+ throw error;
 }finally{await browser.close();await new Promise(r=>server.close(r));}

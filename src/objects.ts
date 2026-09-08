@@ -536,7 +536,7 @@ function scoreMarks(count: number, parent: THREE.Object3D, length: number): void
 /** A holder mesh so a multi-part look is still one Mesh for raycasting/userData. */
 function holder(material: THREE.Material, ...parts: THREE.Object3D[]): THREE.Mesh {
   const h = new THREE.Mesh(new THREE.BufferGeometry(), material);
-  h.add(...parts);
+  if (parts.length) h.add(...parts);
   return h;
 }
 

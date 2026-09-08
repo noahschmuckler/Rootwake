@@ -27,7 +27,7 @@ export function installLabControls(gallery: RustMonsterGallery, player: Player, 
   const frameView = (): void => {
     const bay = STUDY_BAYS.find(b => b.id === views.value);
     camera.aspect = window.innerWidth / window.innerHeight;
-    camera.fov = bay ? (bay.id === 'surface' ? (camera.aspect < 0.8 ? 118 : 72) : (camera.aspect < 0.8 ? 78 : 60)) : views.value in COURSE_SPAWNS ? 56 : 40;
+    camera.fov = bay ? (bay.id === 'surface' ? (camera.aspect < 0.8 ? 118 : 72) : (camera.aspect < 0.8 ? 78 : 60)) : views.value in COURSE_SPAWNS ? (camera.aspect < 0.8 ? 72 : 56) : 40;
     camera.updateProjectionMatrix();
   };
   window.addEventListener('resize', frameView);

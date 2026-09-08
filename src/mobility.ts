@@ -182,6 +182,34 @@ export class MobilityMotor {
     this.distance += travelled;
     if (travelled > 0 && this.mode !== 'traverse') this.onTravel(travelled);
   }
+  /** Resolve a downward contact on a partly supported edge. A tiny, swept centring
+   * assist lands the entire footprint; non-walkable narrow tops shed the body to
+   * nearby clear air. Without this, a capsule can balance forever on an edge
+   * that the stricter landing-footprint query correctly rejects. */
+  private settleEdge(world: TraversalWorld): boolean {
+    let escape: Vector3 | null = null;
+    for (const distance of [0.08, 0.16, 0.24, 0.32, 0.40, 0.50, 0.65, 0.8]) {
+      for (let i = 0; i < 16; i++) {
+        const angle = i * Math.PI / 8;
+        const candidate = this.feet.clone().add(new Vector3(Math.cos(angle) * distance, 0, Math.sin(angle) * distance));
+        const ground = supportAt(world, candidate.x, candidate.z, this.feet.y + 0.08);
+        const landing = distance <= 0.5 && ground !== null && Math.abs(ground - this.feet.y) < 0.08;
+        candidate.y = landing ? Math.max(this.feet.y, ground!) : this.feet.y;
+        const from = this.feet.clone(); from.y = candidate.y;
+        let clear = true;
+        const steps = Math.ceil(distance / 0.04);
+        for (let k = 0; k <= steps; k++) {
+          if (!world.canOccupy(from.clone().lerp(candidate, k / steps), BODY_RADIUS, BODY_HEIGHT)) { clear = false; break; }
+        }
+        if (!clear) continue;
+        if (landing) { this.feet.copy(candidate); this.land(ground!); return true; }
+        const below = candidate.clone(); below.y -= 0.08;
+        if (!escape && world.canOccupy(below, BODY_RADIUS, BODY_HEIGHT)) escape = candidate;
+      }
+    }
+    if (escape) { this.feet.copy(escape); return true; }
+    return false;
+  }
   private step(dt: number, world: TraversalWorld, input: MotionInput): void {
     if (this.plan && this.mode === 'traverse') {
       if (!this.enabled || !this.canMove) { this.plan = null; this.mode = 'falling'; return; }
@@ -253,6 +281,7 @@ export class MobilityMotor {
       if (ground !== null && next.y <= ground + 0.01 && this.feet.y >= ground - 0.01) { this.land(ground); return; }
     }
     if (world.canOccupy(next, BODY_RADIUS, BODY_HEIGHT)) this.feet.copy(next);
+    else if (this.velocity.y < 0 && this.settleEdge(world)) { /* Safe, swept edge recovery. */ }
     else this.velocity.y = 0; // A ceiling or a platform underside stops ascent.
   }
 }
