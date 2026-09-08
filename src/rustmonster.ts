@@ -43,6 +43,12 @@ export const FURL_S = 2.4;
 /** The rest pose: the base raised, and a curl per segment that sweeps the chain back over the body. */
 export const REST_PITCH = 0.8;
 export const REST_CURL = 0.115; // 22 segments × 0.115 + the base ≈ 190°: up, over the back, tips near the tail
+/** Turning: how fast the heading swings (rad/s) on the floor and on the wall — slow enough to see the
+ *  body curve into it — and how much the head leads and each abdomen joint follows per rad/s of turn. */
+export const TURN_RATE = 4.5;
+export const WALL_TURN_RATE = 4;
+export const CURVE_HEAD = 0.22;
+export const CURVE_JOINT = 0.045;
 /** He is noticed within this; it freezes and reaches toward him for REGARD_S. */
 export const REGARD_DISTANCE = 4.5;
 export const REGARD_S = 1.8;
@@ -151,6 +157,16 @@ export class RustMonster {
   private sigma = 0;
   private sigmaFrom = 0;
   private sigmaTo = 0;
+  /** +1 going up the corner head-first toward the wall, −1 coming down it head-first toward the floor. */
+  private cornerDir: 1 | -1 = 1;
+  /** Which way it faces to feed: 0 = up at a vein above it, π = down at a vein below it. */
+  private feedFace = 0;
+  /** Where along the wall it will go up for the current vein — chosen once, or it chases a moving spot. */
+  private baseU: number | null = null;
+  /** The smoothed rate of turn (rad/s), for the curve of the body. */
+  private yawRate = 0;
+  private lastHeading = 0;
+  private lastPhi = 0;
   private wall: WallFrame | null = null;
   /** On the wall: along-wall and up-wall coordinates, and the in-plane heading (0 = straight up). */
   private u = 0;
@@ -380,20 +396,25 @@ export class RustMonster {
     const a = sigma / R;
     return { d: WALL_HUG + R - R * Math.sin(a), h: BODY_HEIGHT + R - R * Math.cos(a), theta: a };
   }
-  /** The thorax on the track at `sigma`, and the head and abdomen bent to follow the track's tangent. */
-  private cornerPose(sigma: number): void {
+  /**
+   * The thorax on the track at `sigma`, and the head and abdomen bent to follow the track's tangent. `dir`
+   * is the way it travels: +1 up into the wall (head toward higher sigma), −1 down out of it (head toward
+   * lower sigma, facing the other way along the same path). Either way the head takes the corner first.
+   */
+  private cornerPose(sigma: number, dir: 1 | -1): void {
     const w = this.wall!;
     const t = this.track(sigma);
     this.group.position.copy(w.origin).addScaledVector(w.tangent, this.u).addScaledVector(w.normal, t.d).addScaledVector(UP, t.h);
-    const f = w.normal.clone().multiplyScalar(-Math.cos(t.theta)).addScaledVector(UP, Math.sin(t.theta));
+    const f = w.normal.clone().multiplyScalar(-Math.cos(t.theta)).addScaledVector(UP, Math.sin(t.theta)).multiplyScalar(dir);
     const up = w.normal.clone().multiplyScalar(Math.sin(t.theta)).addScaledVector(UP, Math.cos(t.theta));
     RustMonster.basis(this.group.quaternion, up, f);
-    // Each part pitches relative to the one ahead of it by the change in the tangent along the body.
-    this.head.rotation.x = this.track(sigma - RustMonster.HEAD_S).theta - t.theta;
+    // Each part pitches relative to the one ahead of it by the change in the tangent along the body; the
+    // path bends toward the back either way, so the sign follows the direction of travel.
+    this.head.rotation.x = dir * (this.track(sigma + dir * -RustMonster.HEAD_S).theta - t.theta);
     let prev = t.theta;
     for (let i = 0; i < this.pivots.length; i++) {
-      const th = this.track(sigma - RustMonster.PIVOT_S[i]).theta;
-      this.pivots[i].rotation.x = th - prev;
+      const th = this.track(sigma - dir * RustMonster.PIVOT_S[i]).theta;
+      this.pivots[i].rotation.x = dir * (th - prev);
       prev = th;
     }
   }
@@ -423,8 +444,10 @@ export class RustMonster {
       case 'skitter': {
         const dx = this.target.x - p.x, dz = this.target.z - p.z;
         const d = Math.hypot(dx, dz);
-        this.heading = turnToward(this.heading, Math.atan2(-dx, -dz), 9 * dt);
-        this.speed = SKITTER_SPEED;
+        const want = Math.atan2(-dx, -dz);
+        this.heading = turnToward(this.heading, want, TURN_RATE * dt);
+        // Far off the line it pivots first (the body curving into it), then goes.
+        this.speed = Math.abs(angleDiff(want, this.heading)) > 1.0 ? 0 : SKITTER_SPEED;
         const step = Math.min(d, this.speed * dt);
         const nx = p.x - Math.sin(this.heading) * step, nz = p.z - Math.cos(this.heading) * step;
         if (this.isWalkable(new THREE.Vector3(nx, this.floorY, nz))) {
@@ -453,13 +476,16 @@ export class RustMonster {
         if (!wp) break;
         const du = wp.u - this.u, dv = wp.v - this.v;
         const d = Math.hypot(du, dv);
-        this.phi = turnToward(this.phi, Math.atan2(du, dv), 8 * dt);
-        this.speed = WALL_SPEED;
+        const want = Math.atan2(du, dv);
+        this.phi = turnToward(this.phi, want, WALL_TURN_RATE * dt);
+        // Its turning circle at wall speed is wider than the loop's steps: pivot first, then go, or it
+        // would orbit the waypoint for good.
+        this.speed = Math.abs(angleDiff(want, this.phi)) > 0.5 ? 0 : WALL_SPEED;
         const step = Math.min(d, this.speed * dt);
         this.u += Math.sin(this.phi) * step;
         this.v += Math.cos(this.phi) * step;
         this.stride += step;
-        if (d < 0.06) {
+        if (d < 0.12) {
           this.wallPath.shift();
           if (this.wallPath.length === 0) {
             if (this.wallPathDone) {
@@ -469,7 +495,7 @@ export class RustMonster {
               f();
             } else if (this.vein) {
               // In position under the vein, facing up at it.
-              this.phi = turnToward(this.phi, 0, 10);
+              this.phi = turnToward(this.phi, this.feedFace, 10);
               this.enter(this.vein.rust > 0.6 ? 'scrape' : 'tickle', nowMs, this.vein.rust > 0.6 ? SCRAPE_S : TICKLE_S);
             } else this.enter('wallfreeze', nowMs, 0.3);
           } else if (this.rand() < 0.5) this.enter('wallfreeze', nowMs, 0.2 + this.rand() * 0.6);
@@ -486,7 +512,7 @@ export class RustMonster {
       this.group.position.copy(this.wallPos);
       this.group.quaternion.copy(this.wallQuat);
     } else if (cornering) {
-      this.cornerPose(this.sigma);
+      this.cornerPose(this.sigma, this.cornerDir);
     } else {
       this.floorPose();
       this.group.quaternion.copy(this.floorQuat);
@@ -495,11 +521,27 @@ export class RustMonster {
     this.collider.x = p.x;
     this.collider.z = p.z;
 
-    // Body: a low fast breath, a wag when moving. (On the corner the pivots are the track's.)
+    // The turn: how fast the heading is swinging, smoothed; the head leads into it and the joints follow,
+    // so the whole body curves the way it is turning.
+    const yawNow = this.surface === 'wall' ? this.phi : this.heading;
+    const yawLast = this.surface === 'wall' ? this.lastPhi : this.lastHeading;
+    let dyaw = yawNow - yawLast;
+    while (dyaw > Math.PI) dyaw -= Math.PI * 2;
+    while (dyaw < -Math.PI) dyaw += Math.PI * 2;
+    const rate = dt > 0 ? THREE.MathUtils.clamp(dyaw / dt, -3, 3) : 0;
+    this.yawRate = THREE.MathUtils.lerp(this.yawRate, rate, 0.25);
+    while (this.heading > Math.PI) this.heading -= Math.PI * 2;
+    while (this.heading < -Math.PI) this.heading += Math.PI * 2;
+    while (this.phi > Math.PI) this.phi -= Math.PI * 2;
+    while (this.phi < -Math.PI) this.phi += Math.PI * 2;
+    this.lastHeading = this.heading;
+    this.lastPhi = this.phi;
+    // Body: a low fast breath, a wag when moving. (On the corner the pivots' pitch is the track's.)
     const breathe = 1 + 0.02 * Math.sin(t * 7.5);
     this.abdomen.forEach((seg, i) => {
       seg.scale.y = (0.2 - (i / 5) * 0.09) * breathe;
-      this.pivots[i].rotation.y = this.speed > 0 ? Math.sin(this.stride * 6 - i * 0.6) * 0.06 : Math.sin(t * 2.1 + i) * 0.015;
+      const wag = this.speed > 0 ? Math.sin(this.stride * 6 - i * 0.6) * 0.06 : Math.sin(t * 2.1 + i) * 0.015;
+      this.pivots[i].rotation.y = wag + this.yawRate * CURVE_JOINT;
       if (!cornering) this.pivots[i].rotation.x = 0;
     });
     this.body.position.y = this.speed > 0 && this.surface === 'floor' ? Math.abs(Math.sin(this.stride * 9)) * 0.02 : Math.sin(t * 7.5) * 0.004;
@@ -544,8 +586,9 @@ export class RustMonster {
         }
         const w = this.wall!;
         const uv = this.veinUV(this.vein!, w);
-        // The wall base under the vein (a little to one side, so it comes up beside it).
-        const base = w.origin.clone().addScaledVector(w.tangent, uv.u + (r() - 0.5) * 1.2).addScaledVector(w.normal, this.track(this.sigmaFloor).d);
+        // The wall base under the vein (a little to one side, so it comes up beside it), fixed per vein.
+        if (this.baseU === null) this.baseU = uv.u + (r() - 0.5) * 1.2;
+        const base = w.origin.clone().addScaledVector(w.tangent, this.baseU).addScaledVector(w.normal, this.track(this.sigmaFloor).d);
         const dist = Math.hypot(base.x - this.group.position.x, base.z - this.group.position.z);
         if (dist < 0.3) {
           // At the wall: onto the track, head first.
@@ -554,6 +597,7 @@ export class RustMonster {
           this.u = here.dot(w.tangent);
           this.phi = 0;
           this.surface = 'corner';
+          this.cornerDir = 1;
           this.sigmaFrom = this.sigma = this.sigmaFloor;
           this.sigmaTo = this.sigmaWall;
           this.enter('mount', nowMs, 60);
@@ -576,14 +620,27 @@ export class RustMonster {
         this.surface = 'wall';
         this.v = this.track(this.sigmaWall).h;
         const uv = this.veinUV(this.vein!, this.wall!);
+        const vMin = this.track(this.sigmaWall).h; // lowest the thorax can be with the whole body on the wall
         const dir = r() < 0.5 ? 1 : -1;
         const start = Math.atan2(this.u - uv.u, this.v - uv.v);
         this.wallPath = [];
+        let last = { u: this.u, v: this.v };
         for (let k = 1; k <= 5; k++) {
           const a = start + dir * (k / 5) * Math.PI * 1.6;
-          this.wallPath.push({ u: uv.u + Math.sin(a) * CIRCLE_RADIUS, v: Math.max(0.35, uv.v + Math.cos(a) * CIRCLE_RADIUS) });
+          const pt = { u: uv.u + Math.sin(a) * CIRCLE_RADIUS, v: Math.max(vMin, uv.v + Math.cos(a) * CIRCLE_RADIUS) };
+          // a low vein flattens the loop's underside; don't stack points on one spot and spin on it
+          if (Math.hypot(pt.u - last.u, pt.v - last.v) < 0.4) continue;
+          this.wallPath.push(pt);
+          last = pt;
         }
-        this.wallPath.push({ u: uv.u, v: Math.max(0.35, uv.v - FEED_BELOW) });
+        // Feed from below, facing up — or, for a vein too low to stand under, from above it, facing down.
+        if (uv.v - FEED_BELOW >= vMin) {
+          this.feedFace = 0;
+          this.wallPath.push({ u: uv.u, v: uv.v - FEED_BELOW });
+        } else {
+          this.feedFace = Math.PI;
+          this.wallPath.push({ u: uv.u, v: Math.max(vMin, uv.v + FEED_BELOW) });
+        }
         this.enter('wallmove', nowMs, 30);
         return;
       }
@@ -608,9 +665,14 @@ export class RustMonster {
         }
         // Done here: down the wall to where the track begins, then back off it tail-first.
         this.wallPath = [{ u: this.u + (r() - 0.5) * 0.8, v: this.track(this.sigmaWall).h }];
+        this.feedFace = Math.PI; // arriving at the bottom it faces down, ready for the corner
         this.vein = null;
+        this.baseU = null;
         this.wallPathDone = () => {
+          // Facing down at the bottom of the wall: over the corner head-first and off along the floor.
+          this.phi = Math.PI;
           this.surface = 'corner';
+          this.cornerDir = -1;
           this.sigmaFrom = this.sigma = this.sigmaWall;
           this.sigmaTo = this.sigmaFloor;
           this.enter('dismount', this.lastMs, 60);
@@ -623,7 +685,7 @@ export class RustMonster {
         const tr = this.track(this.sigmaFloor);
         const at = w.origin.clone().addScaledVector(w.tangent, this.u).addScaledVector(w.normal, tr.d);
         this.group.position.set(at.x, this.floorY + BODY_HEIGHT, at.z);
-        this.heading = Math.atan2(w.normal.x, w.normal.z);
+        this.heading = Math.atan2(-w.normal.x, -w.normal.z); // facing away from the wall, as it came off it
         this.surface = 'floor';
         this.wall = null;
         this.enter('freeze', nowMs, range(FREEZE_S));
@@ -660,7 +722,7 @@ export class RustMonster {
     this.mandibles.forEach((m, i) => (m.rotation.y = (i === 0 ? -1 : 1) * (0.2 + open)));
     if (this.mode === 'regard') this.aimAt = new THREE.Vector3(player.x, this.floorY + 0.5, player.z);
     if (this.surface === 'corner') {
-      this.head.rotation.y = THREE.MathUtils.lerp(this.head.rotation.y, 0, 0.1);
+      this.head.rotation.y = THREE.MathUtils.lerp(this.head.rotation.y, this.yawRate * CURVE_HEAD, 0.1);
       return; // its pitch is the track's
     }
     if (this.aimAt) {
@@ -670,7 +732,7 @@ export class RustMonster {
       this.head.rotation.y = THREE.MathUtils.lerp(this.head.rotation.y, THREE.MathUtils.clamp(yaw, -1.1, 1.1), 0.08);
       this.head.rotation.x = THREE.MathUtils.lerp(this.head.rotation.x, THREE.MathUtils.clamp(pitch, -0.6, 0.8), 0.08);
     } else {
-      this.head.rotation.y = THREE.MathUtils.lerp(this.head.rotation.y, Math.sin(t * 0.9) * 0.15, 0.05);
+      this.head.rotation.y = THREE.MathUtils.lerp(this.head.rotation.y, Math.sin(t * 0.9) * 0.15 + this.yawRate * CURVE_HEAD, 0.12);
       this.head.rotation.x = THREE.MathUtils.lerp(this.head.rotation.x, g ? 0.45 : 0, 0.05);
     }
   }
@@ -817,6 +879,12 @@ export class RustMonster {
   }
 }
 
+function angleDiff(a: number, b: number): number {
+  let d = a - b;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  return d;
+}
 function turnToward(a: number, b: number, max: number): number {
   let d = b - a;
   while (d > Math.PI) d -= Math.PI * 2;

@@ -169,3 +169,31 @@ down, which at the moment left it wedged in the wall, walking in place.
 **Open:** the corner radius (tighter is more silverfish, looser is more
 cricket); whether it should come down head-first instead of backing;
 corner speed against wall speed.
+
+## v2.3 (2026-09-08)
+
+Designer's notes on v2.2: come down head-first, in the same head →
+thorax → abdomen order as going up; curve the body through turns rather
+than rotating it whole; and it got stuck circling, almost spinning, at
+the bottom-right vein.
+
+- *Down head-first.* At the bottom of the wall it faces down and runs
+  the same corner track the other way, head first over the corner and
+  off along the floor, ending on the floor facing away from the wall.
+  The abdomen bends toward the back through the corner exactly as on
+  the way up.
+- *The curve.* The rate of turn is measured every frame and smoothed;
+  the head leads into the turn (CURVE_HEAD 0.22 rad per rad/s) and each
+  abdomen joint follows (CURVE_JOINT 0.045), so a turn bends the whole
+  body into an arc the way it is turning. Turns are slower now
+  (TURN_RATE 4.5 on the floor, 4 on the wall) so the curve is seen.
+- *The spin.* Two causes. The loop around a vein only 1.0 up was clamped
+  to the lowest height the body can stand on the wall, so its points
+  piled onto one spot and it turned in place on them; now points that
+  land on top of each other are dropped, and a vein too low to stand
+  under is fed from above, facing down. And the spot at the wall's base
+  was re-randomised at every freeze, so it arrived, the target moved,
+  and it feinted after a new one — that spot is now fixed per vein.
+
+**Open:** feeding from above (facing down) for the low veins — right,
+or should low ore be worked from the floor?; the amount of curve.
