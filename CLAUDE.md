@@ -37,7 +37,16 @@ each viewed as it lands. `src/lab.ts` boots the underworld's wiring
 empty chamber of bare rock, and the metallurgist already in the suit
 (`suit: true`) so nothing has to be crafted to get to the creature. The
 cave, the greblins and the crafting are untouched; merge main into lab
-as it moves. The creature's modules go here first.
+as it moves. The creature's modules go here first. **`LAB.md` is the
+design log: the brief and each version's decisions — read it before
+touching the creature.**
+
+Lab modules: `orevein.ts` (silvery ore plates on a wall with a rust level
+and a fuzz), `rustmonster.ts` (the creature: plate skin, feeler chains,
+legs, the state machine skitter / tickle / scrape / groom / regard),
+`arena.ts` (the room, its veins, `dynamic` colliders). `bootUnder` takes
+`populate(ctx)` for things that want a frame each frame; the lab's debug
+handle exposes them as `extras` (`extras[0].monster`).
 
 ## Status
 

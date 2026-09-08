@@ -9,6 +9,7 @@ import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GROUND_Y, WALL_THICK, ROCK_COLOR, ROCK_DARK, DARKSIGHT_INTENSITY, DARKSIGHT_AMBIENT, DARKSIGHT_DECAY, DARKSIGHT_DECAY_HELM, type TableTop } from './cave';
 import type { OreBoulder } from './ore';
 import type { CircleCollider } from './player';
+import { OreVein } from './orevein';
 
 // ---- Tuning constants ---------------------------------------------------------
 /** Half-width of the arena's interior, and its roof height. Room for something big to move. */
@@ -38,6 +39,10 @@ export class Arena {
   readonly fog: THREE.FogExp2;
   readonly darksight: THREE.PointLight;
   readonly hemi: THREE.HemisphereLight;
+  /** Silvery ore on the walls, for the creature. */
+  readonly veins: OreVein[] = [];
+  /** Colliders that move (the creature's); it keeps its own entry up to date. */
+  readonly dynamic: CircleCollider[] = [];
 
   constructor(scene: THREE.Scene, seed: number) {
     scene.background = new THREE.Color(0x000000);
@@ -70,6 +75,21 @@ export class Arena {
       wall.userData.bareRock = true;
       this.group.add(wall);
     }
+    // Ore on the walls: five clusters at working height, one or two per wall, never in a corner.
+    const H = ARENA_HALF;
+    const spots: [number, number, number, number, number][] = [
+      // x, z, normal x, normal z, height above the floor
+      [-2.5, -H, 0, 1, 0.9],
+      [3.5, -H, 0, 1, 1.3],
+      [H, 1.5, -1, 0, 0.7],
+      [-1.0, H, 0, -1, 1.1],
+      [-H, -3.0, 1, 0, 0.8],
+    ];
+    spots.forEach(([x, z, nx, nz, h], i) => {
+      const v = new OreVein(new THREE.Vector3(x, GROUND_Y + h, z), new THREE.Vector3(nx, 0, nz), seed ^ (0x5e1 + i * 7));
+      this.veins.push(v);
+      this.group.add(v.group);
+    });
     scene.add(this.group);
   }
 
@@ -78,7 +98,7 @@ export class Arena {
   cameraClear = (p: THREE.Vector3): boolean => Math.abs(p.x) < ARENA_HALF - 0.25 && Math.abs(p.z) < ARENA_HALF - 0.25 && p.y > GROUND_Y + 0.1 && p.y < GROUND_Y + ARENA_ROOF - 0.25;
 
   colliders(): CircleCollider[] {
-    return [];
+    return this.dynamic;
   }
 
   bareRock(): THREE.Object3D[] {

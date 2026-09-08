@@ -53,6 +53,18 @@ export interface BootOptions {
   greblins?: boolean;
   /** The free-view hint, if the place's isn't the cave's. */
   freeHint?: string;
+  /** Things that live in the place and want a frame each frame (the lab's creature). */
+  populate?: (ctx: PopulateContext) => Updatable[];
+}
+export interface Updatable {
+  update(nowMs: number): void;
+}
+export interface PopulateContext {
+  scene: THREE.Scene;
+  world: World;
+  seed: number;
+  player: Player;
+  camera: THREE.PerspectiveCamera;
 }
 
 export function bootUnder(opts: BootOptions): void {
@@ -93,6 +105,7 @@ const hands = new Hands(camera, player, objects, scene, [...document.querySelect
 const energy = new Energy();
 // U3: the miners who left the food, cowering at the top of the stairs.
 const greblins = opts.greblins ? new Greblins(scene, seed) : null;
+const extras: Updatable[] = opts.populate ? opts.populate({ scene, world: cave, seed, player, camera }) : [];
 let greblinsSeen = false;
 const interactables: Interactable[] = [...cave.boulders];
 
@@ -596,6 +609,7 @@ function animate(now: number): void {
   hands.update(animClock);
   for (const it of interactables) it.update(animClock);
   if (craft) craft.update(animClock);
+  for (const x of extras) x.update(animClock);
   if (forge) {
     forge.evaluate();
     forge.update(animClock);
@@ -622,5 +636,5 @@ applyMode('free');
 requestAnimationFrame(animate);
 
 // Debug handle. Not part of the design surface.
-(window as unknown as { __rootwake: unknown }).__rootwake = { THREE, scene, camera, renderer, player, cave, boulders: cave.boulders, objects, hands, energy, cameraRig, boardView, get craft() { return craft; }, startCraft, get forge() { return forge; }, startForge, FORGE_PLANS, worn, equip, takeOff, greblins, get shake() { return { animClock }; }, CELL };
+(window as unknown as { __rootwake: unknown }).__rootwake = { THREE, scene, camera, renderer, player, cave, boulders: cave.boulders, objects, hands, energy, cameraRig, boardView, get craft() { return craft; }, startCraft, get forge() { return forge; }, startForge, FORGE_PLANS, worn, equip, takeOff, greblins, extras, get shake() { return { animClock }; }, CELL };
 }
