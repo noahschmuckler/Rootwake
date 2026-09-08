@@ -29,6 +29,7 @@ export const NOURISHED_DRAIN = 0.6;
  *  at HELM_SIGHT and the tunnel open. Balancing to come. */
 export const CHEST_CHARGE = 0.3;
 export const HELM_CHARGE = 0.1;
+export const LEGS_CHARGE = 0.12;
 export const HELM_SIGHT = 30;
 // -------------------------------------------------------------------------------
 

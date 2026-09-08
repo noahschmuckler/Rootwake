@@ -27,7 +27,7 @@ export function handsToDrag(mass: number, strength = STRENGTH): number {
 }
 // -------------------------------------------------------------------------------
 
-export type ObjectTypeId = 'seed' | 'wheat_seed' | 'popcorn' | 'stick' | 'log' | 'log_short' | 'lichen' | 'rock' | 'hand_axe' | 'log_long_notched' | 'log_notched' | 'log_stub' | 'log_half' | 'timber' | 'timber_short' | 'chip' | 'ingot' | 'dagger' | 'haunch' | 'potato' | 'chestpiece' | 'helm';
+export type ObjectTypeId = 'seed' | 'wheat_seed' | 'popcorn' | 'stick' | 'log' | 'log_short' | 'lichen' | 'rock' | 'hand_axe' | 'log_long_notched' | 'log_notched' | 'log_stub' | 'log_half' | 'timber' | 'timber_short' | 'chip' | 'ingot' | 'dagger' | 'haunch' | 'potato' | 'chestpiece' | 'helm' | 'leg_armor';
 
 export interface ObjectType {
   id: ObjectTypeId;
@@ -48,7 +48,7 @@ export interface ObjectType {
   /** While nourished by this, every drain is multiplied by this (default: the stat's own factor). Lower = more potent. */
   nourishDrain?: number;
   /** U2: a piece of the suit — worn, not carried. The chest is the attachment point for the rest. */
-  wear?: 'chest' | 'helm';
+  wear?: 'chest' | 'helm' | 'legs';
   /** For long things: half their length along local X, so hands and ropes aim at the nearer end. */
   halfLength?: number;
   build: () => THREE.Mesh;
@@ -159,6 +159,11 @@ export const OBJECT_TYPES: Record<ObjectTypeId, ObjectType> = {
     restHeight: 0.16,
     wear: 'chest',
     build: () => buildLook('chestpiece'),
+  },
+  leg_armor: {
+    id: 'leg_armor', label: 'powered leg armor', size: 'large', mass: 1,
+    color: 0x6e8795, radius: 0.22, blocks: false, restHeight: 0.2,
+    wear: 'legs', build: () => buildLook('leg_armor'),
   },
   helm: {
     id: 'helm',
@@ -531,7 +536,7 @@ function scoreMarks(count: number, parent: THREE.Object3D, length: number): void
 /** A holder mesh so a multi-part look is still one Mesh for raycasting/userData. */
 function holder(material: THREE.Material, ...parts: THREE.Object3D[]): THREE.Mesh {
   const h = new THREE.Mesh(new THREE.BufferGeometry(), material);
-  h.add(...parts);
+  if (parts.length) h.add(...parts);
   return h;
 }
 
@@ -657,6 +662,19 @@ export function buildLook(look: string): THREE.Mesh {
       const glow = new THREE.PointLight(0x8fe6ff, 5, 3.5, 2);
       glow.position.set(0, 0.04, -0.24);
       return holder(plate, shell, collar, socket, core, glow);
+    }
+    case 'leg_armor': {
+      const look = holder(plate);
+      for (const x of [-0.115, 0.115]) {
+        const greave = new THREE.Mesh(new THREE.CylinderGeometry(0.076, 0.063, 0.24, 8), plate);
+        greave.position.set(x, 0.17, 0);
+        const boot = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.1, 0.23), plateDark);
+        boot.position.set(x, 0.05, -0.025);
+        const nozzle = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.06, 0.04, 10), suitLight);
+        nozzle.position.set(x, 0.01, 0.02);
+        look.add(greave, boot, nozzle);
+      }
+      return look;
     }
     case 'helm': {
       // A head shell with a faceplate and two slit eyes that give their own light.

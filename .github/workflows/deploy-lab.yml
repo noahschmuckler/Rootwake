@@ -1,57 +1,58 @@
-name: Deploy lab preview
-
+name: Deploy verified Rootwake and lab
 on:
-  workflow_dispatch:
   push:
-    paths:
-      - .github/workflows/deploy-lab.yml
-
+    branches: [lab]
+  workflow_dispatch:
 permissions:
-  contents: write
-
+  contents: read
 concurrency:
   group: rootwake-lab-pages
-  cancel-in-progress: true
-
+  cancel-in-progress: false
 jobs:
-  deploy:
+  verify:
+    uses: ./.github/workflows/verify-mobility.yml
+  publish:
+    needs: verify
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pages: write
     steps:
-      - name: Check out lab
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          ref: lab
           fetch-depth: 0
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
+      - uses: actions/download-artifact@v4
         with:
-          node-version: 22
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build lab
-        run: npx vite build --base=/Rootwake/lab/
-
-      - name: Publish /lab to gh-pages
+          name: mobility-build
+          path: dist
+      - name: Publish the exact browser-tested bundle for all three domains
         run: |
           set -euo pipefail
+          test "$(node -p "require('./dist/revision.json').sourceCommit")" = "$GITHUB_SHA"
           git fetch origin gh-pages
           tmp=$(mktemp -d)
           git worktree add "$tmp" origin/gh-pages
-          rm -rf "$tmp/lab"
-          mkdir -p "$tmp/lab"
-          cp -r dist/assets "$tmp/lab/assets"
+          mkdir -p "$tmp/assets" "$tmp/lab"
+          # Keep old hashed assets briefly usable by already-open phone tabs.
+          cp -r dist/assets/. "$tmp/assets/"
+          cp dist/index.html "$tmp/index.html"
+          cp dist/under.html "$tmp/under.html"
+          cp dist/lab.html "$tmp/lab.html"
           cp dist/lab.html "$tmp/lab/index.html"
+          cp dist/revision.json "$tmp/revision.json"
+          cp dist/revision.json "$tmp/lab/revision.json"
           touch "$tmp/.nojekyll"
           cd "$tmp"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
-          if git diff --cached --quiet; then
-            exit 0
-          fi
-          git commit -m "Deploy lab: ${GITHUB_SHA::7}"
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Deploy verified mobility v3: ${GITHUB_SHA::7}"
           git push origin HEAD:gh-pages
+      - name: Request the configured Pages build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/$GITHUB_REPOSITORY/pages/builds"
+      - name: Verify public pages, revision, and assets
+        run: node scripts/verify-pages.mjs

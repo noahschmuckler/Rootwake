@@ -37,6 +37,7 @@ export interface ForgePlan {
 /** The pieces of the suit, in the order they can be made: the chest is the attachment point for the rest. */
 export const FORGE_PLANS: ForgePlan[] = [
   { id: 'chestpiece', label: 'Blueprint: chestpiece', ingots: 6, result: 'chestpiece', blurb: 'six ingots · the core that powers the rest' },
+  { id: 'leg_armor', label: 'Blueprint: powered leg armor', ingots: 4, result: 'leg_armor', blurb: 'four ingots / faster running, higher jumps and hover thrusters' },
   { id: 'helm', label: 'Blueprint: helm', ingots: 2, result: 'helm', blurb: 'two ingots · sustained darksight' },
 ];
 

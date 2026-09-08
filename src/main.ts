@@ -34,6 +34,7 @@
 // Still out of scope: combat, specials, the 6-face mirror, a real field, art.
 
 import * as THREE from 'three';
+import { installMobilityControls } from './mobilityControls';
 import { CameraRig, lockedPoseFor, type CameraMode, type CameraPose } from './cameraLock';
 import { Player, THIRD_ZOOM_MIN, THIRD_ZOOM_MAX } from './player';
 import { Voxel } from './voxel';
@@ -290,20 +291,7 @@ viewButton.addEventListener('click', () => {
   updateHud(); // the zoom buttons follow the view
 });
 const walkButton = document.getElementById('walk') as HTMLButtonElement;
-walkButton.addEventListener('pointerdown', (e) => {
-  e.stopPropagation();
-  e.preventDefault();
-  walkButton.setPointerCapture(e.pointerId);
-  walkButton.classList.add('active');
-  player.startMove(e);
-});
-walkButton.addEventListener('pointermove', (e) => player.pointerMove(e));
-for (const ev of ['pointerup', 'pointercancel'] as const) {
-  walkButton.addEventListener(ev, (e) => {
-    walkButton.classList.remove('active');
-    player.pointerUp(e);
-  });
-}
+installMobilityControls(player);
 
 // ---- Recipes and crafting (Pass 0.8) --------------------------------------------
 const menu = document.getElementById('menu')!;
@@ -962,7 +950,7 @@ const hint = document.getElementById('hint')!;
 const backButton = document.getElementById('back') as HTMLButtonElement;
 
 const HINTS: Record<CameraMode, string> = {
-  free: 'Hold walk to move, drag to look, tap growth or grass to lock in, long-press a thing for what it can become. Drag a hand box to a thing to take or place it.',
+  free: 'Drag the movement stick to move, drag to look, tap growth or grass to lock in, long-press a thing for what it can become. Drag a hand box to a thing to take or place it.',
   locking: '',
   locked: '',
   unlocking: '',
