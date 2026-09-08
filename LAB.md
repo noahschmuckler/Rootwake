@@ -246,3 +246,15 @@ The post-update head-angle addition also fed back into the next frame.
 Open for visual judgement: bend strength and follow-through timing, bay
 viewing distance/lighting, and the legacy procedural foot lift/placement
 (the gait reversal is not a new foot-contact IK system).
+
+## v3 - shared player mobility and a connected course
+
+The shared player now uses an analog thumbstick, with neutral long-hold
+landing targets and height-aware jumping. A new east doorway beyond the
+study hall connects to a separate mobility annex: speed track, slalom,
+hurdles, normal and powered parkour, and seven ordered hover-flight rings.
+Powered leg armor is a real four-ingot forge result and equipment slot,
+with the same equip/remove behavior in the lab and underworld. Both world
+entry points install the same controls; the plateau is not left on the old
+waypoint-only input. See `MOBILITY.md` for controls, tuning, limitations,
+architecture and verification commands. Rust-monster motion is unchanged.
