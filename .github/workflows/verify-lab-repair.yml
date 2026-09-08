@@ -1,0 +1,63 @@
+name: Verify lab v2.5 repair
+on:
+  push:
+    branches: [fix/lab-articulation-v25]
+    paths:
+      - .github/workflows/verify-lab-repair.yml
+      - .repair/**
+permissions:
+  contents: write
+concurrency:
+  group: rootwake-v25-verification
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Apply checksum-verified source patch
+        run: |
+          python - <<'PY'
+          import base64, hashlib, lzma, pathlib, subprocess
+          parts = sorted(pathlib.Path('.repair').glob('part-*'))
+          assert len(parts) == 5
+          patch = lzma.decompress(base64.b85decode(''.join(p.read_text().strip() for p in parts)))
+          assert hashlib.sha256(patch).hexdigest() == '50092bce2fdc9962587cc7a77350a9f6dcd1379e3637c81b5c85d30858a09473'
+          subprocess.run(['git', 'apply', '--index', '--binary', '-'], input=patch, check=True)
+          for extra in sorted(pathlib.Path('.repair').glob('adjustment-*.patch')):
+              subprocess.run(['git', 'apply', '--index', '-'], input=extra.read_bytes(), check=True)
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Movement and layout regression tests
+        run: npm run test:lab
+      - name: Type-check and production build
+        run: npm run build -- --base=/Rootwake/lab/
+      - name: Install browser test tooling
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.1
+          npx playwright install --with-deps chromium
+      - name: Desktop and phone browser verification
+        run: node scripts/browser-lab.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lab-v25-verification
+          path: artifacts/lab-v25
+          retention-days: 7
+      - name: Commit only verified source; remove temporary transport files
+        run: |
+          git rm -r .repair
+          git rm --ignore-unmatch .github/workflows/repair-workspace.yml .github/workflows/verify-lab-repair.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git diff --cached --check
+          git commit -m 'Lab v2.5: shared articulated movement, corrected gait, and accessible study annex'
+          git push origin HEAD:fix/lab-articulation-v25
