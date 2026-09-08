@@ -20,8 +20,24 @@ don't add structure the prototype doesn't need yet.
   network URL).
 - `npm run build` — type-checks (`tsc --noEmit`) then builds via Vite.
 - `npm run preview` — serve the production build locally.
-- Two entries: `/` (index.html → `src/main.ts`, the plateau) and
-  `/under.html` (→ `src/under.ts`, the underworld). Vite builds both.
+- Three entries: `/` (index.html → `src/main.ts`, the plateau),
+  `/under.html` (→ `src/under.ts`, the underworld) and, on the **lab
+  branch** only, `/lab.html` (→ `src/lab.ts`). Vite builds them all.
+- Deploy with `scripts/deploy.sh main` (from main: the site root, leaving
+  `lab/` alone) or `scripts/deploy.sh lab` (from the lab branch: only
+  `/Rootwake/lab/`). Live: https://noahschmuckler.github.io/Rootwake/ ,
+  `/under.html`, and `/lab/`.
+
+## The lab branch
+
+`lab` branches from main to design the stage's main enemy (a rust
+monster, after D&D) collaboratively — its look first, then its behaviours,
+each viewed as it lands. `src/lab.ts` boots the underworld's wiring
+(`bootUnder` in `underworld.ts`) with `src/arena.ts`: one wide, high,
+empty chamber of bare rock, and the metallurgist already in the suit
+(`suit: true`) so nothing has to be crafted to get to the creature. The
+cave, the greblins and the crafting are untouched; merge main into lab
+as it moves. The creature's modules go here first.
 
 ## Status
 
