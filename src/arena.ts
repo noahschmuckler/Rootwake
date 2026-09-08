@@ -11,6 +11,7 @@ import { GROUND_Y, WALL_THICK, ROCK_COLOR, ROCK_DARK, DARKSIGHT_INTENSITY, DARKS
 import type { OreBoulder } from './ore';
 import type { CircleCollider } from './player';
 import { OreVein } from './orevein';
+import { ANNEX, CONNECTOR, STUDY_FRONT, STUDY_RISE, AISLE_RISE, annexWalkable, inside, inStudyPartition } from './labLayout';
 
 // ---- Tuning constants ---------------------------------------------------------
 /** Half-width of the chamber, its roof height above the pit floor, and the platform: where it starts
@@ -86,12 +87,24 @@ export class Arena {
     // The platform: a block from PLATFORM_Z0 to the near wall, its top the floor he walks, its front a cliff.
     const depth = ARENA_HALF - PLATFORM_Z0;
     rock(rockSlab(span, PLATFORM_RISE + 0.5, depth + WALL_THICK, seed ^ 0x60, 0.15), 0, PIT_FLOOR + PLATFORM_RISE / 2 - 0.25, PLATFORM_Z0 + (depth + WALL_THICK) / 2);
-    // A low lip along its edge, so the edge reads.
-    rock(rockSlab(span, 0.16, 0.3, seed ^ 0x61, 0.05), 0, PLATFORM_FLOOR + 0.08, PLATFORM_Z0 + 0.15);
+    // Flush boundary marker only. No raised lip obscures the pit floor.
+    rock(new THREE.Mesh(new THREE.BoxGeometry(span, 0.008, 0.09), new THREE.MeshBasicMaterial({ color: 0x76868c })), 0, PLATFORM_FLOOR + 0.006, PLATFORM_Z0 + 0.08);
     // Four walls; the far one is the feeding wall.
     rock(rockSlab(span, ARENA_ROOF + 0.5, WALL_THICK, seed ^ 0x77, 0.2), 0, PIT_FLOOR + ARENA_ROOF / 2, ARENA_HALF + WALL_THICK / 2);
     rock(rockSlab(span, ARENA_ROOF + 0.5, WALL_THICK, seed ^ 0x78, 0.2), 0, PIT_FLOOR + ARENA_ROOF / 2, -ARENA_HALF - WALL_THICK / 2);
-    rock(rockSlab(span, ARENA_ROOF + 0.5, WALL_THICK, seed ^ 0x79, 0.2), ARENA_HALF + WALL_THICK / 2, PIT_FLOOR + ARENA_ROOF / 2, 0, Math.PI / 2);
+    // The east wall has a real opening from the observation platform into the annex.
+    const eastX = ARENA_HALF + WALL_THICK / 2;
+    const sideWall = (z0: number, z1: number, code: number): void => {
+      rock(rockSlab(z1 - z0, ARENA_ROOF + 0.5, WALL_THICK, seed ^ code, 0.12), eastX, PIT_FLOOR + ARENA_ROOF / 2, (z0 + z1) / 2, Math.PI / 2);
+    };
+    sideWall(-ARENA_HALF, CONNECTOR.z0, 0x79);
+    sideWall(CONNECTOR.z1, ARENA_HALF, 0x7b);
+    const doorWidth = CONNECTOR.z1 - CONNECTOR.z0;
+    const doorZ = (CONNECTOR.z0 + CONNECTOR.z1) / 2;
+    const lintelBottom = PLATFORM_FLOOR + CONNECTOR.height;
+    const lintelH = PIT_FLOOR + ARENA_ROOF - lintelBottom;
+    rock(rockSlab(doorWidth, lintelH, WALL_THICK, seed ^ 0x7c, 0.08), eastX, lintelBottom + lintelH / 2, doorZ, Math.PI / 2);
+    rock(rockSlab(doorWidth, PLATFORM_RISE, WALL_THICK, seed ^ 0x7d, 0.08), eastX, PIT_FLOOR + PLATFORM_RISE / 2, doorZ, Math.PI / 2);
     rock(rockSlab(span, ARENA_ROOF + 0.5, WALL_THICK, seed ^ 0x7a, 0.2), -ARENA_HALF - WALL_THICK / 2, PIT_FLOOR + ARENA_ROOF / 2, 0, Math.PI / 2);
     // The lamps over the pit.
     for (const x of [-4.5, 4.5]) {
@@ -105,18 +118,53 @@ export class Arena {
       this.veins.push(v);
       this.group.add(v.group);
     });
+    // The connector and annex are actual room geometry; the original chamber remains intact.
+    const slabMat = new THREE.MeshStandardMaterial({ color: 0x252b31, roughness: 0.85 });
+    const slab = (w: number, h: number, d: number, x: number, y: number, z: number): void => {
+      rock(new THREE.Mesh(new THREE.BoxGeometry(w, h, d), slabMat), x, y, z);
+    };
+    const cx = (9 + ANNEX.x0) / 2, cw = ANNEX.x0 - 9;
+    slab(cw + 0.5, 0.25, doorWidth, cx, PLATFORM_FLOOR - 0.125, doorZ);
+    slab(cw + 0.5, 0.25, doorWidth, cx, lintelBottom + 0.125, doorZ);
+    for (const z of [CONNECTOR.z0 - 0.12, CONNECTOR.z1 + 0.12]) slab(cw + 0.5, CONNECTOR.height, 0.24, cx, PLATFORM_FLOOR + CONNECTOR.height / 2, z);
+    const ax = (ANNEX.x0 + ANNEX.x1) / 2, aw = ANNEX.x1 - ANNEX.x0;
+    const az = (ANNEX.z0 + ANNEX.z1) / 2, ad = ANNEX.z1 - ANNEX.z0;
+    slab(aw, 0.3, ad, ax, PIT_FLOOR + STUDY_RISE - 0.15, az);
+    slab(aw, AISLE_RISE - STUDY_RISE, ANNEX.z1 - STUDY_FRONT, ax, PIT_FLOOR + (AISLE_RISE + STUDY_RISE) / 2, (STUDY_FRONT + ANNEX.z1) / 2);
+    slab(aw, 0.25, ad, ax, PIT_FLOOR + ANNEX.roof + 0.125, az);
+    const wallH = ANNEX.roof - STUDY_RISE;
+    for (const z of [ANNEX.z0 - 0.12, ANNEX.z1 + 0.12]) slab(aw, wallH, 0.24, ax, PIT_FLOOR + STUDY_RISE + wallH / 2, z);
+    slab(0.24, wallH, ad, ANNEX.x1 + 0.12, PIT_FLOOR + STUDY_RISE + wallH / 2, az);
+    // West wall of the annex, split at the connector instead of sealing its entrance.
+    for (const [z0, z1] of [[ANNEX.z0, CONNECTOR.z0], [CONNECTOR.z1, ANNEX.z1]]) {
+      slab(0.24, wallH, z1 - z0, ANNEX.x0 - 0.12, PIT_FLOOR + STUDY_RISE + wallH / 2, (z0 + z1) / 2);
+    }
+    slab(0.24, ANNEX.roof - (PLATFORM_RISE + CONNECTOR.height), doorWidth, ANNEX.x0 - 0.12, (PIT_FLOOR + ANNEX.roof + lintelBottom) / 2, doorZ);
+    for (const x of [25, 45]) {
+      const lamp = new THREE.PointLight(0xc6d6e4, 85, 23, 1.35);
+      lamp.position.set(x, PIT_FLOOR + 6.7, 1.5);
+      scene.add(lamp);
+    }
+    const passageLight = new THREE.PointLight(0x9db5bb, 12, 8, 1.2);
+    passageLight.position.set(cx, PLATFORM_FLOOR + 2.8, doorZ);
+    scene.add(passageLight);
     scene.add(this.group);
   }
 
-  /** He walks the platform only. */
-  isWalkable = (p: THREE.Vector3): boolean => Math.abs(p.x) < ARENA_HALF - 0.45 && p.z > PLATFORM_Z0 + 0.35 && p.z < ARENA_HALF - 0.45;
+  /** The original viewing platform, connector and annex aisle; display enclosures are not walkable. */
+  isWalkable = (p: THREE.Vector3): boolean => (Math.abs(p.x) < ARENA_HALF - 0.45 && p.z > PLATFORM_Z0 + 0.35 && p.z < ARENA_HALF - 0.45) || annexWalkable(p.x, p.z);
   /** The creature's ground: the pit floor. */
   pitWalkable = (p: THREE.Vector3): boolean => Math.abs(p.x) < ARENA_HALF - 0.6 && p.z > -ARENA_HALF + 0.6 && p.z < PLATFORM_Z0 - 0.6;
-  groundHeight = (_x: number, z: number): number => (z > PLATFORM_Z0 ? PLATFORM_RISE : 0);
+  groundHeight = (x: number, z: number): number => x >= ANNEX.x0 && z < STUDY_FRONT ? STUDY_RISE : z > PLATFORM_Z0 ? PLATFORM_RISE : 0;
   cameraClear = (p: THREE.Vector3): boolean => {
-    if (Math.abs(p.x) > ARENA_HALF - 0.25 || Math.abs(p.z) > ARENA_HALF - 0.25) return false;
+    const original = Math.abs(p.x) < ARENA_HALF - 0.25 && Math.abs(p.z) < ARENA_HALF - 0.25;
+    const passage = inside(p.x, p.z, CONNECTOR, 0.1);
+    const annex = inside(p.x, p.z, ANNEX, 0.15);
+    if (!original && !passage && !annex) return false;
+    if (annex && inStudyPartition(p.x, p.z)) return false;
     const floorY = PIT_FLOOR + this.groundHeight(p.x, p.z);
-    return p.y > floorY + 0.1 && p.y < PIT_FLOOR + ARENA_ROOF - 0.25;
+    const roofY = passage && !original && !annex ? PLATFORM_FLOOR + CONNECTOR.height : PIT_FLOOR + (annex ? ANNEX.roof : ARENA_ROOF);
+    return p.y > floorY + 0.12 && p.y < roofY - 0.25;
   };
 
   colliders(): CircleCollider[] {
