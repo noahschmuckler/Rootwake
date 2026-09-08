@@ -1,0 +1,37 @@
+--- a/src/labControls.ts
++++ b/src/labControls.ts
+@@ -21,13 +21,20 @@
+   panel.querySelector<HTMLButtonElement>('#lab-restart')!.onclick = () => { gallery.restart(); gallery.paused = false; pause.textContent = 'Pause studies'; };
+   panel.querySelector<HTMLSelectElement>('#lab-speed')!.onchange = e => gallery.playbackRate = Number((e.target as HTMLSelectElement).value);
+   const views = panel.querySelector<HTMLSelectElement>('#lab-view')!;
++  const frameView = (): void => {
++    const bay = STUDY_BAYS.find(b => b.id === views.value);
++    camera.aspect = window.innerWidth / window.innerHeight;
++    camera.fov = bay ? (bay.id === 'surface' ? (camera.aspect < 0.8 ? 118 : 72) : (camera.aspect < 0.8 ? 78 : 60)) : 40;
++    camera.updateProjectionMatrix();
++  };
++  window.addEventListener('resize', frameView);
+   const view = (id: string): void => {
+     const bay = STUDY_BAYS.find(b => b.id === id);
+     let target = new THREE.Vector3(0, GROUND_Y + 2.0, -3.5);
+     if (bay) {
+       // Stand at the open edge, not behind a floor that occludes the feet.
+       player.position.set(bay.x, GROUND_Y, 5.3);
+-      target = new THREE.Vector3(bay.x, GROUND_Y + (id === 'surface' ? 3.85 : id === 'feeding' ? 3.5 : 1.95), 0.65);
++      target = new THREE.Vector3(bay.x, GROUND_Y + (id === 'surface' ? 3.85 : id === 'feeding' ? 3.5 : 2.4), 0.65);
+     } else if (id === 'hall') {
+       player.position.set(15.1, GROUND_Y, 7.2);
+       target.set(23, GROUND_Y + 2.3, 0);
+@@ -37,8 +44,10 @@
+     player.yaw = Math.atan2(-delta.x, -delta.z);
+     player.pitch = Math.atan2(delta.y, Math.hypot(delta.x, delta.z));
+     // In portrait, fit a whole study rather than cropping both sides of the square circuit.
+-    camera.fov = bay ? (id === 'surface' ? (camera.aspect < 0.8 ? 112 : 64) : (camera.aspect < 0.8 ? 78 : 48)) : 40;
+-    camera.updateProjectionMatrix();
++    frameView();
++    // Empty inventory boxes otherwise cover the specimen's feeler tips.
++    const hands = document.getElementById('hands');
++    if (hands) hands.style.visibility = bay ? 'hidden' : '';
+     gallery.setObserver(player.eye());
+   };
+   views.onchange = () => view(views.value);
