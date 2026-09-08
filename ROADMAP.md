@@ -15,7 +15,7 @@ roof, must want a roof before there are shaped logs.
 
 Built and judged: Passes 0 → 1.1 (through the doorway cut, the campfire,
 wheat by the rune, harvest, nourishment, popcorn; judged 2026-09-07).
-Built, awaiting judgement: **U0** to **U3**, the underworld's first four
+Built, awaiting judgement: **U0** to **U4**, the underworld's first five
 passes (below).
 
 ## Open directions after 1.1
@@ -215,9 +215,21 @@ that catch the light are the first thing he sees of them. No colliders,
 no threat. "Get that working and we'll add another part." Open, flagged:
 count, run speed, the lit fraction and the in-view cone, near distance.
 
-**U4 (designer's call).** The next part of the greblins; where more
-ingots come from; the legs and arms; whether the dagger belongs to the
-suit; what lies past the second chamber.
+**U4 — the high tunnel (built 2026-09-08).** *Question: does a way out
+only they can take make the room read as a place with a beyond — and
+plant the want for climbing?* The dining chamber's ceiling is raised
+(7.2) and high in its far wall is a tunnel mouth, big enough for him and
+too high to reach; the tunnel behind it is sealed at its far end for
+now. Each time his light finds a greblin counts; at the third it has
+had enough: along the walls to the spot under the mouth, straight up
+the wall (a thing only they can do), down the tunnel out of sight, and
+despawned. The first climb is hinted: he could fit, he cannot climb. The
+intention on record: he gains climbing or jumping later and follows.
+Open, flagged: SCARE_LIMIT, CLIMB_SPEED, the mouth's height and size.
+
+**U5 (designer's call).** Climbing or jumping and what is down that
+tunnel; where more ingots come from; the legs and arms; whether the
+dagger belongs to the suit.
 
 ## Later, in no order yet
 

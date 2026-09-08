@@ -339,7 +339,9 @@ rules invert: no weather, no day, no food yet — heat instead of harvest.
 - **The greblins (U3).** The miners whose vein he woke in. They fear him:
   still in the dark, they bolt from his light along the walls to a corner
   it doesn't reach, and again when it finds them. They never block him
-  and never come at him. What else they are for is the next part.
+  and never come at him. Three scares and one leaves for good: up the
+  wall into the high tunnel only they can reach (U4). Climbing is theirs
+  until it is his.
 
 ## 7. Open questions (deliberately unresolved)
 

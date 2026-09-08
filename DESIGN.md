@@ -657,6 +657,33 @@ Status: built and headless-tested (holding beside him out of the light's
 front, bolting when he turns on them, settling in far corners, holding in
 the dark across the room); awaiting the phone judgement.
 
+### U4 — the high tunnel (2026-09-08)
+
+Designer's brief: raise the dining area's ceiling; count how many times
+each gremlin is hit with his light, and at three it flees toward the top
+of the room — another tunnel, large enough for the player but too high
+to reach (later he gains climbing or jumping; not now). Only the
+gremlins can get to it: they climb the wall, run down the tunnel out of
+sight, and can despawn to save memory.
+
+Built: the chamber's roof is 7.2; the +x wall carries a mouth 2.2 wide
+and 2.2 tall whose floor is 4.4 above his — the wall is cut into two
+side pieces, a piece below and a piece above — and behind it a tunnel
+seven deep, floor, roof and walls of bare rock, sealed at its far end for
+now (they run out of sight, not out of the world). Neither the tunnel nor
+its mouth is walkable or camera space. Every bolt counts as a scare; at
+the third the greblin's next route is to the hiding spot under the
+mouth, whatever the light is doing there; arrived, it goes to the wall
+face and climbs it, belly to the rock, leaning in, at CLIMB_SPEED, then
+runs the tunnel at running speed and, past its end, is removed from the
+scene. The first to go is hinted: "One goes straight up the wall and
+into a hole high in the rock. You could fit. You cannot climb."
+
+Status: built and headless-tested (three scares, the run to the wall,
+the climb from floor to tunnel floor, the tunnel run, despawn with the
+meshes gone; the tunnel refused to feet and camera); awaiting the phone
+judgement.
+
 ## Beyond the passes: SYSTEMS.md and ROADMAP.md (2026-09-05)
 
 The designer's systems notes — the "nothing just because" philosophy,
@@ -671,7 +698,7 @@ what was built and why.
 Repo scaffolded 2026-09-03. Passes 0 through 1.1 built and confirmed on
 phone playtests (plus the sky); 1.1 (the doorway cut and knuckles, the
 campfire, wheat: rune, planting, harvest, nourishment, popcorn) judged
-2026-09-07 — "loving it". The underworld's U0 to U3 are built (sections
+2026-09-07 — "loving it". The underworld's U0 to U4 are built (sections
 above) and await judgement; `/under.html` is its entry. **Next: the designer judges
 U0 and adds to it, or picks from ROADMAP.md's open directions.**
 

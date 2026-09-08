@@ -34,9 +34,10 @@ out of the chamber to a second room with tables, chairs and food that
 nourishes harder than popcorn; the third-person camera kept out of the
 rock) and U2 (the suit: forge rings that turn six ingots into a chestpiece
 and two into a helm, worn not carried, the helm holding darksight open)
-and U3 (the greblin miners who left the food: cowering in the upper
-chamber's corners, bolting along the walls from his light) are built and
-await the phone judgement. Standing rules: confinement→vista, objects have weight,
+and U3/U4 (the greblin miners who left the food: cowering in the upper
+chamber's corners, bolting along the walls from his light; three scares
+and one climbs the wall into a high tunnel he can't reach and is gone)
+are built and await the phone judgement. Standing rules: confinement→vista, objects have weight,
 nothing "just because" (DESIGN.md, SYSTEMS.md).**
 `src/` holds:
 
@@ -174,8 +175,10 @@ nothing "just because" (DESIGN.md, SYSTEMS.md).**
   four immune walls, a doorway in the +x wall), the 3×3 ring of ore
   boulders around the centre cell (the gap between boulders is narrower
   than the player: confinement), the long hall that climbs HALL_RISE to a
-  second chamber with crude tables and chairs (`tables` for laying food,
-  furniture colliders), black fog whose density is the darksight's reach,
+  second chamber (ROOM_B_ROOF tall) with crude tables and chairs (`tables`
+  for laying food, furniture colliders) and, high in its +x wall, the
+  tunnel mouth (TUNNEL_*: too high for him, sealed at its far end; not
+  walkable, not camera space), black fog whose density is the darksight's reach,
   the cool light on the camera; `isWalkable`, `groundHeight` (the ramp),
   `cameraClear` (the air the third-person camera may occupy), `colliders`,
   `bareRock()`, `setSight` (DARKSIGHT_DECAY gentler than inverse-square so
@@ -199,8 +202,11 @@ nothing "just because" (DESIGN.md, SYSTEMS.md).**
   the upper chamber's perimeter; hiding = still, watching him, trembling;
   when his light touches one (within LIT_FRACTION of his darksight reach
   and in front of him) or he comes within NEAR_DISTANCE, it bolts along
-  the walls (`routeBetween`) to a far, unlit spot. No colliders. Tuning
-  constants at the top.
+  the walls (`routeBetween`) to a far, unlit spot. `hits` counts the
+  scares; at SCARE_LIMIT one runs to the spot under the tunnel mouth,
+  climbs the wall (`mode` 'climb'), runs down the tunnel and despawns
+  ('gone', mesh removed; `climbs`). No colliders. Tuning constants at
+  the top.
 - `under.ts` — the underworld entry (under.html): cave, player, hands,
   energy, ore locks (tap; bare rock answers "nothing in it to heat"),
   long-press menus on ingots (Blueprint: dagger / chestpiece / helm),
