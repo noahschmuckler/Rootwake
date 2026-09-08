@@ -139,3 +139,33 @@ the ore or explore the player.
 **Open:** the rest arc's height and whether the tips should cross over
 the tail; whether it should unfurl a little while skittering, feeling
 ahead.
+
+## v2.2 (2026-09-08)
+
+Designer's notes on v2.1: the rust should purge from the feeler that
+folds back, not the one held out; and the climb should go head first —
+the head angling up close to 90°, then the thorax as it walks in, then
+the abdomen following smoothly up the wall — and the reverse coming
+down, which at the moment left it wedged in the wall, walking in place.
+
+- *Grooming is the fold.* The feeler being cleaned furls back over the
+  body — that curl is the draw through the mouthparts — and is purged
+  base to tip as far as it has folded, dust falling from the mouth. The
+  other stays out while it still carries rust, then furls in its turn.
+- *The corner is a track.* Between floor and wall the thorax runs along
+  a path: flat floor toward the wall, a quarter arc of radius 0.34
+  (CORNER_RADIUS) at the junction, flat wall upward, at CORNER_SPEED 1.5.
+  Every part of the body sits at its own distance along that path — the
+  head 0.62 ahead, the six abdomen joints 0.12 to 0.97 behind — and takes
+  the path's tangent there, so the head pitches up first while the
+  thorax still walks in flat, the thorax turns the corner next, and the
+  abdomen bends joint by joint after it, straightening as it comes up the
+  wall. The dismount runs the same track backwards: it backs down the
+  wall tail-first, the abdomen levels onto the floor, then the thorax,
+  then the head, and it ends standing on the floor facing the wall where
+  the track leaves it. Nothing is interpolated between two poses any
+  more, so nothing can end up inside the rock.
+
+**Open:** the corner radius (tighter is more silverfish, looser is more
+cricket); whether it should come down head-first instead of backing;
+corner speed against wall speed.

@@ -25,9 +25,11 @@ export const SKITTER_SPEED = 3.4;
 export const WALL_SPEED = 2.2;
 export const BURST_S: [number, number] = [0.35, 0.9];
 export const FREEZE_S: [number, number] = [0.25, 1.4];
-/** Floor to wall and back: seconds, and where it starts up the wall. */
-export const MOUNT_S = 1.1;
-export const MOUNT_V = 0.55;
+/** Floor to wall and back: the body runs along a track that turns the corner on an arc of this radius,
+ *  at this speed — the head pitches up first, the thorax follows as it walks in, the abdomen last;
+ *  coming down it backs off the wall tail-first along the same track. */
+export const CORNER_RADIUS = 0.34;
+export const CORNER_SPEED = 1.5;
 /** The circle it walks around a vein before feeding, and how far below the vein it stops. */
 export const CIRCLE_RADIUS = 1.05;
 export const FEED_BELOW = 0.95;
@@ -144,9 +146,11 @@ export class RustMonster {
   readonly collider: CircleCollider;
   mode: Mode = 'freeze';
   vein: OreVein | null = null;
-  /** 'floor' or 'wall'; `blend` 0..1 is how far onto the wall it is (the mount and dismount run it). */
-  surface: 'floor' | 'wall' = 'floor';
-  private blend = 0;
+  /** 'floor', 'wall', or 'corner' while the body runs the track between them (`sigma` along it). */
+  surface: 'floor' | 'wall' | 'corner' = 'floor';
+  private sigma = 0;
+  private sigmaFrom = 0;
+  private sigmaTo = 0;
   private wall: WallFrame | null = null;
   /** On the wall: along-wall and up-wall coordinates, and the in-plane heading (0 = straight up). */
   private u = 0;
@@ -181,6 +185,9 @@ export class RustMonster {
   private readonly wallQuat = new THREE.Quaternion();
   private readonly floorPos = new THREE.Vector3();
   private readonly wallPos = new THREE.Vector3();
+  /** Where each part of the body sits along it, ahead (−) or behind (+) the thorax, for the corner. */
+  private static readonly HEAD_S = -0.62;
+  private static readonly PIVOT_S = [0.12, 0.29, 0.46, 0.63, 0.8, 0.97];
 
   constructor(readonly floorY: number, at: THREE.Vector3, private readonly veins: OreVein[], private readonly isWalkable: (p: THREE.Vector3) => boolean, seed: number) {
     this.rand = mulberry32(seed ^ 0xb00b);
@@ -360,6 +367,44 @@ export class RustMonster {
     RustMonster.basis(this.wallQuat, w.normal, f);
   }
 
+  /**
+   * The corner track, in the wall's frame: distance from the wall face `d`, height `h`, and the tangent's
+   * pitch `theta` (0 = walking toward the wall on the floor, π/2 = straight up the wall). `sigma` is arc
+   * length along it, 0 where the arc begins; before that it is flat floor, after it flat wall.
+   */
+  private track(sigma: number): { d: number; h: number; theta: number } {
+    const R = CORNER_RADIUS;
+    const arc = (R * Math.PI) / 2;
+    if (sigma <= 0) return { d: WALL_HUG + R - sigma, h: BODY_HEIGHT, theta: 0 };
+    if (sigma >= arc) return { d: WALL_HUG, h: BODY_HEIGHT + R + (sigma - arc), theta: Math.PI / 2 };
+    const a = sigma / R;
+    return { d: WALL_HUG + R - R * Math.sin(a), h: BODY_HEIGHT + R - R * Math.cos(a), theta: a };
+  }
+  /** The thorax on the track at `sigma`, and the head and abdomen bent to follow the track's tangent. */
+  private cornerPose(sigma: number): void {
+    const w = this.wall!;
+    const t = this.track(sigma);
+    this.group.position.copy(w.origin).addScaledVector(w.tangent, this.u).addScaledVector(w.normal, t.d).addScaledVector(UP, t.h);
+    const f = w.normal.clone().multiplyScalar(-Math.cos(t.theta)).addScaledVector(UP, Math.sin(t.theta));
+    const up = w.normal.clone().multiplyScalar(Math.sin(t.theta)).addScaledVector(UP, Math.cos(t.theta));
+    RustMonster.basis(this.group.quaternion, up, f);
+    // Each part pitches relative to the one ahead of it by the change in the tangent along the body.
+    this.head.rotation.x = this.track(sigma - RustMonster.HEAD_S).theta - t.theta;
+    let prev = t.theta;
+    for (let i = 0; i < this.pivots.length; i++) {
+      const th = this.track(sigma - RustMonster.PIVOT_S[i]).theta;
+      this.pivots[i].rotation.x = th - prev;
+      prev = th;
+    }
+  }
+  /** Track positions: where the whole body is on the floor before the corner, and past it on the wall. */
+  private get sigmaFloor(): number {
+    return RustMonster.HEAD_S - 0.15;
+  }
+  private get sigmaWall(): number {
+    return (CORNER_RADIUS * Math.PI) / 2 + RustMonster.PIVOT_S[5] + 0.15;
+  }
+
   // ---- per frame ----------------------------------------------------------------
   update(nowMs: number, player: THREE.Vector3): void {
     const dt = this.lastMs ? Math.min(0.1, (nowMs - this.lastMs) / 1000) : 0;
@@ -392,10 +437,15 @@ export class RustMonster {
       }
       case 'mount':
       case 'dismount': {
-        const k = Math.min(1, (nowMs - this.modeStart) / (MOUNT_S * 1000));
-        this.blend = this.mode === 'mount' ? k : 1 - k;
-        this.speed = WALL_SPEED * 0.6;
-        this.stride += this.speed * dt;
+        // Along the track, at corner speed; done when it reaches the far end.
+        const dir = Math.sign(this.sigmaTo - this.sigmaFrom);
+        this.sigma += dir * CORNER_SPEED * dt;
+        this.speed = CORNER_SPEED;
+        this.stride += CORNER_SPEED * dt;
+        if ((dir > 0 && this.sigma >= this.sigmaTo) || (dir < 0 && this.sigma <= this.sigmaTo)) {
+          this.sigma = this.sigmaTo;
+          this.modeUntil = nowMs; // hand over to next()
+        }
         break;
       }
       case 'wallmove': {
@@ -429,32 +479,30 @@ export class RustMonster {
       default:
         break;
     }
-    // Where the body is: the floor pose, the wall pose, or the flex between them.
-    if (this.wall) this.wallPose();
-    this.floorPose();
-    if (this.blend <= 0 || !this.wall) {
-      this.group.quaternion.copy(this.floorQuat);
-      p.y = this.floorPos.y;
-    } else if (this.blend >= 1) {
+    // Where the body is: on the floor, on the wall, or on the corner track between them.
+    const cornering = this.surface === 'corner' && this.wall !== null;
+    if (this.surface === 'wall' && this.wall) {
+      this.wallPose();
       this.group.position.copy(this.wallPos);
       this.group.quaternion.copy(this.wallQuat);
+    } else if (cornering) {
+      this.cornerPose(this.sigma);
     } else {
-      const k = this.blend;
-      this.group.position.lerpVectors(this.floorPos, this.wallPos, k);
-      this.group.quaternion.slerpQuaternions(this.floorQuat, this.wallQuat, k);
+      this.floorPose();
+      this.group.quaternion.copy(this.floorQuat);
+      p.y = this.floorPos.y;
     }
     this.collider.x = p.x;
     this.collider.z = p.z;
 
-    // Body: a low fast breath, a wag when moving; the flex into the corner while mounting.
+    // Body: a low fast breath, a wag when moving. (On the corner the pivots are the track's.)
     const breathe = 1 + 0.02 * Math.sin(t * 7.5);
-    const flex = Math.sin(this.blend * Math.PI) * 0.62; // total bend, spread over the joints
     this.abdomen.forEach((seg, i) => {
       seg.scale.y = (0.2 - (i / 5) * 0.09) * breathe;
       this.pivots[i].rotation.y = this.speed > 0 ? Math.sin(this.stride * 6 - i * 0.6) * 0.06 : Math.sin(t * 2.1 + i) * 0.015;
-      this.pivots[i].rotation.x = i === 0 ? 0 : (flex / 5) * (this.mode === 'dismount' ? 1 : 1);
+      if (!cornering) this.pivots[i].rotation.x = 0;
     });
-    this.body.position.y = this.speed > 0 && this.blend <= 0 ? Math.abs(Math.sin(this.stride * 9)) * 0.02 : Math.sin(t * 7.5) * 0.004;
+    this.body.position.y = this.speed > 0 && this.surface === 'floor' ? Math.abs(Math.sin(this.stride * 9)) * 0.02 : Math.sin(t * 7.5) * 0.004;
     for (const sk of this.skins) layPlates(sk, t);
     eye.emissiveIntensity = 0.7 + 0.5 * Math.max(0, Math.sin(t * 1.7) * Math.sin(t * 0.43));
     if (this.speed === 0 && nowMs > this.twitchUntil && this.rand() < dt * 0.35) {
@@ -497,16 +545,18 @@ export class RustMonster {
         const w = this.wall!;
         const uv = this.veinUV(this.vein!, w);
         // The wall base under the vein (a little to one side, so it comes up beside it).
-        const base = w.origin.clone().addScaledVector(w.tangent, uv.u + (r() - 0.5) * 1.2).addScaledVector(w.normal, WALL_HUG + 0.5);
+        const base = w.origin.clone().addScaledVector(w.tangent, uv.u + (r() - 0.5) * 1.2).addScaledVector(w.normal, this.track(this.sigmaFloor).d);
         const dist = Math.hypot(base.x - this.group.position.x, base.z - this.group.position.z);
         if (dist < 0.3) {
-          // At the wall: face it and go up.
+          // At the wall: onto the track, head first.
           this.heading = Math.atan2(w.normal.x, w.normal.z);
-          this.u = uv.u + (r() - 0.5) * 1.2;
-          this.v = MOUNT_V;
+          const here = this.group.position.clone().sub(w.origin);
+          this.u = here.dot(w.tangent);
           this.phi = 0;
-          this.surface = 'wall';
-          this.enter('mount', nowMs, MOUNT_S);
+          this.surface = 'corner';
+          this.sigmaFrom = this.sigma = this.sigmaFloor;
+          this.sigmaTo = this.sigmaWall;
+          this.enter('mount', nowMs, 60);
           return;
         }
         this.target.copy(base);
@@ -523,7 +573,8 @@ export class RustMonster {
         return;
       case 'mount': {
         // Up on the wall: a loop around the vein, then the feeding spot below it.
-        this.blend = 1;
+        this.surface = 'wall';
+        this.v = this.track(this.sigmaWall).h;
         const uv = this.veinUV(this.vein!, this.wall!);
         const dir = r() < 0.5 ? 1 : -1;
         const start = Math.atan2(this.u - uv.u, this.v - uv.v);
@@ -555,18 +606,29 @@ export class RustMonster {
           this.enter('groom', nowMs, GROOM_S);
           return;
         }
-        // Done here: back down the wall to just above the floor, then off it.
-        this.wallPath = [{ u: this.u + (r() - 0.5) * 0.8, v: MOUNT_V }];
+        // Done here: down the wall to where the track begins, then back off it tail-first.
+        this.wallPath = [{ u: this.u + (r() - 0.5) * 0.8, v: this.track(this.sigmaWall).h }];
         this.vein = null;
-        this.wallPathDone = () => this.enter('dismount', this.lastMs, MOUNT_S);
+        this.wallPathDone = () => {
+          this.surface = 'corner';
+          this.sigmaFrom = this.sigma = this.sigmaWall;
+          this.sigmaTo = this.sigmaFloor;
+          this.enter('dismount', this.lastMs, 60);
+        };
         this.enter('wallmove', nowMs, 30);
         return;
-      case 'dismount':
-        this.blend = 0;
+      case 'dismount': {
+        // Off the track: on the floor, facing the wall, where the track left it.
+        const w = this.wall!;
+        const tr = this.track(this.sigmaFloor);
+        const at = w.origin.clone().addScaledVector(w.tangent, this.u).addScaledVector(w.normal, tr.d);
+        this.group.position.set(at.x, this.floorY + BODY_HEIGHT, at.z);
+        this.heading = Math.atan2(w.normal.x, w.normal.z);
         this.surface = 'floor';
         this.wall = null;
         this.enter('freeze', nowMs, range(FREEZE_S));
         return;
+      }
     }
   }
   private wallPathDone: (() => void) | null = null;
@@ -581,8 +643,9 @@ export class RustMonster {
       v.setRust(v.rust - dt / SCRAPE_S);
       for (const f of this.feelers) for (let i = 0; i < FEELER_SEGMENTS; i++) f.rust[i] = Math.min(1, f.rust[i] + (dt / SCRAPE_S) * (0.4 + 0.9 * (i / FEELER_SEGMENTS)));
     } else if (this.mode === 'groom') {
+      // The fold draws the feeler through the mouthparts base to tip: cleaned as far as it has folded.
       const f = this.feelers[this.groomSide];
-      const front = Math.floor(k * FEELER_SEGMENTS * 1.05);
+      const front = Math.floor(Math.max(k, 1 - f.furl) * FEELER_SEGMENTS * 1.05);
       for (let i = 0; i < front && i < FEELER_SEGMENTS; i++) {
         if (f.rust[i] > 0.02) this.puff();
         f.rust[i] = Math.max(0, f.rust[i] - dt * 4);
@@ -596,6 +659,10 @@ export class RustMonster {
     const open = g ? 0.5 + 0.35 * Math.sin(t * 14) : 0.25 + 0.15 * Math.sin(t * 2.3);
     this.mandibles.forEach((m, i) => (m.rotation.y = (i === 0 ? -1 : 1) * (0.2 + open)));
     if (this.mode === 'regard') this.aimAt = new THREE.Vector3(player.x, this.floorY + 0.5, player.z);
+    if (this.surface === 'corner') {
+      this.head.rotation.y = THREE.MathUtils.lerp(this.head.rotation.y, 0, 0.1);
+      return; // its pitch is the track's
+    }
     if (this.aimAt) {
       const local = this.group.worldToLocal(this.aimAt.clone());
       const yaw = Math.atan2(-(local.x - this.head.position.x), -(local.z - this.head.position.z));
@@ -614,12 +681,15 @@ export class RustMonster {
    * through it.
    */
   private poseFeelers(t: number, dt: number): void {
-    const onWall = this.blend > 0.5;
+    const onWall = this.surface === 'wall' || (this.surface === 'corner' && this.track(this.sigma).theta > 0.8);
     for (const f of this.feelers) {
       const s = f.side;
-      // At rest they lie curled back over the body; they unfurl to work the ore, to reach for him, or to be groomed.
+      // At rest they lie curled back over the body; they unfurl to work the ore or to reach for him. Grooming
+      // is the fold itself: the feeler being cleaned curls back through the mouthparts, the other stays out
+      // while it still carries rust.
       const mine = this.feelers[this.groomSide] === f;
-      const wantOut = this.mode === 'tickle' || this.mode === 'scrape' || this.mode === 'regard' || (this.mode === 'groom' && mine);
+      const carries = f.rust.reduce((a, b) => a + b, 0) > 0.3;
+      const wantOut = this.mode === 'tickle' || this.mode === 'scrape' || this.mode === 'regard' || (this.mode === 'groom' && !mine && carries);
       f.furl = wantOut ? Math.min(1, f.furl + dt / UNFURL_S) : Math.max(0, f.furl - dt / FURL_S);
       const k = f.furl * f.furl * (3 - 2 * f.furl);
       let basePitch = -0.25, baseYaw = s * 0.55, amp = 0.16, omega = 1.1, curl = 0.02, wave = 0.55;
@@ -642,11 +712,8 @@ export class RustMonster {
           basePitch = 0.0; baseYaw = s * 0.15; amp = 0.4; omega = 6.5; wave = 0.35; lift = 0.2;
           break;
         case 'groom': {
-          if (mine) {
-            basePitch = onWall ? 0.55 : -1.35; baseYaw = s * 0.15; amp = 0.05; omega = 3; curl = onWall ? -0.12 : 0.16; wave = 0.2;
-          } else {
-            basePitch = onWall ? -0.05 : -0.35; baseYaw = s * 0.7; amp = 0.1; omega = 0.8;
-          }
+          // The one not being groomed holds a slow sweep while it waits its turn.
+          basePitch = onWall ? -0.05 : -0.35; baseYaw = s * 0.7; amp = 0.1; omega = 0.8;
           break;
         }
         case 'regard':
@@ -712,7 +779,7 @@ export class RustMonster {
         pitch = l.pitch + (l.kind === 'hind' ? Math.sin(t * 11 + l.side) * 0.012 : 0);
       }
       // On the wall the legs splay a little flatter, gripping.
-      if (this.blend > 0.5 && l.kind !== 'arm') pitch -= 0.15;
+      if (this.surface !== 'floor' && l.kind !== 'arm') pitch -= 0.15;
       l.hip.rotation.set(pitch, yaw, 0);
       l.knee.rotation.x = bend;
     }
