@@ -31,6 +31,8 @@ jobs:
           for extra in sorted(pathlib.Path('.repair').glob('adjustment-*.patch')):
               subprocess.run(['git', 'apply', '--index', '-'], input=extra.read_bytes(), check=True)
           PY
+          # Workflow edits are handled through the authorized connector, not this token.
+          git restore --source=HEAD --staged --worktree .github
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -44,6 +46,13 @@ jobs:
         run: |
           npm install --no-save --package-lock=false playwright@1.55.1
           npx playwright install --with-deps chromium
+      - name: Package review workspace without credentials or Git metadata
+        run: tar -czf /tmp/rootwake-v25-workspace.tar.gz src scripts tests node_modules dist *.html *.json *.md vite.config.ts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rootwake-v25-source-workspace
+          path: /tmp/rootwake-v25-workspace.tar.gz
+          retention-days: 1
       - name: Desktop and phone browser verification
         run: node scripts/browser-lab.mjs
       - uses: actions/upload-artifact@v4
@@ -52,10 +61,9 @@ jobs:
           name: lab-v25-verification
           path: artifacts/lab-v25
           retention-days: 7
-      - name: Commit only verified source; remove temporary transport files
+      - name: Commit only verified source
         run: |
           git rm -r .repair
-          git rm --ignore-unmatch .github/workflows/repair-workspace.yml .github/workflows/verify-lab-repair.yml
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git diff --cached --check
