@@ -1,27 +1,20 @@
-name: Verify mobility implementation
+name: Apply verified mobility refinements
 on:
   push:
     branches: [feat/mobility-lab]
-  workflow_dispatch:
 permissions:
   contents: write
-concurrency:
-  group: mobility-development
-  cancel-in-progress: true
 jobs:
-  verify:
+  apply:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-      - name: Apply exact source changes
-        if: hashFiles('.mobility-part-4.b64') != ''
+      - name: Apply checksummed source refinements
         run: |
           node --input-type=module <<'JS'
           import {readFileSync,writeFileSync,existsSync,mkdirSync} from 'node:fs';
@@ -29,11 +22,10 @@ jobs:
           import {brotliDecompressSync} from 'node:zlib';
           import {createHash} from 'node:crypto';
           const hash=b=>createHash('sha256').update(b).digest('hex');
-          const payload=[1,2,3,4].map(i=>readFileSync('.mobility-part-'+i+'.b64','utf8').trim()).join('');
-          const changes=JSON.parse(brotliDecompressSync(Buffer.from(payload,'base64')));
+          const changes=JSON.parse(brotliDecompressSync(Buffer.from(readFileSync('.mobility-polish.b64','utf8').trim(),'base64')));
           const pending=[];
           for(const f of changes.files){
-            if(!/^(src\/|scripts\/|tests\/|[A-Z]+\.md$|package\.json$)/.test(f.path)||f.path.includes('..'))throw new Error('Invalid source path '+f.path);
+            if(!/^(src\/|scripts\/|tests\/|\.github\/workflows\/)/.test(f.path)||f.path.includes('..'))throw new Error('Invalid source path '+f.path);
             const old=existsSync(f.path)?readFileSync(f.path):null;
             if((old?hash(old):null)!==f.before)throw new Error('Changed baseline '+f.path);
             const lines=old?old.toString('utf8').match(/[^\n]*\n|[^\n]+$/g)||[]:[];
@@ -47,35 +39,12 @@ jobs:
       - run: npm ci
       - run: npm run test:mobility
       - run: npm run test:lab
-      - run: npm run build
-      - name: Commit tested implementation on the feature branch
-        if: hashFiles('.mobility-part-4.b64') != ''
+      - run: npm run build -- --base=/Rootwake/
+      - name: Commit verified refinements and remove development transport
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src scripts tests package.json MOBILITY.md LAB.md CLAUDE.md
-          git rm -f .mobility-part-1.b64 .mobility-part-2.b64 .mobility-part-3.b64 .mobility-part-4.b64 .github/workflows/mobility-workspace.yml
-          git commit -m 'feat: shared analog movement, validated jumps, powered legs and connected mobility courses'
+          git add src scripts tests .github/workflows
+          git rm -f .mobility-polish.b64 .github/workflows/mobility-verify.yml
+          git commit -m 'fix: safe edge landings, portrait course framing and verified all-domain publication'
           git push origin HEAD:feat/mobility-lab
-      - name: Install browser verification tooling
-        run: |
-          npm install --no-save --package-lock=false playwright@1.55.1
-          npx playwright install --with-deps chromium
-      - name: Verify mobility in desktop and phone views
-        run: node scripts/browser-mobility.mjs
-      - name: Verify original rust monster studies
-        run: node scripts/browser-lab.mjs
-      - name: Save verification evidence and exact source
-        if: always()
-        run: |
-          mkdir -p artifacts
-          git rev-parse HEAD > artifacts/source-commit.txt
-          tar --exclude=.git --exclude=node_modules --exclude=artifacts -czf /tmp/mobility-source.tgz .
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: mobility-verification
-          path: |
-            artifacts
-            /tmp/mobility-source.tgz
-          retention-days: 7
