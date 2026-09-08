@@ -5,6 +5,9 @@
 // surface as the cave, so the underworld's wiring boots it.
 
 import * as THREE from 'three';
+import { MobilityCourse } from './mobilityCourse';
+import { COURSE_PASSAGE } from './mobilityCourseLayout';
+import type { TraversalWorld } from './mobility';
 import { mulberry32 } from './colors';
 import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GROUND_Y, WALL_THICK, ROCK_COLOR, ROCK_DARK, DARKSIGHT_INTENSITY, DARKSIGHT_AMBIENT, DARKSIGHT_DECAY, DARKSIGHT_DECAY_HELM, type TableTop } from './cave';
@@ -53,6 +56,7 @@ function rockSlab(w: number, h: number, d: number, seed: number, amp = 0.12): TH
 
 export class Arena {
   readonly group = new THREE.Group();
+  readonly mobility: MobilityCourse;
   readonly boulders: OreBoulder[] = [];
   readonly tables: TableTop[] = [];
   readonly fog: THREE.FogExp2;
@@ -64,6 +68,7 @@ export class Arena {
   readonly dynamic: CircleCollider[] = [];
 
   constructor(scene: THREE.Scene, seed: number) {
+    this.mobility = new MobilityCourse(scene);
     scene.background = new THREE.Color(0x000000);
     this.fog = new THREE.FogExp2(0x000000, 0.12);
     scene.fog = this.fog;
@@ -134,7 +139,11 @@ export class Arena {
     slab(aw, 0.25, ad, ax, PIT_FLOOR + ANNEX.roof + 0.125, az);
     const wallH = ANNEX.roof - STUDY_RISE;
     for (const z of [ANNEX.z0 - 0.12, ANNEX.z1 + 0.12]) slab(aw, wallH, 0.24, ax, PIT_FLOOR + STUDY_RISE + wallH / 2, z);
-    slab(0.24, wallH, ad, ANNEX.x1 + 0.12, PIT_FLOOR + STUDY_RISE + wallH / 2, az);
+    // A second real doorway links the study aisle to the movement hangar.
+    for (const [z0, z1] of [[ANNEX.z0, COURSE_PASSAGE.z0], [COURSE_PASSAGE.z1, ANNEX.z1]]) {
+      slab(0.24, wallH, z1 - z0, ANNEX.x1 + 0.12, PIT_FLOOR + STUDY_RISE + wallH / 2, (z0 + z1) / 2);
+    }
+    slab(0.24, PIT_FLOOR + ANNEX.roof - COURSE_PASSAGE.roof, COURSE_PASSAGE.z1 - COURSE_PASSAGE.z0, ANNEX.x1 + 0.12, (PIT_FLOOR + ANNEX.roof + COURSE_PASSAGE.roof) / 2, (COURSE_PASSAGE.z0 + COURSE_PASSAGE.z1) / 2);
     // West wall of the annex, split at the connector instead of sealing its entrance.
     for (const [z0, z1] of [[ANNEX.z0, CONNECTOR.z0], [CONNECTOR.z1, ANNEX.z1]]) {
       slab(0.24, wallH, z1 - z0, ANNEX.x0 - 0.12, PIT_FLOOR + STUDY_RISE + wallH / 2, (z0 + z1) / 2);
@@ -152,11 +161,25 @@ export class Arena {
   }
 
   /** The original viewing platform, connector and annex aisle; display enclosures are not walkable. */
-  isWalkable = (p: THREE.Vector3): boolean => (Math.abs(p.x) < ARENA_HALF - 0.45 && p.z > PLATFORM_Z0 + 0.35 && p.z < ARENA_HALF - 0.45) || annexWalkable(p.x, p.z);
+  private legacyWalkable = (p: THREE.Vector3): boolean => (Math.abs(p.x) < ARENA_HALF - 0.45 && p.z > PLATFORM_Z0 + 0.35 && p.z < ARENA_HALF - 0.45) || annexWalkable(p.x, p.z);
+  isWalkable = (p: THREE.Vector3): boolean => this.legacyWalkable(p) || this.mobility.geometry.surfacesAt(p.x, p.z).length > 0;
+  readonly traversal: TraversalWorld = {
+    surfacesAt: (x, z) => {
+      const course = this.mobility.geometry.surfacesAt(x, z);
+      if (course.length) return course;
+      return this.legacyWalkable(new THREE.Vector3(x, GROUND_Y, z)) ? [GROUND_Y + this.groundHeight(x, z)] : [];
+    },
+    canOccupy: (p, radius, height) => {
+      if (this.mobility.geometry.canOccupy(p, radius, height)) return true;
+      return this.legacyWalkable(p) && p.y >= GROUND_Y + this.groundHeight(p.x, p.z) - 0.025 && this.cameraClear(new THREE.Vector3(p.x, p.y + height, p.z));
+    },
+    anchors: () => this.mobility.geometry.anchors(),
+  };
   /** The creature's ground: the pit floor. */
   pitWalkable = (p: THREE.Vector3): boolean => Math.abs(p.x) < ARENA_HALF - 0.6 && p.z > -ARENA_HALF + 0.6 && p.z < PLATFORM_Z0 - 0.6;
-  groundHeight = (x: number, z: number): number => x >= ANNEX.x0 && z < STUDY_FRONT ? STUDY_RISE : z > PLATFORM_Z0 ? PLATFORM_RISE : 0;
+  groundHeight = (x: number, z: number): number => this.mobility.geometry.contains(x, z) ? this.mobility.geometry.groundHeight(x, z) - GROUND_Y : x >= ANNEX.x0 && z < STUDY_FRONT ? STUDY_RISE : z > PLATFORM_Z0 ? PLATFORM_RISE : 0;
   cameraClear = (p: THREE.Vector3): boolean => {
+    if (this.mobility.geometry.canOccupy(p, 0.08, 0.1)) return true;
     const original = Math.abs(p.x) < ARENA_HALF - 0.25 && Math.abs(p.z) < ARENA_HALF - 0.25;
     const passage = inside(p.x, p.z, CONNECTOR, 0.1);
     const annex = inside(p.x, p.z, ANNEX, 0.15);
@@ -176,12 +199,13 @@ export class Arena {
   }
 
   setSight(cameraPosition: THREE.Vector3, sight: number, boost = 1): void {
-    this.fog.density = 1.5 / sight;
+    const inCourse = cameraPosition.x > 57;
+    this.fog.density = inCourse ? 0.015 : 1.5 / sight;
     this.darksight.position.copy(cameraPosition);
     this.darksight.distance = sight * 1.3;
     const k = Math.min(1, sight / 16);
     this.darksight.intensity = DARKSIGHT_INTENSITY * (0.55 + 0.45 * k) * boost;
     this.darksight.decay = boost > 1 ? DARKSIGHT_DECAY_HELM : DARKSIGHT_DECAY;
-    this.hemi.intensity = DARKSIGHT_AMBIENT * (0.5 + 0.5 * k) * boost;
+    this.hemi.intensity = inCourse ? 1.6 : DARKSIGHT_AMBIENT * (0.5 + 0.5 * k) * boost;
   }
 }

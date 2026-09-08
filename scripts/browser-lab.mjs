@@ -9,7 +9,7 @@ await mkdir(out, {recursive:true});
 const root = resolve('dist');
 const server = createServer(async (req,res) => {
   try {
-    const pathname = new URL(req.url,'http://localhost').pathname.replace(/^\/Rootwake\/lab\//, '/');
+    const pathname = new URL(req.url,'http://localhost').pathname.replace(/^\/Rootwake\/(?:lab\/)?/, '/');
     if (pathname === '/favicon.ico') { res.statusCode=204; res.end(); return; }
     const path = resolve(root, '.' + pathname);
     if (!path.startsWith(root + '/')) throw new Error('Invalid path');

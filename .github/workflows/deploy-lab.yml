@@ -1,107 +1,58 @@
-name: Deploy lab preview
-
+name: Deploy verified Rootwake and lab
 on:
   push:
     branches: [lab]
   workflow_dispatch:
-
 permissions:
-  contents: write
-
+  contents: read
 concurrency:
   group: rootwake-lab-pages
-  cancel-in-progress: true
-
+  cancel-in-progress: false
 jobs:
-  deploy:
+  verify:
+    uses: ./.github/workflows/verify-mobility.yml
+  publish:
+    needs: verify
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pages: write
     steps:
-      - name: Check out the exact source revision
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
           fetch-depth: 0
-
-      - name: Set up Node
-        uses: actions/setup-node@v4
+      - uses: actions/download-artifact@v4
         with:
-          node-version: 22
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Movement and layout regression tests
-        run: npm run test:lab
-
-      - name: Type-check and build lab
-        run: npm run build -- --base=/Rootwake/lab/
-
-      - name: Install browser verification tooling
-        run: |
-          npm install --no-save --package-lock=false playwright@1.55.1
-          npx playwright install --with-deps chromium
-
-      - name: Verify desktop and phone inspection views
-        run: node scripts/browser-lab.mjs
-
-      - name: Save browser verification evidence
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: lab-browser-verification
-          path: artifacts/lab-v25
-          retention-days: 7
-
-      - name: Publish only /lab to gh-pages
+          name: mobility-build
+          path: dist
+      - name: Publish the exact browser-tested bundle for all three domains
         run: |
           set -euo pipefail
+          test "$(node -p "require('./dist/revision.json').sourceCommit")" = "$GITHUB_SHA"
           git fetch origin gh-pages
           tmp=$(mktemp -d)
           git worktree add "$tmp" origin/gh-pages
-          rm -rf "$tmp/lab"
-          mkdir -p "$tmp/lab"
-          cp -r dist/assets "$tmp/lab/assets"
+          mkdir -p "$tmp/assets" "$tmp/lab"
+          # Keep old hashed assets briefly usable by already-open phone tabs.
+          cp -r dist/assets/. "$tmp/assets/"
+          cp dist/index.html "$tmp/index.html"
+          cp dist/under.html "$tmp/under.html"
+          cp dist/lab.html "$tmp/lab.html"
           cp dist/lab.html "$tmp/lab/index.html"
-          printf '{"sourceCommit":"%s","version":"2.5"}\n' "$GITHUB_SHA" > "$tmp/lab/revision.json"
+          cp dist/revision.json "$tmp/revision.json"
+          cp dist/revision.json "$tmp/lab/revision.json"
           touch "$tmp/.nojekyll"
           cd "$tmp"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git add -A
-          if git diff --cached --quiet; then
-            exit 0
-          fi
-          git commit -m "Deploy lab v2.5: ${GITHUB_SHA::7}"
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "Deploy verified mobility v3: ${GITHUB_SHA::7}"
           git push origin HEAD:gh-pages
-
-      - name: Verify GitHub Pages serves this revision
-        run: |
-          node --input-type=module <<'JS'
-          import { readFile } from 'node:fs/promises';
-          const base = 'https://noahschmuckler.github.io/Rootwake/lab/';
-          const expected = process.env.GITHUB_SHA;
-          const html = await readFile('dist/lab.html', 'utf8');
-          let lastError;
-          for (let attempt = 0; attempt < 24; attempt++) {
-            try {
-              const revisionResponse = await fetch(base + 'revision.json?source=' + expected, { cache: 'no-store', signal: AbortSignal.timeout(10000) });
-              if (!revisionResponse.ok) throw new Error('Revision HTTP ' + revisionResponse.status);
-              const revision = await revisionResponse.json();
-              if (revision.sourceCommit !== expected) throw new Error('Pages still serves ' + revision.sourceCommit);
-              const pageResponse = await fetch(base + '?source=' + expected, { cache: 'no-store', signal: AbortSignal.timeout(10000) });
-              if (!pageResponse.ok || await pageResponse.text() !== html) throw new Error('Published HTML differs from tested build');
-              for (const match of html.matchAll(/(?:src|href)="([^\"]+\.js)"/g)) {
-                const response = await fetch(new URL(match[1], base), { signal: AbortSignal.timeout(10000) });
-                if (!response.ok) throw new Error('Asset HTTP ' + response.status + ': ' + match[1]);
-              }
-              console.log('Verified public lab revision, tested HTML, and JavaScript assets: ' + expected);
-              process.exit(0);
-            } catch (error) {
-              lastError = error;
-              await new Promise(resolve => setTimeout(resolve, 5000));
-            }
-          }
-          throw lastError;
-          JS
+      - name: Request the configured Pages build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/$GITHUB_REPOSITORY/pages/builds"
+      - name: Verify public pages, revision, and assets
+        run: node scripts/verify-pages.mjs

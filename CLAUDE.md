@@ -280,3 +280,14 @@ at the real aspect, not by counts.
   comments/commit messages rather than silently picking an answer — this
   project has several open questions on record (see DESIGN.md) that are
   deliberately left for whoever builds the feature to decide in context.
+
+## Player mobility v3
+
+Read `MOBILITY.md` for the current controls and terrain contract. The old
+waypoint-only description above is historical. `mobility.ts` and
+`movementGesture.ts` are the shared, testable core; all entries use
+`mobilityControls.ts`. Actual feet height is `player.feet()`, while
+`player.position.y` retains the legacy domain datum. Run both
+`npm run test:mobility` and `npm run test:lab` plus `npm run build`.
+Do not replace shared behavior with course-only movement or bypass the
+forge/equipment lifecycle when extending the powered legs.

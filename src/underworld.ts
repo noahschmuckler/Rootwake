@@ -11,6 +11,8 @@
 // This file is the underworld's main.ts: wiring only.
 
 import * as THREE from 'three';
+import { installMobilityControls } from './mobilityControls';
+import type { TraversalWorld } from './mobility';
 import { CameraRig, type CameraMode, type CameraPose } from './cameraLock';
 import { Player, THIRD_ZOOM_MIN, THIRD_ZOOM_MAX } from './player';
 import type { Interactable } from './interactable';
@@ -26,13 +28,14 @@ import { GROUND_Y, CELL, BOULDER_RADIUS, type TableTop } from './cave';
 import type { OreBoulder } from './ore';
 import type { CircleCollider } from './player';
 import { mulberry32 } from './colors';
-import { Energy, DRAIN_HEAT, DRAIN_HOP, CHEST_CHARGE, HELM_CHARGE, HELM_SIGHT } from './energy';
+import { Energy, DRAIN_HEAT, DRAIN_HOP, CHEST_CHARGE, HELM_CHARGE, LEGS_CHARGE, HELM_SIGHT } from './energy';
 import { EYE_HEIGHT } from './player';
 import { Greblins } from './greblins';
 
 /** What the underworld's wiring needs from a place: the cave (`Cave`) or, on the lab branch, an arena. */
 export interface World {
   readonly group: THREE.Group;
+  readonly traversal?: TraversalWorld;
   readonly boulders: OreBoulder[];
   readonly tables: TableTop[];
   readonly fog: THREE.FogExp2;
@@ -67,6 +70,7 @@ export interface PopulateContext {
   seed: number;
   player: Player;
   camera: THREE.PerspectiveCamera;
+  trialLegs: (on: boolean) => boolean;
 }
 
 export function bootUnder(opts: BootOptions): void {
@@ -99,6 +103,9 @@ const player = new Player(renderer.domElement, scene, camera);
 player.position.set(opts.spawn?.x ?? 0, GROUND_Y, opts.spawn?.z ?? 0);
 player.yaw = opts.spawn?.yaw ?? 0.6;
 scene.add(player.avatar);
+player.standHeightAt = cave.groundHeight;
+player.cameraClear = cave.cameraClear;
+player.traversalWorld = cave.traversal ?? null;
 // He is a metallurgist: darker cloth, a broader frame.
 player.avatar.scale.set(1.15, 1, 1.15);
 
@@ -107,7 +114,7 @@ const hands = new Hands(camera, player, objects, scene, [...document.querySelect
 const energy = new Energy();
 // U3: the miners who left the food, cowering at the top of the stairs.
 const greblins = opts.greblins ? new Greblins(scene, seed) : null;
-const extras: Updatable[] = opts.populate ? opts.populate({ scene, world: cave, seed, player, camera }) : [];
+const extras: Updatable[] = opts.populate ? opts.populate({ scene, world: cave, seed, player, camera, trialLegs }) : [];
 let greblinsSeen = false;
 const interactables: Interactable[] = [...cave.boulders];
 
@@ -211,20 +218,7 @@ viewButton.addEventListener('click', () => {
   viewButton.classList.toggle('active', player.view === 'third');
   updateHud();
 });
-walkButton.addEventListener('pointerdown', (e) => {
-  e.stopPropagation();
-  e.preventDefault();
-  walkButton.setPointerCapture(e.pointerId);
-  walkButton.classList.add('active');
-  player.startMove(e);
-});
-walkButton.addEventListener('pointermove', (e) => player.pointerMove(e));
-for (const ev of ['pointerup', 'pointercancel'] as const) {
-  walkButton.addEventListener(ev, (e) => {
-    walkButton.classList.remove('active');
-    player.pointerUp(e);
-  });
-}
+installMobilityControls(player);
 
 // ---- Input -----------------------------------------------------------------------
 const raycaster = new THREE.Raycaster();
@@ -316,7 +310,7 @@ player.onLongPress = (x, y) => {
   }
   if (obj.type.wear) {
     const why = equipBlocker(obj);
-    rows.push({ label: `Equip ${obj.type.label}`, small: why ?? (obj.type.wear === 'chest' ? `takes ${CHEST_CHARGE} of your energy into its core` : `takes ${HELM_CHARGE} of your energy · darksight held`), disabled: !!why, onPick: () => equip(obj) });
+    rows.push({ label: `Equip ${obj.type.label}`, small: why ?? (obj.type.wear === 'chest' ? `takes ${CHEST_CHARGE} of your energy into its core` : obj.type.wear === 'legs' ? `takes ${LEGS_CHARGE} of your energy / run, jump, hover` : `takes ${HELM_CHARGE} of your energy · darksight held`), disabled: !!why, onPick: () => equip(obj) });
   }
   if (rows.length === 0) {
     hint.textContent = `Nothing to make from ${obj.type.label} yet.`;
@@ -367,13 +361,15 @@ function startForge(anchor: WorldObject, plan: ForgePlan): void {
 }
 
 // ---- U2: the suit — worn, not carried; the chest is the attachment point and powers the rest ----
-const worn: { chest: boolean; helm: boolean } = { chest: false, helm: false };
-const gearMeshes: { chest: THREE.Object3D | null; helm: THREE.Object3D | null } = { chest: null, helm: null };
+const worn = { chest: false, helm: false, legs: false };
+type SuitSlot = keyof typeof worn;
+const gearCharge = (which: SuitSlot): number => which === 'chest' ? CHEST_CHARGE : which === 'helm' ? HELM_CHARGE : LEGS_CHARGE;
+const gearMeshes: Record<SuitSlot, THREE.Object3D | null> = { chest: null, helm: null, legs: null };
 function equipBlocker(obj: WorldObject): string | null {
   const which = obj.type.wear!;
   if (worn[which]) return `already wearing a ${obj.type.label}`;
   if (which !== 'chest' && !worn.chest) return 'needs a chestpiece to attach to';
-  const charge = which === 'chest' ? CHEST_CHARGE : HELM_CHARGE;
+  const charge = gearCharge(which);
   if (energy.value - charge < 0.17) return 'not enough energy in you to power it';
   return null;
 }
@@ -385,35 +381,36 @@ function equip(obj: WorldObject): void {
     return;
   }
   const which = obj.type.wear!;
-  if (!energy.impart(which === 'chest' ? CHEST_CHARGE : HELM_CHARGE)) return;
+  if (!energy.impart(gearCharge(which))) return;
   objects.remove(obj);
   worn[which] = true;
   dress();
-  hint.textContent = which === 'chest' ? 'The core takes your energy and holds it. The rest of the suit can hang from this.' : 'The helm wakes. The dark opens out — and stays open.';
+  hint.textContent = which === 'chest' ? 'The core takes your energy and holds it. The rest of the suit can hang from this.' : which === 'legs' ? 'The legs engage. Run, jump higher, or double tap and hold the stick to hover.' : 'The helm wakes. The dark opens out — and stays open.';
   tooFarUntil = animClock + 3200;
   updateHud();
 }
-function takeOff(which: 'chest' | 'helm'): void {
+function takeOff(which: SuitSlot): void {
   if (!worn[which]) return;
+  if (which === 'chest' && worn.legs) takeOff('legs');
   if (which === 'chest' && worn.helm) takeOff('helm'); // nothing hangs from nothing
   worn[which] = false;
-  energy.giveBack(which === 'chest' ? CHEST_CHARGE : HELM_CHARGE);
+  energy.giveBack(gearCharge(which));
   const fwd = player.forward();
   const x = player.position.x + fwd.x * 0.6 + (which === 'helm' ? 0.25 : 0);
   const z = player.position.z + fwd.z * 0.6;
-  objects.spawn(which === 'chest' ? 'chestpiece' : 'helm', x, GROUND_Y + cave.groundHeight(x, z), z, player.yaw);
+  objects.spawn(which === 'chest' ? 'chestpiece' : which === 'helm' ? 'helm' : 'leg_armor', x, GROUND_Y + cave.groundHeight(x, z), z, player.yaw);
   dress();
-  hint.textContent = which === 'chest' ? 'The core goes dark; its energy flows back into you.' : 'The dark closes back in to what your own eyes can do.';
+  hint.textContent = which === 'chest' ? 'The core goes dark; its energy flows back into you.' : which === 'legs' ? 'The thrusters go quiet. Your normal stride returns.' : 'The dark closes back in to what your own eyes can do.';
   tooFarUntil = animClock + 2600;
   updateHud();
 }
 /** The avatar wears what he wears; energy sustains what the pieces sustain. */
 function dress(): void {
-  for (const which of ['chest', 'helm'] as const) {
+  for (const which of ['chest', 'helm', 'legs'] as const) {
     const has = worn[which];
     if (has && !gearMeshes[which]) {
-      const look = buildLook(which === 'chest' ? 'chestpiece' : 'helm');
-      look.position.y = which === 'chest' ? 0.3 : EYE_HEIGHT + 0.005;
+      const look = buildLook(which === 'chest' ? 'chestpiece' : which === 'helm' ? 'helm' : 'leg_armor');
+      look.position.y = which === 'chest' ? 0.3 : which === 'helm' ? EYE_HEIGHT + 0.005 : 0;
       player.avatar.add(look);
       gearMeshes[which] = look;
     } else if (!has && gearMeshes[which]) {
@@ -423,13 +420,15 @@ function dress(): void {
   }
   energy.sightFloor = worn.helm ? HELM_SIGHT : 0;
   energy.holdVision = worn.helm;
+  player.poweredLegs = worn.legs;
 }
 gearButton.addEventListener('click', () => {
   if (cameraRig.mode !== 'free') return;
   const r = gearButton.getBoundingClientRect();
   const rows: { label: string; small?: string; onPick: () => void }[] = [];
+  if (worn.legs) rows.push({ label: 'Take off the powered legs', small: 'thrusters off; normal running and jumping', onPick: () => takeOff('legs') });
   if (worn.helm) rows.push({ label: 'Take off the helm', small: 'darksight back to your own', onPick: () => takeOff('helm') });
-  if (worn.chest) rows.push({ label: 'Take off the chestpiece', small: worn.helm ? 'and the helm with it' : 'its energy flows back', onPick: () => takeOff('chest') });
+  if (worn.chest) rows.push({ label: 'Take off the chestpiece', small: worn.helm || worn.legs ? 'and all attached equipment with it' : 'its energy flows back', onPick: () => takeOff('chest') });
   showMenu(r.left - 120, r.top - 20, rows);
 });
 
@@ -438,6 +437,17 @@ if (opts.suit) {
   worn.chest = true;
   worn.helm = true;
   dress();
+}
+
+function trialLegs(on: boolean): boolean {
+  if (!opts.suit || cameraRig.mode !== 'free') return false;
+  if (!on) { takeOff('legs'); return !worn.legs; }
+  if (worn.legs) return true;
+  energy.value = 1; // The labelled lab rack recharges for repeatable comparisons.
+  const at = player.feet();
+  const item = objects.spawn('leg_armor', at.x, at.y, at.z, player.yaw);
+  equip(item);
+  return worn.legs;
 }
 
 function onInteractableDone(done: Interactable): void {
@@ -471,7 +481,7 @@ boardView.onRun = (run, origin) => {
 
 // ---- Modes / HUD ------------------------------------------------------------------
 const HINTS: Record<CameraMode, string> = {
-  free: opts.freeHint ?? 'Hold walk to move, drag to look. Tap the shining ore in a boulder to heat it. Long-press an ingot for what it can become.',
+  free: opts.freeHint ?? 'Drag the movement stick to walk or run; hold its centre for jump targets. Drag the world to look. Tap the shining ore in a boulder to heat it. Long-press an ingot for what it can become.',
   locking: '',
   locked: '',
   unlocking: '',
@@ -505,7 +515,7 @@ function updateHud(): void {
   if (slowmo > 1) parts.push(`slowmo ×${slowmo}`);
   if (debug) parts.push(`energy ${energy.value.toFixed(2)}`);
   if (energy.nourished(animClock)) parts.push('nourished');
-  const wearing = [worn.chest ? 'chestpiece' : '', worn.helm ? 'helm' : ''].filter(Boolean);
+  const wearing = [worn.chest ? 'chestpiece' : '', worn.helm ? 'helm' : '', worn.legs ? 'powered legs' : ''].filter(Boolean);
   if (wearing.length) parts.push(`wearing ${wearing.join(' + ')}`);
   if (locked && cameraRig.mode === 'locked' && locked.status === 'growing') parts.push(locked.poolText());
   hud.textContent = parts.join(' · ');
@@ -516,7 +526,7 @@ function updateHud(): void {
   zoomOutButton.hidden = !zoomable;
   walkButton.hidden = cameraRig.mode !== 'free';
   viewButton.hidden = cameraRig.mode !== 'free';
-  gearButton.hidden = cameraRig.mode !== 'free' || !(worn.chest || worn.helm);
+  gearButton.hidden = cameraRig.mode !== 'free' || !(worn.chest || worn.helm || worn.legs);
   tools.classList.toggle('locked', lockedNow);
 }
 
@@ -620,7 +630,7 @@ function animate(now: number): void {
   if (locked && locked.status !== 'growing') boardView.hide();
   boardView.update(animClock);
   projectiles.update(animClock);
-  if (animClock > tooFarUntil && cameraRig.mode === 'free' && !hint.textContent?.startsWith('Hold walk')) hint.textContent = hands.notice ?? HINTS.free;
+  if (animClock > tooFarUntil && cameraRig.mode === 'free' && !hint.textContent?.startsWith('Drag MOVE')) hint.textContent = hands.notice ?? HINTS.free;
   if (hands.notice && animClock > tooFarUntil) {
     hint.textContent = hands.notice;
     hands.notice = null;

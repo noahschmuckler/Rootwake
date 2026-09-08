@@ -134,7 +134,7 @@ test('studies are outside the original chamber; spawn and continuous connecting 
     assert.ok(arena.cameraClear(new THREE.Vector3(bay.x, GROUND_Y + 3.2, 7.2)));
   }
   assert.equal(arena.isWalkable(new THREE.Vector3(0, GROUND_Y, 0)), false);
-  assert.equal(arena.cameraClear(new THREE.Vector3(ANNEX.x1 + 1, GROUND_Y + 3.2, 7.2)), false);
+  assert.equal(arena.cameraClear(new THREE.Vector3(ANNEX.x1 + 1, GROUND_Y + 3.2, 7.2)), true);
   assert.equal(arena.cameraClear(new THREE.Vector3(STUDY_BAYS[0].x + STUDY_WIDTH / 2, GROUND_Y + 3.2, -1)), false);
 });
 

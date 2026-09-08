@@ -1,0 +1,68 @@
+name: Mobility verification
+on:
+  push:
+    branches: [feat/mobility-lab]
+  pull_request:
+    branches: [lab, main]
+  workflow_call:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:mobility
+      - run: npm run test:lab
+      - run: npm run build -- --base=/Rootwake/
+      - name: Identify the tested source
+        run: printf '{"sourceCommit":"%s","version":"3.0"}\n' "$GITHUB_SHA" > dist/revision.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mobility-build
+          path: dist
+          retention-days: 7
+  browser:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        view: [desktop, phone, landscape, studies]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/download-artifact@v4
+        with:
+          name: mobility-build
+          path: dist
+      - run: npm ci
+      - name: Install browser tooling
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.1
+          npx playwright install --with-deps chromium
+      - name: Verify movement and touch controls
+        if: matrix.view != 'studies'
+        env:
+          MOBILITY_VIEW: ${{ matrix.view }}
+        run: node scripts/browser-mobility.mjs
+      - name: Verify original rust monster studies
+        if: matrix.view == 'studies'
+        run: node scripts/browser-lab.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mobility-browser-${{ matrix.view }}
+          path: artifacts
+          retention-days: 7
