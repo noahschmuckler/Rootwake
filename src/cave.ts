@@ -41,12 +41,23 @@ export const HALL_LENGTH = 26;
 export const HALL_HALF = 1.1; // interior half-width
 export const HALL_RISE = 5;
 export const ROOM_B_HALF = 5;
+/** U4: the dining chamber is tall, and high in its far (+x) wall is a tunnel mouth — big enough for
+ *  him, too high for him (until he can climb or jump). Only the greblins can get to it. */
+export const ROOM_B_ROOF = 7.2;
+export const TUNNEL_Z = 0;
+export const TUNNEL_HALF = 1.1;
+export const TUNNEL_BOTTOM = 4.4; // above the chamber floor
+export const TUNNEL_HEIGHT = 2.2;
+export const TUNNEL_LENGTH = 7;
 // -------------------------------------------------------------------------------
 
 export const HALL_X0 = HALF;
 export const HALL_X1 = HALF + HALL_LENGTH;
 export const ROOM_B_CX = HALL_X1 + ROOM_B_HALF;
 export const ROOM_B_FLOOR = GROUND_Y + HALL_RISE;
+/** The tunnel mouth: the +x wall's inner face, and its floor height. */
+export const TUNNEL_X = ROOM_B_CX + ROOM_B_HALF;
+export const TUNNEL_FLOOR = ROOM_B_FLOOR + TUNNEL_BOTTOM;
 
 const wood = new THREE.MeshStandardMaterial({ color: 0x6a4a30, roughness: 0.95, flatShading: true });
 const woodDark = new THREE.MeshStandardMaterial({ color: 0x4a3320, roughness: 0.95, flatShading: true });
@@ -99,7 +110,7 @@ export class Cave {
     scene.add(this.darksight);
 
     // The first chamber, with the hallway's opening in its +x wall.
-    this.room(0, 0, HALF, GROUND_Y, seed, { side: 1 });
+    this.room(0, 0, HALF, GROUND_Y, ROOF_HEIGHT, seed, { side: 1 });
     // The 3x3 block of ore-bearing boulders around the centre cell.
     let k = 0;
     for (let ix = -1; ix <= 1; ix++) {
@@ -113,13 +124,15 @@ export class Cave {
     }
     this.hallway(seed);
     // The second chamber, entered from its −x wall.
-    this.room(ROOM_B_CX, 0, ROOM_B_HALF, ROOM_B_FLOOR, seed ^ 0x3c3, { side: -1 });
+    this.room(ROOM_B_CX, 0, ROOM_B_HALF, ROOM_B_FLOOR, ROOM_B_ROOF, seed ^ 0x3c3, { side: -1 }, { side: 1 });
+    this.tunnel(seed);
     this.furnish(seed);
     scene.add(this.group);
   }
 
-  /** A square room: floor, roof, four bare walls; one wall may be split by a doorway of the hall's width. */
-  private room(cx: number, cz: number, half: number, floorY: number, seed: number, opening: { side: 1 | -1 }): void {
+  /** A square room: floor, roof, four bare walls; one wall may be split by a doorway of the hall's width,
+   *  and one by the high tunnel mouth (U4). */
+  private room(cx: number, cz: number, half: number, floorY: number, roofHeight: number, seed: number, opening: { side: 1 | -1 }, high?: { side: 1 | -1 }): void {
     const span = half * 2 + WALL_THICK * 2;
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(span, span), new THREE.MeshStandardMaterial({ color: ROCK_DARK, roughness: 1, flatShading: true }));
     floor.rotation.x = -Math.PI / 2;
@@ -127,13 +140,13 @@ export class Cave {
     floor.userData.bareRock = true;
     this.group.add(floor);
     const roof = rockSlab(span, 0.5, span, seed ^ 0x51, 0.35);
-    roof.position.set(cx, floorY + ROOF_HEIGHT + 0.25, cz);
+    roof.position.set(cx, floorY + roofHeight + 0.25, cz);
     roof.userData.bareRock = true;
     this.group.add(roof);
-    const wallY = floorY + ROOF_HEIGHT / 2;
-    const place = (len: number, x: number, z: number, ry: number, s: number): void => {
-      const wall = rockSlab(len, ROOF_HEIGHT + 0.5, WALL_THICK, s, 0.2);
-      wall.position.set(x, wallY, z);
+    // A wall piece: `len` along the wall, full height unless `y0..y1` (above the floor) is given.
+    const place = (len: number, x: number, z: number, ry: number, s: number, y0 = -0.5, y1 = roofHeight + 0.0): void => {
+      const wall = rockSlab(len, y1 - y0, WALL_THICK, s, 0.2);
+      wall.position.set(x, floorY + (y0 + y1) / 2, z);
       wall.rotation.y = ry;
       wall.userData.bareRock = true;
       this.group.add(wall);
@@ -142,6 +155,15 @@ export class Cave {
     place(span, cx, cz - half - WALL_THICK / 2, 0, seed ^ 0x78);
     for (const side of [1, -1] as const) {
       const x = cx + side * (half + WALL_THICK / 2);
+      if (high && side === high.side) {
+        // The tunnel mouth: two full-height pieces either side, a piece below it and a piece above.
+        const segLen = half + WALL_THICK - (TUNNEL_HALF + WALL_THICK);
+        for (const sz of [1, -1]) place(segLen, x, cz + sz * (TUNNEL_HALF + WALL_THICK + segLen / 2), Math.PI / 2, seed ^ (0x8b + side + sz));
+        const mouth = (TUNNEL_HALF + WALL_THICK) * 2;
+        place(mouth, x, cz + TUNNEL_Z, Math.PI / 2, seed ^ 0x8e, -0.5, TUNNEL_BOTTOM);
+        place(mouth, x, cz + TUNNEL_Z, Math.PI / 2, seed ^ 0x8f, TUNNEL_BOTTOM + TUNNEL_HEIGHT, roofHeight);
+        continue;
+      }
       if (side !== opening.side) {
         place(span, x, cz, Math.PI / 2, seed ^ (0x79 + side));
         continue;
@@ -173,6 +195,24 @@ export class Cave {
     slab(len, 0.5, width, cx, cy - 0.25, 0, seed ^ 0x101, 0.1);
     slab(len, 0.5, width, cx, cy + ROOF_HEIGHT + 0.25, 0, seed ^ 0x102, 0.3);
     for (const sz of [1, -1]) slab(len, ROOF_HEIGHT + 0.5, WALL_THICK, cx, cy + ROOF_HEIGHT / 2, sz * (HALL_HALF + WALL_THICK / 2), seed ^ (0x110 + sz), 0.2);
+  }
+
+  /** U4: the high tunnel out of the dining chamber's +x wall — floor, roof, two walls, dead straight into the dark. */
+  private tunnel(seed: number): void {
+    const len = TUNNEL_LENGTH + WALL_THICK * 2;
+    const cx = TUNNEL_X + TUNNEL_LENGTH / 2;
+    const width = TUNNEL_HALF * 2 + WALL_THICK * 2;
+    const slab = (w: number, h: number, d: number, x: number, y: number, z: number, s: number, amp: number): void => {
+      const m = rockSlab(w, h, d, s, amp);
+      m.position.set(x, y, z);
+      m.userData.bareRock = true;
+      this.group.add(m);
+    };
+    slab(len, 0.5, width, cx, TUNNEL_FLOOR - 0.25, TUNNEL_Z, seed ^ 0x201, 0.1);
+    slab(len, 0.5, width, cx, TUNNEL_FLOOR + TUNNEL_HEIGHT + 0.25, TUNNEL_Z, seed ^ 0x202, 0.3);
+    for (const sz of [1, -1]) slab(len, TUNNEL_HEIGHT + 0.5, WALL_THICK, cx, TUNNEL_FLOOR + TUNNEL_HEIGHT / 2, TUNNEL_Z + sz * (TUNNEL_HALF + WALL_THICK / 2), seed ^ (0x210 + sz), 0.2);
+    // Its far end is sealed for now: they run out of sight, not out of the world.
+    slab(WALL_THICK, TUNNEL_HEIGHT + 0.5, width, TUNNEL_X + TUNNEL_LENGTH + WALL_THICK / 2, TUNNEL_FLOOR + TUNNEL_HEIGHT / 2, TUNNEL_Z, seed ^ 0x220, 0.2);
   }
 
   /** Crude tables and chairs in the second chamber, and where their tops are for the food.
@@ -247,8 +287,8 @@ export class Cave {
   /** Where the third-person camera may be: inside the rooms' or the hall's air, not in the rock. */
   cameraClear = (p: THREE.Vector3): boolean => {
     const m = 0.25;
-    const inBox = (cx: number, half: number, floorY: number): boolean => Math.abs(p.x - cx) < half - m && Math.abs(p.z) < half - m && p.y > floorY + 0.1 && p.y < floorY + ROOF_HEIGHT - m;
-    if (inBox(0, HALF, GROUND_Y) || inBox(ROOM_B_CX, ROOM_B_HALF, ROOM_B_FLOOR)) return true;
+    const inBox = (cx: number, half: number, floorY: number, roof: number): boolean => Math.abs(p.x - cx) < half - m && Math.abs(p.z) < half - m && p.y > floorY + 0.1 && p.y < floorY + roof - m;
+    if (inBox(0, HALF, GROUND_Y, ROOF_HEIGHT) || inBox(ROOM_B_CX, ROOM_B_HALF, ROOM_B_FLOOR, ROOM_B_ROOF)) return true;
     if (p.x < HALL_X0 - 0.3 || p.x > HALL_X1 + 0.3 || Math.abs(p.z) > HALL_HALF - m) return false;
     const floorY = GROUND_Y + this.groundHeight(p.x, p.z);
     return p.y > floorY + 0.1 && p.y < floorY + ROOF_HEIGHT - m;
