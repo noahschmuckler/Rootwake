@@ -17,6 +17,7 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: write
+      pages: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -49,5 +50,9 @@ jobs:
           if git diff --cached --quiet; then exit 0; fi
           git commit -m "Deploy verified mobility v3: ${GITHUB_SHA::7}"
           git push origin HEAD:gh-pages
+      - name: Request the configured Pages build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/$GITHUB_REPOSITORY/pages/builds"
       - name: Verify public pages, revision, and assets
         run: node scripts/verify-pages.mjs
