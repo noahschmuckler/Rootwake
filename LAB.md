@@ -116,3 +116,26 @@ dismounts.
 longer; wall speed; how far the feelers overshoot the vein (they are 2.6
 long and the vein is 0.95 above the head, so the tips flail above it);
 whether it should feed from the side rather than below; the lamps.
+
+## v2.1 (2026-09-08)
+
+Designer's notes on v2: the legs angled inward and clipped through the
+thorax, so they hardly showed; and the feelers, good as they are, need a
+rest position curved back up over the body, unfurling to interact with
+the ore or explore the player.
+
+- *Legs.* A sign error: a leg's local forward turned about its hip's Y
+  by a positive angle points to the body's −x, so the right side's legs
+  swung inward. Yaw is now −side × angle; all six come out from the
+  body, on the floor and on the wall.
+- *Feelers.* Each has a `furl` 0..1. At rest (0) the base is raised
+  (REST_PITCH 0.8) and every segment curls back (REST_CURL 0.115), so the
+  chain rises from the brow, arcs over the back and ends near the tail,
+  breathing slowly. It unfurls (UNFURL_S 1.1) for tickle, scrape, regard,
+  and for the feeler being groomed; it furls back (FURL_S 2.4) for
+  everything else — skittering, climbing, freezing. The pose is a smooth
+  mix of the rest angles and the working angles by the furl.
+
+**Open:** the rest arc's height and whether the tips should cross over
+the tail; whether it should unfurl a little while skittering, feeling
+ahead.

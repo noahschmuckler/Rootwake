@@ -35,6 +35,12 @@ export const FEED_BELOW = 0.95;
 export const TICKLE_S = 7;
 export const SCRAPE_S = 4;
 export const GROOM_S = 3.2;
+/** Feelers unfurl from their rest over the body in UNFURL_S, and furl back in FURL_S. */
+export const UNFURL_S = 1.1;
+export const FURL_S = 2.4;
+/** The rest pose: the base raised, and a curl per segment that sweeps the chain back over the body. */
+export const REST_PITCH = 0.8;
+export const REST_CURL = 0.115; // 22 segments × 0.115 + the base ≈ 190°: up, over the back, tips near the tail
 /** He is noticed within this; it freezes and reaches toward him for REGARD_S. */
 export const REGARD_DISTANCE = 4.5;
 export const REGARD_S = 1.8;
@@ -120,6 +126,8 @@ interface Feeler {
   barbMats: THREE.LineBasicMaterial[];
   rust: number[];
   side: 1 | -1;
+  /** 0 = at rest, curled back up over the body; 1 = unfurled to work or to reach. */
+  furl: number;
 }
 
 /** A wall it can climb: a point on its face at the floor, its inward normal, and the along-wall direction. */
@@ -283,7 +291,7 @@ export class RustMonster {
         seg.add(next);
         par = next;
       }
-      this.feelers.push({ base, segs, barbMats, rust: new Array(FEELER_SEGMENTS).fill(0), side });
+      this.feelers.push({ base, segs, barbMats, rust: new Array(FEELER_SEGMENTS).fill(0), side, furl: 0 });
     }
     // Legs: two scraping arms at the front, mid legs, and the big leaping hind legs.
     const mk = (kind: Leg['kind'], side: 1 | -1, z: number, femur: [number, number, number], tibia: [number, number, number], yaw: number, pitch: number, bend: number, phase: number): void => {
@@ -314,10 +322,11 @@ export class RustMonster {
       }
       this.legs.push({ hip, knee, side, yaw, pitch, bend, phase, kind });
     };
+    // Yaw: local −Z turned about Y by a points to (−sin a, 0, −cos a), so the right side (+x) needs a < 0.
     for (const s of [1, -1] as const) {
-      mk('arm', s, -0.5, [0.05, 0.035, 0.42], [0.03, 0.02, 0.4], s * 0.35, 0.9, -2.5, 0);
-      mk('mid', s, -0.15, [0.045, 0.03, 0.48], [0.028, 0.016, 0.55], s * 1.45, 0.75, -1.9, s > 0 ? 0 : Math.PI);
-      mk('hind', s, 0.3, [0.07, 0.04, 0.72], [0.035, 0.02, 0.82], s * 2.0, 1.15, -2.45, s > 0 ? Math.PI : 0);
+      mk('arm', s, -0.5, [0.05, 0.035, 0.42], [0.03, 0.02, 0.4], -s * 0.4, 0.9, -2.5, 0);
+      mk('mid', s, -0.15, [0.045, 0.03, 0.48], [0.028, 0.016, 0.55], -s * 1.5, 0.75, -1.9, s > 0 ? 0 : Math.PI);
+      mk('hind', s, 0.3, [0.07, 0.04, 0.72], [0.035, 0.02, 0.82], -s * 2.05, 1.15, -2.45, s > 0 ? Math.PI : 0);
     }
     this.poseLegs(0);
   }
@@ -457,7 +466,7 @@ export class RustMonster {
     this.body.rotation.x = tw * this.twitch.z;
     this.poseLegs(t);
     this.poseHead(t, player);
-    this.poseFeelers(t);
+    this.poseFeelers(t, dt);
     this.work(nowMs, dt);
     this.updateDust(dt);
   }
@@ -604,10 +613,15 @@ export class RustMonster {
    * wall the wave runs in the wall's plane and the lifts are only away from the rock, so nothing goes
    * through it.
    */
-  private poseFeelers(t: number): void {
+  private poseFeelers(t: number, dt: number): void {
     const onWall = this.blend > 0.5;
     for (const f of this.feelers) {
       const s = f.side;
+      // At rest they lie curled back over the body; they unfurl to work the ore, to reach for him, or to be groomed.
+      const mine = this.feelers[this.groomSide] === f;
+      const wantOut = this.mode === 'tickle' || this.mode === 'scrape' || this.mode === 'regard' || (this.mode === 'groom' && mine);
+      f.furl = wantOut ? Math.min(1, f.furl + dt / UNFURL_S) : Math.max(0, f.furl - dt / FURL_S);
+      const k = f.furl * f.furl * (3 - 2 * f.furl);
       let basePitch = -0.25, baseYaw = s * 0.55, amp = 0.16, omega = 1.1, curl = 0.02, wave = 0.55;
       let lift = 0; // wall modes: how much the tips lift off the rock and lay back
       switch (this.mode) {
@@ -628,7 +642,6 @@ export class RustMonster {
           basePitch = 0.0; baseYaw = s * 0.15; amp = 0.4; omega = 6.5; wave = 0.35; lift = 0.2;
           break;
         case 'groom': {
-          const mine = this.feelers[this.groomSide] === f;
           if (mine) {
             basePitch = onWall ? 0.55 : -1.35; baseYaw = s * 0.15; amp = 0.05; omega = 3; curl = onWall ? -0.12 : 0.16; wave = 0.2;
           } else {
@@ -642,20 +655,28 @@ export class RustMonster {
         default:
           break;
       }
-      f.base.rotation.set(basePitch, baseYaw, 0);
+      // The rest pose breathes: a slow sway in the curl and a drift of the base.
+      const restPitch = REST_PITCH + Math.sin(t * 0.7 + s) * 0.06;
+      const restYaw = s * (0.32 + Math.sin(t * 0.5 + s * 2) * 0.05);
+      f.base.rotation.set(THREE.MathUtils.lerp(restPitch, basePitch, k), THREE.MathUtils.lerp(restYaw, baseYaw, k), 0);
       for (let i = 0; i < FEELER_SEGMENTS; i++) {
         const u = i / FEELER_SEGMENTS;
         const seg = f.segs[i];
         const w = Math.sqrt(u + 0.05);
         const quiver = u > 0.6 ? (u - 0.6) * 0.09 * Math.sin(t * 23 + i * 1.7 + s) : 0;
+        let ax: number, ay: number;
         if (onWall) {
           // in-plane sweep, and only-upward lifts
-          seg.rotation.y = amp * w * Math.sin(omega * t - wave * i + s * 0.3) + quiver;
-          seg.rotation.x = lift * w * (0.5 + 0.5 * Math.sin(omega * 0.8 * t - wave * i)) + curl + quiver * 0.3;
+          ay = amp * w * Math.sin(omega * t - wave * i + s * 0.3) + quiver;
+          ax = lift * w * (0.5 + 0.5 * Math.sin(omega * 0.8 * t - wave * i)) + curl + quiver * 0.3;
         } else {
-          seg.rotation.x = curl + amp * w * Math.sin(omega * t - wave * i + s * 0.3) + quiver;
-          seg.rotation.y = amp * 0.6 * w * Math.sin(omega * 0.73 * t - wave * 1.3 * i + s) + quiver * 0.7;
+          ax = curl + amp * w * Math.sin(omega * t - wave * i + s * 0.3) + quiver;
+          ay = amp * 0.6 * w * Math.sin(omega * 0.73 * t - wave * 1.3 * i + s) + quiver * 0.7;
         }
+        const rx = REST_CURL + Math.sin(t * 0.7 + i * 0.25 + s) * 0.012 + quiver * 0.25;
+        const ry = s * 0.006 + quiver * 0.2;
+        seg.rotation.x = THREE.MathUtils.lerp(rx, ax, k);
+        seg.rotation.y = THREE.MathUtils.lerp(ry, ay, k);
       }
     }
   }
