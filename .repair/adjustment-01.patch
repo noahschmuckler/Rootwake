@@ -1,0 +1,116 @@
+diff --git a/scripts/browser-lab.mjs b/scripts/browser-lab.mjs
+index b6877d5..de217c1 100644
+--- a/scripts/browser-lab.mjs
++++ b/scripts/browser-lab.mjs
+@@ -21,6 +21,11 @@ const server = createServer(async (req,res) => {
+ await new Promise(r=>server.listen(4173,'127.0.0.1',r));
+ const browser = await chromium.launch({headless:true,args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
+ const results = [];
++// Wait for rendered frames, not a guessed number of milliseconds on software WebGL.
++async function rendered(page, count = 2) {
++  const before = await page.evaluate(() => window.__rootwake.renderer.info.render.frame);
++  await page.waitForFunction(({before, count}) => window.__rootwake.renderer.info.render.frame >= before + count, {before, count}, {timeout:60000});
++}
+ try {
+   for (const [name,viewport] of [['desktop',{width:1440,height:1000}],['phone',{width:430,height:932}]]) {
+     const page = await browser.newPage({viewport,deviceScaleFactor:1,isMobile:name==='phone',hasTouch:name==='phone'});
+@@ -30,7 +35,7 @@ try {
+     await page.waitForFunction(()=>!!window.__rootwake?.extras?.[0]?.gallery);
+     for (const view of ['live','hall','gait','surface','feeding','turn','regard','idle']) {
+       await page.selectOption('#lab-view',view);
+-      await page.waitForTimeout(550);
++      await rendered(page);
+       const state=await page.evaluate(()=>{
+         const r=window.__rootwake,g=r.extras[0].gallery;
+         let invalid=0;r.scene.traverse(o=>{if(o.matrixWorld.elements.some(v=>!Number.isFinite(v))) invalid++;});
+@@ -39,17 +44,18 @@ try {
+       assert.ok(state.walkable,`Invalid viewing position: ${view}`);
+       assert.equal(state.invalid,0);
+       assert.ok(state.drawCalls>10);
++      if (!['live','hall'].includes(view)) assert.ok(state.visible.includes(view), `Selected bay is hidden: ${view}`);
+       await page.screenshot({path:`${out}/${name}-${view}.png`});
+       results.push({name,view,...state});
+     }
+     await page.click('#lab-pause');
+     const clock = await page.evaluate(()=>window.__rootwake.extras[0].gallery.clockMs);
+-    await page.waitForTimeout(200);
++    await rendered(page);
+     assert.equal(await page.evaluate(()=>window.__rootwake.extras[0].gallery.clockMs),clock);
+     await page.selectOption('#lab-view','surface');
+-    await page.waitForTimeout(100);
++    await rendered(page);
+     assert.ok(await page.evaluate(()=>window.__rootwake.extras[0].gallery.studies.find(s=>s.id==='surface').group.visible));
+-    await page.click('#lab-step'); await page.waitForTimeout(120);
++    await page.click('#lab-step'); await rendered(page);
+     assert.ok(Math.abs(await page.evaluate(()=>window.__rootwake.extras[0].gallery.clockMs)-clock-1000/60)<1e-5);
+     // Capture the actual shared rig at three successive first-corner stages, and on the ceiling/descent.
+     for (const [label,distance] of [['head-first',3.72],['thorax-follows',4.15],['abdomen-follows',4.9],['ceiling',10.0],['descending',15.5]]) {
+@@ -59,7 +65,7 @@ try {
+         s.monster.updateStudy(1+seconds*1000,s.sample(seconds),r.player.eye());
+         r.renderer.render(r.scene,r.camera);
+       },{distance});
+-      await page.waitForTimeout(75);
++      await rendered(page);
+       await page.screenshot({path:`${out}/${name}-${label}.png`});
+     }
+     assert.deepEqual(errors,[],`Browser errors: ${name}`);
+diff --git a/src/arena.ts b/src/arena.ts
+index 22c5bd9..24edb05 100644
+--- a/src/arena.ts
++++ b/src/arena.ts
+@@ -151,7 +151,7 @@ export class Arena {
+     scene.add(this.group);
+   }
+ 
+-  /** He walks the platform only. */
++  /** The original viewing platform, connector and annex aisle; display enclosures are not walkable. */
+   isWalkable = (p: THREE.Vector3): boolean => (Math.abs(p.x) < ARENA_HALF - 0.45 && p.z > PLATFORM_Z0 + 0.35 && p.z < ARENA_HALF - 0.45) || annexWalkable(p.x, p.z);
+   /** The creature's ground: the pit floor. */
+   pitWalkable = (p: THREE.Vector3): boolean => Math.abs(p.x) < ARENA_HALF - 0.6 && p.z > -ARENA_HALF + 0.6 && p.z < PLATFORM_Z0 - 0.6;
+diff --git a/src/labControls.ts b/src/labControls.ts
+index cb038f2..67e3891 100644
+--- a/src/labControls.ts
++++ b/src/labControls.ts
+@@ -25,7 +25,8 @@ export function installLabControls(gallery: RustMonsterGallery, player: Player,
+     const bay = STUDY_BAYS.find(b => b.id === id);
+     let target = new THREE.Vector3(0, GROUND_Y + 2.0, -3.5);
+     if (bay) {
+-      player.position.set(bay.x, GROUND_Y, 9.3);
++      // Stand at the open edge, not behind a floor that occludes the feet.
++      player.position.set(bay.x, GROUND_Y, 5.3);
+       target = new THREE.Vector3(bay.x, GROUND_Y + (id === 'surface' ? 3.85 : id === 'feeding' ? 3.5 : 1.95), 0.65);
+     } else if (id === 'hall') {
+       player.position.set(15.1, GROUND_Y, 7.2);
+@@ -36,8 +37,9 @@ export function installLabControls(gallery: RustMonsterGallery, player: Player,
+     player.yaw = Math.atan2(-delta.x, -delta.z);
+     player.pitch = Math.atan2(delta.y, Math.hypot(delta.x, delta.z));
+     // In portrait, fit a whole study rather than cropping both sides of the square circuit.
+-    camera.fov = bay ? (camera.aspect < 0.8 ? 78 : 48) : 40;
++    camera.fov = bay ? (id === 'surface' ? (camera.aspect < 0.8 ? 112 : 64) : (camera.aspect < 0.8 ? 78 : 48)) : 40;
+     camera.updateProjectionMatrix();
++    gallery.setObserver(player.eye());
+   };
+   views.onchange = () => view(views.value);
+   const initial = new URLSearchParams(location.search).get('study');
+diff --git a/src/rustmonster_gallery.ts b/src/rustmonster_gallery.ts
+index c643574..4d6271a 100644
+--- a/src/rustmonster_gallery.ts
++++ b/src/rustmonster_gallery.ts
+@@ -167,11 +167,16 @@ export class RustMonsterGallery {
+     for (const study of this.studies) { study.monster.resetStudy(); study.reset?.(); }
+   }
+   step(): void { this.paused = true; this.queuedSteps++; }
++  /** Visibility is navigation state, not playback state; update it even without an animation step. */
++  setObserver(player: THREE.Vector3): void {
++    for (const study of this.studies) study.group.visible = Math.abs(player.x - study.group.position.x) < 16;
++  }
++
+   update(nowMs: number, player: THREE.Vector3): void {
+     const dt = this.lastMs === null ? 0 : Math.min(0.1, Math.max(0, (nowMs - this.lastMs) / 1000));
+     this.lastMs = nowMs;
+     // View changes must remain usable while playback is paused.
+-    for (const study of this.studies) study.group.visible = Math.abs(player.x - study.group.position.x) < 16;
++    this.setObserver(player);
+     if (!this.paused) this.clockMs += dt * 1000 * this.playbackRate;
+     else if (this.queuedSteps) { this.clockMs += 1000 / 60; this.queuedSteps--; }
+     else return;
