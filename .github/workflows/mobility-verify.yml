@@ -1,0 +1,81 @@
+name: Verify mobility implementation
+on:
+  push:
+    branches: [feat/mobility-lab]
+    paths: [.mobility-transport.b64, .github/workflows/mobility-verify.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: mobility-development
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply exact source changes
+        if: hashFiles('.mobility-transport.b64') != ''
+        run: |
+          node --input-type=module <<'JS'
+          import {readFileSync,writeFileSync,existsSync,mkdirSync} from 'node:fs';
+          import {dirname} from 'node:path';
+          import {brotliDecompressSync} from 'node:zlib';
+          import {createHash} from 'node:crypto';
+          const hash=b=>createHash('sha256').update(b).digest('hex');
+          const changes=JSON.parse(brotliDecompressSync(Buffer.from(readFileSync('.mobility-transport.b64','utf8').trim(),'base64')));
+          const pending=[];
+          for(const f of changes.files){
+            if(!/^(src\/|scripts\/|tests\/|[A-Z]+\.md$|package\.json$)/.test(f.path)||f.path.includes('..'))throw new Error('Invalid source path '+f.path);
+            const old=existsSync(f.path)?readFileSync(f.path):null;
+            if((old?hash(old):null)!==f.before)throw new Error('Changed baseline '+f.path);
+            const lines=old?old.toString('utf8').match(/[^\n]*\n|[^\n]+$/g)||[]:[];
+            for(const c of [...f.changes].reverse())lines.splice(c.start,c.end-c.start,c.text);
+            const text=lines.join('');if(hash(Buffer.from(text))!==f.after)throw new Error('Content checksum '+f.path);
+            pending.push([f.path,text]);
+          }
+          for(const [path,text]of pending){mkdirSync(dirname(path),{recursive:true});writeFileSync(path,text);}
+          console.log('Applied '+pending.length+' verified source files.');
+          JS
+      - run: npm ci
+      - run: npm run test:mobility
+      - run: npm run test:lab
+      - run: npm run build
+      - name: Commit tested implementation on the feature branch
+        if: hashFiles('.mobility-transport.b64') != ''
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src scripts tests package.json MOBILITY.md LAB.md CLAUDE.md
+          git rm -f .mobility-transport.b64 .github/workflows/mobility-workspace.yml
+          git commit -m 'feat: shared analog movement, validated jumps, powered legs and connected mobility courses'
+          git push origin HEAD:feat/mobility-lab
+      - name: Install browser verification tooling
+        run: |
+          npm install --no-save --package-lock=false playwright@1.55.1
+          npx playwright install --with-deps chromium
+      - name: Verify mobility in desktop and phone views
+        run: node scripts/browser-mobility.mjs
+      - name: Verify original rust monster studies
+        run: node scripts/browser-lab.mjs
+      - name: Save verification evidence and exact source
+        if: always()
+        run: |
+          mkdir -p artifacts
+          git rev-parse HEAD > artifacts/source-commit.txt
+          tar --exclude=.git --exclude=node_modules --exclude=artifacts -czf /tmp/mobility-source.tgz .
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mobility-verification
+          path: |
+            artifacts
+            /tmp/mobility-source.tgz
+          retention-days: 7
