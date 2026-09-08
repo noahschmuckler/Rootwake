@@ -1,187 +1,189 @@
-// Deterministic rust-monster animation gallery for the lab branch.
-// The gallery is deliberately behind the observation position, leaving the original pit unobstructed.
-
+// The gallery supplies actions, routes and a clock. RustMonster renders the actual poses.
 import * as THREE from 'three';
 import { OreVein } from './orevein';
-import { BODY_HEIGHT, RustMonster, TICKLE_S, SCRAPE_S, GROOM_S } from './rustmonster';
-import { refineRustMonsterRig, refineRustMonsterTurnPose } from './rustmonster_refinements';
+import { BODY_HEIGHT, WALL_HUG, RustMonster, TICKLE_S, SCRAPE_S, GROOM_S, type MonsterStudyFrame } from './rustmonster';
+import { SquareSurfaceRoute } from './creatureMotion';
+import { GROUND_Y } from './cave';
+import { STUDY_BAYS, STUDY_RISE, STUDY_CENTRE_Z, STUDY_WIDTH, STUDY_DEPTH, STUDY_HEIGHT, type StudyId } from './labLayout';
 
-const BAY_W = 3.05;
-const BAY_D = 3.55;
-const BAY_H = 3.0;
-const CENTRES = [-6.25, -3.12, 0, 3.12, 6.25];
-const FAR_PLAYER = new THREE.Vector3(0, 0, 1000);
-const ALWAYS = () => true;
-
-interface MonsterHack {
-  mode: string;
-  surface: string;
-  modeStart: number;
-  modeUntil: number;
-  target: THREE.Vector3;
-  heading: number;
-  speed: number;
-  groomSide: number;
-  feelers: { rust: number[] }[];
-  pivots: THREE.Group[];
-  head: THREE.Group;
-  body: THREE.Group;
-}
-interface Demo { update(nowMs: number, player: THREE.Vector3): void; }
-
-const rockMat = new THREE.MeshStandardMaterial({ color: 0x24282d, roughness: 0.92, metalness: 0.08, flatShading: true });
-const floorMat = new THREE.MeshStandardMaterial({ color: 0x171a1d, roughness: 0.8, metalness: 0.3, flatShading: true });
-const trackMat = new THREE.MeshStandardMaterial({ color: 0x6c747b, roughness: 0.48, metalness: 0.75, flatShading: true });
-
-function box(w: number, h: number, d: number, mat: THREE.Material, x = 0, y = 0, z = 0): THREE.Mesh {
+const rock = new THREE.MeshStandardMaterial({ color: 0x252d35, roughness: 0.9 });
+const metal = new THREE.MeshStandardMaterial({ color: 0x748592, roughness: 0.55, metalness: 0.45 });
+const ground = new THREE.MeshStandardMaterial({ color: 0x171f26, roughness: 0.9 });
+function box(w: number, h: number, d: number, mat: THREE.Material, x: number, y: number, z: number): THREE.Mesh {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
   m.position.set(x, y, z);
   return m;
 }
-function label(text: string): THREE.Sprite {
-  const canvas = document.createElement('canvas'); canvas.width = 512; canvas.height = 96;
-  const ctx = canvas.getContext('2d')!;
-  ctx.fillStyle = 'rgba(7,9,11,0.88)'; ctx.fillRect(0, 5, 512, 86);
-  ctx.strokeStyle = '#89939d'; ctx.lineWidth = 4; ctx.strokeRect(3, 8, 506, 80);
-  ctx.fillStyle = '#e1e6eb'; ctx.font = '600 34px system-ui, sans-serif';
-  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(text, 256, 49);
-  const tex = new THREE.CanvasTexture(canvas); tex.colorSpace = THREE.SRGBColorSpace;
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: true }));
-  s.scale.set(2.45, 0.46, 1); return s;
+export function labSign(title: string, subtitle: string, width = 4.8): THREE.Sprite {
+  const canvas = document.createElement('canvas');
+  canvas.width = 1024; canvas.height = 160;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Lab labels require a 2D canvas');
+  ctx.fillStyle = '#111c25'; ctx.fillRect(0, 0, 1024, 160);
+  ctx.fillStyle = '#98c5c9'; ctx.fillRect(0, 0, 8, 160);
+  ctx.fillStyle = '#e5edf1'; ctx.font = '600 38px system-ui';
+  ctx.fillText(title, 34, 61);
+  ctx.fillStyle = '#a8bfc9'; ctx.font = '28px system-ui'; ctx.fillText(subtitle, 34, 112);
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const sign = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, fog: false }));
+  sign.scale.set(width, width * 160 / 1024, 1);
+  return sign;
 }
-function makeBay(root: THREE.Group, x: number, title: string): THREE.Group {
-  const bay = new THREE.Group(); bay.position.x = x; root.add(bay);
-  bay.add(box(BAY_W, 0.1, BAY_D, floorMat, 0, 0, 0));
-  bay.add(box(BAY_W, BAY_H, 0.12, rockMat, 0, BAY_H / 2, BAY_D / 2));
-  bay.add(box(0.12, BAY_H, BAY_D, rockMat, -BAY_W / 2, BAY_H / 2, 0));
-  bay.add(box(0.12, BAY_H, BAY_D, rockMat, BAY_W / 2, BAY_H / 2, 0));
-  // No front lip: the viewing edge is completely open.
-  const sign = label(title); sign.position.set(0, BAY_H + 0.34, BAY_D / 2 - 0.08); bay.add(sign);
-  const lamp = new THREE.PointLight(0xb9c9da, 11, 6, 1.35); lamp.position.set(0, BAY_H - 0.2, -0.45); bay.add(lamp);
-  return bay;
-}
-function hack(m: RustMonster): MonsterHack { return m as unknown as MonsterHack; }
-function makeMonster(seed: number): RustMonster {
-  const m = new RustMonster(0, new THREE.Vector3(), [], ALWAYS, seed);
-  refineRustMonsterRig(m); return m;
-}
-function treadmill(m: RustMonster, nowMs: number, player = FAR_PLAYER): void {
-  const h = hack(m); h.mode = 'skitter'; h.surface = 'floor'; h.modeStart = nowMs; h.modeUntil = nowMs + 60000;
-  h.target.set(0, 0, -100); m.update(nowMs, player); m.group.position.set(0, BODY_HEIGHT, 0); refineRustMonsterTurnPose(m);
+interface Study {
+  id: StudyId;
+  monster: RustMonster;
+  group: THREE.Group;
+  sample(seconds: number): MonsterStudyFrame;
+  reset?(): void;
 }
 
-/**
- * Square surface study. Translation/orientation follows the square, while local articulation leads the corner:
- * head pitches first, thorax/body follows, then the six abdomen pivots progressively catch up.
- */
-function surfaceLoopPose(m: RustMonster, seconds: number): void {
-  const h = hack(m);
-  const side = 1.72;
-  const bottom = BODY_HEIGHT;
-  const top = 2.32;
-  const straightT = 2.1;
-  const turnT = 1.55; // intentionally slow so the head->thorax->abdomen transition is inspectable
-  const legT = straightT + turnT;
-  const total = legT * 4;
-  let t = seconds % total;
-  const leg = Math.floor(t / legT); t -= leg * legT;
-  const turning = t > straightT;
-  const k = turning ? THREE.MathUtils.smoothstep((t - straightT) / turnT, 0, 1) : t / straightT;
-
-  let x = 0, y = bottom, angle = 0;
-  if (leg === 0) { x = THREE.MathUtils.lerp(-side / 2, side / 2, Math.min(1, t / straightT)); y = bottom; angle = turning ? k * Math.PI / 2 : 0; }
-  if (leg === 1) { x = side / 2; y = THREE.MathUtils.lerp(bottom, top, Math.min(1, t / straightT)); angle = Math.PI / 2 + (turning ? k * Math.PI / 2 : 0); }
-  if (leg === 2) { x = THREE.MathUtils.lerp(side / 2, -side / 2, Math.min(1, t / straightT)); y = top; angle = Math.PI + (turning ? k * Math.PI / 2 : 0); }
-  if (leg === 3) { x = -side / 2; y = THREE.MathUtils.lerp(top, bottom, Math.min(1, t / straightT)); angle = Math.PI * 1.5 + (turning ? k * Math.PI / 2 : 0); }
-
-  m.group.position.set(x, y, 0);
-  m.group.rotation.z = angle;
-
-  // Progressive articulation. During each 90-degree transition the head anticipates the corner,
-  // thorax follows, then abdomen segments follow one after another. The offsets settle back to zero
-  // before the next straight run.
-  if (turning) {
-    const q = (t - straightT) / turnT;
-    const bend = (phase: number): number => {
-      const u = THREE.MathUtils.clamp((q - phase) / 0.34, 0, 1);
-      return Math.sin(u * Math.PI) * 0.62;
-    };
-    h.head.rotation.x = -bend(0.0);
-    h.body.rotation.x = -bend(0.12) * 0.45;
-    const phases = [0.22, 0.30, 0.38, 0.46, 0.54, 0.62];
-    for (let i = 0; i < h.pivots.length; i++) h.pivots[i].rotation.x = -bend(phases[i]);
-  } else {
-    h.head.rotation.x *= 0.7; h.body.rotation.x *= 0.7;
-    for (const p of h.pivots) p.rotation.x *= 0.7;
-  }
-}
-
-export class RustMonsterGallery implements Demo {
+export class RustMonsterGallery {
   readonly group = new THREE.Group();
-  private readonly demos: Demo[] = [];
+  readonly studies: Study[] = [];
+  readonly surfaceRoute = new SquareSurfaceRoute();
+  paused = false;
+  playbackRate = 1;
+  clockMs = 1;
+  private lastMs: number | null = null;
+  private queuedSteps = 0;
 
-  constructor(scene: THREE.Scene, floorY: number, seed: number) {
-    // Completely separate study area: behind the player's initial observation position.
-    // The open faces point toward the pit; nothing now stands between player and original live bay.
-    this.group.position.set(0, floorY + 2.23, 7.15);
+  constructor(scene: THREE.Scene, _floorY: number, seed: number) {
+    this.group.name = 'study-annex';
     scene.add(this.group);
+    const wayfinding = labSign('MOVEMENT STUDIES  >', 'East annex - open viewing aisle', 3.0);
+    wayfinding.position.set(8.2, GROUND_Y + 5.4, 6.9);
+    scene.add(wayfinding);
+    const hallSign = labSign('<  LIVE PIT', 'Return through the connector', 2.8);
+    hallSign.position.set(14.8, GROUND_Y + 5.3, 8.9);
+    this.group.add(hallSign);
 
-    {
-      const bay = makeBay(this.group, CENTRES[0], 'GAIT / TREADMILL');
-      for (let i = -5; i <= 5; i++) bay.add(box(0.035, 0.018, 2.45, trackMat, i * 0.18, 0.075, -0.25));
-      const m = makeMonster(seed ^ 0x101); m.group.position.z = -0.35; bay.add(m.group);
-      this.demos.push({ update: (nowMs) => { treadmill(m, nowMs); m.group.position.z = -0.35; m.group.quaternion.identity(); } });
-    }
-
-    {
-      const bay = makeBay(this.group, CENTRES[1], 'SURFACE LOOP');
-      bay.add(box(2.15, 0.055, 0.07, trackMat, 0, 0.08, 0.2));
-      bay.add(box(2.15, 0.055, 0.07, trackMat, 0, 2.42, 0.2));
-      bay.add(box(0.055, 2.4, 0.07, trackMat, -1.05, 1.2, 0.2));
-      bay.add(box(0.055, 2.4, 0.07, trackMat, 1.05, 1.2, 0.2));
-      const m = makeMonster(seed ^ 0x202); bay.add(m.group);
-      this.demos.push({ update: (nowMs) => { treadmill(m, nowMs); m.group.quaternion.identity(); surfaceLoopPose(m, nowMs / 1000); } });
-    }
-
-    {
-      const bay = makeBay(this.group, CENTRES[2], 'FEED / SCRAPE / GROOM');
-      const vein = new OreVein(new THREE.Vector3(0, 1.2, 1.66), new THREE.Vector3(0, 0, -1), seed ^ 0x303); bay.add(vein.group);
-      const m = makeMonster(seed ^ 0x304); m.vein = vein; m.group.position.z = -0.45; m.group.rotation.y = Math.PI; bay.add(m.group);
-      let lastCycle = -1;
-      this.demos.push({ update: (nowMs) => {
-        const cycleLength = TICKLE_S + SCRAPE_S + GROOM_S * 2 + 1;
-        const raw = nowMs / 1000, cycle = Math.floor(raw / cycleLength), t = raw - cycle * cycleLength; const h = hack(m);
-        if (cycle !== lastCycle) { lastCycle = cycle; vein.setRust(0); for (const f of h.feelers) f.rust.fill(0); }
-        let mode: 'tickle' | 'scrape' | 'groom' | 'freeze' = 'freeze', local = 0, duration = 1;
-        if (t < TICKLE_S) { mode = 'tickle'; local = t; duration = TICKLE_S; vein.setRust(t / TICKLE_S); }
-        else if (t < TICKLE_S + SCRAPE_S) { mode = 'scrape'; local = t - TICKLE_S; duration = SCRAPE_S; vein.setRust(1 - local / SCRAPE_S); }
-        else if (t < TICKLE_S + SCRAPE_S + GROOM_S) { mode = 'groom'; local = t - TICKLE_S - SCRAPE_S; duration = GROOM_S; h.groomSide = 0; }
-        else if (t < TICKLE_S + SCRAPE_S + GROOM_S * 2) { mode = 'groom'; local = t - TICKLE_S - SCRAPE_S - GROOM_S; duration = GROOM_S; h.groomSide = 1; }
-        h.mode = mode; h.surface = 'floor'; h.speed = 0; h.modeStart = nowMs - local * 1000; h.modeUntil = h.modeStart + duration * 1000;
-        m.update(nowMs, FAR_PLAYER); m.group.position.set(0, BODY_HEIGHT, -0.45); m.group.rotation.set(0, Math.PI, 0);
-      } });
-    }
-
-    {
-      const bay = makeBay(this.group, CENTRES[3], 'TURN / BODY WAVE');
-      const m = makeMonster(seed ^ 0x404); bay.add(m.group);
-      this.demos.push({ update: (nowMs) => {
-        const h = hack(m); const phase = nowMs / 1500; const side = Math.sin(phase);
-        h.mode = 'skitter'; h.surface = 'floor'; h.modeStart = nowMs; h.modeUntil = nowMs + 60000;
-        h.target.set(side * 3.2, 0, -1.4); m.update(nowMs, FAR_PLAYER); refineRustMonsterTurnPose(m);
-        m.group.position.set(0, BODY_HEIGHT, -0.3);
-      } });
-    }
-
-    {
-      const bay = makeBay(this.group, CENTRES[4], 'REGARD / REACH');
-      const m = makeMonster(seed ^ 0x505); bay.add(m.group);
-      this.demos.push({ update: (nowMs, player) => {
-        const h = hack(m); h.mode = 'regard'; h.surface = 'floor'; h.speed = 0; h.modeStart = nowMs; h.modeUntil = nowMs + 60000;
-        m.update(nowMs, player); m.group.position.set(0, BODY_HEIGHT, -0.3); m.group.quaternion.identity();
-      } });
+    for (let i = 0; i < STUDY_BAYS.length; i++) {
+      const spec = STUDY_BAYS[i];
+      const bay = new THREE.Group();
+      bay.name = `study-${spec.id}`;
+      bay.position.set(spec.x, GROUND_Y + STUDY_RISE, STUDY_CENTRE_Z);
+      this.group.add(bay);
+      bay.add(box(STUDY_WIDTH, 0.08, STUDY_DEPTH, ground, 0, -0.04, 0));
+      bay.add(box(STUDY_WIDTH, STUDY_HEIGHT, 0.12, rock, 0, STUDY_HEIGHT / 2, -STUDY_DEPTH / 2));
+      // Partitions stop 3 m short of the viewing edge; no sill or rail across the front.
+      for (const side of [-1, 1]) bay.add(box(0.12, STUDY_HEIGHT, 4.5, rock, side * STUDY_WIDTH / 2, STUDY_HEIGHT / 2, -1.5));
+      const sign = labSign(spec.title, spec.note);
+      sign.position.set(0, STUDY_HEIGHT - 0.1, -2.9);
+      bay.add(sign);
+      const monster = new RustMonster(0, new THREE.Vector3(), [], () => true, seed ^ (0x100 + i));
+      bay.add(monster.group);
+      const floorFrame = (heading = 0, speed = 0): MonsterStudyFrame => ({ mode: speed > 0 ? 'skitter' : 'freeze', surface: 'floor', position: new THREE.Vector3(0, BODY_HEIGHT, 0.35), heading, speed });
+      let sample: Study['sample'];
+      let reset: Study['reset'];
+      switch (spec.id) {
+        case 'gait': {
+          const stripes = Array.from({ length: 16 }, (_, n) => {
+            const stripe = box(0.035, 0.015, 2.1, metal, n * 0.3 - 2.25, 0.013, 0.35);
+            bay.add(stripe); return stripe;
+          });
+          sample = (seconds) => {
+            // Belt and stance move backward at the same nominal speed.
+            stripes.forEach((stripe, n) => stripe.position.x = ((n * 0.3 - seconds * 3.4) % 4.8 + 4.8) % 4.8 - 2.4);
+            return floorFrame(-Math.PI / 2, 3.4);
+          };
+          break;
+        }
+        case 'surface': {
+          const { width, height } = this.surfaceRoute;
+          bay.add(box(width + 0.3, 0.15, 2.1, rock, 0, -0.075, 0));
+          bay.add(box(width + 0.3, 0.15, 2.1, rock, 0, height + 0.075, 0));
+          for (const side of [-1, 1]) bay.add(box(0.15, height, 2.1, rock, side * (width / 2 + 0.075), height / 2, 0));
+          // Thin stripes mark the contact surfaces without pretending to be the surfaces themselves.
+          for (const y of [0.008, height - 0.008]) bay.add(box(width, 0.016, 0.055, metal, 0, y, 1.02));
+          sample = (seconds) => {
+            const distance = 1.0 + seconds * 0.9;
+            const frame = this.surfaceRoute.sample(distance);
+            const surface = frame.up.y > 0.999 ? 'floor' : frame.up.y < -0.999 ? 'ceiling' : 'wall';
+            return { mode: surface === 'floor' ? 'skitter' : 'wallmove', surface,
+              position: frame.position, forward: frame.forward, up: frame.up, heading: 0, speed: 0.9,
+              route: { path: this.surfaceRoute, distance } };
+          };
+          break;
+        }
+        case 'feeding': {
+          // A nearer working panel, not a specimen pushed to the back of the deep enclosure.
+          const panelZ = -0.95;
+          bay.add(box(3.4, 4.8, 0.16, rock, 0, 2.4, panelZ - 0.08));
+          const vein = new OreVein(new THREE.Vector3(0, 2.9, panelZ), new THREE.Vector3(0, 0, 1), seed ^ 0xfeed);
+          bay.add(vein.group);
+          const total = TICKLE_S + SCRAPE_S + 2 * GROOM_S + 2.6;
+          let lastCycle = -1;
+          sample = (seconds) => {
+            const cycle = Math.floor(seconds / total);
+            if (cycle !== lastCycle) { monster.resetStudy(); vein.setRust(0); lastCycle = cycle; }
+            let t = seconds % total;
+            let mode: MonsterStudyFrame['mode'] = 'wallfreeze', progress = 0, groomSide: 0 | 1 = 0;
+            if (t < TICKLE_S) { mode = 'tickle'; progress = t / TICKLE_S; }
+            else if ((t -= TICKLE_S) < SCRAPE_S) { mode = 'scrape'; progress = t / SCRAPE_S; }
+            else if ((t -= SCRAPE_S) < GROOM_S * 2) { mode = 'groom'; groomSide = t < GROOM_S ? 0 : 1; progress = (t % GROOM_S) / GROOM_S; }
+            return { mode, surface: 'wall', position: new THREE.Vector3(0, 1.95, panelZ + WALL_HUG),
+              heading: 0, speed: 0, up: new THREE.Vector3(0, 0, 1), forward: new THREE.Vector3(0, 1, 0), vein, progress, groomSide };
+          };
+          reset = () => { lastCycle = -1; vein.setRust(0); };
+          break;
+        }
+        case 'turn': {
+          // A real closed S-shaped journey; the tail follows travelled headings rather than a pinned root.
+          const route = new THREE.CatmullRomCurve3([
+            new THREE.Vector3(-1.8, BODY_HEIGHT, -1.3), new THREE.Vector3(0, BODY_HEIGHT, -1.25),
+            new THREE.Vector3(1.7, BODY_HEIGHT, -0.8), new THREE.Vector3(1.2, BODY_HEIGHT, 0.45),
+            new THREE.Vector3(-0.4, BODY_HEIGHT, 0.35), new THREE.Vector3(-1.5, BODY_HEIGHT, 1.25),
+            new THREE.Vector3(0.4, BODY_HEIGHT, 1.6), new THREE.Vector3(1.9, BODY_HEIGHT, 0.9),
+            new THREE.Vector3(0.1, BODY_HEIGHT, -0.3), new THREE.Vector3(-1.9, BODY_HEIGHT, -0.4),
+          ], true, 'centripetal');
+          const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(route.getPoints(160).map(p => new THREE.Vector3(p.x, 0.008, p.z))), new THREE.LineBasicMaterial({ color: 0x607582 }));
+          bay.add(line);
+          const length = route.getLength();
+          sample = (seconds) => {
+            const u = (seconds / 16) % 1;
+            const tangent = route.getTangentAt(u);
+            return { ...floorFrame(), mode: 'skitter', position: route.getPointAt(u), heading: Math.atan2(-tangent.x, -tangent.z), speed: length / 16 };
+          };
+          break;
+        }
+        case 'regard':
+          sample = (seconds) => ({ ...floorFrame(Math.PI), mode: seconds % 6 < 2.5 ? 'regard' : 'freeze' });
+          break;
+        case 'idle':
+          sample = (seconds) => {
+            const t = seconds % 10;
+            const heading = t < 2 ? THREE.MathUtils.smoothstep(t / 2, 0, 1) * 1.1 : t < 5 ? 1.1 : t < 7 ? (1 - THREE.MathUtils.smoothstep((t - 5) / 2, 0, 1)) * 1.1 : 0;
+            return floorFrame(heading, 0);
+          };
+          break;
+      }
+      this.studies.push({ id: spec.id, monster, group: bay, sample, reset });
     }
   }
 
-  update(nowMs: number, player: THREE.Vector3): void { for (const demo of this.demos) demo.update(nowMs, player); }
+  restart(): void {
+    this.clockMs = 1;
+    for (const study of this.studies) { study.monster.resetStudy(); study.reset?.(); }
+  }
+  step(): void { this.paused = true; this.queuedSteps++; }
+  /** Visibility is navigation state, not playback state; update it even without an animation step. */
+  setObserver(player: THREE.Vector3): void {
+    for (const study of this.studies) study.group.visible = Math.abs(player.x - study.group.position.x) < 16;
+  }
+
+  update(nowMs: number, player: THREE.Vector3): void {
+    const dt = this.lastMs === null ? 0 : Math.min(0.1, Math.max(0, (nowMs - this.lastMs) / 1000));
+    this.lastMs = nowMs;
+    // View changes must remain usable while playback is paused.
+    this.setObserver(player);
+    if (!this.paused) this.clockMs += dt * 1000 * this.playbackRate;
+    else if (this.queuedSteps) { this.clockMs += 1000 / 60; this.queuedSteps--; }
+    else return;
+    for (const study of this.studies) {
+      // Culling rendering, not the animation clock, preserves the loop when moving between bays.
+      study.group.visible = Math.abs(player.x - study.group.position.x) < 16;
+      study.monster.updateStudy(this.clockMs, study.sample(this.clockMs / 1000), player);
+    }
+  }
 }

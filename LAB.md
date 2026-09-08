@@ -197,3 +197,52 @@ the bottom-right vein.
 
 **Open:** feeding from above (facing down) for the low veins — right,
 or should low ore be worked from the floor?; the amount of curve.
+
+
+## v2.5 (2026-09-08) - shared animation and a real annex
+
+This pass corrects the unsuccessful v2.4 gallery changes. Negating 0/pi
+phase offsets did not reverse gait, the gallery still occupied the
+original platform, and its surface study rotated around the wrong axis.
+The post-update head-angle addition also fed back into the next frame.
+
+- **Layout:** six 6.8-wide, 7.5-deep open-front studies in an east annex
+  (x 14.2 to 56.8), joined to the original platform by a lit doorway and
+  corridor. The viewing aisle is outside the displays, 0.8 above them.
+  Navigation and camera clearance share `labLayout.ts` measurements.
+  No study occupies the live pit or its platform. Raised viewing lips
+  removed; rear partitions stop short of the fronts for oblique views.
+- **Rig and gait:** unscaled thorax joint owns the shell, head, all six
+  hips and abdominal chain. Hind anchors move from body z +0.3 to -0.08.
+  The advancing middle/hind stride phase is reversed, not its offset.
+- **Corners:** `creatureMotion.ts` supplies forward/normal contact frames
+  and a shared route-based spine solver. The live mount/dismount and the
+  square circuit use that same solver. Head, thorax and abdominal links
+  occupy successive points on the route with fixed chord lengths; no
+  gallery-only Euler rotation, paused corner or timed bend pulse.
+  The circuit has real floor/wall/ceiling surfaces and constant travel
+  speed, with gait distance advancing at the same rate.
+- **Turns:** stronger bounded head lead and independent thorax steering;
+  abdominal joints follow travelled heading history, or time-delayed
+  follow-through during stationary turns. Targets are assigned once per
+  frame with delta-time damping. No additive feedback or stale corner
+  yaw. The swerve study actually travels an S-shaped route; the sixth
+  study isolates turn, straighten and idle.
+- **Study driver:** `updateStudy()` selects action, contact, route and
+  time; the real creature owns all poses, including wall feeding and
+  regard. The private `MonsterHack` casts and refinements module are gone.
+- **Inspection:** LAB selector offers live pit, annex entrance and each
+  bay. The physical route also remains walkable. Pause, single-frame
+  step, restart, 0.5x and 0.25x studies; the live specimen keeps running.
+  Portrait inspection views use a wider field of view to fit a whole bay.
+- **Verification:** `npm run test:lab` checks reversed stance direction,
+  thoracic hip parenting, surface-frame continuity, head-first ordering,
+  rigid link lengths, bounded/frame-rate-independent turn relaxation,
+  heading history, annex reachability, live AI completion and feeding.
+  `scripts/browser-lab.mjs` checks desktop/phone views, pause/step/view
+  switching, finite scene transforms and saves corner screenshots.
+  Deployment now type-checks and runs both test suites before publishing.
+
+Open for visual judgement: bend strength and follow-through timing, bay
+viewing distance/lighting, and the legacy procedural foot lift/placement
+(the gait reversal is not a new foot-contact IK system).

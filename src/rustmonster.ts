@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import { mulberry32 } from './colors';
 import type { OreVein } from './orevein';
 import type { CircleCollider } from './player';
+import { HeadingTrail, angleDelta, damp, frameQuaternion, poseSpineOnRoute, type SurfaceRoute } from './creatureMotion';
 
 // ---- Tuning constants ---------------------------------------------------------
 /** Body length (head to tail); the body's centre off the floor; and off a wall (it hugs it). */
@@ -27,7 +28,7 @@ export const BURST_S: [number, number] = [0.35, 0.9];
 export const FREEZE_S: [number, number] = [0.25, 1.4];
 /** Floor to wall and back: the body runs along a track that turns the corner on an arc of this radius,
  *  at this speed — the head pitches up first, the thorax follows as it walks in, the abdomen last;
- *  coming down it backs off the wall tail-first along the same track. */
+ *  coming down it walks head-first along the same track in reverse. */
 export const CORNER_RADIUS = 0.34;
 export const CORNER_SPEED = 1.5;
 /** The circle it walks around a vein before feeding, and how far below the vein it stops. */
@@ -47,8 +48,9 @@ export const REST_CURL = 0.115; // 22 segments × 0.115 + the base ≈ 190°: up
  *  body curve into it — and how much the head leads and each abdomen joint follows per rad/s of turn. */
 export const TURN_RATE = 4.5;
 export const WALL_TURN_RATE = 4;
-export const CURVE_HEAD = 0.22;
-export const CURVE_JOINT = 0.045;
+export const CURVE_HEAD = 0.32;
+export const CURVE_THORAX = 0.10;
+export const TURN_JOINT_LIMIT = 0.65;
 /** He is noticed within this; it freezes and reaches toward him for REGARD_S. */
 export const REGARD_DISTANCE = 4.5;
 export const REGARD_S = 1.8;
@@ -145,15 +147,31 @@ interface WallFrame {
   tangent: THREE.Vector3;
 }
 
-type Mode = 'skitter' | 'freeze' | 'mount' | 'wallmove' | 'wallfreeze' | 'tickle' | 'scrape' | 'groom' | 'dismount' | 'regard';
+export type MonsterMode = 'skitter' | 'freeze' | 'mount' | 'wallmove' | 'wallfreeze' | 'tickle' | 'scrape' | 'groom' | 'dismount' | 'regard';
+
+export type MonsterSurface = 'floor' | 'wall' | 'ceiling' | 'corner';
+/** Studies select action/contact/clock. The normal creature renderer owns every joint. */
+export interface MonsterStudyFrame {
+  mode: MonsterMode;
+  surface: MonsterSurface;
+  position: THREE.Vector3;
+  heading: number;
+  speed: number;
+  up?: THREE.Vector3;
+  forward?: THREE.Vector3;
+  route?: { path: SurfaceRoute; distance: number };
+  vein?: OreVein | null;
+  progress?: number;
+  groomSide?: 0 | 1;
+}
 
 export class RustMonster {
   readonly group = new THREE.Group();
   readonly collider: CircleCollider;
-  mode: Mode = 'freeze';
+  mode: MonsterMode = 'freeze';
   vein: OreVein | null = null;
   /** 'floor', 'wall', or 'corner' while the body runs the track between them (`sigma` along it). */
-  surface: 'floor' | 'wall' | 'corner' = 'floor';
+  surface: MonsterSurface = 'floor';
   private sigma = 0;
   private sigmaFrom = 0;
   private sigmaTo = 0;
@@ -165,8 +183,13 @@ export class RustMonster {
   private baseU: number | null = null;
   /** The smoothed rate of turn (rad/s), for the curve of the body. */
   private yawRate = 0;
-  private lastHeading = 0;
-  private lastPhi = 0;
+  private lastYaw: number | null = null;
+  private readonly turnTrail = new HeadingTrail();
+  private readonly turnAngles = new Array<number>(6).fill(0);
+  private priorSurface: MonsterSurface | null = null;
+  private routePose: { path: SurfaceRoute; distance: number } | null = null;
+  private studyProgress: number | null = null;
+  private headTurn = 0;
   private wall: WallFrame | null = null;
   /** On the wall: along-wall and up-wall coordinates, and the in-plane heading (0 = straight up). */
   private u = 0;
@@ -175,6 +198,7 @@ export class RustMonster {
   private wallPath: { u: number; v: number }[] = [];
   private readonly rand: () => number;
   private readonly body = new THREE.Group();
+  private readonly thorax = new THREE.Group();
   private readonly pivots: THREE.Group[] = [];
   private readonly abdomen: THREE.Mesh[] = [];
   private readonly skins: Skin[] = [];
@@ -194,7 +218,6 @@ export class RustMonster {
   private lastMs = 0;
   private groomSide = 0;
   private regardCooldownUntil = 0;
-  private aimAt: THREE.Vector3 | null = null;
   private twitchUntil = 0;
   private twitch = new THREE.Vector3();
   private readonly floorQuat = new THREE.Quaternion();
@@ -209,7 +232,13 @@ export class RustMonster {
     this.rand = mulberry32(seed ^ 0xb00b);
     this.group.position.set(at.x, floorY + BODY_HEIGHT, at.z);
     this.collider = { x: at.x, z: at.z, radius: COLLIDER_RADIUS, cameraClearance: COLLIDER_RADIUS + 0.4 };
+    this.group.name = 'rust-monster';
     this.group.add(this.body);
+    this.body.name = 'body-root';
+    this.thorax.name = 'thorax-joint';
+    this.thorax.position.z = -0.22;
+    this.body.add(this.thorax);
+    this.head.name = 'head-joint';
     this.build();
     const dg = new THREE.BufferGeometry();
     dg.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(40 * 3), 3));
@@ -224,17 +253,19 @@ export class RustMonster {
     const r = this.rand;
     // Abdomen: a chain of pivots (so it can flex), each carrying an overlapping plate with its skin.
     const n = 6;
-    let parent: THREE.Object3D = this.body;
+    let parent: THREE.Object3D = this.thorax;
     for (let i = 0; i < n; i++) {
       const t = i / (n - 1);
       const pivot = new THREE.Group();
-      pivot.position.set(0, i === 0 ? -0.02 : -0.01, i === 0 ? 0.12 : 0.17);
+      pivot.name = `abdomen-joint-${i}`;
+      pivot.position.set(0, 0, i === 0 ? 0.34 : 0.17);
       parent.add(pivot);
       parent = pivot;
       this.pivots.push(pivot);
       const rx = 0.36 - t * 0.16, ry = 0.2 - t * 0.09, rz = 0.22;
       const seg = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 7), i % 2 ? chitin : chitinEdge);
       seg.scale.set(rx, ry, rz);
+      seg.position.y = -0.02 - i * 0.01;
       const sk = plates(1, 1, 1, 220, 0.16, r);
       seg.add(sk.mesh);
       this.skins.push(sk);
@@ -244,17 +275,18 @@ export class RustMonster {
     // Thorax: the pronotum hood over the front, wider than the abdomen.
     const thorax = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), chitin);
     thorax.scale.set(0.42, 0.24, 0.42);
-    thorax.position.set(0, 0.02, -0.22);
+    thorax.name = 'thorax-shell';
+    thorax.position.set(0, 0.02, 0);
     const tk = plates(1, 1, 1, 380, 0.13, r);
     thorax.add(tk.mesh);
     this.skins.push(tk);
-    this.body.add(thorax);
+    this.thorax.add(thorax);
     const hood = new THREE.Mesh(new THREE.SphereGeometry(1, 10, 6, 0, Math.PI * 2, 0, Math.PI * 0.55), chitinEdge);
     hood.scale.set(0.46, 0.2, 0.44);
-    hood.position.set(0, 0.06, -0.24);
-    this.body.add(hood);
+    hood.position.set(0, 0.06, -0.02);
+    this.thorax.add(hood);
     // Head: tucked under the hood, low, eyes and mouthparts forward.
-    this.head.position.set(0, -0.08, -0.62);
+    this.head.position.set(0, 0, -0.4);
     const skull = new THREE.Mesh(new THREE.SphereGeometry(0.15, 9, 7), chitin);
     skull.scale.set(1.1, 0.85, 1);
     const hk = plates(0.15, 0.13, 0.15, 90, 0.035, r);
@@ -278,7 +310,7 @@ export class RustMonster {
       palp.rotation.set(0.4, -s * 0.9, 0);
       this.head.add(palp);
     }
-    this.body.add(this.head);
+    this.thorax.add(this.head);
     // Feelers: from the brow, a chain of thin segments with fine barbs.
     for (const side of [1, -1] as const) {
       const base = new THREE.Group();
@@ -316,18 +348,22 @@ export class RustMonster {
       }
       this.feelers.push({ base, segs, barbMats, rust: new Array(FEELER_SEGMENTS).fill(0), side, furl: 0 });
     }
+    // Preserve the tucked head silhouette while its joint follows the spine centreline.
+    for (const child of this.head.children) child.position.y -= 0.08;
     // Legs: two scraping arms at the front, mid legs, and the big leaping hind legs.
     const mk = (kind: Leg['kind'], side: 1 | -1, z: number, femur: [number, number, number], tibia: [number, number, number], yaw: number, pitch: number, bend: number, phase: number): void => {
       const hip = new THREE.Group();
       hip.rotation.order = 'YXZ';
-      hip.position.set(side * 0.3, -0.02, z);
-      this.body.add(hip);
+      hip.name = `${kind}-hip-${side}`;
+      hip.position.set(side * (kind === 'hind' ? 0.33 : 0.3), -0.02, z + 0.22);
+      this.thorax.add(hip);
       hip.add(bone(femur[0], femur[1], femur[2], chitin));
       const knee = new THREE.Group();
       knee.position.z = -femur[2];
       hip.add(knee);
       knee.add(bone(tibia[0], tibia[1], tibia[2], chitinEdge));
       const foot = new THREE.Group();
+      foot.name = `${kind}-foot-${side}`;
       foot.position.z = -tibia[2];
       knee.add(foot);
       const teeth = kind === 'arm' ? 5 : 3;
@@ -349,7 +385,7 @@ export class RustMonster {
     for (const s of [1, -1] as const) {
       mk('arm', s, -0.5, [0.05, 0.035, 0.42], [0.03, 0.02, 0.4], -s * 0.4, 0.9, -2.5, 0);
       mk('mid', s, -0.15, [0.045, 0.03, 0.48], [0.028, 0.016, 0.55], -s * 1.5, 0.75, -1.9, s > 0 ? 0 : Math.PI);
-      mk('hind', s, 0.3, [0.07, 0.04, 0.72], [0.035, 0.02, 0.82], -s * 2.05, 1.15, -2.45, s > 0 ? Math.PI : 0);
+      mk('hind', s, -0.08, [0.07, 0.04, 0.72], [0.035, 0.02, 0.82], -s * 2.05, 1.15, -2.45, s > 0 ? Math.PI : 0);
     }
     this.poseLegs(0);
   }
@@ -401,22 +437,17 @@ export class RustMonster {
    * is the way it travels: +1 up into the wall (head toward higher sigma), −1 down out of it (head toward
    * lower sigma, facing the other way along the same path). Either way the head takes the corner first.
    */
-  private cornerPose(sigma: number, dir: 1 | -1): void {
+  private cornerRoute(): SurfaceRoute {
     const w = this.wall!;
-    const t = this.track(sigma);
-    this.group.position.copy(w.origin).addScaledVector(w.tangent, this.u).addScaledVector(w.normal, t.d).addScaledVector(UP, t.h);
-    const f = w.normal.clone().multiplyScalar(-Math.cos(t.theta)).addScaledVector(UP, Math.sin(t.theta)).multiplyScalar(dir);
-    const up = w.normal.clone().multiplyScalar(Math.sin(t.theta)).addScaledVector(UP, Math.cos(t.theta));
-    RustMonster.basis(this.group.quaternion, up, f);
-    // Each part pitches relative to the one ahead of it by the change in the tangent along the body; the
-    // path bends toward the back either way, so the sign follows the direction of travel.
-    this.head.rotation.x = dir * (this.track(sigma + dir * -RustMonster.HEAD_S).theta - t.theta);
-    let prev = t.theta;
-    for (let i = 0; i < this.pivots.length; i++) {
-      const th = this.track(sigma - dir * RustMonster.PIVOT_S[i]).theta;
-      this.pivots[i].rotation.x = dir * (th - prev);
-      prev = th;
-    }
+    const dir = this.cornerDir;
+    return { sample: (distance: number) => {
+      const t = this.track(distance * dir);
+      return {
+        position: w.origin.clone().addScaledVector(w.tangent, this.u).addScaledVector(w.normal, t.d).addScaledVector(UP, t.h),
+        forward: w.normal.clone().multiplyScalar(-Math.cos(t.theta)).addScaledVector(UP, Math.sin(t.theta)).multiplyScalar(dir),
+        up: w.normal.clone().multiplyScalar(Math.sin(t.theta)).addScaledVector(UP, Math.cos(t.theta)),
+      };
+    } };
   }
   /** Track positions: where the whole body is on the floor before the corner, and past it on the wall. */
   private get sigmaFloor(): number {
@@ -430,7 +461,8 @@ export class RustMonster {
   update(nowMs: number, player: THREE.Vector3): void {
     const dt = this.lastMs ? Math.min(0.1, (nowMs - this.lastMs) / 1000) : 0;
     this.lastMs = nowMs;
-    const t = nowMs / 1000;
+    this.studyProgress = null;
+    this.routePose = null;
     const p = this.group.position;
     const dPlayer = Math.hypot(player.x - p.x, player.z - p.z);
     if (dPlayer < REGARD_DISTANCE && nowMs > this.regardCooldownUntil && (this.mode === 'skitter' || this.mode === 'freeze' || this.mode === 'wallfreeze')) {
@@ -512,7 +544,7 @@ export class RustMonster {
       this.group.position.copy(this.wallPos);
       this.group.quaternion.copy(this.wallQuat);
     } else if (cornering) {
-      this.cornerPose(this.sigma, this.cornerDir);
+      this.routePose = { path: this.cornerRoute(), distance: this.sigma * this.cornerDir };
     } else {
       this.floorPose();
       this.group.quaternion.copy(this.floorQuat);
@@ -521,51 +553,113 @@ export class RustMonster {
     this.collider.x = p.x;
     this.collider.z = p.z;
 
-    // The turn: how fast the heading is swinging, smoothed; the head leads into it and the joints follow,
-    // so the whole body curves the way it is turning.
-    const yawNow = this.surface === 'wall' ? this.phi : this.heading;
-    const yawLast = this.surface === 'wall' ? this.lastPhi : this.lastHeading;
-    let dyaw = yawNow - yawLast;
-    while (dyaw > Math.PI) dyaw -= Math.PI * 2;
-    while (dyaw < -Math.PI) dyaw += Math.PI * 2;
-    const rate = dt > 0 ? THREE.MathUtils.clamp(dyaw / dt, -3, 3) : 0;
-    this.yawRate = THREE.MathUtils.lerp(this.yawRate, rate, 0.25);
-    while (this.heading > Math.PI) this.heading -= Math.PI * 2;
-    while (this.heading < -Math.PI) this.heading += Math.PI * 2;
-    while (this.phi > Math.PI) this.phi -= Math.PI * 2;
-    while (this.phi < -Math.PI) this.phi += Math.PI * 2;
-    this.lastHeading = this.heading;
-    this.lastPhi = this.phi;
-    // Body: a low fast breath, a wag when moving. (On the corner the pivots' pitch is the track's.)
+    this.animate(nowMs, dt, player);
+  }
+
+  /** Explicit preview driver. No private-state casts or transform overrides in the gallery. */
+  updateStudy(nowMs: number, frame: MonsterStudyFrame, player: THREE.Vector3): void {
+    const dt = this.lastMs ? Math.min(0.1, Math.max(0, (nowMs - this.lastMs) / 1000)) : 0;
+    this.lastMs = nowMs;
+    if (this.mode !== frame.mode) this.enter(frame.mode, nowMs, 1e6);
+    this.surface = frame.surface;
+    this.vein = frame.vein ?? null;
+    this.groomSide = frame.groomSide ?? 0;
+    this.studyProgress = frame.progress ?? null;
+    this.routePose = frame.route ?? null;
+    this.speed = Math.max(0, frame.speed);
+    this.stride += this.speed * dt;
+    this.heading = frame.heading;
+    this.phi = frame.heading;
+    this.group.position.copy(frame.position);
+    this.group.quaternion.copy(frameQuaternion({ position: frame.position,
+      forward: frame.forward ?? new THREE.Vector3(-Math.sin(frame.heading), 0, -Math.cos(frame.heading)),
+      up: frame.up ?? UP }));
+    this.animate(nowMs, dt, player);
+  }
+
+  /** Restart a study without re-allocating its geometry. */
+  resetStudy(): void {
+    this.lastMs = 0;
+    this.stride = 0;
+    this.lastYaw = null;
+    this.yawRate = 0;
+    this.turnTrail.clear();
+    this.turnAngles.fill(0);
+    this.headTurn = 0;
+    this.priorSurface = null;
+    this.routePose = null;
+    this.studyProgress = null;
+    this.dustLife = 0;
+    this.twitchUntil = 0;
+    this.body.rotation.set(0, 0, 0);
+    this.thorax.rotation.set(0, 0, 0);
+    this.head.rotation.set(0, 0, 0);
+    for (const p of this.pivots) p.rotation.set(0, 0, 0);
+    for (const f of this.feelers) { f.furl = 0; f.rust.fill(0); }
+    this.vein?.setRust(0);
+  }
+
+  private animate(nowMs: number, dt: number, player: THREE.Vector3): void {
+    const t = nowMs / 1000;
+    const heading = this.surface === 'wall' ? this.phi : this.heading;
+    if (this.priorSurface !== this.surface || this.routePose) {
+      this.lastYaw = heading;
+      this.yawRate = 0;
+      this.turnTrail.clear();
+      this.turnAngles.fill(0);
+    }
+    this.priorSurface = this.surface;
+    const rate = this.lastYaw === null || dt <= 0 ? 0 : THREE.MathUtils.clamp(angleDelta(heading, this.lastYaw) / dt, -4.5, 4.5);
+    this.yawRate = damp(this.yawRate, rate, dt, 0.12);
+    this.lastYaw = heading;
+    this.turnTrail.record(t, this.stride, heading);
+    // One owner for each transform: reset overlays before assigning this frame's pose.
+    this.body.rotation.set(0, 0, 0);
+    this.body.position.set(0, 0, 0);
+    if (this.routePose) {
+      poseSpineOnRoute({ root: this.group, thorax: this.thorax, head: this.head, abdomen: this.pivots }, this.routePose.path, this.routePose.distance);
+    } else {
+      this.thorax.position.set(0, 0, -0.22);
+      this.thorax.rotation.set(0, damp(this.thorax.rotation.y, THREE.MathUtils.clamp(this.yawRate * CURVE_THORAX, -0.3, 0.3), dt, 0.12), 0);
+      this.head.position.set(0, 0, -0.4);
+      let previous = this.thorax.rotation.y;
+      this.pivots.forEach((joint, i) => {
+        const past = this.turnTrail.behind(0.34 + i * 0.17, 0.18 + i * 0.075, this.speed > 0.2);
+        const target = THREE.MathUtils.clamp(angleDelta(past, heading), -1.5, 1.5);
+        this.turnAngles[i] = damp(this.turnAngles[i], target, dt, 0.065);
+        const relative = THREE.MathUtils.clamp(this.turnAngles[i] - previous, -TURN_JOINT_LIMIT, TURN_JOINT_LIMIT);
+        const wag = this.speed > 0 ? Math.sin(this.stride * 6 - i * 0.6) * 0.025 : Math.sin(t * 2.1 + i) * 0.008;
+        joint.position.set(0, 0, i === 0 ? 0.34 : 0.17);
+        joint.rotation.set(0, relative + wag, 0);
+        previous += relative;
+      });
+      this.body.position.y = this.speed > 0 && this.surface === 'floor' ? Math.abs(Math.sin(this.stride * 9)) * 0.015 : Math.sin(t * 7.5) * 0.004;
+    }
     const breathe = 1 + 0.02 * Math.sin(t * 7.5);
-    this.abdomen.forEach((seg, i) => {
-      seg.scale.y = (0.2 - (i / 5) * 0.09) * breathe;
-      const wag = this.speed > 0 ? Math.sin(this.stride * 6 - i * 0.6) * 0.06 : Math.sin(t * 2.1 + i) * 0.015;
-      this.pivots[i].rotation.y = wag + this.yawRate * CURVE_JOINT;
-      if (!cornering) this.pivots[i].rotation.x = 0;
-    });
-    this.body.position.y = this.speed > 0 && this.surface === 'floor' ? Math.abs(Math.sin(this.stride * 9)) * 0.02 : Math.sin(t * 7.5) * 0.004;
+    this.abdomen.forEach((seg, i) => seg.scale.y = (0.2 - i / 5 * 0.09) * breathe);
     for (const sk of this.skins) layPlates(sk, t);
     eye.emissiveIntensity = 0.7 + 0.5 * Math.max(0, Math.sin(t * 1.7) * Math.sin(t * 0.43));
-    if (this.speed === 0 && nowMs > this.twitchUntil && this.rand() < dt * 0.35) {
+    if (!this.routePose && this.speed === 0 && nowMs > this.twitchUntil && this.rand() < dt * 0.35) {
       this.twitchUntil = nowMs + 140;
       this.twitch.set((this.rand() - 0.5) * 0.12, 0, (this.rand() - 0.5) * 0.08);
     }
-    const tw = nowMs < this.twitchUntil ? Math.sin(((this.twitchUntil - nowMs) / 140) * Math.PI) : 0;
+    const tw = !this.routePose && nowMs < this.twitchUntil ? Math.sin((this.twitchUntil - nowMs) / 140 * Math.PI) : 0;
     this.body.rotation.z = tw * this.twitch.x;
     this.body.rotation.x = tw * this.twitch.z;
     this.poseLegs(t);
-    this.poseHead(t, player);
+    this.poseHead(t, dt, player);
     this.poseFeelers(t, dt);
     this.work(nowMs, dt);
     this.updateDust(dt);
+    const world = this.group.getWorldPosition(new THREE.Vector3());
+    this.collider.x = world.x;
+    this.collider.z = world.z;
   }
 
-  private enter(mode: Mode, nowMs: number, seconds: number): void {
+  private enter(mode: MonsterMode, nowMs: number, seconds: number): void {
     this.mode = mode;
     this.modeStart = nowMs;
     this.modeUntil = nowMs + seconds * 1000;
-    if (mode !== 'regard') this.aimAt = null;
   }
 
   /** The loop: skitter to the wall under a vein; mount; circle it on the wall; tickle; scrape; groom; down; again. */
@@ -580,6 +674,7 @@ export class RustMonster {
       case 'regard':
       case 'freeze': {
         if (!this.vein) {
+          if (this.veins.length === 0) { this.enter('freeze', nowMs, 1); return; }
           const candidates = this.veins.filter((v) => v.rust < 0.5);
           this.vein = candidates.length ? candidates[Math.floor(r() * candidates.length)] : this.veins[Math.floor(r() * this.veins.length)];
           this.wall = this.wallFrameFor(this.vein);
@@ -663,7 +758,7 @@ export class RustMonster {
           this.enter('groom', nowMs, GROOM_S);
           return;
         }
-        // Done here: down the wall to where the track begins, then back off it tail-first.
+        // Done here: down the wall to where the track begins, then walk off head-first.
         this.wallPath = [{ u: this.u + (r() - 0.5) * 0.8, v: this.track(this.sigmaWall).h }];
         this.feedFace = Math.PI; // arriving at the bottom it faces down, ready for the corner
         this.vein = null;
@@ -680,7 +775,7 @@ export class RustMonster {
         this.enter('wallmove', nowMs, 30);
         return;
       case 'dismount': {
-        // Off the track: on the floor, facing the wall, where the track left it.
+        // Off the track: on the floor, facing away from the wall, where the track left it.
         const w = this.wall!;
         const tr = this.track(this.sigmaFloor);
         const at = w.origin.clone().addScaledVector(w.tangent, this.u).addScaledVector(w.normal, tr.d);
@@ -698,7 +793,7 @@ export class RustMonster {
   /** What the feelers and arms do to the vein, and the rust that moves between them. */
   private work(nowMs: number, dt: number): void {
     const v = this.vein;
-    const k = (nowMs - this.modeStart) / Math.max(1, this.modeUntil - this.modeStart);
+    const k = this.studyProgress ?? (nowMs - this.modeStart) / Math.max(1, this.modeUntil - this.modeStart);
     if (this.mode === 'tickle' && v) {
       v.setRust(v.rust + dt / TICKLE_S);
     } else if (this.mode === 'scrape' && v) {
@@ -716,25 +811,21 @@ export class RustMonster {
     for (const f of this.feelers) f.barbMats.forEach((m, i) => m.color.copy(BARB).lerp(BARB_RUST, f.rust[i]));
   }
 
-  private poseHead(t: number, player: THREE.Vector3): void {
+  private poseHead(t: number, dt: number, player: THREE.Vector3): void {
     const g = this.mode === 'groom';
     const open = g ? 0.5 + 0.35 * Math.sin(t * 14) : 0.25 + 0.15 * Math.sin(t * 2.3);
-    this.mandibles.forEach((m, i) => (m.rotation.y = (i === 0 ? -1 : 1) * (0.2 + open)));
-    if (this.mode === 'regard') this.aimAt = new THREE.Vector3(player.x, this.floorY + 0.5, player.z);
-    if (this.surface === 'corner') {
-      this.head.rotation.y = THREE.MathUtils.lerp(this.head.rotation.y, this.yawRate * CURVE_HEAD, 0.1);
-      return; // its pitch is the track's
+    this.mandibles.forEach((m, i) => m.rotation.y = (i === 0 ? -1 : 1) * (0.2 + open));
+    if (this.routePose) return; // The shared spine solver, not a late overlay, owns head direction.
+    let yaw = Math.sin(t * 0.9) * 0.045 + this.yawRate * CURVE_HEAD - this.thorax.rotation.y;
+    let pitch = g ? 0.45 : 0;
+    if (this.mode === 'regard') {
+      this.thorax.updateWorldMatrix(true, false);
+      const local = this.thorax.worldToLocal(player.clone());
+      yaw = Math.atan2(-(local.x - this.head.position.x), -(local.z - this.head.position.z));
+      pitch = Math.atan2(local.y - this.head.position.y, Math.hypot(local.x - this.head.position.x, local.z - this.head.position.z));
     }
-    if (this.aimAt) {
-      const local = this.group.worldToLocal(this.aimAt.clone());
-      const yaw = Math.atan2(-(local.x - this.head.position.x), -(local.z - this.head.position.z));
-      const pitch = Math.atan2(local.y - this.head.position.y, Math.hypot(local.x - this.head.position.x, local.z - this.head.position.z));
-      this.head.rotation.y = THREE.MathUtils.lerp(this.head.rotation.y, THREE.MathUtils.clamp(yaw, -1.1, 1.1), 0.08);
-      this.head.rotation.x = THREE.MathUtils.lerp(this.head.rotation.x, THREE.MathUtils.clamp(pitch, -0.6, 0.8), 0.08);
-    } else {
-      this.head.rotation.y = THREE.MathUtils.lerp(this.head.rotation.y, Math.sin(t * 0.9) * 0.15 + this.yawRate * CURVE_HEAD, 0.12);
-      this.head.rotation.x = THREE.MathUtils.lerp(this.head.rotation.x, g ? 0.45 : 0, 0.05);
-    }
+    this.headTurn = damp(this.headTurn, THREE.MathUtils.clamp(yaw, -0.9, 0.9), dt, 0.10);
+    this.head.rotation.set(damp(this.head.rotation.x, THREE.MathUtils.clamp(pitch, -0.6, 0.8), dt, 0.16), this.headTurn, 0);
   }
 
   /**
@@ -743,7 +834,7 @@ export class RustMonster {
    * through it.
    */
   private poseFeelers(t: number, dt: number): void {
-    const onWall = this.surface === 'wall' || (this.surface === 'corner' && this.track(this.sigma).theta > 0.8);
+    const onWall = this.surface !== 'floor';
     for (const f of this.feelers) {
       const s = f.side;
       // At rest they lie curled back over the body; they unfurl to work the ore or to reach for him. Grooming
@@ -832,7 +923,8 @@ export class RustMonster {
           pitch = 0.85 + Math.max(0, Math.cos(ph)) * 0.2;
         }
       } else if (this.speed > 0) {
-        const ph = this.stride * (l.kind === 'hind' ? 6 : 9) + l.phase;
+        // Reverse traversal of the cycle, retaining the left/right phase offsets.
+        const ph = -this.stride * (l.kind === 'hind' ? 6 : 9) + l.phase;
         const liftK = Math.max(0, Math.sin(ph));
         yaw = l.yaw + Math.cos(ph) * (l.kind === 'hind' ? 0.25 : 0.4) * l.side;
         pitch = l.pitch + liftK * 0.35;
@@ -850,7 +942,8 @@ export class RustMonster {
   private puff(): void {
     if (this.dustLife > 0) return;
     const pos = this.dust.geometry.attributes.position as THREE.BufferAttribute;
-    const mouth = this.head.position.clone().add(new THREE.Vector3(0, -0.12, -0.18));
+    this.group.updateWorldMatrix(true, true);
+    const mouth = this.group.worldToLocal(this.head.localToWorld(new THREE.Vector3(0, -0.2, -0.18)));
     for (let i = 0; i < pos.count; i++) {
       pos.setXYZ(i, mouth.x + (this.rand() - 0.5) * 0.08, mouth.y, mouth.z + (this.rand() - 0.5) * 0.08);
       this.dustVel[i].set((this.rand() - 0.5) * 0.3, -0.1 - this.rand() * 0.3, (this.rand() - 0.5) * 0.3);
@@ -869,7 +962,7 @@ export class RustMonster {
     m.opacity = Math.min(1, this.dustLife);
     const pos = this.dust.geometry.attributes.position as THREE.BufferAttribute;
     // Dust falls in the world's down, whichever way the body is turned.
-    const down = this.group.worldToLocal(this.group.position.clone().add(new THREE.Vector3(0, -1, 0))).normalize();
+    const down = new THREE.Vector3(0, -1, 0).applyQuaternion(this.group.getWorldQuaternion(new THREE.Quaternion()).invert());
     for (let i = 0; i < pos.count; i++) {
       const v = this.dustVel[i];
       v.addScaledVector(down, 1.6 * dt);
