@@ -1,0 +1,27 @@
+name: Prepare lab repair workspace
+on:
+  push:
+    branches: [fix/lab-articulation-v25]
+    paths: [.github/workflows/repair-workspace.yml]
+permissions:
+  contents: read
+jobs:
+  workspace:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm install --no-save --package-lock=false playwright@1.55.1
+      - name: Package source and test dependencies (no credentials or Git metadata)
+        run: tar -czf /tmp/rootwake-workspace.tar.gz src scripts node_modules *.html *.json *.md vite.config.ts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rootwake-repair-workspace
+          path: /tmp/rootwake-workspace.tar.gz
+          retention-days: 1
