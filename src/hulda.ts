@@ -67,7 +67,7 @@ function openNode(index:number):void {
   const pose={position:center.clone().addScaledVector(back,4.4).add(new THREE.Vector3(0,2.2,0)),target};
   const lowest=boardView.lowestWorldY(pose.position,pose.target);
   if(lowest<-.7){pose.position.y+=-.7-lowest;pose.target.y+=-.7-lowest;}
-  cameraRig.lock(now,pose);boardView.bind(boards[index]);refresh();
+  cameraRig.lock(now,pose);boardView.bind(boards[index]);layoutBoard();refresh();
 }
 function closeNode():void {
   if(cameraRig.mode!=='locked'||boardView.isBusy||pending||!returnPose)return;
@@ -155,7 +155,12 @@ function refresh():void {
 }
 const trailGeometry=new THREE.BufferGeometry(),trailPositions=new Float32Array(45*3);trailGeometry.setAttribute('position',new THREE.BufferAttribute(trailPositions,3));
 const trail=new THREE.Points(trailGeometry,new THREE.PointsMaterial({color:0xeed99a,size:.055,transparent:true,opacity:.65,depthWrite:false}));scene.add(trail);
-function resize():void {renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();boardView.layout();}addEventListener('resize',resize);
+function layoutBoard():void {
+  boardView.layout();
+  // Leave a clear touch zone below the gems for channel and ability buttons.
+  boardView.group.position.y += 2*Math.tan(THREE.MathUtils.degToRad(camera.fov)/2)*2.2*.07;
+}
+function resize():void {renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix();layoutBoard();}addEventListener('resize',resize);
 const rootWard=new THREE.Group();
 for(let i=0;i<8;i++){
   const a=i*Math.PI/4,points=Array.from({length:12},(_,j)=>new THREE.Vector3(Math.sin(a+j*.04)*.5,j*.075,Math.cos(a+j*.04)*.5));

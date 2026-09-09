@@ -16,7 +16,7 @@ if [ "$which" = lab ]; then
   cp "$root/dist/lab.html" "$wt/lab/index.html"
 else
   npx vite build --base=/Rootwake/
-  (cd "$wt" && find . -maxdepth 1 ! -name . ! -name .git ! -name lab -exec rm -rf {} +)
+  (cd "$wt" && find . -maxdepth 1 ! -name . ! -name .git ! -name lab ! -name hulda -exec rm -rf {} +)
   cp -r "$root/dist/." "$wt/"
   rm -f "$wt/lab.html"
 fi
