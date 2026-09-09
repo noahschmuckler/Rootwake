@@ -1,0 +1,57 @@
+name: Verify and publish Hulda awakening
+on:
+  push:
+    branches: [feat/hulda-awakening]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: rootwake-hulda-pages
+  cancel-in-progress: true
+jobs:
+  verify-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+      pages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:hulda && npm run test:mobility && npm run test:lab
+      - run: npm run build -- --base=/Rootwake/hulda/
+      - run: npm install --no-save --package-lock=false playwright@1.55.1 && npx playwright install --with-deps chromium
+      - run: node scripts/browser-hulda.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hulda-browser-checks
+          path: artifacts/hulda
+      - name: Publish tested Hulda bundle alongside existing domains
+        run: |
+          set -euo pipefail
+          git fetch origin gh-pages
+          target=$(mktemp -d)
+          git worktree add "$target" origin/gh-pages
+          mkdir -p "$target/hulda/assets"
+          cp -r dist/assets/. "$target/hulda/assets/"
+          cp dist/hulda.html "$target/hulda/index.html"
+          printf '{"sourceCommit":"%s","experience":"hulda-awakening"}\n' "$GITHUB_SHA" > "$target/hulda/revision.json"
+          touch "$target/.nojekyll"
+          cd "$target"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add hulda .nojekyll
+          git diff --cached --quiet && exit 0
+          git commit -m "Deploy tested Hulda awakening: ${GITHUB_SHA::7}"
+          git push origin HEAD:gh-pages
+      - name: Request Pages build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/$GITHUB_REPOSITORY/pages/builds"

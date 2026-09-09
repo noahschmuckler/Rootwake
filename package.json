@@ -8,7 +8,8 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test:lab": "node scripts/test-lab.mjs",
-    "test:mobility": "node scripts/test-mobility.mjs"
+    "test:mobility": "node scripts/test-mobility.mjs",
+    "test:hulda": "node scripts/test-hulda.mjs"
   },
   "dependencies": {
     "three": "^0.169.0"
