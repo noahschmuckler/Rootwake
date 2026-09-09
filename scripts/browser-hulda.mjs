@@ -8,7 +8,7 @@ const server=createServer(async(req,res)=>{try{const path=decodeURIComponent(req
 const browser=await chromium.launch({headless:true,args:['--no-sandbox','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
 await mkdir('artifacts/hulda',{recursive:true});
 const errors=[];
-async function idle(page){await page.waitForFunction(()=>!window.__hulda.boardView.isBusy&&!document.querySelector('#back').disabled,null,{timeout:60000});}
+async function idle(page){await page.waitForFunction(()=>!window.__hulda.boardView.isBusy&&!document.querySelector('#back').disabled&&Math.abs(window.__hulda.boardView.group.scale.x-window.__hulda.boardView.fitScale)<0.000001,null,{timeout:60000});}
 async function swap(page,index){
   const points=await page.evaluate(index=>{
     const h=window.__hulda,b=h.boards[index],grid=b.grid.map(row=>row.map(g=>g.type));
@@ -51,4 +51,4 @@ try{
     await page.close();console.log(`${name}: rendered and pointer interaction passed`);
   }
   assert.deepEqual(errors,[]);
-}finally{await browser.close();server.close();}
+}catch(error){for(const page of browser.contexts().flatMap(c=>c.pages())){console.log('HULDA_FAILURE_IMAGE='+ (await page.screenshot({type:'jpeg',quality:45})).toString('base64'));console.log(await page.locator('body').innerText());}throw error;}finally{await browser.close();server.close();}
