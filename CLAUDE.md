@@ -44,7 +44,11 @@ touching the creature.**
 Lab modules: `orevein.ts` (silvery ore plates on a wall with a rust level
 and a fuzz), `rustmonster.ts` (the creature: plate skin, feeler chains,
 legs, the state machine skitter / tickle / scrape / groom / regard),
-`arena.ts` (the room, its veins, `dynamic` colliders). `bootUnder` takes
+`arena.ts` (the room: the platform over the live pit, the feeding wall,
+and to the right the five cubbies of the second bay, BAY_*), `bays.ts`
+(one puppeted creature per cubby looping one behaviour: treadmill,
+wheel, feeding, corner, regard & turn — `puppet` and `followPath` on
+the rig). `bootUnder` takes
 `populate(ctx)` for things that want a frame each frame; the lab's debug
 handle exposes them as `extras` (`extras[0].monster`).
 

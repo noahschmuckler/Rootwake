@@ -197,3 +197,49 @@ the bottom-right vein.
 
 **Open:** feeding from above (facing down) for the low veins — right,
 or should low ore be worked from the floor?; the amount of curve.
+
+## v3 — the bays (2026-09-10)
+
+Designer's ask: it is hard to judge each movement by waiting for the
+live creature to do it. A second viewing bay, like the first, with the
+creature in a row of small enclosures side by side, each performing one
+scripted movement on a loop: a treadmill; a square "hamster wheel" that
+doesn't move (floor, up a wall, across the ceiling, down a wall, back to
+the floor, walking side on to him); the feeler feeding cycle; and more
+as needed for behaviours not described.
+
+**The room** is wider: the live pit stays on the left (x < 9, a divider
+from pit floor to roof), and to the right the platform runs on past five
+cubbies of bare rock — 3.6 wide, 3.6 tall, 2.8 deep, floor 1.0 above the
+pit's so a creature sits near his eye line — open toward the platform,
+each named in the air above it, three lamps over them.
+
+**The rig is puppetable** (`puppet`): a bay moves the body itself and the
+rig only animates — the curve into turns, breath and wag, the plate
+skin, eyes, twitch, legs, head, feelers, the work on ore, dust
+(`animate`). `followPath(s, at)` lays the body along any path: each part
+at its own arc length, pitched by the path's turn between it and the
+part ahead — the corner track generalised.
+
+**The bays** (`bays.ts`), left to right:
+
+- *treadmill* — walking on the spot, side on, over a striped belt that
+  scrolls under it at its walking speed.
+- *wheel* — a rounded rectangle in the cubby's plane: floor rightward,
+  up the right wall, across the ceiling upside down, down the left wall,
+  round again, at wall speed, the head and abdomen bending through each
+  corner.
+- *feeding* — on the left wall under a vein, side on: tickle 7 s, scrape
+  4 s, groom each feeler 3.2 s, a pause, again; the vein rusts and
+  clears with it.
+- *corner* — walks in, mounts the right wall head-first, pauses, turns
+  about on the wall, comes down head-first, walks off, turns about on the
+  floor, again.
+- *regard & turn* — facing him: the regard (feelers out, trembling),
+  then furled; then pivots left, back, right, back, the body curving
+  into each.
+
+**Open:** whether the bays should be closer or the cubbies lit
+brighter; a bay per remaining behaviour (skitter bursts and freezes,
+the twitch) if wanted; whether the live creature should be paused while
+he is at the bays.

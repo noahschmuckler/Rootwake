@@ -139,18 +139,22 @@ interface Feeler {
 }
 
 /** A wall it can climb: a point on its face at the floor, its inward normal, and the along-wall direction. */
-interface WallFrame {
+export interface WallFrame {
   origin: THREE.Vector3;
   normal: THREE.Vector3;
   tangent: THREE.Vector3;
 }
 
-type Mode = 'skitter' | 'freeze' | 'mount' | 'wallmove' | 'wallfreeze' | 'tickle' | 'scrape' | 'groom' | 'dismount' | 'regard';
+export type Mode = 'skitter' | 'freeze' | 'mount' | 'wallmove' | 'wallfreeze' | 'tickle' | 'scrape' | 'groom' | 'dismount' | 'regard';
 
 export class RustMonster {
   readonly group = new THREE.Group();
   readonly collider: CircleCollider;
   mode: Mode = 'freeze';
+  /** A bay drives it: no behaviour, no movement of its own — only the rig's animation (`animate`). */
+  puppet = false;
+  /** A bay has set the head's and the joints' pitch itself this frame (a path), so animate leaves them. */
+  puppetBent = false;
   vein: OreVein | null = null;
   /** 'floor', 'wall', or 'corner' while the body runs the track between them (`sigma` along it). */
   surface: 'floor' | 'wall' | 'corner' = 'floor';
@@ -167,11 +171,11 @@ export class RustMonster {
   private yawRate = 0;
   private lastHeading = 0;
   private lastPhi = 0;
-  private wall: WallFrame | null = null;
+  wall: WallFrame | null = null;
   /** On the wall: along-wall and up-wall coordinates, and the in-plane heading (0 = straight up). */
-  private u = 0;
-  private v = 0;
-  private phi = 0;
+  u = 0;
+  v = 0;
+  phi = 0;
   private wallPath: { u: number; v: number }[] = [];
   private readonly rand: () => number;
   private readonly body = new THREE.Group();
@@ -185,16 +189,16 @@ export class RustMonster {
   private readonly dust: THREE.Points;
   private readonly dustVel: THREE.Vector3[] = [];
   private dustLife = 0;
-  private heading = 0;
-  private speed = 0;
-  private stride = 0;
-  private modeUntil = 0;
-  private modeStart = 0;
+  heading = 0;
+  speed = 0;
+  stride = 0;
+  modeUntil = 0;
+  modeStart = 0;
   private target = new THREE.Vector3();
   private lastMs = 0;
-  private groomSide = 0;
+  groomSide = 0;
   private regardCooldownUntil = 0;
-  private aimAt: THREE.Vector3 | null = null;
+  aimAt: THREE.Vector3 | null = null;
   private twitchUntil = 0;
   private twitch = new THREE.Vector3();
   private readonly floorQuat = new THREE.Quaternion();
@@ -355,7 +359,7 @@ export class RustMonster {
   }
 
   // ---- frames: where the body is, on the floor and on the wall ---------------------
-  private wallFrameFor(vein: OreVein): WallFrame {
+  wallFrameFor(vein: OreVein): WallFrame {
     const origin = new THREE.Vector3(vein.anchor.x, this.floorY, vein.anchor.z);
     const normal = vein.normal.clone();
     const tangent = new THREE.Vector3().crossVectors(normal, UP).normalize();
@@ -365,18 +369,18 @@ export class RustMonster {
     const d = vein.anchor.clone().sub(w.origin);
     return { u: d.dot(w.tangent), v: vein.anchor.y - this.floorY };
   }
-  private static basis(out: THREE.Quaternion, up: THREE.Vector3, forward: THREE.Vector3): THREE.Quaternion {
+  static basis(out: THREE.Quaternion, up: THREE.Vector3, forward: THREE.Vector3): THREE.Quaternion {
     const z = forward.clone().negate();
     const x = new THREE.Vector3().crossVectors(up, z).normalize();
     const y = new THREE.Vector3().crossVectors(z, x).normalize();
     return out.setFromRotationMatrix(new THREE.Matrix4().makeBasis(x, y, z));
   }
-  private floorPose(): void {
+  floorPose(): void {
     const p = this.group.position;
     this.floorPos.set(p.x, this.floorY + BODY_HEIGHT, p.z);
     RustMonster.basis(this.floorQuat, UP, new THREE.Vector3(-Math.sin(this.heading), 0, -Math.cos(this.heading)));
   }
-  private wallPose(): void {
+  wallPose(): void {
     const w = this.wall!;
     this.wallPos.copy(w.origin).addScaledVector(w.tangent, this.u).addScaledVector(UP, this.v).addScaledVector(w.normal, WALL_HUG);
     const f = UP.clone().multiplyScalar(Math.cos(this.phi)).addScaledVector(w.tangent, Math.sin(this.phi)).normalize();
@@ -388,7 +392,7 @@ export class RustMonster {
    * pitch `theta` (0 = walking toward the wall on the floor, π/2 = straight up the wall). `sigma` is arc
    * length along it, 0 where the arc begins; before that it is flat floor, after it flat wall.
    */
-  private track(sigma: number): { d: number; h: number; theta: number } {
+  track(sigma: number): { d: number; h: number; theta: number } {
     const R = CORNER_RADIUS;
     const arc = (R * Math.PI) / 2;
     if (sigma <= 0) return { d: WALL_HUG + R - sigma, h: BODY_HEIGHT, theta: 0 };
@@ -401,7 +405,7 @@ export class RustMonster {
    * is the way it travels: +1 up into the wall (head toward higher sigma), −1 down out of it (head toward
    * lower sigma, facing the other way along the same path). Either way the head takes the corner first.
    */
-  private cornerPose(sigma: number, dir: 1 | -1): void {
+  cornerPose(sigma: number, dir: 1 | -1): void {
     const w = this.wall!;
     const t = this.track(sigma);
     this.group.position.copy(w.origin).addScaledVector(w.tangent, this.u).addScaledVector(w.normal, t.d).addScaledVector(UP, t.h);
@@ -418,11 +422,31 @@ export class RustMonster {
       prev = th;
     }
   }
+  /**
+   * The thorax on any path, the head and abdomen bent to follow it: `at(s)` gives the point, the forward
+   * and the up (away from the surface) at arc length s. Each part sits at its own distance along the path
+   * and pitches, relative to the part ahead of it, by the turn of the path between them.
+   */
+  followPath(s: number, at: (s: number) => { position: THREE.Vector3; forward: THREE.Vector3; up: THREE.Vector3 }): void {
+    const here = at(s);
+    this.group.position.copy(here.position);
+    RustMonster.basis(this.group.quaternion, here.up, here.forward);
+    const side = new THREE.Vector3().crossVectors(here.up, here.forward).negate(); // local +X
+    const pitchOf = (f: THREE.Vector3, g: THREE.Vector3): number => Math.atan2(new THREE.Vector3().crossVectors(f, g).dot(side), f.dot(g));
+    const headF = at(s - RustMonster.HEAD_S).forward;
+    this.head.rotation.x = pitchOf(here.forward, headF);
+    let prevF = here.forward;
+    for (let i = 0; i < this.pivots.length; i++) {
+      const f = at(s - RustMonster.PIVOT_S[i]).forward;
+      this.pivots[i].rotation.x = pitchOf(prevF, f);
+      prevF = f;
+    }
+  }
   /** Track positions: where the whole body is on the floor before the corner, and past it on the wall. */
-  private get sigmaFloor(): number {
+  get sigmaFloor(): number {
     return RustMonster.HEAD_S - 0.15;
   }
-  private get sigmaWall(): number {
+  get sigmaWall(): number {
     return (CORNER_RADIUS * Math.PI) / 2 + RustMonster.PIVOT_S[5] + 0.15;
   }
 
@@ -433,6 +457,10 @@ export class RustMonster {
     const t = nowMs / 1000;
     const p = this.group.position;
     const dPlayer = Math.hypot(player.x - p.x, player.z - p.z);
+    if (this.puppet) {
+      this.animate(nowMs, dt, t, player, this.surface === 'corner' || this.puppetBent);
+      return;
+    }
     if (dPlayer < REGARD_DISTANCE && nowMs > this.regardCooldownUntil && (this.mode === 'skitter' || this.mode === 'freeze' || this.mode === 'wallfreeze')) {
       this.enter('regard', nowMs, REGARD_S);
       this.regardCooldownUntil = nowMs + 9000;
@@ -520,7 +548,16 @@ export class RustMonster {
     }
     this.collider.x = p.x;
     this.collider.z = p.z;
+    this.animate(nowMs, dt, t, player, cornering);
+  }
 
+  /**
+   * The rig's life, whatever moves it: the curve into a turn, breath and wag, the skin's crawl, the eyes,
+   * the twitch, the legs, the head, the feelers, the work on the ore, the dust. `bent` = something else
+   * (the corner track, a bay's path) owns the head's and the joints' pitch this frame.
+   */
+  animate(nowMs: number, dt: number, t: number, player: THREE.Vector3, bent: boolean): void {
+    const cornering = bent;
     // The turn: how fast the heading is swinging, smoothed; the head leads into it and the joints follow,
     // so the whole body curves the way it is turning.
     const yawNow = this.surface === 'wall' ? this.phi : this.heading;
@@ -561,7 +598,7 @@ export class RustMonster {
     this.updateDust(dt);
   }
 
-  private enter(mode: Mode, nowMs: number, seconds: number): void {
+  enter(mode: Mode, nowMs: number, seconds: number): void {
     this.mode = mode;
     this.modeStart = nowMs;
     this.modeUntil = nowMs + seconds * 1000;
