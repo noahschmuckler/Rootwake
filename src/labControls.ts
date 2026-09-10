@@ -13,6 +13,11 @@ export function installLabControls(gallery: RustMonsterGallery, player: Player, 
   panel.setAttribute('aria-label', 'Rust monster laboratory controls');
   panel.innerHTML = `<div class="lab-row"><strong>LAB 3.0</strong><select aria-label="Viewing position" id="lab-view"><option value="live">Live pit</option><option value="hall">Study hall entrance</option>${STUDY_BAYS.map(b => `<option value="${b.id}">${b.title}</option>`).join('')}${Object.entries(COURSE_SPAWNS).map(([id, s]) => `<option value="${id}">${s.label}</option>`).join('')}</select></div><div class="lab-row"><button id="lab-pause">Pause studies</button><button id="lab-step">Step</button><button id="lab-restart">Restart</button><select id="lab-speed" aria-label="Playback speed"><option value="1">1x</option><option value="0.5">0.5x</option><option value="0.25">0.25x</option></select></div>`;
   document.body.appendChild(panel);
+  const campaign = document.createElement('a');
+  campaign.textContent = 'The Broken Conduit · seven-character campaign';
+  campaign.href = (location.pathname.endsWith('/lab/') ? '../' : './') + 'conduit.html';
+  campaign.style.cssText = 'display:block;padding:8px 0 2px;color:#e2cb99;font:12px system-ui';
+  panel.appendChild(campaign);
   course.installControls(panel, player, trialLegs);
   const style = document.createElement('style');
   style.textContent = `#lab-controls{position:fixed;z-index:15;top:calc(env(safe-area-inset-top,0px) + 8px);left:12px;width:min(440px,calc(100vw - 24px));box-sizing:border-box;padding:8px 10px;background:#101c26ed;border:1px solid #536b76;border-radius:9px;color:#dce6ed;font:12px system-ui;touch-action:manipulation}.lab-row{display:flex;gap:6px;align-items:center}.lab-row+.lab-row{margin-top:6px}#lab-controls strong{white-space:nowrap;color:#a4ccd0;letter-spacing:1px}#lab-controls select,#lab-controls button{color:#dfebf1;background:#22333f;border:1px solid #526975;border-radius:5px;min-height:32px;padding:4px 7px;font:12px system-ui}#lab-view{flex:1;min-width:0}#lab-controls button{cursor:pointer;flex:1}#text{top:calc(env(safe-area-inset-top,0px) + 108px)!important;pointer-events:none}`;

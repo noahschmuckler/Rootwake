@@ -8,7 +8,9 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test:lab": "node scripts/test-lab.mjs",
-    "test:mobility": "node scripts/test-mobility.mjs"
+    "test:mobility": "node scripts/test-mobility.mjs",
+    "test:conduit": "node scripts/test-conduit.mjs",
+    "postbuild": "node scripts/stage-conduit.mjs"
   },
   "dependencies": {
     "three": "^0.169.0"

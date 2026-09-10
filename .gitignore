@@ -2,3 +2,9 @@ node_modules
 dist
 .DS_Store
 *.local
+
+build
+.sites-runtime
+.conduit-tests.mjs
+.mobility-tests.mjs
+.lab-tests.mjs
