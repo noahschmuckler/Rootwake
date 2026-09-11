@@ -1,0 +1,79 @@
+name: Deploy Broken Conduit to GitHub Pages
+on:
+  push:
+    branches: [feat/broken-conduit]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: rootwake-conduit-pages
+  cancel-in-progress: false
+jobs:
+  verify-and-publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - name: Verify campaign and shared movement
+        run: npm run test:conduit && npm run test:mobility
+      - name: Build the campaign with its GitHub Pages asset base
+        run: |
+          npm run build -- --base=/Rootwake/conduit/
+          node -e "require('fs').writeFileSync('dist/revision.json',JSON.stringify({sourceCommit:process.env.GITHUB_SHA}))"
+      - name: Publish only the campaign directory
+        run: |
+          set -euo pipefail
+          git fetch origin gh-pages
+          destination=$(mktemp -d)
+          git worktree add --detach "$destination" origin/gh-pages
+          for attempt in 1 2 3; do
+            git fetch origin gh-pages
+            git -C "$destination" reset --hard origin/gh-pages
+            mkdir -p "$destination/conduit"
+            cp -r dist/. "$destination/conduit/"
+            cp dist/conduit.html "$destination/conduit/index.html"
+            printf '%s\n' '<!doctype html><html lang="en"><head><meta charset="utf-8"><meta http-equiv="refresh" content="0;url=./conduit/"><title>The Broken Conduit</title></head><body><a href="./conduit/">Play The Broken Conduit</a></body></html>' > "$destination/conduit.html"
+            touch "$destination/.nojekyll"
+            git -C "$destination" add conduit conduit.html .nojekyll
+            git -C "$destination" -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m "Publish Broken Conduit: $GITHUB_SHA"
+            if git -C "$destination" push origin HEAD:gh-pages; then break; fi
+            if [ "$attempt" = 3 ]; then exit 1; fi
+          done
+      - name: Request the configured Pages build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/$GITHUB_REPOSITORY/pages/builds"
+      - name: Verify the public campaign revision and assets
+        env:
+          EXPECTED_COMMIT: ${{ github.sha }}
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          const base='https://noahschmuckler.github.io/Rootwake/conduit/';
+          let lastError;
+          for(let attempt=0;attempt<24;attempt++) {
+            try {
+              const revision=await fetch(base+'revision.json?t='+Date.now(),{signal:AbortSignal.timeout(15000)});
+              assert.equal(revision.status,200);
+              assert.equal((await revision.json()).sourceCommit,process.env.EXPECTED_COMMIT);
+              const page=await fetch(base+'?t='+Date.now(),{signal:AbortSignal.timeout(15000)});
+              assert.equal(page.status,200);
+              const html=await page.text();assert.match(html,/The Broken Conduit/);
+              const assets=[...html.matchAll(/(?:src|href)="([^"]+\.(?:js|css))"/g)].map(m=>new URL(m[1],base));
+              assert.ok(assets.length>=2);
+              for(const url of assets)assert.equal((await fetch(url,{signal:AbortSignal.timeout(15000)})).status,200,String(url));
+              console.log('Verified playable campaign:',base);process.exit(0);
+            } catch(error) {lastError=error;await new Promise(resolve=>setTimeout(resolve,10000));}
+          }
+          throw lastError;
+          JS
