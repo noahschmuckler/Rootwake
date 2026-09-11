@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Rootwake — Under</title>
+    <style>
+      html, body {
+        margin: 0; height: 100%; background: #0a0a12; overflow: hidden;
+        touch-action: none; overscroll-behavior: none;
+        /* Long presses are game gestures (rest, eat, recipes): no iOS text selection or callout. */
+        -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+      }
+      * { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+      /* The canvas gets a CSS filter when tired, which makes it a stacking context; without explicit
+         layers it would paint over the UI that follows it in the DOM and the hand boxes would go dead. */
+      canvas { display: block; touch-action: none; position: relative; z-index: 0; }
+      #rain { z-index: 4; }
+      #halo { z-index: 5; }
+      #blackout { z-index: 6; }
+      #flash { z-index: 7; }
+      #links { z-index: 8; }
+      #text { z-index: 9; }
+      #hands, #back, #tools { z-index: 10; }
+      /* Pass 1.0d: bottom-right tools — walk (a hold opens the fan wherever you point), 1st/3rd person, zoom while locked. */
+      #tools { position: fixed; right: 12px; bottom: 16px; display: flex; flex-direction: column; gap: 10px; touch-action: none; user-select: none; }
+      #tools button {
+        width: 60px; height: 60px; border-radius: 10px; border: 2px solid rgba(200, 220, 200, 0.45); background: rgba(30, 42, 30, 0.75);
+        color: #dfe8df; font: 12px/1.15 system-ui, sans-serif; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+        cursor: pointer; touch-action: none; -webkit-tap-highlight-color: transparent;
+      }
+      #tools button b { font-size: 20px; line-height: 1; }
+      #tools button.active { border-color: #dff5c8; box-shadow: 0 0 12px rgba(190, 255, 170, 0.6); }
+      #tools button[hidden] { display: none; }
+      /* While locked on a board the tools lie side by side along the bottom edge, under the last gem row. */
+      #tools.locked { flex-direction: row; right: auto; left: 50%; bottom: 8px; transform: translateX(-50%); gap: 12px; }
+      #tools.locked button { width: 88px; height: 46px; flex-direction: row; gap: 6px; }
+      #tools.locked button b { font-size: 18px; }
+      #menu {
+        position: fixed; z-index: 11; display: flex; flex-direction: column; gap: 6px; width: 220px;
+        background: rgba(20, 28, 20, 0.92); border: 1px solid #3a4a3a; border-radius: 8px; padding: 8px;
+      }
+      #menu[hidden] { display: none; }
+      #menu button {
+        font: 14px/1.2 system-ui, sans-serif; color: #dfe8df; background: #26382a; border: 1px solid #4a5f4a;
+        border-radius: 6px; padding: 10px 12px; text-align: left; cursor: pointer;
+      }
+      #menu button:disabled { color: #8a978a; background: #1c261c; cursor: default; }
+      #menu button small { display: block; font-size: 11px; opacity: 0.8; margin-top: 3px; }
+      /* Pass 1.0c: the blueprint menu — one structure at a time, arrows to cycle, a plan drawing. */
+      #blueprints {
+        position: fixed; z-index: 11; left: 50%; top: 50%; transform: translate(-50%, -50%);
+        width: min(340px, 92vw); background: rgba(20, 28, 20, 0.95); border: 1px solid #3a4a3a; border-radius: 10px;
+        padding: 10px; color: #dfe8df; font: 14px/1.3 system-ui, sans-serif; display: flex; flex-direction: column; gap: 8px;
+      }
+      #blueprints[hidden] { display: none; }
+      #blueprints .row { display: flex; align-items: center; gap: 8px; }
+      #blueprints .arrow {
+        flex: 0 0 44px; height: 64px; font: 26px/1 system-ui, sans-serif; color: #dfe8df; background: #26382a;
+        border: 1px solid #4a5f4a; border-radius: 8px; cursor: pointer;
+      }
+      #blueprints canvas { flex: 1 1 auto; width: 100%; height: 150px; background: #101810; border-radius: 6px; }
+      #blueprints h3 { margin: 0; font: 600 16px/1.2 system-ui, sans-serif; }
+      #blueprints .blurb { color: #9aa89a; font-size: 12px; }
+      #blueprints .needs { color: #c9d4c9; font-size: 13px; }
+      #blueprints label { display: flex; align-items: center; gap: 6px; color: #9aa89a; font-size: 12px; }
+      #blueprints .buttons { display: flex; gap: 8px; }
+      #blueprints .buttons button {
+        flex: 1; font: 14px/1.2 system-ui, sans-serif; color: #dfe8df; background: #26382a; border: 1px solid #4a5f4a;
+        border-radius: 6px; padding: 10px 12px; cursor: pointer;
+      }
+      #blueprints .buttons button.go { background: #2f5a34; border-color: #5f8a5f; }
+      #blueprints .buttons button:disabled { color: #8a978a; background: #1c261c; cursor: default; }
+      #hands {
+        position: fixed; top: 8px; left: 50%; transform: translateX(-50%);
+        display: flex; gap: 10px; touch-action: none; user-select: none;
+      }
+      .hand {
+        width: 62px; height: 62px; border-radius: 8px; position: relative;
+        border: 2px solid rgba(200, 220, 200, 0.45); background: rgba(30, 42, 30, 0.75);
+        color: #dfe8df; font: 11px/1.1 system-ui, sans-serif; text-align: center;
+        display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+        cursor: pointer; touch-action: none;
+      }
+      .hand.active { border-color: #dff5c8; box-shadow: 0 0 12px rgba(190, 255, 170, 0.6); }
+      .hand.full { background: rgba(48, 66, 44, 0.9); }
+      .hand.linked { border-color: #bfe6a8; }
+      .hand.strain { border-color: #e8a25c; box-shadow: 0 0 10px rgba(232, 162, 92, 0.6); }
+      .hand i { display: block; width: 18px; height: 18px; border-radius: 4px; }
+      .hand b { font-size: 15px; }
+      .hand small { opacity: 0.8; }
+      .hand.disabled { opacity: 0.35; border-style: dashed; }
+      /* Pass 1.0: rain as a screen sheet too — two scrolling streak layers over the canvas, outside its
+         saturation filter and the tone-mapping exposure, so a shower reads at night and when tired. */
+      #rain { position: fixed; inset: 0; pointer-events: none; opacity: 0; overflow: hidden; background: rgba(120, 140, 170, 0.12); }
+      #rain i { position: absolute; left: -20%; top: -100%; width: 140%; height: 300%; display: block; }
+      /* Break the streaks into falling dashes. */
+      #rain .a { -webkit-mask-image: repeating-linear-gradient(180deg, #000 0 34px, transparent 34px 58px); mask-image: repeating-linear-gradient(180deg, #000 0 34px, transparent 34px 58px); }
+      #rain .b { -webkit-mask-image: repeating-linear-gradient(180deg, #000 0 52px, transparent 52px 90px); mask-image: repeating-linear-gradient(180deg, #000 0 52px, transparent 52px 90px); }
+      #rain .a {
+        background-image: repeating-linear-gradient(104deg, transparent 0 9px, rgba(225, 235, 250, 0.85) 9px 10.5px, transparent 10.5px 26px);
+        animation: rain-a 0.55s linear infinite;
+      }
+      #rain .b {
+        background-image: repeating-linear-gradient(98deg, transparent 0 14px, rgba(210, 225, 245, 0.55) 14px 15px, transparent 15px 41px);
+        animation: rain-b 0.8s linear infinite;
+      }
+      @keyframes rain-a { to { transform: translate3d(-4%, 30%, 0); } }
+      @keyframes rain-b { to { transform: translate3d(-2.5%, 30%, 0); } }
+      #halo { position: fixed; inset: 0; pointer-events: none; }
+      #blackout { position: fixed; inset: 0; pointer-events: none; background: #000; opacity: 0; }
+      #flash { position: fixed; inset: 0; pointer-events: none; background: #fff; opacity: 0; }
+      #links { position: fixed; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+      #links .link { fill: none; stroke-linecap: round; }
+      #links .glow { stroke: rgba(190, 255, 170, 0.35); stroke-width: 9; }
+      #links .core { stroke: #dff5c8; stroke-width: 2; }
+      #links .snap.core { stroke: #ffffff; stroke-width: 3; }
+      #links .strain.glow { stroke: rgba(232, 162, 92, 0.4); }
+      #links .strain.core { stroke: #f0b070; }
+      /* Hint and HUD stack in one column so a wrapped hint (narrow phones) never runs under the HUD. */
+      #text {
+        position: fixed; left: 12px; top: 80px; right: 110px;
+        font: 13px/1.4 system-ui, sans-serif;
+        pointer-events: none; user-select: none;
+      }
+      #hint { color: #8a978a; }
+      #hud { color: #9aa89a; margin-top: 4px; }
+      #back {
+        position: fixed; right: 12px; top: 10px;
+        font: 13px/1 system-ui, sans-serif; color: #c9d4c9;
+        background: #1e2a1e; border: 1px solid #3a4a3a; border-radius: 4px;
+        padding: 8px 12px; cursor: pointer;
+      }
+      #back:hover { background: #2a3a2a; }
+      #back[hidden] { display: none; }
+    </style>
+    <script type="module" crossorigin src="/Rootwake/conduit/assets/under-Nq0rRhPo.js"></script>
+    <link rel="modulepreload" crossorigin href="/Rootwake/conduit/assets/match3-boNc5q6P.js">
+    <link rel="modulepreload" crossorigin href="/Rootwake/conduit/assets/projectiles-Bge13O0g.js">
+    <link rel="modulepreload" crossorigin href="/Rootwake/conduit/assets/underworld-B6HjG1kh.js">
+  </head>
+  <body>
+    <div id="rain"><i class="a"></i><i class="b"></i></div>
+    <div id="halo"></div>
+    <div id="blackout"></div>
+    <div id="flash"></div>
+    <div id="text"><div id="hint"></div><div id="hud"></div></div>
+    <svg id="links" xmlns="http://www.w3.org/2000/svg"></svg>
+    <div id="hands"><div class="hand" data-hand="0"></div><div class="hand" data-hand="1"></div></div>
+    <button id="back" type="button" hidden>Back out</button>
+    <div id="tools">
+      <button id="zoom-in" type="button" hidden><b>+</b>closer</button>
+      <button id="zoom-out" type="button" hidden><b>−</b>further</button>
+      <button id="gear" type="button" hidden><b>⛨</b>suit</button>
+      <button id="view" type="button"><b>◎</b>3rd</button>
+      <button id="walk" type="button"><b>⇡</b>walk</button>
+    </div>
+    <div id="menu" hidden></div>
+    <div id="blueprints" hidden>
+      <div class="row"><button class="arrow" id="bp-prev" type="button">‹</button><canvas id="bp-plan" width="240" height="150"></canvas><button class="arrow" id="bp-next" type="button">›</button></div>
+      <h3 id="bp-name"></h3>
+      <div class="blurb" id="bp-blurb"></div>
+      <div class="needs" id="bp-needs"></div>
+      <label><input type="checkbox" id="bp-track" /> Show what it needs in the HUD</label>
+      <div class="buttons"><button id="bp-build" class="go" type="button">Build here</button><button id="bp-close" type="button">Close</button></div>
+    </div>
+    <script>
+      // Long presses must never open a context menu or start a selection on any browser.
+      document.addEventListener('contextmenu', (e) => e.preventDefault());
+      document.addEventListener('selectstart', (e) => e.preventDefault());
+    </script>
+  </body>
+</html>
