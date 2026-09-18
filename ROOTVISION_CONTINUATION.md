@@ -26,20 +26,22 @@ Cloud browser could display the welcome, cultivation board, and legal hints. It 
 
 ## Publication checkpoint
 
+- COMPLETED: preview deployment succeeded September 18, 2026.
+- Playable URL: https://hulda-beneath-the-roots.noah-schmuck-3455.chatgpt.site
+- Published source: fee4d1e6e41165c92487073bf35acc2376b96a11.
+- Saved version: appgprj_6aaca17e0b0081919ef2c7a443a93e67~appgver_c56bd4a50fc481918fa0a54937e688ab.
+- Successful deployment: appgdep_6aad885e67b08191a139214c9a850c01.
 - A separate owner-private Site has been registered. Reuse its exact project ID from .openai/hosting.json; never create another.
 - Initial local source was pushed successfully to the configured Sites source repository. Local commit: a4edf20b29a5cd139b2ab552f69af85292dd251a. GitHub and Sites commits differ because the private hosting manifest is excluded from the GitHub PR.
 - The first package attempt failed because Sites accepts static output directories such as build or dist, not dist-rootvision.
-- Fixed the private manifest to select build. Next: copy the already-built dist-rootvision output into build, commit this manifest and the notes, push the exact new source, and package. No source game rebuild is needed for this manifest-only change.
-- Next calls: save_site_version with exact pushed HEAD and archive; deploy_private_site_version; poll get_deployment_status to a terminal result. Record the literal successful URL here and in PR #3.
+- Fixed the private manifest to select build, copied dist-rootvision output into build, committed and pushed the exact source, packaged, saved, and deployed successfully.
+- For a future update, rebuild dist-rootvision, refresh build from that output, commit/push the exact source, then package and save/deploy. Do not accidentally publish stale build assets.
 - Credentials must stay out of files and logs. Renew through the native tool for the same Site if the in-memory credential expired.
 - Existing GitHub Pages is configured to the source branch feat/broken-conduit rather than gh-pages. Prior attempts to change Pages settings returned 403. Do not attempt to bypass this restriction. Private Sites is the current playable handoff route.
 
-## Remaining work before handoff
+## Handoff status
 
-1. Persist these continuation notes on the feature branch now.
-2. Complete private publication and record its verified URL.
-3. Stop only this task's supervised preview (sites-preview stop); do not stop other projects' processes.
-4. Return the playable link, a short route through the prototype, and the explicit testing limitations.
+Implementation and publication are complete. Continuation notes are persisted on feat/hulda-rootvision. The supervised preview reports stopped. The next step is Noah's playtest; no additional deployment or implementation is pending. Keep the visual-testing limitations above explicit.
 
 ## Next iteration after Noah plays
 
