@@ -5,6 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:roots": "vite --config rootvision.config.ts",
+    "build:roots": "tsc --noEmit && vite build --config rootvision.config.ts",
+    "test:roots": "node scripts/test-rootvision.mjs",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test:lab": "node scripts/test-lab.mjs",
