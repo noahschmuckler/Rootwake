@@ -27,7 +27,8 @@ export interface TraversalWorld {
   /** Optional authored landings supplement the continuous fan; never bypass validation. */
   anchors?(): readonly Vector3[];
 }
-export type TraversalKind = 'walk' | 'jump' | 'drop';
+/** 'drift' is the free-volume move: a straight line through a medium with no support, gravity or arc. */
+export type TraversalKind = 'walk' | 'jump' | 'drop' | 'drift';
 export interface Traversal {
   kind: TraversalKind;
   from: Vector3;
@@ -37,7 +38,9 @@ export interface Traversal {
   /** Walk routes follow every sampled height, rather than cutting through a ramp. */
   floorPath?: Vector3[];
 }
-export type MotionMode = 'grounded' | 'traverse' | 'hover' | 'descending' | 'falling';
+/** 'free' is the opt-in volume medium (Hulda's awareness in the soil): the body floats, steered by
+ * yaw and pitch, and is bound only by what the world's canOccupy admits. */
+export type MotionMode = 'grounded' | 'traverse' | 'hover' | 'descending' | 'falling' | 'free';
 export interface MotionInput { right: number; forward: number; lift: number; turn: number; held: boolean; }
 const ZERO_INPUT: MotionInput = { right: 0, forward: 0, lift: 0, turn: 0, held: false };
 const clamp = MathUtils.clamp;
@@ -88,6 +91,20 @@ export function validateTraversal(world: TraversalWorld, plan: Traversal): boole
   const support = supportAt(world, plan.to.x, plan.to.z, plan.to.y + 0.03);
   return support !== null && Math.abs(support - plan.to.y) <= STEP_HEIGHT;
 }
+/** The free-volume counterpart of planTraversal: the same reach bound (in 3-D, not just across the
+ * ground), the same swept body test, no support required at either end and no arc. The ability's
+ * reach is the only distance rule; the world's canOccupy is the roof, floor and every impediment. */
+export function planDrift(world: TraversalWorld, from: Vector3, to: Vector3, profile: Readonly<MobilityProfile>, reachScale = 1): Traversal | null {
+  const distance = from.distanceTo(to);
+  if (distance < 0.35 || distance > profile.reach * clamp(reachScale, 0.25, 1.1)) return null;
+  const plan: Traversal = { kind: 'drift', from: from.clone(), to: to.clone(), duration: Math.max(0.18, distance / profile.runSpeed), velocityY: 0, floorPath: [from.clone(), to.clone()] };
+  const samples = Math.max(12, Math.ceil(distance / 0.06)), p = new Vector3();
+  for (let i = 0; i <= samples; i++) {
+    traversalPoint(plan, i / samples * plan.duration, p);
+    if (!world.canOccupy(p, BODY_RADIUS, BODY_HEIGHT)) return null;
+  }
+  return plan;
+}
 export function planTraversal(world: TraversalWorld, from: Vector3, to: Vector3, profile: Readonly<MobilityProfile>, reachScale = 1): Traversal | null {
   const distance = Math.hypot(to.x - from.x, to.z - from.z), rise = to.y - from.y;
   if (distance < 0.35 || distance > profile.reach * clamp(reachScale, 0.25, 1.1) || rise > profile.jumpRise || rise < -profile.maxDrop) return null;
@@ -126,6 +143,8 @@ export class MobilityMotor {
   readonly velocity = new Vector3();
   mode: MotionMode = 'grounded';
   yaw = 0;
+  /** Steers free-volume drive only; grounded and hover movement stay level. */
+  pitch = 0;
   powered = false;
   slowdown = 1;
   reachScale = 1;
@@ -142,21 +161,33 @@ export class MobilityMotor {
   onLand: () => void = () => {};
   get profile(): Readonly<MobilityProfile> { return this.powered ? POWERED_MOBILITY : NORMAL_MOBILITY; }
   get flying(): boolean { return this.mode === 'hover' || this.mode === 'descending'; }
-  get airborne(): boolean { return this.mode !== 'grounded'; }
+  /** Floating in the free volume is a resting state like standing, not being in the air. */
+  get airborne(): boolean { return this.mode !== 'grounded' && this.mode !== 'free'; }
+  /** The medium: false is the ground (support, gravity, arcs); true is a volume the world bounds. */
+  get free(): boolean { return this.medium === 'free'; }
+  set free(value: boolean) {
+    if (value === this.free) return;
+    this.medium = value ? 'free' : 'grounded';
+    if (value) { if (this.flying) this.flightCeiling = Infinity; this.plan = null; this.mode = 'free'; this.idleTime = 0; }
+    else if (this.mode === 'free' || this.mode === 'traverse') { this.plan = null; this.mode = 'falling'; }
+    this.velocity.set(0, 0, 0);
+  }
+  private medium: 'grounded' | 'free' = 'grounded';
   reset(at: Vector3): void {
     this.feet.copy(at); this.velocity.set(0, 0, 0); this.plan = null;
-    this.mode = 'grounded'; this.speed = 0; this.idleTime = 0; this.flightCeiling = Infinity;
+    this.mode = this.free ? 'free' : 'grounded'; this.speed = 0; this.idleTime = 0; this.flightCeiling = Infinity;
   }
   commit(plan: Traversal, world: TraversalWorld): boolean {
-    if (!this.enabled || !this.canMove || this.mode !== 'grounded' || this.feet.distanceTo(plan.from) > 0.08) return false;
-    const fresh = planTraversal(world, this.feet, plan.to, this.profile, this.reachScale);
+    if (!this.enabled || !this.canMove || this.feet.distanceTo(plan.from) > 0.08) return false;
+    if (this.mode !== (this.free ? 'free' : 'grounded')) return false;
+    const fresh = this.free ? planDrift(world, this.feet, plan.to, this.profile, this.reachScale) : planTraversal(world, this.feet, plan.to, this.profile, this.reachScale);
     if (!fresh) return false; // Equipment, energy or an obstacle may have changed since preview.
     plan = fresh;
     this.plan = plan; this.planTime = 0; this.mode = 'traverse'; this.velocity.set(0, 0, 0);
     this.onCommit(plan); return true;
   }
   ignite(): boolean {
-    if (!this.powered || !this.enabled || !this.canMove || this.mode === 'traverse') return false;
+    if (!this.powered || !this.enabled || !this.canMove || this.mode === 'traverse' || this.free) return false;
     this.plan = null; this.mode = 'hover'; this.idleTime = 0; this.velocity.set(0, 1.8, 0);
     this.flightCeiling = this.feet.y + 14;
     return true;
@@ -173,11 +204,11 @@ export class MobilityMotor {
     if (!Number.isFinite(dt) || dt <= 0) return;
     dt = Math.min(dt, 0.1); // Never teleport across walls after returning from a suspended tab.
     if (!this.powered && this.flying) this.cutThrusters();
-    if (!this.enabled || !this.canMove) { this.velocity.x = 0; this.velocity.z = 0; }
+    if (!this.enabled || !this.canMove) { this.velocity.x = 0; this.velocity.z = 0; if (this.free) this.velocity.y = 0; }
     const start = this.feet.clone();
     const n = Math.max(1, Math.ceil(dt / (1 / 120)));
     for (let i = 0; i < n; i++) this.step(dt / n, world, this.enabled && this.canMove ? input : ZERO_INPUT);
-    const travelled = Math.hypot(this.feet.x - start.x, this.feet.z - start.z);
+    const travelled = this.free ? this.feet.distanceTo(start) : Math.hypot(this.feet.x - start.x, this.feet.z - start.z);
     this.speed = travelled / dt;
     this.distance += travelled;
     if (travelled > 0 && this.mode !== 'traverse') this.onTravel(travelled);
@@ -210,16 +241,45 @@ export class MobilityMotor {
     if (escape) { this.feet.copy(escape); return true; }
     return false;
   }
+  /** Free-volume drive: the stick is camera-relative in three dimensions (forward follows the pitch,
+   * so looking down and pushing forward sinks), lift is an extra vertical axis for keyboards, and the
+   * sweep slides along whatever stops it, axis by axis, exactly as the ground drive slides along walls.
+   * Speed is the ability's runSpeed: the same system, only the medium differs (tuning: a slower
+   * drift may read better as awareness moving through soil; judge on the phone). */
+  private drift(dt: number, world: TraversalWorld, input: MotionInput): void {
+    const speed = this.profile.runSpeed / Math.max(1, this.slowdown);
+    const r = stickResponse(input.right, -input.forward);
+    const right = r.x, forward = -r.y, cp = Math.cos(this.pitch), sp = Math.sin(this.pitch);
+    const lift = stickResponse(0, input.lift).y;
+    const wantedX = (Math.cos(this.yaw) * right - Math.sin(this.yaw) * cp * forward) * speed;
+    const wantedY = (sp * forward + lift) * speed;
+    const wantedZ = (-Math.sin(this.yaw) * right - Math.cos(this.yaw) * cp * forward) * speed;
+    const damping = 1 - Math.exp(-dt * (r.amount > 0 || lift !== 0 ? 18 : 32));
+    this.velocity.x += (wantedX - this.velocity.x) * damping;
+    this.velocity.y += (wantedY - this.velocity.y) * damping;
+    this.velocity.z += (wantedZ - this.velocity.z) * damping;
+    if (Math.abs(this.velocity.x) + Math.abs(this.velocity.y) + Math.abs(this.velocity.z) < 0.001) this.velocity.set(0, 0, 0);
+    for (const axis of ['x', 'y', 'z'] as const) {
+      const delta = this.velocity[axis] * dt;
+      if (!delta) continue;
+      const next = this.feet.clone(); next[axis] += delta;
+      if (world.canOccupy(next, BODY_RADIUS, BODY_HEIGHT)) this.feet.copy(next);
+      else this.velocity[axis] = 0;
+    }
+  }
   private step(dt: number, world: TraversalWorld, input: MotionInput): void {
     if (this.plan && this.mode === 'traverse') {
-      if (!this.enabled || !this.canMove) { this.plan = null; this.mode = 'falling'; return; }
+      if (!this.enabled || !this.canMove) { this.plan = null; this.mode = this.free ? 'free' : 'falling'; return; }
       const time = Math.min(this.plan.duration, this.planTime + dt / Math.max(1, this.slowdown));
       const next = traversalPoint(this.plan, time);
       if (!world.canOccupy(next, BODY_RADIUS, BODY_HEIGHT)) {
+        // A drift that meets something new simply stops where it is; a jump falls.
+        if (this.free) { this.plan = null; this.mode = 'free'; this.velocity.set(0, 0, 0); this.onLand(); return; }
         this.velocity.y = Math.min(0, this.plan.velocityY - GRAVITY * time);
         this.plan = null; this.mode = 'falling'; return;
       }
       this.feet.copy(next); this.planTime = time;
+      if (time >= this.plan.duration && this.free) { this.plan = null; this.mode = 'free'; this.velocity.set(0, 0, 0); this.idleTime = 0; this.onLand(); return; }
       if (time >= this.plan.duration) {
         const support = supportAt(world, next.x, next.z, next.y + 0.05);
         if (support !== null && Math.abs(support - next.y) < STEP_HEIGHT) this.land(support);
@@ -227,6 +287,7 @@ export class MobilityMotor {
       }
       return;
     }
+    if (this.mode === 'free') { this.drift(dt, world, input); return; }
     if (this.flying) {
       if (input.held) { this.idleTime = 0; this.mode = 'hover'; }
       else { this.idleTime += dt; if (this.idleTime > HOVER_GRACE_S) this.mode = 'descending'; }

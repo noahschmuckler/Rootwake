@@ -53,6 +53,28 @@ Desktop: WASD movement; F toggles powered hover; while hovering R/V raise
 and lower altitude and Q/E turn. The pointer joystick remains usable with
 a mouse. World dragging still looks around.
 
+### Free volume (a world without ground)
+
+A world can put the same body in a medium instead of on a surface: set
+`player.free = true` and give it a `traversalWorld` whose `surfacesAt` is
+empty and whose `canOccupy` is the whole rule (roof, floor, anything solid).
+The first such world is the root study's soil (`ROOT_STUDY.md`). Nothing
+changes for grounded worlds; the motor's mode is `'free'` only there.
+
+Drive is camera-relative in three dimensions: forward follows the pitch, so
+looking down and pushing sinks; strafing stays level; the keyboard's R/V add
+a vertical axis. The sweep slides along whatever stops it, axis by axis, as
+the ground drive slides along walls. There is no gravity, jumping or
+falling, and thrusters cannot ignite. Speed is the ability's run speed.
+
+Hold-centre targeting lays the same rows and bearings, in view space,
+EYE_HEIGHT below the line of sight, so the fan reads on screen exactly as
+it does on the ground at any pitch; a `'drift'` target (lilac) is a straight
+line whose every sample must be occupiable and whose length is bound by the
+same reach (`planDrift`). Leaving the medium (`player.free = false`) drops
+the body to the nearest support; the study teleports it onto the surface
+it rose to.
+
 ## Courses and measurements
 
 The 16 m track exposes instantaneous speed and elapsed time. The slalom has
@@ -68,7 +90,8 @@ does not award it. Reset course returns to the selected start.
 ## Architecture
 
 - `mobility.ts`: DOM-independent motor, supported landing footprints,
-  sampled ballistic trajectories, substepped collision, hover state machine.
+  sampled ballistic trajectories, substepped collision, hover state machine,
+  the opt-in free-volume medium (`free`, `planDrift`).
 - `movementGesture.ts`: testable pointer-ID, hold, and double-tap arbitration.
 - `player.ts`: one shared player, overlay targets, camera/avatar adaptation,
   collision adapter for existing trees and built wall segments.
@@ -89,7 +112,8 @@ is a future traversal type, not implemented or faked by this pass.
 `npm run test:mobility` covers gesture timing/cancellation, analog speed,
 frame-rate agreement, thin obstacles, route and landing validity, normal
 and powered course reachability, equipment changes, hovering/descent,
-flight ring crossing, and forge integration. `npm run test:lab` retains the
+flight ring crossing, forge integration, and the free volume (pitch-led
+drive against a roof and floor, drift reach and impediments). `npm run test:lab` retains the
 existing creature regression suite; its annex boundary assertion now
 expects the authored course doorway to be open. `npm run build` type-checks
 all three entries. `node scripts/browser-mobility.mjs` tests production

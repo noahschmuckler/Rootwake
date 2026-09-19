@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Vector3, Scene } from 'three';
 import { MovementGesture, TARGET_HOLD_MS, IGNITION_HOLD_MS } from '../src/movementGesture';
-import { MobilityMotor, NORMAL_MOBILITY, POWERED_MOBILITY, BODY_RADIUS, BODY_HEIGHT, HOVER_GRACE_S, stickResponse, planTraversal, supportAt, traversalPoint, validateTraversal, type TraversalWorld, type MotionInput } from '../src/mobility';
+import { MobilityMotor, NORMAL_MOBILITY, POWERED_MOBILITY, BODY_RADIUS, BODY_HEIGHT, HOVER_GRACE_S, stickResponse, planDrift, planTraversal, supportAt, traversalPoint, validateTraversal, type TraversalWorld, type MotionInput } from '../src/mobility';
 import { CourseGeometry, NORMAL_PADS, POWERED_PADS, COURSE_SPAWNS, FLIGHT_GATES, crossedGate } from '../src/mobilityCourseLayout';
 import { Arena } from '../src/arena';
 import { OBJECT_TYPES } from '../src/objects';
@@ -200,4 +200,27 @@ test('automatic hover landing also resolves partial support along a platform edg
 test('cutting thrust over a narrow non-walkable slalom obstacle sheds to safe ground', () => {
   const m=new MobilityMotor();m.powered=true;m.reset(new Vector3(86,4,6.3));m.ignite();m.cutThrusters();
   simulate(m,course,6);assert.equal(m.mode,'grounded');near(m.feet.y,1.2);
+});
+
+// The free volume (the root study's soil): no surfaces; a roof at y = -0.1, a floor at -4, a clay
+// disc of radius 8 around (2, -2) below y = -2 that cannot be entered.
+const soil: TraversalWorld = { surfacesAt: () => [], canOccupy: (p, _r, h) => p.y + h <= -0.1 && p.y >= -4 && !(p.y < -2 && Math.hypot(p.x - 2, p.z + 2) < 8) };
+test('free volume: forward drive follows the pitch, the floor and roof stop it, and it slides along both', () => {
+  const m = new MobilityMotor(); m.free = true; m.reset(new Vector3(0, -2, 20)); assert.equal(m.mode, 'free'); assert.equal(m.airborne, false);
+  m.pitch = -0.6; simulate(m, soil, 3, { ...idle, forward: 1, held: true });
+  assert.ok(m.feet.y >= -4 && m.feet.y < -3.95, `floor ${m.feet.y}`); assert.ok(m.feet.z < 14, `slid along the floor ${m.feet.z}`);
+  m.pitch = 0.8; simulate(m, soil, 4, { ...idle, forward: 1, held: true });
+  assert.ok(m.feet.y + BODY_HEIGHT <= -0.1 && m.feet.y + BODY_HEIGHT > -0.15, `roof ${m.feet.y}`); assert.ok(m.feet.z < 8, `slid along the roof ${m.feet.z}`);
+  assert.ok(soil.canOccupy(m.feet, BODY_RADIUS, BODY_HEIGHT));
+  m.feet.set(0, 0.3, 0); m.free = false; assert.equal(m.mode, 'falling'); simulate(m, flat, 2); assert.equal(m.mode, 'grounded'); near(m.feet.y, 0);
+});
+test('free volume: a drift is bound by reach in three dimensions and by the soil, then rests in place', () => {
+  const m = new MobilityMotor(); m.free = true; m.reset(new Vector3(2, -3, 9));
+  assert.equal(planDrift(soil, m.feet, new Vector3(2, -3, 5.5), NORMAL_MOBILITY), null, 'the clay is a wall');
+  assert.equal(planDrift(soil, m.feet, new Vector3(2, -3, 4), NORMAL_MOBILITY), null, 'beyond reach');
+  assert.equal(planDrift(soil, m.feet, new Vector3(2, 0.5, 9), NORMAL_MOBILITY), null, 'through the roof');
+  const plan = planDrift(soil, m.feet, new Vector3(2, -1.5, 5.5), NORMAL_MOBILITY); assert.ok(plan); assert.equal(plan!.kind, 'drift');
+  assert.ok(m.commit(plan!, soil)); assert.equal(m.mode, 'traverse'); assert.equal(m.airborne, true);
+  simulate(m, soil, 3); assert.equal(m.mode, 'free'); near(m.feet.distanceTo(new Vector3(2, -1.5, 5.5)), 0, 1e-3); near(m.velocity.length(), 0);
+  assert.equal(m.ignite(), false, 'no thrusters in the soil');
 });

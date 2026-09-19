@@ -1,6 +1,6 @@
 // One touch-first player controller for the plateau, underworld and laboratory.
 import * as THREE from 'three';
-import { BODY_RADIUS, BODY_HEIGHT, MobilityMotor, planTraversal, supportAt, traversalPoint, type Traversal, type TraversalWorld } from './mobility';
+import { BODY_RADIUS, BODY_HEIGHT, MobilityMotor, planDrift, planTraversal, supportAt, traversalPoint, type Traversal, type TraversalWorld } from './mobility';
 import { MovementGesture } from './movementGesture';
 
 export const EYE_HEIGHT = 0.55;
@@ -33,7 +33,12 @@ function nearestOnCollider(c: Collider, px: number, pz: number): { x: number; z:
   return { x: c.x1 + dx * t, z: c.z1 + dz * t };
 }
 interface LookPointer { role: 'look' | 'press'; startX: number; startY: number; lastX: number; lastY: number; downMs: number; moved: boolean; }
-export interface MovementTarget { plan: Traversal; marker: THREE.Mesh; }
+export interface MovementTarget {
+  plan: Traversal; marker: THREE.Mesh;
+  /** Free-volume rings: the stick bearing and distance they were laid at, since their world
+   * bearing from the feet is not the stick's once the view tilts. */
+  stick?: { bearing: number; distance: number };
+}
 
 export class Player {
   /** Legacy world datum: x/z are the player position, y remains the domain's base plane.
@@ -83,6 +88,7 @@ export class Player {
     // Transparent like the others so it renders in the same (last) pass: an opaque overlay is drawn
     // before any transparent ground and gets painted over by it wherever the ground is nearer.
     picked: new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 1, transparent: true, depthTest: false, depthWrite: false, fog: false, side: THREE.DoubleSide }),
+    drift: new THREE.MeshBasicMaterial({ color: 0xd7bdff, opacity: 0.9, transparent: true, depthTest: false, depthWrite: false, fog: false, side: THREE.DoubleSide }),
   };
   private readonly arc = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.75, depthTest: false, depthWrite: false, fog: false }));
   readonly keys = new Set<string>();
@@ -90,6 +96,9 @@ export class Player {
   set poweredLegs(value: boolean) { this.motor.powered = value; if (!value) { this.motor.cutThrusters(); this.flightStick.held = false; } }
   get isMoving(): boolean { return this.motor.airborne || this.motor.speed > 0.02; }
   get isFlying(): boolean { return this.motor.flying; }
+  /** The free-volume medium (see MobilityMotor.free): the world's canOccupy is then the only bound. */
+  get free(): boolean { return this.motor.free; }
+  set free(value: boolean) { if (value !== this.motor.free) { this.motor.free = value; this.closeFan(); } }
   get targets(): readonly MovementTarget[] { return this.candidates; }
   get selectedTarget(): MovementTarget | null { return this.picked; }
   get targeting(): boolean { return this.gesture.mode === 'target'; }
@@ -175,7 +184,7 @@ export class Player {
   }
   forward(): THREE.Vector3 { return new THREE.Vector3(-Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), -Math.cos(this.yaw) * Math.cos(this.pitch)); }
   knock(): void {
-    if (this.motor.airborne) return;
+    if (this.motor.airborne || this.free) return;
     const angle = Math.random() * Math.PI * 2, from = this.feet();
     for (let i = 1; i <= 12; i++) {
       const p = from.clone().add(new THREE.Vector3(Math.cos(angle), 0, Math.sin(angle)).multiplyScalar(KNOCK_DISTANCE * i / 12));
@@ -229,7 +238,7 @@ export class Player {
     this.motor.enabled = this.enabled; this.motor.canMove = this.canMove; this.motor.slowdown = this.moveSlowdown; this.motor.reachScale = this.fanScale;
     if (gestureEvent === 'ignite') this.motor.ignite();
     if (gestureEvent === 'cut') this.motor.cutThrusters();
-    this.motor.yaw = this.yaw;
+    this.motor.yaw = this.yaw; this.motor.pitch = this.pitch;
     const drive = !this.targeting && this.gesture.mode !== 'consumed';
     const right = (drive ? this.gesture.x : 0) + (this.keys.has('KeyD') ? 1 : 0) - (this.keys.has('KeyA') ? 1 : 0);
     const forward = (drive ? -this.gesture.y : 0) + (this.keys.has('KeyW') ? 1 : 0) - (this.keys.has('KeyS') ? 1 : 0);
@@ -268,6 +277,7 @@ export class Player {
   private layoutFan(aim: number): void {
     this.closeFan();
     const from = this.feet(), reach = this.motor.profile.reach * THREE.MathUtils.clamp(this.fanScale, 0.25, 1.1);
+    if (this.free) { this.layoutDriftFan(aim, from, reach); return; }
     const points: THREE.Vector3[] = [];
     for (const fraction of [0.22, 0.43, 0.68, 0.98]) for (const angle of [-1.15, -0.75, -0.38, 0, 0.38, 0.75, 1.15]) {
       const bearing = aim + angle - this.yaw;
@@ -289,19 +299,37 @@ export class Player {
     }
     this.markers.visible = true;
   }
+  /** The free-volume fan is the ground fan carried into the view: the same rows and bearings, laid
+   * in view space EYE_HEIGHT below the line of sight, so on screen it reads exactly as it does on
+   * the ground whatever the pitch, and looking down aims it down. Rings lie in the fan's plane. */
+  private layoutDriftFan(aim: number, from: THREE.Vector3, reach: number): void {
+    const f = this.forward(), r = new THREE.Vector3(Math.cos(this.yaw), 0, -Math.sin(this.yaw)), u = new THREE.Vector3().crossVectors(r, f);
+    const origin = this.eye().addScaledVector(u, -EYE_HEIGHT), z = new THREE.Vector3(0, 0, 1);
+    for (const fraction of [0.22, 0.43, 0.68, 0.98]) for (const angle of [-1.15, -0.75, -0.38, 0, 0.38, 0.75, 1.15]) {
+      const bearing = aim + angle, distance = reach * fraction;
+      const to = origin.clone().addScaledVector(r, Math.sin(bearing) * distance).addScaledVector(f, Math.cos(bearing) * distance);
+      const plan = planDrift(this.movementWorld, from, to, this.motor.profile, this.fanScale);
+      if (!plan) continue;
+      const marker = new THREE.Mesh(this.ring, this.materials.drift);
+      marker.position.copy(to); marker.quaternion.setFromUnitVectors(z, u);
+      marker.renderOrder = 1001; this.markers.add(marker); this.candidates.push({ plan, marker, stick: { bearing, distance } });
+    }
+    this.markers.visible = true;
+  }
   private closeFan(): void {
     this.markers.clear(); this.candidates = []; this.picked = null; this.markers.visible = false; this.arc.visible = false;
   }
   private refreshPick(): void {
     if (!this.targeting) return;
     const magnitude = Math.hypot(this.gesture.x, this.gesture.y);
-    const aim = Math.atan2(this.gesture.x, -this.gesture.y) - this.yaw;
+    const aim = Math.atan2(this.gesture.x, -this.gesture.y);
     const reach = this.motor.profile.reach * THREE.MathUtils.clamp(this.fanScale, 0.25, 1.1);
     let best: MovementTarget | null = null, score = Infinity;
     for (const candidate of this.candidates) {
       const dx = candidate.plan.to.x - this.motor.feet.x, dz = candidate.plan.to.z - this.motor.feet.z;
-      const bearing = Math.atan2(dx, -dz), angle = Math.abs(Math.atan2(Math.sin(bearing - aim), Math.cos(bearing - aim)));
-      const error = Math.abs(Math.hypot(dx, dz) / reach - magnitude);
+      const bearing = candidate.stick?.bearing ?? Math.atan2(dx, -dz) + this.yaw, angle = Math.abs(Math.atan2(Math.sin(bearing - aim), Math.cos(bearing - aim)));
+      const distance = candidate.stick?.distance ?? Math.hypot(dx, dz);
+      const error = Math.abs(distance / reach - magnitude);
       const s = angle * 1.5 + error * 2;
       if (magnitude > 0.18 && angle < 0.5 && error < 0.3 && s < score) { score = s; best = candidate; }
       candidate.marker.material = this.materials[candidate.plan.kind]; candidate.marker.scale.setScalar(1);
