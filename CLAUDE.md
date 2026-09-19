@@ -1,3 +1,7 @@
+# Active phone study: Root Across the Ravine
+
+On branch `feat/root-ravine`, read **RAVINE_HANDOFF.md first** for the scoped mechanic, successful deployed revision, test commands, phone-tuning questions, and continuation history. Live: https://noahschmuckler.github.io/Rootwake/ravine/ . Preserve Claude's sink/drift controls and the original 3D match3; this is a separate route from the successful first study.
+
 # Rootwake — working notes
 
 A prototype for a separate, 3D game exploring a "confinement → open vista"

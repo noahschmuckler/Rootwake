@@ -1,5 +1,16 @@
 # Root Across the Ravine: continuation point
 
+## Latest status: complete and live
+Play: https://noahschmuckler.github.io/Rootwake/ravine/
+Source branch: feat/root-ravine. Tested/published code commit: c843414ab48fd61d8a97cd15eb751a902dae2e65.
+Successful verification/deployment run: https://github.com/noahschmuckler/Rootwake/actions/runs/35472000279
+Public revision.json matches that commit; GitHub verified the HTML and every referenced JS/CSS asset. Existing root-study and other routes were preserved.
+
+All 49 math/mobility/lab tests passed (4 new network tests, 35 mobility, 10 lab). The complete multi-frame touch journey passed in GitHub Chromium, with screenshots for 390x844, 375x667, 844x390 and 1280x900. Runtime screenshots and results are downloadable from the workflow artifact ravine-browser-results. This is browser emulation, not physical iPhone/Safari verification.
+
+No unfinished deployment work. Next step is Noah's phone feedback: branch readability, sense of embodiment within roots, the species gate, and whether emerging makes the crossing tangible. Avoid expanding ecology or world scope before that feedback. The chronological checkpoints below explain decisions; this latest status supersedes their pending-work notes.
+
+
 ## User authorization and reference
 Noah approved scope, implementation, and GitHub Pages publication of a second phone study. He explicitly requested durable clues for Claude if Codex runs out of context or usage. Work autonomously through build, test, publication. No additional deployment approval needed.
 
@@ -44,3 +55,15 @@ The full production journey passed with multi-frame touch match3, traversal of B
 Local visual polish after that pass: suppress close-up node markers so the awareness never flies into a screen-filling glowing sphere; remove background trees along the landmark sightline; use the shared controller's existing third-person view during dryad embodiment, adding a small leafy mantle. Underground remains first-person. CI will rerun the full journey before deployment.
 
 Current source checkpoint before polish: a0d1bcd on feat/root-ravine. Deployment workflow now ready to publish /Rootwake/ravine/; it is independent of root-study. Do not report live until public revision is verified. The dryad uses 90 ACTIVE seconds; menus and hidden tabs pause. Reload keeps learning/sap/shortcut, returns to the oak intentionally.
+
+
+## Tuning and honest limits for the next pass
+- Authored scene, not procedural generation or a background ecology simulator.
+- Corridor radius 1.5 m (body clearance subtracts 0.25 m) in ravineModel.ts. This is deliberately generous. It may feel like an invisible wall at branch edges; judge on phone before changing shared movement.
+- The direction cue calls guide() and rotates the gaze smoothly; it never moves the body. Manual pointer look cancels the cue.
+- Shortcut costs 12, communion 24, spring grants 12 once, sap cap 120. All constants are in ravineModel.ts. Match3 reward keeps the original per-run callback behavior, including overlapping runs.
+- Dryad uses the existing third-person camera and a leaf mantle, 90 active seconds, a six-metre local grove radius. Root travel stays first-person. Manual release and pause were browser-tested. Automatic expiry is implemented but the current browser test does not wait out all 90 seconds.
+- Reload preserves learning, tended shortcut, visited spring, arrival, and sap; position intentionally returns to the oak. There is no offline progression. Save key rootwake-ravine-v1 is independent of the first study.
+- The current root entry is at the oak and emergence at the far grove. There is not yet a contextual rise-at-oak action after travelling back; add that if the phone session calls for freer return trips.
+- Shared Player/mobility/match3/BoardView files are unchanged from Claude's b6235aa baseline. Only a new Vite entry, study-specific files, tests, deployment and this handoff were added.
+- Build with npm run build -- --base=/Rootwake/ravine/. Test with node scripts/test-ravine.mjs, npm run test:mobility, npm run test:lab, then node scripts/browser-ravine.mjs. Browser override: CHROMIUM_PATH. Do not replace multi-frame press() with instantaneous touchscreen.tap(), which previously concealed a genuine interaction bug.
