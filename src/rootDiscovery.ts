@@ -6,6 +6,24 @@ import { installMobilityControls } from './mobilityControls';
 import { Board, type Cell } from './match3';
 import { BoardView } from './board3d';
 import { mulberry32, PALETTE } from './colors';
+import type { TraversalWorld } from './mobility';
+
+// Root vision is entered by sinking: the same body, the same stick and look, freed from the ground.
+// Tuning (judge on the phone): how long the sink takes, how deep it rests, how far a single drift
+// reaches per ability, and where each ability's floor lies.
+const SINK_S = 2.6, RISE_S = 1.6;
+/** Feet come to rest this far under the surface; the eye rides EYE_HEIGHT above the feet. */
+const SINK_DEPTH = 1.7;
+/** The eye never breaks the surface from below: the ground is the roof. */
+const ROOF_MARGIN = 0.1;
+/** Close and wide listening reach through loam down to here (feet); the clay is a harder soil. */
+const LISTEN_FLOOR = -3.6;
+/** Bedrock: solid rock under everything, the floor of deep listening. */
+const BEDROCK = -7.0;
+const CLAY_TOP = -2.22, CLAY_X = 2, CLAY_Z = -2, CLAY_RADIUS = 8;
+/** How far one drift reaches, as a share of the shared reach (4.2 m), per ability. */
+const REACH_SCALE = { close: 0.8, wide: 1.0, deep: 1.1 };
+const WORLD_RADIUS = 25;
 
 type Mode = 'surface' | 'roots' | 'cultivate';
 interface Progress { energy: number; wide: boolean; listened: boolean; deep: boolean; restored: boolean }
@@ -101,8 +119,10 @@ const clay = new THREE.Mesh(new THREE.CircleGeometry(8, 50), clayMat); clay.rota
 const rim = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(Array.from({ length: 80 }, (_, i) => v(2 + Math.cos(i / 80 * 6.28) * 8, -2.22, -2 + Math.sin(i / 80 * 6.28) * 8))), new THREE.LineBasicMaterial({ color: '#c09c6b', transparent: true, opacity: .25 })); roots.add(rim);
 const stone = new THREE.MeshStandardMaterial({ color: '#647e79', emissive: '#233e3b', emissiveIntensity: .6, roughness: 1 });
 const ruinOutline = new THREE.LineBasicMaterial({ color: '#a8d3c1', transparent: true, opacity: .65 });
+const blocks: THREE.Box3[] = [];
 function block(x: number, y: number, z: number, sx: number, sy: number, sz: number): void {
   const geometry = new THREE.BoxGeometry(sx, sy, sz), mesh = new THREE.Mesh(geometry, stone); mesh.position.set(x, y, z); chamber.add(mesh);
+  blocks.push(new THREE.Box3(v(x - sx / 2, y - sy / 2, z - sz / 2), v(x + sx / 2, y + sy / 2, z + sz / 2)));
   const edges = new THREE.LineSegments(new THREE.EdgesGeometry(geometry), ruinOutline); edges.position.copy(mesh.position); chamber.add(edges);
 }
 block(4.6, -5.8, -4.9, 4.2, .25, 3.4);
@@ -116,13 +136,41 @@ const motes = new THREE.Group(); roots.add(motes);
 const particles: { mesh: THREE.Mesh; curve: THREE.CatmullRomCurve3; offset: number }[] = [];
 const moteGeo = new THREE.SphereGeometry(.045, 5, 4), moteMat = new THREE.MeshBasicMaterial({ color: '#bcffe3' });
 for (let i = 0; i < 21; i++) { const mesh = new THREE.Mesh(moteGeo, moteMat); motes.add(mesh); particles.push({ mesh, curve: i < 7 ? seeking : i < 14 ? buried : channel, offset: i / 7 % 1 }); }
+/** The floor of listening: a dark haze at the ability's limit, bedrock once communed. */
+const limitMat = new THREE.MeshBasicMaterial({ color: '#050d0c', transparent: true, opacity: .62, depthWrite: false, side: THREE.DoubleSide });
+const limit = new THREE.Mesh(new THREE.PlaneGeometry(64, 64), limitMat); limit.rotation.x = -Math.PI / 2; roots.add(limit);
+/** A little light travels with the awareness so the nearest soil and roots read up close. */
+const lantern = new THREE.PointLight('#c9e6cf', 0, 7, 1.6); camera.add(lantern);
 const player = new Player(renderer.domElement, scene, camera);
 player.position.y = 0; player.standHeightAt = groundHeight;
 player.teleport(0, 6.5, 0); player.pitch = .1;
 installMobilityControls(player);
+/** The soil as a volume. No surfaces: nothing to stand on. canOccupy is the roof (the ground), the
+ * floor (the ability's limit, or bedrock), the clay (a soil the awareness cannot enter until it has
+ * communed with the root that does) and the buried structure's stone. */
+const soil: TraversalWorld = {
+  surfacesAt: () => [],
+  canOccupy: (p, radius, height) => {
+    if (Math.hypot(p.x, p.z) > WORLD_RADIUS) return false;
+    if (p.y + height > groundHeight(p.x, p.z) - ROOF_MARGIN) return false;
+    if (p.y < (state.deep ? BEDROCK : LISTEN_FLOOR)) return false;
+    if (!state.deep && p.y < CLAY_TOP && Math.hypot(p.x - CLAY_X, p.z - CLAY_Z) < CLAY_RADIUS + radius) return false;
+    for (const b of blocks) if (p.x + radius > b.min.x && p.x - radius < b.max.x && p.y + height > b.min.y && p.y < b.max.y && p.z + radius > b.min.z && p.z - radius < b.max.z) return false;
+    return true;
+  },
+};
+interface Descent { from: number; to: number; t: number; up: boolean }
+let underground = false, descent: Descent | null = null;
+function startDescent(up: boolean): void {
+  const feet = player.feet(), surfaceY = groundHeight(feet.x, feet.z);
+  if (!up) { underground = true; player.traversalWorld = soil; player.free = true; }
+  descent = { from: feet.y, to: up ? surfaceY : surfaceY - SINK_DEPTH, t: 0, up };
+  player.canMove = false;
+}
+const surfaceTint = new THREE.Color('#172d29'), rootsTint = new THREE.Color('#0b2021'), tint = new THREE.Color();
 const board = new Board(6, 6, 190926), boardView = new BoardView(camera);
 const ray = new THREE.Raycaster();
-let mode: Mode = 'surface', time = 0, last = performance.now(), orbitYaw = .48, orbitPitch = .40;
+let mode: Mode = 'surface', time = 0, last = performance.now();
 let transition = 0;
 const oldCamera = new THREE.Vector3(), oldQuat = new THREE.Quaternion();
 const shoots: { mesh: THREE.Mesh; from: THREE.Vector3; to: THREE.Vector3; born: number }[] = [];
@@ -144,15 +192,19 @@ function refresh(): void {
   el('mode-name').textContent = mode === 'surface' ? 'Forest floor' : mode === 'cultivate' ? 'Cultivating the old tree' : state.deep ? 'Deep listening · beneath the clay' : state.wide ? 'Wide listening · the neighbouring grove' : 'Close listening · loamy soil';
   el('energy').textContent = `${state.energy} / 120 sap`;
   el('energy-fill').style.width = `${state.energy / 120 * 100}%`;
-  button('walk').hidden = mode !== 'surface';
+  button('walk').hidden = mode === 'cultivate';
+  button('vision').disabled = descent !== null;
   el('actions').hidden = mode === 'cultivate'; el('board-tools').hidden = mode !== 'cultivate';
-  button('vision').innerHTML = mode === 'roots' ? 'Return to the surface<small>Walk among the trees</small>' : 'Root vision<small>Listen beneath the forest</small>';
+  button('vision').innerHTML = mode === 'roots' ? 'Rise to the surface<small>Walk among the trees</small>' : 'Root vision<small>Sink beneath the forest</small>';
   button('widen').hidden = mode !== 'roots' || state.wide || state.restored; button('widen').disabled = state.energy < 24;
   button('deepen').hidden = mode !== 'roots' || state.deep; button('deepen').disabled = !state.listened || state.energy < 48;
   button('deepen').innerHTML = state.listened ? 'Commune · 48 sap<small>Learn the deep-seeking root</small>' : 'Commune · 48 sap<small>First, tap the glowing root tip</small>';
   button('mend').hidden = mode !== 'roots' || !state.deep || state.restored; button('mend').disabled = state.energy < 24;
   button('done').disabled = boardView.isBusy;
-  el('instruction').textContent = mode === 'surface' ? 'Drag to look. Thumbstick to walk; hold centre for targets.' : mode === 'roots' ? 'Drag to orbit the roots. Tap the glowing tip to listen.' : 'Tap two adjacent gems. Cascades gather sap.';
+  el('instruction').textContent = mode === 'surface' ? 'Drag to look. Thumbstick to walk; hold centre for targets.' : mode === 'roots' ? 'Drag to look. Thumbstick to drift where you look; hold centre for targets. Tap the glowing tip.' : 'Tap two adjacent gems. Cascades gather sap.';
+  player.fanScale = underground ? (state.deep ? REACH_SCALE.deep : state.wide ? REACH_SCALE.wide : REACH_SCALE.close) : 1;
+  limit.position.y = (state.deep ? BEDROCK : LISTEN_FLOOR) - .15;
+  limitMat.color.set(state.deep ? '#2b3230' : '#050d0c'); limitMat.opacity = state.deep ? .9 : .62;
   extended.visible = state.wide || state.restored; deep.visible = state.deep; chamber.visible = state.deep;
   clayMat.opacity = state.deep ? .075 : .24;
   dryFoliage.color.set(state.restored ? '#64945e' : '#867549');
@@ -161,20 +213,19 @@ function refresh(): void {
   el('target-label').hidden = mode !== 'roots' || state.deep;
 }
 function setMode(next: Mode): void {
-  if (boardView.isBusy) return;
-  oldCamera.copy(camera.position); oldQuat.copy(camera.quaternion); transition = 1;
-  player.cancelInput(); mode = next; player.enabled = next === 'surface';
-  roots.visible = next === 'roots'; surface.visible = true;
-  earth.opacity = next === 'roots' ? .16 : 1;
-  scene.background = new THREE.Color(next === 'roots' ? '#0b2021' : '#172d29');
-  scene.fog = new THREE.FogExp2(next === 'roots' ? '#0b2021' : '#172d29', next === 'roots' ? .018 : .026);
+  if (boardView.isBusy || descent) return;
+  // The board has its own camera pose, so it is tweened; the soil is entered by sinking instead.
+  if (next === 'cultivate' || mode === 'cultivate') { oldCamera.copy(camera.position); oldQuat.copy(camera.quaternion); transition = 1; }
+  player.cancelInput(); mode = next; player.enabled = next !== 'cultivate';
+  if (next === 'roots' && !underground) startDescent(false);
+  if (next === 'surface' && underground) startDescent(true);
   if (next === 'cultivate') { boardView.bind(board); boardView.show(time); }
   else { boardView.hide(); boardView.unbind(); hintCells = []; hintRing.visible = false; }
   refresh(); defaultMessage();
 }
 function listen(): void { if (state.listened) { message('This root enters the clay intact. Its tree knows a path Hulda has yet to remember.'); return; } state.listened = true; save(); refresh(); defaultMessage(); }
 player.onTap = (x, y) => {
-  if (transition > 0) return;
+  if (transition > 0 || descent) return;
   ray.setFromCamera(new THREE.Vector2(x / innerWidth * 2 - 1, -y / innerHeight * 2 + 1), camera);
   if (mode === 'cultivate') { hintRing.visible = false; hintCells = []; boardView.tap(ray); refresh(); }
   else if (mode === 'roots' && !state.deep) {
@@ -183,7 +234,6 @@ player.onTap = (x, y) => {
     if (Math.hypot(x - (p.x + 1) * innerWidth / 2, y - (1 - p.y) * innerHeight / 2) < 38) listen();
   }
 };
-player.onOrbit = (dx, dy) => { if (mode === 'roots') { orbitYaw -= dx; orbitPitch = THREE.MathUtils.clamp(orbitPitch + dy, .16, .85); } };
 boardView.onRun = (run, origin) => {
   state.energy = Math.min(120, state.energy + run.cells.length); save(); refresh();
   const mesh = new THREE.Mesh(sapGeo, sapMats[run.type]); mesh.renderOrder = 100; mesh.position.copy(origin); scene.add(mesh);
@@ -208,7 +258,7 @@ button('hint').onclick = () => { if (boardView.isBusy) return; hintCells = possi
 const intro = el<HTMLDialogElement>('intro');
 button('help').onclick = () => { player.cancelInput(); intro.showModal(); };
 button('begin').onclick = () => { intro.close(); last = performance.now(); };
-button('reset').onclick = () => { if (boardView.isBusy) return; if (!confirm('Restart this field study and clear its saved sap and discoveries?')) return; state = fresh(); save(); setMode('surface'); player.teleport(0, 6.5, 0); player.pitch = .1; orbitYaw = .48; orbitPitch = .40; };
+button('reset').onclick = () => { if (boardView.isBusy) return; if (!confirm('Restart this field study and clear its saved sap and discoveries?')) return; state = fresh(); save(); underground = false; descent = null; player.free = false; player.traversalWorld = null; player.canMove = true; setMode('surface'); player.teleport(0, 6.5, 0); player.pitch = .1; };
 function resize(): void { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); boardView.layout(); }
 window.addEventListener('resize', resize);
 document.addEventListener('contextmenu', e => e.preventDefault());
@@ -218,13 +268,27 @@ function frame(now: number): void {
   const dt = Math.min(.05, Math.max(0, (now - last) / 1000)); last = now;
   if (document.hidden || intro.open) return;
   time += dt * 1000;
-  player.update(now, colliders, p => Math.hypot(p.x, p.z) < 25);
-  if (mode === 'surface') player.applyCamera(camera);
-  else if (mode === 'cultivate') { camera.position.set(0, 2.9, 6.8); camera.lookAt(0, 2, 0); }
-  else {
-    const centre = state.deep ? v(2.8, -2.6, -3) : v(1, -.9, -1.5), radius = (state.wide || state.restored ? 19 : state.deep ? 14 : 12) * (camera.aspect < .7 ? 1.4 : 1);
-    camera.position.set(centre.x + Math.sin(orbitYaw) * radius * Math.cos(orbitPitch), centre.y - radius * Math.sin(orbitPitch), centre.z + Math.cos(orbitYaw) * radius * Math.cos(orbitPitch)); camera.lookAt(centre);
+  player.update(now, colliders, p => Math.hypot(p.x, p.z) < WORLD_RADIUS);
+  if (descent) {
+    // Sink (or rise) straight through the surface at the feet; looking stays free the whole way.
+    descent.t = Math.min(1, descent.t + dt / (descent.up ? RISE_S : SINK_S));
+    const k = descent.t * descent.t * (3 - 2 * descent.t);
+    player.motor.feet.y = THREE.MathUtils.lerp(descent.from, descent.to, k);
+    if (descent.t >= 1) {
+      const feet = player.motor.feet;
+      if (descent.up) { underground = false; player.free = false; player.traversalWorld = null; player.teleport(feet.x, feet.z, player.yaw); }
+      player.canMove = true; descent = null; refresh();
+    }
   }
+  if (mode === 'cultivate') { camera.position.set(0, 2.9, 6.8); camera.lookAt(0, 2, 0); }
+  else player.applyCamera(camera);
+  // The atmosphere follows the eye through the surface: the ground thins into a roof as it is crossed.
+  const under = mode === 'cultivate' ? 0 : THREE.MathUtils.smoothstep(groundHeight(camera.position.x, camera.position.z) - camera.position.y, -.25, .25);
+  earth.opacity = THREE.MathUtils.lerp(1, .16, under);
+  tint.lerpColors(surfaceTint, rootsTint, under); (scene.background as THREE.Color).copy(tint); (scene.fog as THREE.FogExp2).color.copy(tint);
+  (scene.fog as THREE.FogExp2).density = THREE.MathUtils.lerp(.026, .018, under);
+  lantern.intensity = 5 * under;
+  roots.visible = mode !== 'cultivate' && (underground || descent !== null);
   if (transition > 0) { transition = Math.max(0, transition - dt * 1.8); const k = transition * transition * (3 - 2 * transition); camera.position.lerp(oldCamera, k); camera.quaternion.slerp(oldQuat, k); }
   camera.updateMatrixWorld();
   boardView.update(time);
@@ -236,7 +300,7 @@ function frame(now: number): void {
   button('done').disabled = boardView.isBusy; button('hint').disabled = boardView.isBusy;
   if (hintCells.length && time < hintUntil && !boardView.isBusy) { const cell = hintCells[Math.floor(time / 700) % 2]; hintRing.position.set(cell.col - 2.5, 2.5 - cell.row, .15); hintRing.visible = true; } else hintRing.visible = false;
   tip.scale.setScalar(1 + Math.sin(time * .003) * .12);
-  if (mode === 'roots' && !state.deep) { const p = tipPoint.clone().project(camera); el('target-label').style.left = `${(p.x + 1) * innerWidth / 2}px`; el('target-label').style.top = `${(1 - p.y) * innerHeight / 2}px`; }
+  if (mode === 'roots' && !state.deep) { const p = tipPoint.clone().project(camera); el('target-label').style.left = `${(p.x + 1) * innerWidth / 2}px`; el('target-label').style.top = `${(1 - p.y) * innerHeight / 2}px`; el('target-label').style.visibility = p.z < 1 && Math.abs(p.x) < 1.1 && Math.abs(p.y) < 1.1 ? 'visible' : 'hidden'; }
   for (let i = 0; i < particles.length; i++) { const p = particles[i]; p.mesh.visible = i < 7 || (i < 14 ? state.deep : state.restored); p.mesh.position.copy(p.curve.getPoint((time * (state.restored ? .00009 : .00004) + p.offset) % 1)); }
   for (let i = shoots.length - 1; i >= 0; i--) { const p = shoots[i], k = Math.min(1, (time - p.born) / 650); p.mesh.position.lerpVectors(p.from, p.to, k); p.mesh.position.y += Math.sin(k * Math.PI) * .5; if (k === 1) { scene.remove(p.mesh); shoots.splice(i, 1); } }
   renderer.render(scene, camera);
@@ -245,4 +309,4 @@ refresh(); defaultMessage(); player.applyCamera(camera); renderer.render(scene, 
 if (!state.listened && state.energy === 0) intro.showModal();
 requestAnimationFrame(frame);
 // Read-only state and original components for browser verification, no alternate gameplay path.
-Object.assign(window, { __rootStudy: { scene, camera, renderer, player, board, boardView, tipPoint, possibleMove, get state() { return { ...state }; }, get mode() { return mode; }, get transitioning() { return transition > 0; } } });
+Object.assign(window, { __rootStudy: { scene, camera, renderer, player, board, boardView, tipPoint, possibleMove, soil, groundHeight, get state() { return { ...state }; }, get mode() { return mode; }, get underground() { return underground; }, get transitioning() { return transition > 0 || descent !== null; } } });

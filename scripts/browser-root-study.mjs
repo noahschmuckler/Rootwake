@@ -38,10 +38,33 @@ try{
  await page.locator('#walk').dispatchEvent('pointermove',{pointerId:2,clientX:315,clientY:686,pointerType:'touch',bubbles:true});
  await page.waitForFunction(()=>window.__rootStudy.player.selectedTarget!==null);await page.waitForTimeout(200);await page.screenshot({path:out+'/phone-targets.png'});
  await page.locator('#walk').dispatchEvent('pointercancel',{pointerId:2,pointerType:'touch'});
- await page.click('#vision');await settle(page);assert.equal(await page.locator('#deepen').isDisabled(),true);await page.screenshot({path:out+'/phone-roots.png'});
- const cameraBefore=await page.evaluate(()=>window.__rootStudy.camera.position.toArray());
+ await page.click('#vision');await settle(page);assert.equal(await page.locator('#deepen').isDisabled(),true);
+ // Root vision is entered by sinking: the eye ends under the ground, the ground thinned into a roof.
+ assert.equal(await page.evaluate(()=>window.__rootStudy.underground),true);
+ assert.ok(await page.evaluate(()=>{const r=window.__rootStudy,c=r.camera.position;return c.y<r.groundHeight(c.x,c.z)-.5;}),'The eye must have sunk beneath the surface');
+ await page.screenshot({path:out+'/phone-roots.png'});
+ const lookBefore=await page.evaluate(()=>window.__rootStudy.camera.quaternion.toArray());
  await drag(page,195,300,70,-30);await page.waitForTimeout(100);
- assert.notDeepEqual(await page.evaluate(()=>window.__rootStudy.camera.position.toArray()),cameraBefore,'A real drag must orbit the roots');
+ assert.notDeepEqual(await page.evaluate(()=>window.__rootStudy.camera.quaternion.toArray()),lookBefore,'A real drag must look around under the soil');
+ // The stick drifts where the eye looks: forward while looking down sinks and advances, and never breaks the roof.
+ const feetBefore=await page.evaluate(()=>{window.__rootStudy.player.pitch=-.5;return window.__rootStudy.player.feet().toArray();});
+ await page.locator('#walk').dispatchEvent('pointerdown',{pointerId:3,clientX:315,clientY:710,pointerType:'touch',bubbles:true});
+ await page.locator('#walk').dispatchEvent('pointermove',{pointerId:3,clientX:315,clientY:672,pointerType:'touch',bubbles:true});
+ await page.waitForFunction(f=>{const p=window.__rootStudy.player.feet();return p.y<f[1]-.3&&Math.hypot(p.x-f[0],p.z-f[2])>.3;},feetBefore);
+ await page.locator('#walk').dispatchEvent('pointercancel',{pointerId:3,pointerType:'touch'});
+ assert.ok(await page.evaluate(()=>{const r=window.__rootStudy;return r.soil.canOccupy(r.player.feet(),.25,.72);}),'Drifting stays inside the soil volume');
+ // A held stick lays drift targets in the view; releasing on one travels a straight line to it.
+ await page.evaluate(()=>{window.__rootStudy.player.pitch=.15;});
+ await page.locator('#walk').dispatchEvent('pointerdown',{pointerId:4,clientX:315,clientY:710,pointerType:'touch',bubbles:true});
+ await page.waitForFunction(()=>window.__rootStudy.player.targeting);
+ await page.locator('#walk').dispatchEvent('pointermove',{pointerId:4,clientX:315,clientY:686,pointerType:'touch',bubbles:true});
+ await page.waitForFunction(()=>window.__rootStudy.player.selectedTarget!==null);await page.waitForTimeout(200);await page.screenshot({path:out+'/phone-drift-targets.png'});
+ assert.equal(await page.evaluate(()=>window.__rootStudy.player.selectedTarget.plan.kind),'drift');
+ const driftTo=await page.evaluate(()=>window.__rootStudy.player.selectedTarget.plan.to.toArray());
+ await page.locator('#walk').dispatchEvent('pointerup',{pointerId:4,clientX:315,clientY:686,pointerType:'touch',bubbles:true});
+ await page.waitForFunction(t=>{const p=window.__rootStudy.player.feet();return Math.hypot(p.x-t[0],p.y-t[1],p.z-t[2])<.05&&window.__rootStudy.player.motor.mode==='free';},driftTo);
+ // Look at the root tip (a drag would do the same), then a real tap on it listens.
+ await page.evaluate(()=>{const r=window.__rootStudy,e=r.player.eye(),d=r.tipPoint.clone().sub(e);r.player.yaw=Math.atan2(-d.x,-d.z);r.player.pitch=Math.atan2(d.y,Math.hypot(d.x,d.z));});await page.waitForFunction(()=>{const r=window.__rootStudy,p=r.tipPoint.clone().project(r.camera);return Math.abs(p.x)<.05&&Math.abs(p.y)<.05;});
  const tip=await page.evaluate(()=>{const r=window.__rootStudy,p=r.tipPoint.clone().project(r.camera);return{x:(p.x+1)*innerWidth/2,y:(1-p.y)*innerHeight/2};});await press(page,tip.x,tip.y);assert.equal(await page.evaluate(()=>window.__rootStudy.state.listened),true,'A real tap on the root tip must listen');
  await page.click('#cultivate');await settle(page);await page.screenshot({path:out+'/phone-board.png'});
  for(let i=0;i<55;i++){if(await page.evaluate(()=>window.__rootStudy.state.energy>=100))break;const cells=await page.evaluate(()=>window.__rootStudy.possibleMove());assert.equal(cells.length,2);await tapMove(page,cells);}
@@ -52,5 +75,8 @@ try{
  const saved=await page.evaluate(()=>window.__rootStudy.state);await page.reload();await settle(page);assert.deepEqual(await page.evaluate(()=>window.__rootStudy.state),saved);
  await page.click('#vision');await settle(page);
  for(const [name,size]of [['small',{width:375,height:667}],['landscape',{width:844,height:390}],['desktop',{width:1280,height:900}]]){await page.setViewportSize(size);await settle(page);await page.screenshot({path:out+'/'+name+'-roots.png'});await page.click('#cultivate');await settle(page);await page.screenshot({path:out+'/'+name+'-board.png'});await page.click('#done');await settle(page);}
+ // Rising returns the same body to the surface, standing.
+ await page.click('#vision');await settle(page);assert.equal(await page.evaluate(()=>window.__rootStudy.underground),false);assert.equal(await page.evaluate(()=>window.__rootStudy.player.motor.mode),'grounded');
+ assert.ok(await page.evaluate(()=>{const r=window.__rootStudy,c=r.camera.position;return c.y>r.groundHeight(c.x,c.z);}),'The eye must be back above the ground');await page.screenshot({path:out+'/desktop-risen.png'});
  assert.deepEqual(errors,[]);const stats=await page.evaluate(()=>({calls:window.__rootStudy.renderer.info.render.calls,triangles:window.__rootStudy.renderer.info.render.triangles}));report.push({passed:true,realMatch3:true,movement:true,saveReload:true,spending:true,viewports:4,stats});await writeFile(out+'/results.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
 }catch(e){for(const c of browser.contexts())for(const p of c.pages())await p.screenshot({path:out+'/failure.png'}).catch(()=>{});throw e;}finally{await browser.close();await new Promise(r=>server.close(r));}
