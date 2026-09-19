@@ -17,7 +17,9 @@ const renderer=new THREE.WebGLRenderer({antialias:true,powerPreference:'high-per
 scene.add(new THREE.HemisphereLight('#eff5d9','#435657',2.6));const sun=new THREE.DirectionalLight('#ffdfa2',2.7);sun.position.set(-12,18,6);scene.add(sun);
 const lantern=new THREE.PointLight('#d5eed1',0,10,1.4);camera.add(lantern);
 const world=buildRavine(scene);
-const player=new Player(renderer.domElement,scene,camera);player.position.y=0;player.standHeightAt=groundHeight;player.teleport(-9,5,-.95);player.pitch=.15;installMobilityControls(player);
+const player=new Player(renderer.domElement,scene,camera);player.position.y=0;player.standHeightAt=groundHeight;player.teleport(-9,5,-.95);player.pitch=.15;installMobilityControls(player);scene.add(player.avatar);
+const dryadLeaf=new THREE.MeshStandardMaterial({color:'#a7c584',emissive:'#29452d',emissiveIntensity:.3,flatShading:true});
+for(let i=0;i<7;i++){const leaf=new THREE.Mesh(new THREE.IcosahedronGeometry(.115,0),dryadLeaf);leaf.position.set(Math.sin(i*2.4)*.17,.38+Math.cos(i*2.4)*.13,Math.cos(i*2.4)*.13);leaf.scale.set(.6,1.3,.7);leaf.rotation.z=i;player.avatar.add(leaf);}
 const soil=makeSoil(()=>progress);
 const board=new Board(6,6,290926),boardView=new BoardView(camera),ray=new THREE.Raycaster();
 type Mode='surface'|'roots'|'dryad'|'cultivate';let mode:Mode='surface',returnMode:Mode='surface';
@@ -90,7 +92,7 @@ window.addEventListener('resize',()=>{renderer.setSize(innerWidth,innerHeight);c
 const surfaceColour=new THREE.Color('#a0b8ae'),soilColour=new THREE.Color('#102726'),colour=new THREE.Color();
 let uiClock=0;
 function frame(now:number){requestAnimationFrame(frame);const dt=Math.min(.05,Math.max(0,(now-last)/1000));last=now;if(document.hidden||intro.open)return;time+=dt*1000;
- if(descent){const d=descent;d.t=Math.min(1,d.t+dt/d.duration);const k=d.t*d.t*(3-2*d.t);const p=d.from.clone().lerp(d.to,k);player.teleport(p.x,p.z,player.yaw,p.y);if(d.t===1){mode=d.end;descent=null;player.canMove=true;player.free=mode==='roots';player.traversalWorld=mode==='roots'?soil:null;player.teleport(p.x,p.z,player.yaw,p.y);if(mode==='dryad'){manifestRemaining=MANIFEST_SECONDS;progress.arrived=true;save();message('You have crossed. The golden oak is behind you, on the other bank. This dryad body lasts 90 active seconds.',10);}noticeUntil=mode==='dryad'?noticeUntil:0;refresh();}}
+ if(descent){const d=descent;d.t=Math.min(1,d.t+dt/d.duration);const k=d.t*d.t*(3-2*d.t);const p=d.from.clone().lerp(d.to,k);player.teleport(p.x,p.z,player.yaw,p.y);if(d.t===1){mode=d.end;player.view=mode==='dryad'?'third':'first';descent=null;player.canMove=true;player.free=mode==='roots';player.traversalWorld=mode==='roots'?soil:null;player.teleport(p.x,p.z,player.yaw,p.y);if(mode==='dryad'){manifestRemaining=MANIFEST_SECONDS;progress.arrived=true;save();message('You have crossed. The golden oak is behind you, on the other bank. This dryad body lasts 90 active seconds.',10);}noticeUntil=mode==='dryad'?noticeUntil:0;refresh();}}
  player.update(now,mode==='roots'||descent?[]:world.colliders,p=>onBank(p.x,p.z)&&(mode!=='dryad'||Math.hypot(p.x-NODES.grove.x,p.z-NODES.grove.z)<6));
  if(lookTarget){lookTarget.t+=dt;const dy=Math.atan2(Math.sin(lookTarget.yaw-player.yaw),Math.cos(lookTarget.yaw-player.yaw));player.yaw+=dy*Math.min(1,dt*9);player.pitch+=(lookTarget.pitch-player.pitch)*Math.min(1,dt*9);if(lookTarget.t>1)lookTarget=null;}
  if(mode==='dryad'&&!descent){manifestRemaining=Math.max(0,manifestRemaining-dt);if(manifestRemaining===0){message('The borrowed body becomes leaves. Your awareness returns to the far tree’s roots.');enterRoots();}}
@@ -100,7 +102,7 @@ function frame(now:number){requestAnimationFrame(frame);const dt=Math.min(.05,Ma
  if(boardTween>0){boardTween=Math.max(0,boardTween-dt*1.8);const k=boardTween*boardTween*(3-2*boardTween);camera.position.lerp(oldPos,k);camera.quaternion.slerp(oldQuat,k);}
  camera.updateMatrixWorld();
  const under=mode==='cultivate'?(returnMode==='roots'?1:0):THREE.MathUtils.clamp((groundHeight(player.position.x,player.position.z)-player.eye().y)/.8,0,1);
- world.update(progress,under,time);colour.copy(surfaceColour).lerp(soilColour,under);scene.background=colour;scene.fog=new THREE.FogExp2(colour,.018+under*.024);lantern.intensity=under*10;
+ world.update(progress,under,time,camera.position);colour.copy(surfaceColour).lerp(soilColour,under);scene.background=colour;scene.fog=new THREE.FogExp2(colour,.018+under*.024);lantern.intensity=under*10;
  boardView.update(time);if(mode==='cultivate'){boardView.group.scale.multiplyScalar(innerHeight<520?.78:innerHeight<740?.82:.95);boardView.group.position.y=Math.tan(THREE.MathUtils.degToRad(camera.fov)/2)*2.2*2*(innerHeight<520?-.08:innerHeight<740?-.12:-.15);}
  btn('done').disabled=boardView.isBusy||boardTween>0;btn('hint').disabled=boardView.isBusy;
  if(hints.length&&time<hintUntil&&!boardView.isBusy){const c=hints[Math.floor(time/700)%2];hintRing.position.set(c.col-2.5,2.5-c.row,.15);hintRing.visible=true;}else hintRing.visible=false;

@@ -36,3 +36,11 @@ Claude fixed Pages back to gh-pages. Copy the current deploy-root-study.yml as r
 
 ## Current checkpoint
 Implementation written and production build passes. Four new model tests, all 35 mobility tests and all 10 lab tests pass. Browser journey and screenshot checks are next. Nothing published yet at this checkpoint. Authored graph and geometry in ravineModel.ts / ravineWorld.ts, UI in ravine.ts. Tests preserve multi-frame touch presses from Claude's corrected study harness. Deployment workflow runs these gates and publishes ravine/ only. Append real verification and publication results before ending.
+
+
+## Checkpoint after local browser pass
+The full production journey passed with multi-frame touch match3, traversal of BOTH short-root directions and the longer spring route, locked fine-root gate, communion, crossing, manifestation, help-menu pause, manual return to roots, reload persistence, and four viewports. Screenshots in artifacts/ravine (ignored by git). Browser: Playwright from CODEX_PRIMARY_RUNTIME_NODE_MODULES; CHROMIUM_PATH=/tmp/chromium. Installed @sparticuz/chromium under /tmp/ravine-browser because no browser was preinstalled; Brotli-decompressed chromium.br and swiftshader.tar.br, extracted shader libraries beside executable without chown. Normal Playwright install works in GitHub Actions.
+
+Local visual polish after that pass: suppress close-up node markers so the awareness never flies into a screen-filling glowing sphere; remove background trees along the landmark sightline; use the shared controller's existing third-person view during dryad embodiment, adding a small leafy mantle. Underground remains first-person. CI will rerun the full journey before deployment.
+
+Current source checkpoint before polish: a0d1bcd on feat/root-ravine. Deployment workflow now ready to publish /Rootwake/ravine/; it is independent of root-study. Do not report live until public revision is verified. The dryad uses 90 ACTIVE seconds; menus and hidden tabs pause. Reload keeps learning/sap/shortcut, returns to the oak intentionally.
