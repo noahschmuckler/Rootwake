@@ -1,6 +1,7 @@
 const base='https://noahschmuckler.github.io/Rootwake/root-study/';
 let error;
-for(let attempt=0;attempt<36;attempt++){
+// Up to eight minutes: a Pages build plus CDN propagation can outlast the old three.
+for(let attempt=0;attempt<96;attempt++){
  try{
   const revision=await fetch(base+'revision.json?source='+process.env.STUDY_COMMIT,{cache:'no-store'});
   if(!revision.ok||(await revision.json()).sourceCommit!==process.env.STUDY_COMMIT)throw Error('Waiting for published source revision');

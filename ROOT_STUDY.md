@@ -39,6 +39,6 @@ Questions for phone testing:
 `npm run build -- --base=/Rootwake/root-study/` builds the dedicated entry and shared assets.
 `node scripts/browser-root-study.mjs` serves that exact production build and tests real touch swaps to earn sap, movement/cancellation, inspection, purchases, restoration, reload persistence, and four viewport layouts. Requires Playwright/Chromium; optionally set CHROMIUM_PATH.
 
-Workflow `.github/workflows/deploy-root-study.yml` runs tests before publication. It writes only `root-study/` and `.nojekyll` on gh-pages. Existing root, lab, hulda, and conduit routes remain untouched. It explicitly requests the Pages build and checks the public revision and assets. Screenshots and test results are retained as a workflow artifact.
+Workflow `.github/workflows/deploy-root-study.yml` runs tests before publication. It writes only `root-study/` and `.nojekyll` on gh-pages. Existing root, lab, hulda, and conduit routes remain untouched. It then makes sure the site's Pages source is the gh-pages branch (it had drifted to `feat/broken-conduit` on 2026-09-11, which hid every route published since), requests the Pages build and checks the public revision and assets. Screenshots and test results are retained as a workflow artifact.
 
 An emulated touch browser is not an actual iPhone/Safari performance or comfort test. User testing remains necessary.
