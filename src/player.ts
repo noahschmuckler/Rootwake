@@ -80,7 +80,9 @@ export class Player {
     walk: new THREE.MeshBasicMaterial({ color: 0xa9f5bd, opacity: 0.85, transparent: true, depthTest: false, depthWrite: false, fog: false, side: THREE.DoubleSide }),
     jump: new THREE.MeshBasicMaterial({ color: 0xffcf72, opacity: 0.9, transparent: true, depthTest: false, depthWrite: false, fog: false, side: THREE.DoubleSide }),
     drop: new THREE.MeshBasicMaterial({ color: 0x80dfff, opacity: 0.9, transparent: true, depthTest: false, depthWrite: false, fog: false, side: THREE.DoubleSide }),
-    picked: new THREE.MeshBasicMaterial({ color: 0xffffff, depthTest: false, depthWrite: false, fog: false, side: THREE.DoubleSide }),
+    // Transparent like the others so it renders in the same (last) pass: an opaque overlay is drawn
+    // before any transparent ground and gets painted over by it wherever the ground is nearer.
+    picked: new THREE.MeshBasicMaterial({ color: 0xffffff, opacity: 1, transparent: true, depthTest: false, depthWrite: false, fog: false, side: THREE.DoubleSide }),
   };
   private readonly arc = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.75, depthTest: false, depthWrite: false, fog: false }));
   readonly keys = new Set<string>();
@@ -163,7 +165,12 @@ export class Player {
     this.motor.reset(new THREE.Vector3(x, height, z)); this.initialized = true;
   }
   cancelInput(): void {
-    this.gesture.cancel(); this.pointers.clear(); this.flightStick.x = 0; this.flightStick.y = 0; this.flightStick.held = false;
+    this.pointers.clear(); this.cancelMovement();
+  }
+  /** Stop walking, flight and the fan but keep the canvas pointers: a disabled player still
+   * answers taps (lock, board, root tip) and drags (orbit), and a finger spans several frames. */
+  private cancelMovement(): void {
+    this.gesture.cancel(); this.flightStick.x = 0; this.flightStick.y = 0; this.flightStick.held = false;
     this.keys.clear(); this.closeFan(); this.onMobilityFrame();
   }
   forward(): THREE.Vector3 { return new THREE.Vector3(-Math.sin(this.yaw) * Math.cos(this.pitch), Math.sin(this.pitch), -Math.cos(this.yaw) * Math.cos(this.pitch)); }
@@ -217,7 +224,7 @@ export class Player {
     this.colliders = colliders; this.isWalkable = isWalkable; this.syncPose();
     this.resolveGrowingColliders();
     const dt = this.lastMs < 0 ? 0 : Math.min(0.1, Math.max(0, (nowMs - this.lastMs) / 1000)); this.lastMs = nowMs;
-    if (!this.enabled || !this.canMove) this.cancelInput();
+    if (!this.enabled || !this.canMove) this.cancelMovement();
     const gestureEvent = this.gesture.tick(nowMs, this.isFlying);
     this.motor.enabled = this.enabled; this.motor.canMove = this.canMove; this.motor.slowdown = this.moveSlowdown; this.motor.reachScale = this.fanScale;
     if (gestureEvent === 'ignite') this.motor.ignite();
