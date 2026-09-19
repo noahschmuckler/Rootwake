@@ -1,0 +1,61 @@
+name: Verify and publish root discovery study
+on:
+  push:
+    branches: [feat/root-discovery-demo]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: rootwake-root-study
+  cancel-in-progress: false
+jobs:
+  study:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:mobility
+      - run: npm run build -- --base=/Rootwake/root-study/
+      - run: npm install --no-save --package-lock=false playwright@1.58.2
+      - run: npx playwright install --with-deps chromium
+      - run: node scripts/browser-root-study.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: root-study-browser-results
+          path: artifacts/root-study
+      - name: Publish tested study without replacing existing demos
+        run: |
+          set -euo pipefail
+          git fetch origin gh-pages
+          study_checkout=$(mktemp -d)
+          git worktree add "$study_checkout" origin/gh-pages
+          mkdir -p "$study_checkout/root-study/assets"
+          cp dist/root-discovery.html "$study_checkout/root-study/index.html"
+          cp dist/assets/* "$study_checkout/root-study/assets/"
+          printf '{"sourceCommit":"%s","study":"remembering-spring-v1"}\n' "$GITHUB_SHA" > "$study_checkout/root-study/revision.json"
+          touch "$study_checkout/.nojekyll"
+          cd "$study_checkout"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add root-study .nojekyll
+          git commit -m "Publish verified root discovery study ${GITHUB_SHA::7}"
+          git push origin HEAD:gh-pages
+      - name: Request Pages build
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api --method POST "repos/$GITHUB_REPOSITORY/pages/builds"
+      - name: Verify published revision and assets
+        env:
+          STUDY_COMMIT: ${{ github.sha }}
+        run: node scripts/verify-root-study-pages.mjs
