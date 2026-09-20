@@ -4,6 +4,7 @@
 import './flow.css';
 import * as THREE from 'three';
 import { Player } from './player';
+import { createHulda } from './huldaCharacter';
 import { installMobilityControls } from './mobilityControls';
 import { buildClearing } from './flowWorld';
 import { TREES, WALL_Z, WALL_H, HANDHOLDS, crownHeight, trunkRadius, nearestTree, nearestRoot, nextRoot, rootPoint, rootTangent, endTree, hopTargets, wallSite, ivySiteX, groundAt, onGround, makeGroundWorld, tread, parseGrowth, serializeGrowth, freshGrowth, vec, type Tree, type RootEdge } from './flowModel';
@@ -21,6 +22,10 @@ const groundWorld = makeGroundWorld();
 /** While she is a bulge, a figure of leaves or a root-rider, the shared motor must stay put but the stick must still speak. */
 const lockedWorld: TraversalWorld = { surfacesAt: () => [], canOccupy: () => false };
 const player = new Player(renderer.domElement, scene, camera); scene.add(player.avatar); player.traversalWorld = groundWorld; player.view = 'third';
+// Flow-only visual replacement; keep the shared controller and its visibility parent.
+const hulda = createHulda();
+for (const child of [...player.avatar.children]) player.avatar.remove(child);
+player.avatar.add(hulda.group);
 player.teleport(0.5, 15, 0); player.pitch = 0.08; installMobilityControls(player);
 type Mode = 'ground' | 'trunk' | 'crown' | 'hop' | 'root' | 'climb' | 'ivy' | 'sink' | 'rise';
 let mode: Mode = 'ground', time = 0, last = performance.now();
@@ -162,6 +167,9 @@ function frame(now: number) {
     if (!v.down && v.k >= 1) { if (!v.grown) { growth.ivy.push(v.site); save(); } standOn(x, WALL_Z - 0.95, Math.PI); ivy = null; }
     else if (v.down && v.k <= 0) { standOn(x, WALL_Z + 0.95, 0); ivy = null; }
   }
+  // Presentation consumes the motor; it never feeds movement back into it.
+  hulda.update(dt, player.motor.speed, player.avatar.rotation.y, mode === 'ground');
+  if (mode === 'ground') player.avatar.rotation.y = hulda.motion.heading;
   under += (wantUnder - under) * Math.min(1, dt * 4);
   world.update(under); lantern.intensity = under * 7;
   colour.copy(sky).lerp(soil, under); scene.background = colour; scene.fog = new THREE.FogExp2(colour, 0.012 + under * 0.03);
@@ -172,4 +180,4 @@ function frame(now: number) {
 }
 world.setTrail(growth); for (const site of growth.ivy) world.growIvy(site, 1);
 player.applyCamera(camera); scene.background = sky; renderer.render(scene, camera); intro.showModal(); requestAnimationFrame(frame);
-Object.assign(window, { __clearing: { scene, camera, renderer, player, trees: TREES, get mode() { return mode; }, get growth() { return JSON.parse(serializeGrowth(growth)); }, get trunk() { return trunk ? { tree: trunk.tree.id, h: trunk.h } : null; }, get crown() { return crown ? { tree: crown.tree.id, az: crown.az } : null; }, get root() { return root ? { root: root.root.id, s: root.s, forward: root.forward } : null; }, get climb() { return climb; }, get ivy() { return ivy ? { site: ivy.site, k: ivy.k, grown: ivy.grown } : null; }, get under() { return under; }, get transitioning() { return mode === 'hop' || mode === 'sink' || mode === 'rise'; } } });
+Object.assign(window, { __clearing: { hulda, scene, camera, renderer, player, trees: TREES, get mode() { return mode; }, get growth() { return JSON.parse(serializeGrowth(growth)); }, get trunk() { return trunk ? { tree: trunk.tree.id, h: trunk.h } : null; }, get crown() { return crown ? { tree: crown.tree.id, az: crown.az } : null; }, get root() { return root ? { root: root.root.id, s: root.s, forward: root.forward } : null; }, get climb() { return climb; }, get ivy() { return ivy ? { site: ivy.site, k: ivy.k, grown: ivy.grown } : null; }, get under() { return under; }, get transitioning() { return mode === 'hop' || mode === 'sink' || mode === 'rise'; } } });

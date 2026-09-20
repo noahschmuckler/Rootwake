@@ -58,5 +58,21 @@ try{
  const saved=await page.evaluate(()=>window.__clearing.growth);await page.reload();await page.click('#begin');await page.waitForFunction(()=>window.__clearing);await page.waitForTimeout(500);const loaded=await page.evaluate(()=>window.__clearing.growth);assert.deepEqual(loaded.ivy,saved.ivy);assert.equal(Object.keys(loaded.trail).length,Object.keys(saved.trail).length);
  await stand(page,0.5,15,0);await page.waitForTimeout(400);await page.screenshot({path:out+'/09-trail.png'});
  for(const[name,size]of[['small',{width:375,height:667}],['landscape',{width:844,height:390}],['desktop',{width:1280,height:900}]]){await page.setViewportSize(size);await page.waitForTimeout(600);await page.screenshot({path:out+'/'+name+'.png'});}
+ // Character review views: render a cloned rig in an isolated scene, preserving the live journey.
+ if(await page.evaluate(()=>!!window.__clearing.hulda)) {
+   await page.setViewportSize({width:720,height:900});
+   for(const [name,speed,angle] of [['front',0,Math.PI],['back',0,0],['walk',.7,2.5],['run',2.8,2.5]]) {
+     const data=await page.evaluate(({speed,angle})=>{
+       const c=window.__clearing, h=c.hulda;
+       for(let i=0;i<67;i++) h.update(1/60,speed,0,true);
+       const scene=new c.scene.constructor(); scene.background=c.scene.background.clone().set('#d5dece');
+       for(const child of c.scene.children) if(child.isLight) scene.add(child.clone());
+       const figure=h.group.clone(true); figure.rotation.y=angle; scene.add(figure);
+       const camera=c.camera.clone(); camera.aspect=720/900; camera.position.set(1,.65,1.7); camera.lookAt(0,.36,0); camera.updateProjectionMatrix();
+       c.renderer.render(scene,camera); return c.renderer.domElement.toDataURL('image/png').split(',')[1];
+     },{speed,angle});
+     await writeFile(out+'/character-'+name+'.png',Buffer.from(data,'base64'));
+   }
+ }
  assert.deepEqual(errors,[]);report.push({passed:true,thirdPerson:true,trunk:true,crown:true,hop:true,roots:'down from the trunk and by ground double tap; out by stick double tap',climb:'up and down',ivy:'grown, kept, descended, reconnected',trail:true,saveReload:true,viewports:4});await writeFile(out+'/results.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
 }catch(e){for(const c of browser.contexts())for(const p of c.pages()){await p.screenshot({path:out+'/failure.png'}).catch(()=>{});console.log(await p.evaluate(()=>{const c=window.__clearing;return c?{mode:c.mode,feet:c.player.feet().toArray(),trunk:c.trunk,crown:c.crown,root:c.root,climb:c.climb,ivy:c.ivy}:null;}).catch(()=>null));}throw e;}finally{await browser.close();await new Promise(r=>server.close(r));}
