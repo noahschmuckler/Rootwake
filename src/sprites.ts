@@ -5,14 +5,14 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mulberry32 } from './colors';
 
-export type SpriteKind = 'grass' | 'leaf' | 'needle' | 'frond';
+export type SpriteKind = 'grass' | 'leaf' | 'needle' | 'frond' | 'bloom';
 const textures = new Map<SpriteKind, THREE.CanvasTexture>();
 /** Drawn in pale neutral tones so the material's colour sets the hue; alpha does the shaping. */
 export function spriteTexture(kind: SpriteKind): THREE.CanvasTexture {
   const cached = textures.get(kind); if (cached) return cached;
   const size = 256, canvas = document.createElement('canvas'); canvas.width = size; canvas.height = size;
   const ctx = canvas.getContext('2d')!; ctx.clearRect(0, 0, size, size);
-  const rand = mulberry32(kind === 'grass' ? 42 : kind === 'leaf' ? 7 : kind === 'needle' ? 11 : 19);
+  const rand = mulberry32(kind === 'grass' ? 42 : kind === 'leaf' ? 7 : kind === 'needle' ? 11 : kind === 'bloom' ? 23 : 19);
   const tone = () => { const v = 170 + Math.floor(rand() * 85); return `rgb(${v - 20}, ${v}, ${v - 30})`; };
   if (kind === 'grass' || kind === 'frond') {
     const blades = kind === 'grass' ? 13 : 9;
@@ -23,6 +23,16 @@ export function spriteTexture(kind: SpriteKind): THREE.CanvasTexture {
       ctx.quadraticCurveTo(baseX + lean * size * 0.1, size * 0.6, tipX, tipY);
       ctx.quadraticCurveTo(baseX + lean * size * 0.12 + width * 0.3, size * 0.62, baseX + width / 2, size); ctx.closePath(); ctx.fill();
       if (kind === 'frond') for (let k = 0; k < 7; k++) { const u = 0.25 + k * 0.1, px = baseX + (tipX - baseX) * u, py = size - (size - tipY) * u; ctx.fillStyle = tone(); ctx.beginPath(); ctx.ellipse(px, py, 14, 5, Math.atan2(tipY - size, tipX - baseX) + (k % 2 ? 0.9 : -0.9), 0, Math.PI * 2); ctx.fill(); }
+    }
+  } else if (kind === 'bloom') {
+    // A flowering tuft: a few leaves low, blossoms above them. Drawn in colour: it is Hulda's trail.
+    for (let i = 0; i < 9; i++) { const x = size * (0.3 + rand() * 0.4), y = size * (0.62 + rand() * 0.3); ctx.fillStyle = `rgb(${70 + Math.floor(rand() * 40)}, ${120 + Math.floor(rand() * 60)}, ${60 + Math.floor(rand() * 30)})`; ctx.beginPath(); ctx.ellipse(x, y, 16 + rand() * 12, 7 + rand() * 5, rand() * Math.PI, 0, Math.PI * 2); ctx.fill(); }
+    for (let i = 0; i < 11; i++) {
+      const x = size * (0.28 + rand() * 0.44), y = size * (0.22 + rand() * 0.4), r = 9 + rand() * 9; const pink = rand() < 0.6;
+      ctx.fillStyle = pink ? `rgb(${230 + Math.floor(rand() * 25)}, ${150 + Math.floor(rand() * 60)}, ${190 + Math.floor(rand() * 50)})` : `rgb(250, 246, ${200 + Math.floor(rand() * 50)})`;
+      for (let k = 0; k < 5; k++) { const a = k / 5 * Math.PI * 2; ctx.beginPath(); ctx.ellipse(x + Math.cos(a) * r * 0.55, y + Math.sin(a) * r * 0.55, r * 0.5, r * 0.32, a, 0, Math.PI * 2); ctx.fill(); }
+      ctx.fillStyle = '#f2c94c'; ctx.beginPath(); ctx.arc(x, y, r * 0.22, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = 'rgba(80,120,60,0.9)'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x, y + r * 0.4); ctx.lineTo(x + (rand() - 0.5) * 10, size * 0.8); ctx.stroke();
     }
   } else if (kind === 'leaf') {
     // A loose cluster of overlapping leaves, denser toward the middle, ragged at the edges.
