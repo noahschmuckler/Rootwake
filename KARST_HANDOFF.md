@@ -1,8 +1,9 @@
 # The Karst: continuation guide
 
-## Latest status
+## Latest status: complete and live
 Play: https://noahschmuckler.github.io/Rootwake/karst/
-Source branch: feat/karst-slide (from the watershed branch, 378f550). Deployment: `.github/workflows/deploy-karst.yml` on every push to the branch: mobility, lab and karst unit tests, the production build at `/Rootwake/karst/`, the browser journey in GitHub's Chromium, publication of `karst/` only on gh-pages, then the public revision.json and asset check. The recorded run is at the bottom of this file.
+Source branch: feat/karst-slide (from the watershed branch, 378f550). Tested and published code commit: b2d8882 (handoff afd1e32).
+Successful verification and deployment run: https://github.com/noahschmuckler/Rootwake/actions/runs/35482188010 (karst, mobility and lab suites, the browser journey in GitHub's Chromium, publication of `karst/` only, public revision.json and asset check; screenshots in the run's `karst-browser-results` artifact). Deployment: `.github/workflows/deploy-karst.yml` on every push to the branch: mobility, lab and karst unit tests, the production build at `/Rootwake/karst/`, the browser journey in GitHub's Chromium, publication of `karst/` only on gh-pages, then the public revision.json and asset check.
 
 Next step is Noah's phone feedback (questions below).
 
