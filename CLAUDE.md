@@ -1,6 +1,6 @@
-# Active phone study: The Breathing Watershed
+# Active phone study: The Karst
 
-On branch `feat/living-watershed`, read **WATERSHED_HANDOFF.md first** for the scoped ecology, its test commands, deployment status, phone-tuning questions and continuation history. Live: https://noahschmuckler.github.io/Rootwake/watershed/ . It builds on the ravine study (`RAVINE_HANDOFF.md`, https://noahschmuckler.github.io/Rootwake/ravine/) and the first study (`ROOT_STUDY.md`, `/root-study/`). Preserve the shared sink/drift controls and the original 3D match3; each study is its own route.
+On branch `feat/karst-slide`, read **KARST_HANDOFF.md first** for the traversal study (a limestone pillar, roots ridden like water between clinging plants, a mushroom-lit cavern), its test commands, deployment status and phone-tuning questions. Live: https://noahschmuckler.github.io/Rootwake/karst/ . Earlier studies, each its own route and handoff: the watershed (`WATERSHED_HANDOFF.md`, `/watershed/`), the ravine (`RAVINE_HANDOFF.md`, `/ravine/`) and the first study (`ROOT_STUDY.md`, `/root-study/`). Preserve the shared player and mobility; each study only adds its own entry.
 
 # Rootwake — working notes
 
