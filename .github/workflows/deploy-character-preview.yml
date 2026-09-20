@@ -77,6 +77,5 @@ jobs:
       - name: Verify published revision and assets
         env:
           STUDY_COMMIT: ${{ github.sha }}
-        run: node scripts/verify-flow-pages.mjs
-        env:
           STUDY_URL: https://noahschmuckler.github.io/Rootwake/flow-character/
+        run: node scripts/verify-flow-pages.mjs
