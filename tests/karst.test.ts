@@ -1,5 +1,6 @@
 import { test } from 'node:test'; import assert from 'node:assert/strict';
-import { PLANTS, ROOTS, ZONES, CAVERN, PILLAR_HEIGHT, pillarRadius, inZone, routes, rootsAt, stepRide, ridePoint, rideTarget, RIDE_MIN, RIDE_MAX, parseProgress, freshProgress, arrive } from '../src/karstModel';
+import { PLANTS, ROOTS, ZONES, CAVERN, PILLAR_HEIGHT, BEDROCK, pillarRadius, inZone, routes, rootsAt, stepRide, ridePoint, rideTarget, RIDE_MIN, RIDE_MAX, parseProgress, freshProgress, arrive, isRideable, tend, TEND_COST, makeFloorSoil, vec } from '../src/karstModel';
+import { advance } from '../src/watershedModel';
 test('the pillar narrows to its top and every plant stands on its own zone, clear of the rock', () => {
   assert.ok(pillarRadius(PILLAR_HEIGHT) < pillarRadius(0) * 0.45); for (let y = 0; y <= PILLAR_HEIGHT; y += 4) assert.ok(pillarRadius(y) > 3);
   for (const p of Object.values(PLANTS)) { const z = ZONES[p.zone]; assert.ok(z, p.id); assert.ok(inZone(z, p.stand.x, p.stand.z), `${p.id} stands in its zone`); assert.ok(Math.abs(p.at.y - z.y) < 0.6, `${p.id} at its zone's height`); }
@@ -21,6 +22,7 @@ test('the demo reaches the floor from the summit, and the way back up has at lea
   const down = routes('pine', 'floorOak'); assert.ok(down.length >= 2);
   const up = [...routes('floorOak', 'pine'), ...routes('floorMaple', 'pine')];
   assert.ok(up.length >= 3, `${up.length} routes up`);
+  assert.ok(routes('floorMaple', 'pine').some(r => r.length === 2), 'the tended taproot is a direct way up');
   const firsts = new Set(up.map(r => r[1])); assert.ok(firsts.size >= 2, 'routes up leave by different roots');
   assert.ok(up.some(r => r.includes('cavernFern')), 'one way up passes through the cavern');
   for (const p of Object.keys(PLANTS)) assert.ok(rootsAt(p).length >= 1, `${p} is connected`);
@@ -39,4 +41,21 @@ test('progress validates saves and records the floor and the return to the summi
   assert.equal(parseProgress('{"returned":true,"reachedFloor":true,"visited":["pine"]}').returned, false, 'cannot have returned without the floor');
   const p = freshProgress(); assert.equal(arrive(p, 'eastShrub'), null); assert.equal(arrive(p, 'pine'), null); assert.equal(arrive(p, 'floorOak'), 'floor'); assert.equal(arrive(p, 'pine'), 'returned'); assert.equal(arrive(p, 'pine'), null);
   const back = parseProgress(JSON.stringify(p)); assert.equal(back.returned, true); assert.deepEqual(back.visited, ['pine', 'eastShrub', 'floorOak']);
+});
+
+test('the fine roots and the dormant taproot are gated by the foot’s watershed and by tending', () => {
+  const p = freshProgress(); const foot = ROOTS.find(r => r.id === 'foot-root')!, tap = ROOTS.find(r => r.id === 'taproot')!, deep = ROOTS.find(r => r.id === 'cavern-floor')!;
+  assert.ok(isRideable(foot, p)); assert.equal(isRideable(tap, p), false, 'dormant until tended'); assert.ok(isRideable(deep, p));
+  p.sap = TEND_COST - 1; assert.equal(tend(p), false); p.sap = TEND_COST; assert.ok(tend(p)); assert.equal(p.sap, 0); assert.ok(isRideable(tap, p)); assert.equal(tend(p), false);
+  let guard = 0; while (p.w.shortcut === 'open' && guard++ < 4000) advance(p.w, 0.05);
+  assert.equal(p.w.shortcut, 'closing'); assert.equal(isRideable(foot, p), false, 'a withdrawing fine root cannot be entered'); assert.equal(isRideable(tap, p), false); assert.ok(isRideable(deep, p), 'the deep roots always serve');
+  guard = 0; while (p.w.shortcut !== 'open' && guard++ < 8000) advance(p.w, 0.05); assert.ok(isRideable(foot, p) && isRideable(tap, p), 'they regrow with recovery');
+  const back = parseProgress(JSON.stringify(p)); assert.equal(back.tended, true); assert.equal(back.w.allocation, 'balanced'); assert.equal(back.sap, 0); assert.equal(back.w.sap, 0);
+  assert.equal(parseProgress('{"sap":999,"tended":"yes"}').sap, 120); assert.equal(parseProgress('{"sap":999,"tended":"yes"}').tended, false);
+});
+test('the soil at the foot is roofed by the forest floor, floored by bedrock, and the pillar goes on down through it', () => {
+  const soil = makeFloorSoil();
+  assert.ok(soil.canOccupy(vec(20, -2, 5), 0.25, 0.72)); assert.equal(soil.canOccupy(vec(20, 0.2, 5), 0.25, 0.72), false, 'not up through the roof');
+  assert.equal(soil.canOccupy(vec(20, BEDROCK - 0.1, 5), 0.25, 0.72), false, 'not below bedrock'); assert.equal(soil.canOccupy(vec(pillarRadius(0) - 1, -2, 0), 0.25, 0.72), false, 'the foot is solid rock');
+  assert.equal(soil.canOccupy(vec(45, -2, 0), 0.25, 0.72), false, 'the soil ends with the forest'); assert.deepEqual(soil.surfacesAt(20, 5), [], 'nothing to stand on in the soil');
 });

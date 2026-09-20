@@ -2,6 +2,8 @@
 // limestone. No soil to sink into: the way between plants is to shrink into a root and ride it.
 // Pure geometry, graph and progress; no Three.js scene here, so it is testable in node.
 import { CatmullRomCurve3, Vector3 } from 'three';
+import type { TraversalWorld } from './mobility';
+import { parseWatershed, freshWatershed, type Watershed } from './watershedModel';
 
 export const PILLAR_HEIGHT = 64;
 /** Limestone radius by height: broad foot, a bulge, a narrow top. Tuning: the silhouette. */
@@ -44,8 +46,10 @@ export const PLANTS: Record<string, Plant> = {
   floorOak: plant('floorOak', 'the foot oak', 'oak', 'floor', vec(15.5, 0, 3.5), vec(14.6, 0.1, 3.0), { x: 13.8, z: 4.8, yaw: -1.3 }),
   floorMaple: plant('floorMaple', 'the west maple', 'maple', 'floor', vec(-16, 0, -2.5), vec(-15.1, 0.1, -2.2), { x: -14.2, z: -3.6, yaw: 1.3 }),
 };
-/** A root between two plants: a curve to ride. `interior` roots pass through the limestone. */
-export interface Root { id: string; a: string; b: string; interior: boolean; curve: CatmullRomCurve3; length: number }
+/** A root between two plants: a curve to ride. `interior` roots pass through the limestone. `fine`
+ * roots are thin and withdraw when the foot's groves are stressed (the watershed's rule); a `dormant`
+ * root must first be tended with sap. */
+export interface Root { id: string; a: string; b: string; interior: boolean; fine?: boolean; dormant?: boolean; curve: CatmullRomCurve3; length: number }
 function faceCurve(a: string, b: string, angleA: number, angleB: number, out: number, extra: Vector3[] = [], pre: Vector3[] = []): Vector3[] {
   // Drape over the surface: interpolate height and angle, keep just outside the rock. `pre` carries a
   // root from a mouth on top of the pillar across the summit and over its rim first.
@@ -55,9 +59,9 @@ function faceCurve(a: string, b: string, angleA: number, angleB: number, out: nu
 }
 /** Over the summit's rim at angle a: along the top, then just past the edge, before the face descent. */
 const overRim = (a: number): Vector3[] => [onFace(PILLAR_HEIGHT, a, -1.2).setY(PILLAR_HEIGHT + 0.15), onFace(PILLAR_HEIGHT, a, 0.35).setY(PILLAR_HEIGHT + 0.1), onFace(PILLAR_HEIGHT - 1.2, a, 0.45)];
-function root(id: string, a: string, b: string, interior: boolean, points: Vector3[]): Root {
+function root(id: string, a: string, b: string, interior: boolean, points: Vector3[], flags: { fine?: boolean; dormant?: boolean } = {}): Root {
   const curve = new CatmullRomCurve3(points, false, 'centripetal', 0.6);
-  return { id, a, b, interior, curve, length: curve.getLength() };
+  return { id, a, b, interior, ...flags, curve, length: curve.getLength() };
 }
 export const ROOTS: Root[] = [
   root('pine-east', 'pine', 'eastShrub', false, faceCurve('pine', 'eastShrub', 0.35, 0, 0.3, [], overRim(0.35))),
@@ -68,7 +72,17 @@ export const ROOTS: Root[] = [
   root('cavern-floor', 'cavernFern', 'floorOak', true, [PLANTS.cavernFern.mouth.clone(), vec(5.5, 22, 3), vec(8, 14, 3.5), vec(10.5, 6, 3.5), vec(12.5, 1.2, 3.2), PLANTS.floorOak.mouth.clone()]),
   root('south-floor', 'southShrub', 'floorOak', false, faceCurve('southShrub', 'floorOak', Math.PI / 2, 0.25, 0.3, [vec(12.8, 0.6, 5.5)])),
   root('west-floor', 'westFig', 'floorMaple', false, faceCurve('westFig', 'floorMaple', Math.PI, Math.PI + 0.15, 0.3, [vec(-13.5, 0.6, -2.4)])),
+  // The foot root: a fine root round the south of the foot joining the two groves. It withdraws under stress.
+  root('foot-root', 'floorOak', 'floorMaple', false, [PLANTS.floorOak.mouth.clone(), vec(11, 0.35, 8), vec(3, 0.4, 13.5), vec(-7, 0.4, 12.5), vec(-13.5, 0.35, 5.5), vec(-15.5, 0.3, 0.5), PLANTS.floorMaple.mouth.clone()], { fine: true }),
+  // The taproot: dormant, the pine's old root straight down the north face to the maple. Tended for sap,
+  // it is the fastest way up, and, being fine, the first to withdraw when the maple's grove wilts.
+  root('taproot', 'pine', 'floorMaple', false, faceCurve('pine', 'floorMaple', Math.PI * 1.5 - 0.3, Math.PI + 0.35, 0.3, [vec(-14.2, 0.6, -4.5)], overRim(Math.PI * 1.5 - 0.3)), { fine: true, dormant: true }),
 ];
+/** Can this root be ridden now? Deep roots always; the dormant one once tended; fine ones while the
+ * foot's groves are not withdrawing them. A ride already begun always completes. */
+export const isRideable = (r: Root, p: { tended: boolean; w: Watershed }): boolean => (!r.dormant || p.tended) && (!r.fine || p.w.shortcut === 'open');
+export const TEND_COST = 12;
+export function tend(p: { sap: number; tended: boolean }): boolean { if (p.tended || p.sap < TEND_COST) return false; p.sap -= TEND_COST; p.tended = true; return true; }
 export const rootsAt = (plantId: string): Root[] => ROOTS.filter(r => r.a === plantId || r.b === plantId);
 export const otherEnd = (r: Root, plantId: string): string => (r.a === plantId ? r.b : r.a);
 /** Every simple route between two plants (the graph is small); used to prove the way back up is not one path. */
@@ -99,8 +113,14 @@ export function ridePoint(r: Root, from: string, s: number): { point: Vector3; t
   const point = r.curve.getPointAt(t), tangent = r.curve.getTangentAt(t); if (!forward) tangent.negate();
   return { point, tangent };
 }
-export interface Progress { at: string; visited: string[]; reachedFloor: boolean; returned: boolean; vision: boolean }
-export const freshProgress = (): Progress => ({ at: 'pine', visited: ['pine'], reachedFloor: false, returned: false, vision: false });
+/** The soil at the foot, for sinking and drifting: the ground is the roof, bedrock the floor, and the
+ * pillar continues down through it as solid rock. */
+export const BEDROCK = -6.5, ROOF_MARGIN = 0.12;
+export function makeFloorSoil(): TraversalWorld {
+  return { surfacesAt: () => [], canOccupy: (p, radius, height) => Math.hypot(p.x, p.z) <= FLOOR_RADIUS && p.y + height <= relief(p.x, p.z) - ROOF_MARGIN && p.y >= BEDROCK && Math.hypot(p.x, p.z) >= pillarRadius(0) + 0.3 + radius };
+}
+export interface Progress { at: string; visited: string[]; reachedFloor: boolean; returned: boolean; vision: boolean; sap: number; tended: boolean; w: Watershed }
+export const freshProgress = (): Progress => ({ at: 'pine', visited: ['pine'], reachedFloor: false, returned: false, vision: false, sap: 0, tended: false, w: freshWatershed() });
 export function parseProgress(raw: string | null): Progress {
   try {
     const p = JSON.parse(raw ?? 'null'); if (!p || typeof p !== 'object') return freshProgress();
@@ -108,7 +128,8 @@ export function parseProgress(raw: string | null): Progress {
     const at = typeof p.at === 'string' && p.at in PLANTS ? p.at : 'pine';
     if (!visited.includes(at)) visited.push(at);
     const reachedFloor = p.reachedFloor === true && visited.some((v: string) => PLANTS[v].zone === 'floor');
-    return { at, visited, reachedFloor, returned: p.returned === true && reachedFloor, vision: p.vision === true };
+    const w = parseWatershed(p.w ? JSON.stringify(p.w) : null); w.sap = 0;
+    return { at, visited, reachedFloor, returned: p.returned === true && reachedFloor, vision: p.vision === true, sap: Math.floor(Math.min(120, Math.max(0, Number.isFinite(p.sap) ? p.sap : 0))), tended: p.tended === true, w };
   } catch { return freshProgress(); }
 }
 /** Arriving somewhere: remember it, and note the two things the demo is about. */
