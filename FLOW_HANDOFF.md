@@ -1,8 +1,9 @@
 # The Clearing: continuation guide
 
-## Latest status
+## Latest status: complete and live
 Play: https://noahschmuckler.github.io/Rootwake/flow/
-Source branch: feat/free-flow (from the karst branch). Deployment: `.github/workflows/deploy-flow.yml` on every push to the branch: mobility, lab and clearing unit tests, the production build at `/Rootwake/flow/`, the browser journey in GitHub's Chromium, publication of `flow/` only on gh-pages, then the public revision.json and asset check. The recorded run is at the bottom.
+Source branch: feat/free-flow (from the karst branch). Tested and published code commit: 2af3894 (handoff de8d761).
+Successful verification and deployment run: https://github.com/noahschmuckler/Rootwake/actions/runs/35529029370 (all suites, the browser journey in GitHub's Chromium, publication of `flow/` only, public revision.json and asset check; screenshots in the run's `flow-browser-results` artifact). Deployment: `.github/workflows/deploy-flow.yml` on every push to the branch: mobility, lab and clearing unit tests, the production build at `/Rootwake/flow/`, the browser journey in GitHub's Chromium, publication of `flow/` only on gh-pages, then the public revision.json and asset check.
 
 Next step is Noah's phone feedback (questions below).
 
