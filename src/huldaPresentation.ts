@@ -72,6 +72,8 @@ export function createHuldaPresentation(scene: THREE.Scene, leaf: THREE.Group, i
     hulda.group.visible=!next; model=next;
     if(next) { human.add(next.root); adopt('human'); }
   }
+  /** Prefab clips for Hulda's own skeleton (the X Bot's): the gait plays them; null returns to the procedural gait. */
+  function setClips(clips: THREE.AnimationClip[]|null) { hulda.setClips(clips); }
   function update(dt: number, form: HuldaForm, position: THREE.Vector3, rotation: THREE.Quaternion, speed: number, heading: number, grounded: boolean, visible = true, key: string = form) {
     blend.update(dt,form,position,rotation,key);
     root.position.copy(blend.position); root.quaternion.copy(blend.rotation); root.visible=visible;
@@ -85,5 +87,5 @@ export function createHuldaPresentation(scene: THREE.Scene, leaf: THREE.Group, i
     }
   }
   function dispose() { root.removeFromParent(); setModel(null); hulda.dispose(); wood.dispose(); for(const m of ownedMaterials) m.dispose(); }
-  return {root,hulda,blend,forms,update,setModel,get model() { return model; },dispose};
+  return {root,hulda,blend,forms,update,setModel,setClips,get model() { return model; },dispose};
 }

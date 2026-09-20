@@ -61,13 +61,11 @@ export function fitModel(root: THREE.Object3D, facing: Facing = DEFAULT_FACING, 
   root.updateMatrixWorld(true);
   return { scale, sourceHeight };
 }
-export interface RiggedModel { root: THREE.Object3D; mixer: THREE.AnimationMixer; roles: Partial<Record<ClipRole, string>>; actions: Partial<Record<ClipRole, THREE.AnimationAction>>; motion: HuldaMotion; update(dt: number, speed: number, heading: number, grounded: boolean, fold?: number): void; dispose(): void }
-/** Fit a loaded model and put its clips under the gait: every role's action plays, weighted by the blend, paced by speed. */
-export function installRiggedModel(root: THREE.Object3D, clips: THREE.AnimationClip[], facing: Facing = DEFAULT_FACING): RiggedModel {
-  fitModel(root, facing);
-  root.traverse(o => { if (o instanceof THREE.Mesh) o.frustumCulled = false; });
+/** Clips under the gait: every role's action plays at once, weighted by the blend, paced by speed. Shared by a loaded body and by Hulda's own skeleton. */
+export interface Gait { mixer: THREE.AnimationMixer; roles: Partial<Record<ClipRole, string>>; actions: Partial<Record<ClipRole, THREE.AnimationAction>>; motion: HuldaMotion; update(dt: number, speed: number, heading: number, grounded: boolean, fold?: number): void; dispose(): void }
+export function installGait(root: THREE.Object3D, clips: THREE.AnimationClip[], motion = new HuldaMotion()): Gait {
   const rootBone = rootBoneOf(root); if (rootBone) for (const c of clips) pinRoot(c, rootBone.name);
-  const mixer = new THREE.AnimationMixer(root), roles = clipRoles(clips.map(c => c.name)), actions: Partial<Record<ClipRole, THREE.AnimationAction>> = {}, motion = new HuldaMotion();
+  const mixer = new THREE.AnimationMixer(root), roles = clipRoles(clips.map(c => c.name)), actions: Partial<Record<ClipRole, THREE.AnimationAction>> = {};
   for (const role of ROLES) { const name = roles[role]; if (!name) continue; const clip = clips.find(c => c.name === name)!; const a = mixer.clipAction(clip); a.enabled = true; a.setEffectiveWeight(role === 'idle' ? 1 : 0); a.play(); actions[role] = a; }
   function update(dt: number, speed: number, heading: number, grounded: boolean, fold = 0): void {
     const seconds = Number.isFinite(dt) ? Math.max(0, Math.min(0.05, dt)) : 0;
@@ -77,6 +75,15 @@ export function installRiggedModel(root: THREE.Object3D, clips: THREE.AnimationC
     for (const role of ROLES) { const a = actions[role]; if (!a) continue; a.setEffectiveWeight(w[role]); a.setEffectiveTimeScale(timeScaleFor(role, motion.speed)); }
     mixer.update(seconds);
   }
-  function dispose(): void { mixer.stopAllAction(); root.removeFromParent(); root.traverse(o => { if (o instanceof THREE.Mesh) { o.geometry.dispose(); for (const m of Array.isArray(o.material) ? o.material : [o.material]) m.dispose(); } }); }
-  return { root, mixer, roles, actions, motion, update, dispose };
+  function dispose(): void { mixer.stopAllAction(); for (const c of clips) mixer.uncacheClip(c); }
+  return { mixer, roles, actions, motion, update, dispose };
+}
+export interface RiggedModel extends Gait { root: THREE.Object3D }
+/** Fit a loaded body and put its clips under the gait. */
+export function installRiggedModel(root: THREE.Object3D, clips: THREE.AnimationClip[], facing: Facing = DEFAULT_FACING): RiggedModel {
+  fitModel(root, facing);
+  root.traverse(o => { if (o instanceof THREE.Mesh) o.frustumCulled = false; });
+  const gait = installGait(root, clips);
+  function dispose(): void { gait.dispose(); root.removeFromParent(); root.traverse(o => { if (o instanceof THREE.Mesh) { o.geometry.dispose(); for (const m of Array.isArray(o.material) ? o.material : [o.material]) m.dispose(); } }); }
+  return { ...gait, root, dispose };
 }

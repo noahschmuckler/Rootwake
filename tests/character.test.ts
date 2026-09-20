@@ -26,7 +26,7 @@ test('figure fits existing capsule at rest and has distinct articulated limbs', 
   assert.ok(box.min.y>=-.015, 'feet on ground'); assert.ok(box.max.y<=.76, 'height stays near .72m capsule');
   assert.notEqual(h.joints.limbs[0].knee,h.joints.limbs[1].knee);
   for(let i=0;i<120;i++) h.update(1/60,2.8,0,true);
-  assert.ok(h.joints.limbs.some(l=>Math.abs(l.hip.rotation.x)>.1));
+  assert.ok(h.joints.limbs.some(l=>l.hip.quaternion.angleTo(h.bindLocal.get(l.hip.name)!)>.1));
   assert.equal(h.group.position.length(),0,'animation never changes world root');
   h.group.traverse(o=>assert.ok(o.position.toArray().every(Number.isFinite)));
   h.dispose();
@@ -85,7 +85,7 @@ test('presentation has no blank frames, isolates materials and restores the unfo
     assert.ok(p.root.children.filter(c=>c.visible).every(c=>c.parent===p.root));
     assert.equal(material.opacity,1,'world material is untouched');
   }
-  assert.equal(p.hulda.joints.spine.rotation.x,neutral);
+  assert.ok(Math.abs(p.hulda.joints.spine.rotation.x-neutral)<1e-9);
   assert.equal(p.forms.human.visible,true); assert.equal(p.forms.knot.visible,false);
   p.update(1/60,'human',position,rotation,0,0,true,false); assert.equal(p.root.visible,false);
   p.dispose(); assert.equal(scene.children.length,0); geometry.dispose(); material.dispose();
@@ -139,4 +139,27 @@ test('the presentation swaps a rigged model in for the procedural figure and out
   p.update(1 / 60, 'human', new Vector3(), new Quaternion(), 1, 0, true); p.update(1 / 60, 'burl', new Vector3(), new Quaternion(), 0, 0, true);
   p.setModel(null); assert.equal(p.model, null); assert.equal(p.hulda.group.visible, true); assert.ok(!p.forms.human.children.includes(m.root));
   p.dispose();
+});
+
+import { BONE_PREFIX, HULDA_HEIGHT } from '../src/huldaCharacter';
+import skeleton from '../src/huldaSkeleton.json';
+test('Hulda wears the X Bot skeleton: every bone by name and bind, fitted to the capsule, and Mixamo-named clips drive her', () => {
+  const h = createHulda(); assert.equal(h.bones.size, 65); assert.equal(skeleton.bones.length, 65);
+  for (const b of skeleton.bones) { const j = h.bones.get(b.name)!; assert.ok(j, b.name); assert.ok(b.name.startsWith(BONE_PREFIX)); assert.equal(j.parent!.name, b.parent ?? 'HuldaRig'); }
+  h.update(0, 0, 0, true); h.group.updateMatrixWorld(true);
+  const box = new Box3().setFromObject(h.group); assert.ok(Math.abs(box.max.y - box.min.y - HULDA_HEIGHT) < 0.06, `stands ${(box.max.y - box.min.y).toFixed(3)} m`); assert.ok(box.min.y > -0.02 && box.min.y < 0.02, 'feet on the ground');
+  const arm = new Vector3(); h.joints.limbs[0].hand.getWorldPosition(arm); const shoulder = new Vector3(); h.joints.limbs[0].shoulder.getWorldPosition(shoulder);
+  assert.ok(arm.y < shoulder.y - 0.2, 'the T-pose arms hang at rest'); assert.ok(box.max.x - box.min.x < 0.5, 'not a T-pose');
+  // Forward is -Z: the nose sits ahead of the head's centre.
+  const head = new Vector3(); h.joints.head.getWorldPosition(head); const nose = new Vector3(); (h.joints.head.children.find(c => c instanceof Mesh && c.scale.x < 0.03 * h.skeletonHeight / 1.9) as Mesh).getWorldPosition(nose); assert.ok(nose.z < head.z - 0.02, 'faces -Z');
+  // A clip on the rig's bone names, as Mixamo exports them, takes over from the procedural gait.
+  const q = (a: number) => [Math.sin(a / 2), 0, 0, Math.cos(a / 2)];
+  const clip = new AnimationClip('walking', 1, [new QuaternionKeyframeTrack(`${BONE_PREFIX}LeftUpLeg.quaternion`, [0, 0.5, 1], [...q(0), ...q(0.9), ...q(0)])]);
+  h.setClips([clip]); assert.deepEqual(h.gait!.roles, { walk: 'walking' });
+  const leg = h.bones.get(`${BONE_PREFIX}LeftUpLeg`)!; let swung = 0; for (let i = 0; i < 60; i++) { h.update(1 / 60, 1.4, 0, true); swung = Math.max(swung, leg.quaternion.angleTo(h.bindLocal.get(leg.name)!)); }
+  assert.ok(swung > 0.5, `the clip moves the leg (${swung.toFixed(2)})`); assert.ok(h.joints.limbs[1].hip.quaternion.angleTo(h.bindLocal.get(h.joints.limbs[1].hip.name)!) < 1e-6, 'bones the clip does not name stay at bind');
+  h.update(1 / 60, 0, 0, true, 1); assert.ok(h.joints.spine.quaternion.angleTo(h.bindLocal.get(h.joints.spine.name)!) > 0.3, 'the fold still curls her over a clip');
+  h.setClips(null); assert.equal(h.gait, null); assert.ok(leg.quaternion.angleTo(h.bindLocal.get(leg.name)!) < 1e-6, 'back to bind');
+  for (let i = 0; i < 60; i++) h.update(1 / 60, 2.8, 0, true); assert.ok(leg.quaternion.angleTo(h.bindLocal.get(leg.name)!) > 0.1, 'the procedural gait poses the same bones');
+  h.dispose();
 });

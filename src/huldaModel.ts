@@ -12,6 +12,11 @@ export async function loadHuldaModel(url: string, facing?: Facing, clipUrls: str
   for (let i = 1; i < scenes.length; i++) { const stem = clipUrls[i - 1].split('?')[0].split('/').pop()!.replace(/\.[^.]+$/, ''); scenes[i].clips.forEach((c, j) => { c.name = scenes[i].clips.length === 1 ? stem : `${stem} ${j}`; }); }
   return installRiggedModel(main.root, scenes.flatMap(s => s.clips), facing);
 }
+/** Clip files on their own (Mixamo animations exported without skin), named after their files, for Hulda's skeleton. */
+export async function loadHuldaClips(clipUrls: string[]): Promise<THREE.AnimationClip[]> {
+  const scenes = await Promise.all(clipUrls.map(load));
+  return scenes.flatMap((s, i) => { const stem = clipUrls[i].split('?')[0].split('/').pop()!.replace(/\.[^.]+$/, ''); s.clips.forEach((c, j) => { c.name = s.clips.length === 1 ? stem : `${stem} ${j}`; }); return s.clips; });
+}
 async function load(url: string): Promise<{ root: THREE.Object3D; clips: THREE.AnimationClip[] }> {
   const ext = url.split('?')[0].split('.').pop()?.toLowerCase();
   if (ext === 'fbx') {

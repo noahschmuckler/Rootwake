@@ -1,7 +1,7 @@
 # Rigged character files
 
 Drop a rigged, skinned character here as `hulda.glb`, `hulda.gltf` or `hulda.fbx` and the clearing
-(`/flow/` and the character preview) uses it in place of the procedural Hulda: fitted to her 0.72 m
+(`/flow/` and the character preview) uses it in place of Hulda's own body: fitted to her 0.72 m
 capsule with its feet on the ground, turned to face the game's forward, and its clips driven by her
 measured speed. Nothing else changes: the wooden forms, the transformations and the traversal are
 the same.
@@ -15,9 +15,12 @@ the same.
   loaded with `?facing=-z`.
 - **Extra clips.** Mixamo lets a clip be exported without skin; load them with `?clips=models/a.fbx,models/b.fbx`.
 - **Trying a file without committing it.** `?model=models/yourfile.fbx` loads any file under this folder.
-- **What is here.** `hulda.fbx` is Mixamo's X Bot with the Female Basic Locomotion Pack in `clips/`:
-  idle, walking and running drive her; jump, the strafes and the turns are here for whoever wires
-  hops and turning next (the gait driver only knows idle / walk / run).
+- **What is here.** Hulda herself wears the X Bot's skeleton (`src/huldaSkeleton.json`, extracted from
+  `xbot.fbx`), so the Female Basic Locomotion Pack in `clips/` drives her directly: idle, walking and
+  running by default; jump, the strafes and the turns are here for whoever wires hops and turning next
+  (the gait driver only knows idle / walk / run). `?body=xbot` shows the X Bot body with the same clips;
+  `?clips=` (empty) leaves Hulda to her procedural gait. Any other Mixamo clip exported without skin
+  fits her bones as it is.
 - **The sample.** `samples/sample-rig.gltf` (from `node scripts/make-sample-rig.mjs`) is a two-bone
   skinned figure with Idle, Walking and Running clips that the browser journey loads to prove the path.
 
