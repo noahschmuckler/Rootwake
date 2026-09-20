@@ -75,10 +75,10 @@ try{
  for(const form of ['human','burl','knot','leaf','ivy']) assert.ok(audit.forms.includes(form),form+' presented');
  await writeFile(out+'/character-continuity.json',JSON.stringify(audit,null,2));
  // First-person ground view hides all character geometry, then third-person restores it.
- await page.click('#view'); await page.waitForTimeout(100);
- assert.equal(await page.evaluate(()=>window.__clearing.presentation.root.visible),false);
- await page.click('#view'); await page.waitForTimeout(100);
- assert.equal(await page.evaluate(()=>window.__clearing.presentation.root.visible),true);
+ await page.click('#view');
+ await page.waitForFunction(()=>window.__clearing.player.view==='first' && !window.__clearing.presentation.root.visible,null,{timeout:10000});
+ await page.click('#view');
+ await page.waitForFunction(()=>window.__clearing.player.view==='third' && window.__clearing.presentation.root.visible,null,{timeout:10000});
  // Reload keeps the trail and the ivy.
  const saved=await page.evaluate(()=>window.__clearing.growth);await page.reload();await page.click('#begin');await page.waitForFunction(()=>window.__clearing);await page.waitForTimeout(500);const loaded=await page.evaluate(()=>window.__clearing.growth);assert.deepEqual(loaded.ivy,saved.ivy);assert.equal(Object.keys(loaded.trail).length,Object.keys(saved.trail).length);
  await stand(page,0.5,15,0);await page.waitForTimeout(400);await page.screenshot({path:out+'/09-trail.png'});
@@ -101,4 +101,4 @@ try{
    }
  }
  assert.deepEqual(errors,[]);report.push({passed:true,thirdPerson:true,trunk:true,crown:true,hop:true,roots:'down from the trunk and by ground double tap; out by stick double tap',climb:'up and down',ivy:'grown, kept, descended, reconnected',trail:true,saveReload:true,viewports:4});await writeFile(out+'/results.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
-}catch(e){for(const c of browser.contexts())for(const p of c.pages()){await p.screenshot({path:out+'/failure.png'}).catch(()=>{});console.log(await p.evaluate(()=>{const c=window.__clearing;return c?{mode:c.mode,feet:c.player.feet().toArray(),trunk:c.trunk,crown:c.crown,root:c.root,climb:c.climb,ivy:c.ivy}:null;}).catch(()=>null));}throw e;}finally{await browser.close();await new Promise(r=>server.close(r));}
+}catch(e){for(const c of browser.contexts())for(const p of c.pages()){await p.screenshot({path:out+'/failure.png'}).catch(()=>{});console.log(await p.evaluate(()=>{const c=window.__clearing;return c?{view:c.player.view,presentationVisible:c.presentation?.root.visible,mode:c.mode,feet:c.player.feet().toArray(),trunk:c.trunk,crown:c.crown,root:c.root,climb:c.climb,ivy:c.ivy}:null;}).catch(()=>null));}throw e;}finally{await browser.close();await new Promise(r=>server.close(r));}
