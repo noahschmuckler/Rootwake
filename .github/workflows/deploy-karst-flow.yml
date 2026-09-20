@@ -50,6 +50,8 @@ jobs:
           mkdir -p "$study_checkout/karst-flow/assets"
           cp dist/karst-flow.html "$study_checkout/karst-flow/index.html"
           cp dist/assets/* "$study_checkout/karst-flow/assets/"
+          rm -rf "$study_checkout/karst-flow/models"
+          cp -r dist/models "$study_checkout/karst-flow/models"
           printf '{"sourceCommit":"%s","study":"karst-flow-v1"}\n' "$GITHUB_SHA" > "$study_checkout/karst-flow/revision.json"
           touch "$study_checkout/.nojekyll"
           cd "$study_checkout"

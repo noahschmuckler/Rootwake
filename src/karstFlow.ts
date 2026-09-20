@@ -26,6 +26,12 @@ const player = new Player(renderer.domElement, scene, camera); scene.add(player.
 player.cameraClear = p => !insideRock(p, CAVERN.centre, CAVERN.radius, PILLAR_HEIGHT);
 const presentation = createHuldaPresentation(scene, new THREE.Group(), new THREE.Group());
 const hulda = presentation.hulda;
+// Hulda wears the X Bot's skeleton: the Mixamo clips in public/models/clips drive her (public/models/README.md); until they
+// load, and if they fail, her procedural gait poses the same bones. ?body=xbot shows the X Bot body with the same clips.
+const query = new URLSearchParams(location.search), clipUrls = query.get('clips')?.split(',').filter(Boolean) ?? __HULDA_CLIPS__, base = (c: string) => import.meta.env.BASE_URL + c;
+let clipStatus: 'none' | 'loading' | 'ready' | 'failed' = clipUrls.length ? 'loading' : 'none', clipError = '';
+if (query.get('body') === 'xbot') import('./huldaModel').then(({ loadHuldaModel }) => loadHuldaModel(base('models/xbot.fbx'), undefined, clipUrls.map(base))).then(m => { presentation.setModel(m); clipStatus = 'ready'; }, e => { clipStatus = 'failed'; clipError = String(e); console.warn('Hulda body', e); });
+else if (clipUrls.length) import('./huldaModel').then(({ loadHuldaClips }) => loadHuldaClips(clipUrls.map(base))).then(clips => { presentation.setClips(clips); clipStatus = 'ready'; }, e => { clipStatus = 'failed'; clipError = String(e); console.warn('Hulda clips', e); });
 for (const child of [...player.avatar.children]) player.avatar.remove(child);
 installMobilityControls(player);
 type Mode = 'ground' | 'sink' | 'mouth' | 'ride' | 'rise';
@@ -150,4 +156,4 @@ function frame(now: number) {
 }
 standOn(at.zone, at.stand.x, at.stand.z, emergeYaw(at)); player.pitch = 0.08;
 world.setTrail(progress); player.applyCamera(camera); present(0); world.update(0, 0, null, null); scene.background = skyColour; renderer.render(scene, camera); intro.showModal(); requestAnimationFrame(frame);
-Object.assign(window, { __karstFlow: { hulda, presentation, scene, camera, renderer, player, plants: PLANTS, zones: ZONES, pillarHeight: PILLAR_HEIGHT, get mode() { return mode; }, get at() { return at.id; }, get zone() { return zone.id; }, get vision() { return vision; }, get progress() { return JSON.parse(serializeProgress(progress)); }, get ride() { return ride ? { root: ride.root.id, from: ride.from, s: ride.s, speed: ride.speed } : null; }, get choice() { return choice ? { root: choice.root.id, held: choice.held } : null; }, get transitioning() { return mode === 'sink' || mode === 'rise' || mode === 'ride'; }, screenDirections: () => { camera.updateMatrixWorld(); return mode === 'mouth' ? screenDirections(at.id, screen) : []; } } });
+Object.assign(window, { __karstFlow: { hulda, presentation, scene, camera, renderer, player, plants: PLANTS, get character() { const g = presentation.model ?? hulda.gait; return { status: clipStatus, error: clipError, clips: clipUrls, bones: hulda.bones.size, body: presentation.model ? 'xbot' : 'hulda', roles: g?.roles ?? null, weights: g ? Object.fromEntries(Object.entries(g.actions).map(([r, a]) => [r, a.getEffectiveWeight()])) : null }; }, zones: ZONES, pillarHeight: PILLAR_HEIGHT, get mode() { return mode; }, get at() { return at.id; }, get zone() { return zone.id; }, get vision() { return vision; }, get progress() { return JSON.parse(serializeProgress(progress)); }, get ride() { return ride ? { root: ride.root.id, from: ride.from, s: ride.s, speed: ride.speed } : null; }, get choice() { return choice ? { root: choice.root.id, held: choice.held } : null; }, get transitioning() { return mode === 'sink' || mode === 'rise' || mode === 'ride'; }, screenDirections: () => { camera.updateMatrixWorld(); return mode === 'mouth' ? screenDirections(at.id, screen) : []; } } });

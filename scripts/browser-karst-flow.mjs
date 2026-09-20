@@ -40,10 +40,16 @@ try{
  });
  assert.equal(await mode(page),'ground');assert.equal(await page.evaluate(()=>window.__karstFlow.zone),'summit');assert.equal(await page.evaluate(()=>window.__karstFlow.player.view),'third','Third person is native');
  assert.equal(await page.locator('#hint, #story, #actions button:visible, #rides').count(),0,'No screen text or destination buttons');
+ // Hulda on the X Bot's skeleton: the Mixamo gait clips load onto her bones before the journey begins.
+ await page.waitForFunction(()=>window.__karstFlow.character.status!=='loading',null,{timeout:120000});const character=await page.evaluate(()=>window.__karstFlow.character);
+ assert.equal(character.status,'ready',character.error);assert.equal(character.body,'hulda');assert.equal(character.bones,65);assert.deepEqual(character.roles,{idle:'idle',walk:'walking',run:'running'},JSON.stringify(character.roles));
  // The top is narrow: the stick cannot walk her off it, and walking leaves a trail.
  await page.evaluate(()=>{window.__karstFlow.player.yaw=0;});const s=stick(page,1);await s.down(0,-38);await page.waitForTimeout(2500);await s.up();
  assert.ok(await page.evaluate(()=>{const k=window.__karstFlow,f=k.player.feet();return Math.hypot(f.x,f.z)<=3.25&&f.y>k.pillarHeight-.5;}),'Held on the summit');
  assert.ok(await page.evaluate(()=>Object.keys(window.__karstFlow.progress.trail).some(k=>k.startsWith('summit:'))),'Walking leaves a trail on the summit');
+ // Running on the summit: the run clip carries her; at rest the idle. A mid-run frame is kept for the eye.
+ await page.evaluate(()=>{window.__karstFlow.player.yaw=Math.PI;});await s.down(0,-38);await page.waitForTimeout(1200);const running=await page.evaluate(()=>({w:window.__karstFlow.character.weights,speed:window.__karstFlow.player.motor.speed}));await page.screenshot({path:out+'/01b-running.png'});await s.up();
+ assert.ok(running.w.run>.6,`the run clip carries her (${JSON.stringify(running)})`);await page.waitForTimeout(900);assert.ok(await page.evaluate(()=>window.__karstFlow.character.weights.idle>.8),'the idle at rest');
  // Press into the pine: she walks to it, keeps pushing, and goes into its roots.
  await approach(page,'pine');await page.waitForTimeout(300);await s.down(0,-38);await waitMode(page,'sink',15000);await waitMode(page,'mouth',10000);await s.up();
  assert.equal(await at(page),'pine');await page.waitForFunction(()=>window.__karstFlow.vision>.6);await page.screenshot({path:out+'/02-in-the-pine.png'});
@@ -74,5 +80,5 @@ try{
  const saved=await page.evaluate(()=>window.__karstFlow.progress);await page.reload();await page.click('#begin');await page.waitForFunction(()=>window.__karstFlow);await page.waitForTimeout(500);
  const loaded=await page.evaluate(()=>window.__karstFlow.progress);assert.equal(loaded.at,'pine');assert.equal(loaded.returned,true);assert.equal(Object.keys(loaded.trail).length,Object.keys(saved.trail).length);
  for(const[name,size]of[['small',{width:375,height:667}],['landscape',{width:844,height:390}],['desktop',{width:1280,height:900}]]){await page.setViewportSize(size);await page.waitForTimeout(600);await page.screenshot({path:out+'/'+name+'.png'});}
- assert.deepEqual(errors,[]);report.push({passed:true,thirdPerson:true,noScreenText:true,pressInto:true,rides:['pine-east','east-cavern','cavern-floor','south-floor','east-south','pine-east'],emerge:'stick double tap',enter:'press into a plant, or ground double tap near one',trail:true,saveReload:true,viewports:4});await writeFile(out+'/results.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
+ assert.deepEqual(errors,[]);report.push({passed:true,character:'Hulda on the X Bot skeleton, '+character.bones+' bones, clips '+Object.values(character.roles).join(', '),thirdPerson:true,noScreenText:true,pressInto:true,rides:['pine-east','east-cavern','cavern-floor','south-floor','east-south','pine-east'],emerge:'stick double tap',enter:'press into a plant, or ground double tap near one',trail:true,saveReload:true,viewports:4});await writeFile(out+'/results.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
 }catch(e){for(const c of browser.contexts())for(const p of c.pages()){await p.screenshot({path:out+'/failure.png'}).catch(()=>{});console.log(await p.evaluate(()=>{const c=window.__karstFlow;return c?{mode:c.mode,at:c.at,zone:c.zone,feet:c.player.feet().toArray(),ride:c.ride,choice:c.choice,dirs:c.screenDirections()}:null;}).catch(()=>null));}throw e;}finally{await browser.close();await new Promise(r=>server.close(r));}
