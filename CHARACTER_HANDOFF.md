@@ -27,4 +27,15 @@ Browser script accepts `CHROMIUM_PATH` and falls back to runtime Playwright when
 The existing `.github/workflows/deploy-flow.yml` publishes /flow only from feat/free-flow. A character branch push must not overwrite the accepted demo. PR targets feat/free-flow. Merging there triggers its verification/publication workflow.
 
 ## Resume status
-Sprint 1 in progress. Next: implement `huldaMotion.ts`, `huldaCharacter.ts`, flow integration and regression tests, then update this status with exact checks and limitations. Sprints 2-4 not started. Keep the accepted /flow live until this branch is reviewed.
+Sprint 1 implementation committed as `815907c` on `feat/hulda-character`.
+Draft PR: https://github.com/noahschmuckler/Rootwake/pull/4 (base `feat/free-flow`).
+Verification run: https://github.com/noahschmuckler/Rootwake/actions/runs/35530310400
+
+- Implemented: `src/huldaCharacter.ts` (named rigid pivots, leaf bodice/skirt, copper vine locks, idle and gait posing); `src/huldaMotion.ts` (speed filtering, common walk/run phase, shortest-angle heading); `src/flow.ts` (flow-only avatar child replacement and per-frame presentation update, debug handle `window.__clearing.hulda`).
+- Added: `tests/character.test.ts`, `scripts/test-character.mjs`, npm `test:character`; `.github/workflows/verify-character.yml` verifies without deploying. Existing browser journey now also captures `character-front/back/walk/run.png`.
+- Passed locally and in GitHub: build, character 4/4, mobility 35/35, lab 10/10, flow 4/4 (53 total). Local Chromium download timed out; GitHub installed Chromium successfully and is running the browser journey.
+- NEXT EXACT ACTION: inspect the verification run, download `hulda-character-browser-results`, inspect character and in-world portraits. Fix any browser failure before marking sprint 1 accepted. Then implement sprint 2 using the contracts above.
+- Remaining: foot locking/terrain-aware IK, animation quality/phone review, all transformation blending, distinct rootknot geometry, climbing contact animation. Existing climbing currently carries a relaxed humanoid pose up the wall. No skinned mesh, GLTF asset, or authored animation clips yet; procedural rigid pivots are intentional for this sprint.
+- No changes to live /flow; no automatic publish from this branch. Sprints 2-4 not started. User review should judge silhouette and gait before replacing accepted traversal visuals.
+- If shell git push lacks credentials, the GitHub connector can create a tree/commit and update this branch. Never force-push; preserve parent SHA. Local checkout can fetch/reconcile that remote commit after verifying identical content.
+
