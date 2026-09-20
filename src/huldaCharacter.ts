@@ -81,18 +81,20 @@ export function createHulda() {
     const {moving,run,phase,time}=motion;
     hips.position.y=.86 + moving*(.012+.022*run)*Math.cos(phase*2);
     hips.rotation.y=Math.sin(phase)*.08*moving;
-    spine.rotation.x=-.12*run*moving;
+    // Forward is -Z; a positive x rotation tips a hanging limb (or the spine's top) forward.
+    spine.rotation.x=.12*run*moving;
     spine.rotation.z=Math.sin(phase)*.025*moving;
     spine.rotation.y=-hips.rotation.y*.65;
     neck.rotation.x=-spine.rotation.x*.6;
     for(const l of limbs) {
       const p=phase+(l.side<0?0:Math.PI), swing=Math.sin(p)*moving;
       l.hip.rotation.x=swing*(.48+.3*run);
-      l.knee.rotation.x=-Math.max(0,-Math.cos(p))*(.65+.75*run)*moving;
+      // The knee flexes through the swing (toe-off at 3pi/2 to just before heel strike at pi/2), not the stance.
+      l.knee.rotation.x=-Math.max(0,Math.cos(p-7*Math.PI/4))*(.65+.75*run)*moving;
       l.ankle.rotation.x=-l.hip.rotation.x*.3-l.knee.rotation.x*.4;
       l.shoulder.rotation.x=-swing*(.34+.4*run);
       l.shoulder.rotation.z=l.side*(.08+.018*Math.sin(time*1.7));
-      l.elbow.rotation.x=-.12-run*.95+Math.max(0,swing)*.15;
+      l.elbow.rotation.x=.12+run*.95+Math.max(0,-swing)*.15;
     }
     // Crouch, tuck the knees and wrap the arms before the wooden form takes over.
     const k = THREE.MathUtils.clamp(fold,0,1);
@@ -105,7 +107,7 @@ export function createHulda() {
       l.shoulder.rotation.x=THREE.MathUtils.lerp(l.shoulder.rotation.x,-1.3,k);
       l.elbow.rotation.x=THREE.MathUtils.lerp(l.elbow.rotation.x,-1.6,k);
     }
-    for(let i=0;i<locks.length;i++) locks[i].rotation.x=.1+run*.18+Math.sin(time*2.2+i*.7)*.035+Math.sin(phase+.4*i)*moving*.07;
+    for(let i=0;i<locks.length;i++) locks[i].rotation.x=-.1-run*.18+Math.sin(time*2.2+i*.7)*.035+Math.sin(phase+.4*i)*moving*.07;
   }
   function dispose() {
     group.removeFromParent(); sphere.dispose(); leafGeo.dispose();
