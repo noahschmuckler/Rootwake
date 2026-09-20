@@ -22,7 +22,7 @@ Each sprint should stop at a tested, reviewable commit. Do not promise exact usa
 - `climb` currently translates the avatar up the wall with no contact solver. Sprint 1 must avoid running the ground gait there.
 
 ## Preview route
-`.github/workflows/deploy-character-preview.yml` publishes this branch, after the same suites and the browser journey, to **https://noahschmuckler.github.io/Rootwake/flow-character/** (folder `flow-character/` on gh-pages), so Noah can play each sprint without replacing the accepted `/flow/`. The browser and page-verify scripts take the route from `STUDY_BASE` / `STUDY_URL` (defaults are the accepted `/flow/`). Merging PR #4 into `feat/free-flow` remains the way to publish to `/flow/` itself.
+`.github/workflows/deploy-character-preview.yml` publishes this branch, after the same suites and the browser journey, to **https://noahschmuckler.github.io/Rootwake/flow-character/** (folder `flow-character/` on gh-pages), so Noah can play each sprint without replacing the accepted `/flow/`. The browser and page-verify scripts take the route from `STUDY_BASE` / `STUDY_URL` (defaults are the accepted `/flow/`). Merging PR #4 into `feat/free-flow` remains the way to publish to `/flow/` itself. First preview published from fec7367 by run https://github.com/noahschmuckler/Rootwake/actions/runs/35534020550 (sprint 2: burl and rootknot blends).
 
 ## Validation / commands
 `npm ci`; `npm run build -- --base=/Rootwake/flow/`; `npm run test:mobility`; `npm run test:lab`; `node scripts/test-flow.mjs`; `npm run test:character`; `node scripts/browser-flow.mjs`.
