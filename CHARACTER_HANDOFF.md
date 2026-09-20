@@ -21,6 +21,9 @@ Each sprint should stop at a tested, reviewable commit. Do not promise exact usa
 - `flow.ts:present()` resolves the current traversal into a form and world-space centre AFTER movement updates. `huldaPresentation.ts` owns blending, visibility and local form transforms. `flowWorld.ts` still builds the leaf/ivy placeholder geometry, transferred to presentation at startup. The old bulge sphere is removed.
 - `climb` currently translates the avatar up the wall with no contact solver. Sprint 1 must avoid running the ground gait there.
 
+## Preview route
+`.github/workflows/deploy-character-preview.yml` publishes this branch, after the same suites and the browser journey, to **https://noahschmuckler.github.io/Rootwake/flow-character/** (folder `flow-character/` on gh-pages), so Noah can play each sprint without replacing the accepted `/flow/`. The browser and page-verify scripts take the route from `STUDY_BASE` / `STUDY_URL` (defaults are the accepted `/flow/`). Merging PR #4 into `feat/free-flow` remains the way to publish to `/flow/` itself.
+
 ## Validation / commands
 `npm ci`; `npm run build -- --base=/Rootwake/flow/`; `npm run test:mobility`; `npm run test:lab`; `node scripts/test-flow.mjs`; `npm run test:character`; `node scripts/browser-flow.mjs`.
 Browser script accepts `CHROMIUM_PATH` and falls back to runtime Playwright when not locally installed. Output is `artifacts/flow/` (ignored). Build base must match browser script.

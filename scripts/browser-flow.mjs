@@ -6,7 +6,8 @@ import assert from 'node:assert/strict';
 const require=createRequire(import.meta.url);
 let chromium;try{({chromium}=require('playwright'));}catch{({chromium}=require(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES+'/playwright'));}
 const root=resolve('dist'),out=resolve('artifacts/flow');await mkdir(out,{recursive:true});
-const server=createServer(async(req,res)=>{try{let path=new URL(req.url,'http://localhost').pathname.replace(/^\/Rootwake\/flow\//,'/');if(path==='/')path='/flow.html';if(path==='/favicon.ico'){res.writeHead(204).end();return;}const file=resolve(root,'.'+path);if(!file.startsWith(root+'/'))throw Error('Bad path');res.setHeader('Content-Type',{'.html':'text/html','.js':'application/javascript','.css':'text/css'}[extname(file)]??'application/octet-stream');res.end(await readFile(file));}catch{res.writeHead(404).end();}});await new Promise(r=>server.listen(4185,'127.0.0.1',r));
+const BASE=process.env.STUDY_BASE??'/Rootwake/flow/';
+const server=createServer(async(req,res)=>{try{let path=new URL(req.url,'http://localhost').pathname;if(path.startsWith(BASE))path='/'+path.slice(BASE.length);if(path==='/')path='/flow.html';if(path==='/favicon.ico'){res.writeHead(204).end();return;}const file=resolve(root,'.'+path);if(!file.startsWith(root+'/'))throw Error('Bad path');res.setHeader('Content-Type',{'.html':'text/html','.js':'application/javascript','.css':'text/css'}[extname(file)]??'application/octet-stream');res.end(await readFile(file));}catch{res.writeHead(404).end();}});await new Promise(r=>server.listen(4185,'127.0.0.1',r));
 const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{}),args:['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
 const report=[];
 async function settle(page){await page.waitForFunction(()=>window.__clearing&&!window.__clearing.transitioning,null,{timeout:120000});await page.waitForTimeout(750);}
@@ -23,7 +24,7 @@ const waitMode=(page,m,timeout=30000)=>page.waitForFunction(m=>window.__clearing
 const stand=(page,x,z,yaw)=>page.evaluate(({x,z,yaw})=>{const c=window.__clearing;c.player.teleport(x,z,yaw);c.player.pitch=.08;},{x,z,yaw});
 try{
  const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});const errors=[];page.on('pageerror',e=>errors.push(String(e)));page.on('response',r=>{if(r.status()>=400)errors.push(r.status()+' '+r.url());});
- await page.goto('http://127.0.0.1:4185/Rootwake/flow/');await page.click('#begin');await page.waitForFunction(()=>window.__clearing);await page.waitForTimeout(800);await page.screenshot({path:out+'/01-clearing.png'});
+ await page.goto('http://127.0.0.1:4185'+BASE);await page.click('#begin');await page.waitForFunction(()=>window.__clearing);await page.waitForTimeout(800);await page.screenshot({path:out+'/01-clearing.png'});
  // Sample the real frame loop: a mode change must never leave a blank character or two roots.
  await page.evaluate(()=>{
    const audit=window.__characterAudit={frames:0,mixed:0,failures:[],forms:[]};
