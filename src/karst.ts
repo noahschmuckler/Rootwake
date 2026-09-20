@@ -201,9 +201,9 @@ function frame(now: number) {
   // Sight through the stone: chosen on the surface, always while shrunk into a root.
   const wantVision = progress.vision || !(mode === 'surface' || mode === 'soil' || mode === 'cultivate') ? 1 : 0; vision += (wantVision - vision) * Math.min(1, dt * 3);
   const under = onFloor() && (mode === 'soil' || (mode === 'cultivate' && returnMode === 'soil')) ? THREE.MathUtils.smoothstep(relief(camera.position.x, camera.position.z) - camera.position.y, -0.25, 0.25) : 0;
-  const raining = isWet(progress.w.day) && speed > 0;
-  world.update(vision, time, mode === 'ride' && ride ? ride.root : null, camera.position, progress.w, under, raining, progress.tended, dt);
   const inCavern = camera.position.distanceTo(CAVERN.centre) < CAVERN.radius + 0.5, inRoot = mode === 'ride' || mode === 'choose' || mode === 'arrive' || mode === 'shrink';
+  const raining = isWet(progress.w.day) && speed > 0;
+  world.update(vision, time, mode === 'ride' && ride ? ride.root : null, camera.position, progress.w, under, raining && !inCavern, progress.tended, dt);
   colour.copy(inCavern ? cavernColour : raining ? rainSky : skyColour); if (inRoot && !inCavern) colour.lerp(rootColour, 0.75); colour.lerp(soilColour, under);
   scene.background = colour; scene.fog = new THREE.FogExp2(colour, inCavern ? 0.05 : inRoot ? 0.06 : 0.011 + under * 0.03 + (raining ? 0.004 : 0));
   lantern.intensity = inRoot ? 3 : inCavern ? 1.2 : under * 6; hemi.intensity = inCavern ? 0.6 : raining ? 2.0 : 2.4; sun.intensity = inCavern ? 0.2 : raining ? 1.5 : 2.4;
