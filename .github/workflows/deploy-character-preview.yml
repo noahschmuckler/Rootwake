@@ -48,6 +48,8 @@ jobs:
           mkdir -p "$study_checkout/flow-character/assets"
           cp dist/flow.html "$study_checkout/flow-character/index.html"
           cp dist/assets/* "$study_checkout/flow-character/assets/"
+          rm -rf "$study_checkout/flow-character/models"
+          cp -r dist/models "$study_checkout/flow-character/models"
           printf '{"sourceCommit":"%s","study":"flow-character-preview"}\n' "$GITHUB_SHA" > "$study_checkout/flow-character/revision.json"
           touch "$study_checkout/.nojekyll"
           cd "$study_checkout"
