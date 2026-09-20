@@ -2,7 +2,7 @@
 
 ## Latest status
 Play: https://noahschmuckler.github.io/Rootwake/karst-flow/
-Source branch: feat/karst-flow (from feat/hulda-character, which carries the clearing and the Hulda character over the karst branch). Deployment: `.github/workflows/deploy-karst-flow.yml` on every push to the branch: mobility, lab, character, karst, clearing and karst-flow unit tests, the production build at `/Rootwake/karst-flow/`, the browser journey in GitHub's Chromium, publication of `karst-flow/` only on gh-pages, then the public revision.json and asset check (screenshots in the run's `karst-flow-browser-results` artifact). The publish record is at the end of this file.
+Source branch: feat/karst-flow (from feat/hulda-character, which carries the clearing and the Hulda character over the karst branch). Deployment: `.github/workflows/deploy-karst-flow.yml` on every push to the branch: mobility, lab, character, karst, clearing and karst-flow unit tests, the production build at `/Rootwake/karst-flow/`, the browser journey in GitHub's Chromium, publication of `karst-flow/` only on gh-pages, then the public revision.json and asset check (screenshots in the run's `karst-flow-browser-results` artifact). Tested and published code commit: af8c004. Successful verification and deployment run: https://github.com/noahschmuckler/Rootwake/actions/runs/35537374368 (all suites, the browser journey in GitHub's Chromium in six minutes, publication of `karst-flow/` only, public revision.json and asset check).
 
 Next step is Noah's phone feedback (questions below).
 
