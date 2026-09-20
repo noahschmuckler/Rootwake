@@ -15,10 +15,10 @@ Each sprint should stop at a tested, reviewable commit. Do not promise exact usa
 4. **Handholds and polish**: expose the actual hold coordinates from flowWorld as shared data; two-bone arm/leg IK or explicit planted-contact poses, alternate reach/pull, lateral and descending travel, stationary grip, top-out and bottom-out. Smooth entry/exit. Inspect all modes on phones; profile render cost; publish only after full journey passes.
 
 ## Architecture and scale
-- `Player.avatar` is the existing transform/visibility parent. Forward is local -Z; feet are y=0. Existing collision height is 0.72 and eye height 0.55: do not silently resize collision, world or camera to fit a model.
+- `Player.avatar` is now an empty controller/camera proxy in /flow. `HuldaPresentation.root` is the sole visible-character parent. Forward is local -Z; feet are y=0. Existing collision height is 0.72 and eye height 0.55: do not silently resize collision, world or camera to fit a model.
 - New figure is a rigid hierarchy, not a skinned GLTF. Named hip/spine/neck/shoulder/elbow/hip/knee/ankle pivots permit future contact animation. Meshes follow joints. A later skin can replace geometry without replacing traversal.
 - Animation owns local pivots only. Motor owns root translation. No root motion and no changes to input response.
-- `flow.ts` currently switches visibility immediately and positions `world.bulge`, `world.figure`, `world.mass`. Those are intentionally retained until sprints 2/3. Do not claim transforms are complete because walking is done.
+- `flow.ts:present()` resolves the current traversal into a form and world-space centre AFTER movement updates. `huldaPresentation.ts` owns blending, visibility and local form transforms. `flowWorld.ts` still builds the leaf/ivy placeholder geometry, transferred to presentation at startup. The old bulge sphere is removed.
 - `climb` currently translates the avatar up the wall with no contact solver. Sprint 1 must avoid running the ground gait there.
 
 ## Validation / commands
@@ -39,3 +39,17 @@ Verification run: https://github.com/noahschmuckler/Rootwake/actions/runs/355303
 - No changes to live /flow; no automatic publish from this branch. Sprints 2-4 not started. User review should judge silhouette and gait before replacing accepted traversal visuals.
 - If shell git push lacks credentials, the GitHub connector can create a tree/commit and update this branch. Never force-push; preserve parent SHA. Local checkout can fetch/reconcile that remote commit after verifying identical content.
 
+
+## Sprint 2 checkpoint
+User reports Fable reviewed sprint 1 and explicitly requested sprint 2. No additional remote commits or PR comments were present when fetched.
+
+Implemented, awaiting verification in GitHub Chromium:
+- `src/huldaForms.ts`: flattened bark burl with growth rings, intertwined rootknot with trailing roots; green bud carries identity across both. Six draw calls total for both wood forms, shared merged geometry per material.
+- `src/huldaPresentation.ts`: sole presentation owner and exported `FormBlend`; 0.48-second finite blends, snapshots current world pose and weights on interruption, shared origin for all forms, smooth root heading reversal, private material clones so fading cannot affect scenery. Centre is 0.32 above human feet.
+- `src/huldaCharacter.ts`: optional fold amount layers crouch/arm-wrap/knee tuck over locomotion, unwinds as human weight returns.
+- `src/flow.ts`: `present()` samples the authoritative mode after movement, new form ownership; all previous placeholder visibility mutations removed. Emergence from a trunk now starts at actual height instead of teleporting to its base. Controls, speeds, saving and camera rules retained.
+- `tests/character.test.ts`: interruption, same-form landing, frame rates, root reversal, wood geometry budget, visibility/material isolation and fold recovery. `scripts/browser-flow.mjs`: per-frame continuity audit across real touch traversal, first-person visibility, additional burl/rootknot review images.
+
+Next exact action: run build and all suites, commit this checkpoint and run verification workflow. Inspect `character-continuity.json`, browser results and new wood images. Fix failures before closing sprint 2. Then update this section with commit/run IDs and exact remaining limitations.
+
+Sprint 3 remains leaf scatter/reassembly and wall ivy spreading. The existing leaf/ivy geometry now participates in a generic crossfade, but is still placeholder geometry, not the requested authored transformation. Sprint 4 remains handhold contact/climbing. Root motion remains in the existing motor; visual transition interpolation does not drive collision.

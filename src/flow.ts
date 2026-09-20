@@ -4,7 +4,7 @@
 import './flow.css';
 import * as THREE from 'three';
 import { Player } from './player';
-import { createHulda } from './huldaCharacter';
+import { createHuldaPresentation, HUMAN_CENTRE, type HuldaForm } from './huldaPresentation';
 import { installMobilityControls } from './mobilityControls';
 import { buildClearing } from './flowWorld';
 import { TREES, WALL_Z, WALL_H, HANDHOLDS, crownHeight, trunkRadius, nearestTree, nearestRoot, nextRoot, rootPoint, rootTangent, endTree, hopTargets, wallSite, ivySiteX, groundAt, onGround, makeGroundWorld, tread, parseGrowth, serializeGrowth, freshGrowth, vec, type Tree, type RootEdge } from './flowModel';
@@ -23,9 +23,10 @@ const groundWorld = makeGroundWorld();
 const lockedWorld: TraversalWorld = { surfacesAt: () => [], canOccupy: () => false };
 const player = new Player(renderer.domElement, scene, camera); scene.add(player.avatar); player.traversalWorld = groundWorld; player.view = 'third';
 // Flow-only visual replacement; keep the shared controller and its visibility parent.
-const hulda = createHulda();
+const presentation = createHuldaPresentation(scene, world.figure, world.mass);
+const hulda = presentation.hulda;
 for (const child of [...player.avatar.children]) player.avatar.remove(child);
-player.avatar.add(hulda.group);
+// player.avatar remains an empty camera/controller proxy. Presentation owns visible geometry.
 player.teleport(0.5, 15, 0); player.pitch = 0.08; installMobilityControls(player);
 type Mode = 'ground' | 'trunk' | 'crown' | 'hop' | 'root' | 'climb' | 'ivy' | 'sink' | 'rise';
 let mode: Mode = 'ground', time = 0, last = performance.now();
@@ -60,21 +61,21 @@ function place(p: THREE.Vector3): void { player.motor.feet.copy(p); player.posit
 function standOn(x: number, z: number, yaw = player.yaw): void {
   // Never stand inside a trunk: nudge out of the nearest one if the landing is too close.
   const n = nearestTree(x, z); if (n.distance < 0.35) { const a = Math.atan2(z - n.tree.z, x - n.tree.x); x = n.tree.x + Math.cos(a) * (trunkRadius(n.tree) + 0.4); z = n.tree.z + Math.sin(a) * (trunkRadius(n.tree) + 0.4); }
-  player.traversalWorld = groundWorld; player.motor.reset(vec(x, groundAt(x, z), z)); place(vec(x, groundAt(x, z), z)); player.yaw = yaw; player.canMove = true; mode = 'ground'; world.bulge.visible = false; world.figure.visible = false; world.mass.visible = false;
+  player.traversalWorld = groundWorld; player.motor.reset(vec(x, groundAt(x, z), z)); place(vec(x, groundAt(x, z), z)); player.yaw = yaw; player.canMove = true; mode = 'ground';
 }
-function enterTrunk(tree: Tree): void { lock(); trunk = { tree, h: 0.2, az: 0, downHeld: 0 }; mode = 'trunk'; world.bulge.visible = true; hint('Push up. At the ground, push down.', 'trunk'); }
-function enterRoots(r: RootEdge, s: number, forward: boolean): void { root = { root: r, s, forward, stopped: 0 }; mode = 'root'; world.bulge.visible = true; world.bulge.scale.set(0.5, 0.5, 0.5); hint('Double tap the stick to come out.', 'root'); }
+function enterTrunk(tree: Tree): void { lock(); trunk = { tree, h: 0.2, az: Math.atan2(Math.cos(player.yaw),Math.sin(player.yaw)), downHeld: 0 }; mode = 'trunk'; hint('Push up. At the ground, push down.', 'trunk'); }
+function enterRoots(r: RootEdge, s: number, forward: boolean): void { root = { root: r, s, forward, stopped: 0 }; mode = 'root'; hint('Double tap the stick to come out.', 'root'); }
 function emerge(): void {
-  const p = mode === 'root' && root ? rootPoint(root.root, root.s) : mode === 'trunk' && trunk ? world.trunkPoint(trunk.tree, 0, trunk.az) : mode === 'crown' && crown ? world.crownPoint(crown.tree, crown.az) : null;
+  const p = mode === 'root' && root ? rootPoint(root.root, root.s) : mode === 'trunk' && trunk ? world.trunkPoint(trunk.tree, trunk.h, trunk.az) : mode === 'crown' && crown ? world.crownPoint(crown.tree, crown.az) : null;
   if (!p) return;
   const gx = p.x, gz = p.z, target = vec(gx, groundAt(gx, gz), gz);
   if (!onGround(gx, gz)) return;
-  const from = p.clone(); mode = 'rise'; world.figure.visible = true; world.bulge.visible = false;
+  const from = p.clone(); mode = 'rise';
   move = { from, to: target, t: 0, seconds: 0.8, then: () => { standOn(gx, gz); } };
 }
 function sinkHere(): void {
   if (mode !== 'ground') return; const feet = player.feet(), n = nearestRoot(feet); if (n.distance > 5) return;
-  lock(); mode = 'sink'; world.bulge.visible = true; world.bulge.scale.set(0.5, 0.5, 0.5);
+  lock(); mode = 'sink';
   move = { from: feet.clone(), to: rootPoint(n.root, n.s), t: 0, seconds: 0.7, then: () => enterRoots(n.root, n.s, true) };
 }
 function pressInto(dt: number): void {
@@ -91,7 +92,7 @@ function enterWall(x: number, down: boolean): void {
   if (site.kind === 'handholds') { lock(); climb = { x: Math.min(HANDHOLDS.x1 - 0.3, Math.max(HANDHOLDS.x0 + 0.3, x)), y: down ? WALL_H - 0.15 : 0.15 }; mode = 'climb'; player.avatar.visible = true; hint('Push up to climb.', 'climb'); return; }
   const grown = growth.ivy.includes(site.site);
   if (down && !grown) { hint('Nothing to climb here.', 'nodown'); return; }
-  lock(); ivy = { site: site.site, k: down ? 1 : 0, grown, down }; mode = 'ivy'; world.mass.visible = true; world.growIvy(site.site, grown ? 1 : 0);
+  lock(); ivy = { site: site.site, k: down ? 1 : 0, grown, down }; mode = 'ivy'; world.growIvy(site.site, grown ? 1 : 0);
   hint(grown ? '' : 'No holds. She grows ivy; it stays.', grown ? 'ivyagain' : 'ivy');
 }
 // Double taps: on the stick, come out of tree or root; on the ground, go into the roots.
@@ -105,6 +106,31 @@ document.addEventListener('contextmenu', e => e.preventDefault()); document.addE
 window.addEventListener('pagehide', save); window.addEventListener('beforeunload', save);
 window.addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); });
 const sky = new THREE.Color('#a9bcae'), soil = new THREE.Color('#102726'), colour = new THREE.Color();
+const visualPosition = new THREE.Vector3(), visualRotation = new THREE.Quaternion();
+const visualForward = new THREE.Vector3(0,0,-1), visualUp = new THREE.Vector3(0,1,0);
+function present(dt: number): void {
+  let form: HuldaForm = 'human';
+  visualPosition.copy(player.feet());
+  let heading = mode === 'climb' ? 0 : player.yaw;
+  if (mode === 'ground' && player.motor.speed > .08) heading = Math.atan2(-player.motor.velocity.x,-player.motor.velocity.z);
+  visualRotation.setFromAxisAngle(visualUp,heading);
+  if (mode === 'trunk' && trunk) {
+    form='burl'; visualPosition.copy(world.trunkPoint(trunk.tree,trunk.h,trunk.az));
+    // Grain faces outward (+Z); the back of the burl lies inside the trunk.
+    visualRotation.setFromAxisAngle(visualUp,Math.PI/2-trunk.az);
+  } else if (mode === 'root' && root) {
+    form='knot'; visualPosition.copy(rootPoint(root.root,root.s));
+    const tangent=rootTangent(root.root,root.s); if(!root.forward) tangent.negate();
+    visualRotation.setFromUnitVectors(visualForward,tangent.normalize());
+  } else if (mode === 'sink') form='knot';
+  else if (mode === 'crown' && crown) { form='leaf'; visualPosition.copy(world.crownPoint(crown.tree,crown.az)); }
+  else if (mode === 'hop') form='leaf';
+  else if (mode === 'ivy' && ivy) { form='ivy'; visualPosition.set(ivySiteX(ivy.site),ivy.k*WALL_H+.2,WALL_Z+.45); }
+  if(form==='human' || form==='leaf' || form==='ivy') visualPosition.y+=HUMAN_CENTRE;
+  const visible=mode!=='ground' || player.view==='third';
+  presentation.update(dt,form,visualPosition,visualRotation,player.motor.speed,heading,mode==='ground',visible,mode);
+  player.avatar.visible=false;
+}
 function frame(now: number) {
   requestAnimationFrame(frame); const dt = Math.min(0.05, Math.max(0, (now - last) / 1000)); last = now; if (document.hidden || intro.open) return; time += dt * 1000;
   player.update(now, [], undefined);
@@ -115,23 +141,23 @@ function frame(now: number) {
   } else if (mode === 'trunk' && trunk) {
     const t = trunk, top = crownHeight(t.tree); t.az = Math.atan2(Math.cos(player.yaw), Math.sin(player.yaw));
     const y = stickY(); if (Math.abs(y) > 0.25) t.h += -y * 2.4 * dt; t.h = Math.min(top, Math.max(0, t.h));
-    if (t.h >= top - 1e-6 && y < -0.25) { crown = { tree: t.tree, az: t.az }; mode = 'crown'; world.bulge.visible = false; world.figure.visible = true; hint('Sideways slides. Toward a tree leaps.', 'crown'); }
-    else if (t.h <= 0 && y > 0.5) { t.downHeld += dt; if (t.downHeld > 0.35) { const w = want(); const next = nextRoot(t.tree.id, w.lengthSq() ? w : vec(0, 0, 1)) ?? (nextRoot(t.tree.id, vec(1, 0, 0)) || nextRoot(t.tree.id, vec(-1, 0, 0)) || nextRoot(t.tree.id, vec(0, 0, -1))); if (next) { world.bulge.visible = true; enterRoots(next.root, next.forward ? 0 : next.root.length, next.forward); } } }
+    if (t.h >= top - 1e-6 && y < -0.25) { crown = { tree: t.tree, az: t.az }; mode = 'crown'; hint('Sideways slides. Toward a tree leaps.', 'crown'); }
+    else if (t.h <= 0 && y > 0.5) { t.downHeld += dt; if (t.downHeld > 0.35) { const w = want(); const next = nextRoot(t.tree.id, w.lengthSq() ? w : vec(0, 0, 1)) ?? (nextRoot(t.tree.id, vec(1, 0, 0)) || nextRoot(t.tree.id, vec(-1, 0, 0)) || nextRoot(t.tree.id, vec(0, 0, -1))); if (next) { enterRoots(next.root, next.forward ? 0 : next.root.length, next.forward); } } }
     else t.downHeld = 0;
-    if (mode === 'trunk') { const p = world.trunkPoint(t.tree, t.h, t.az); world.bulge.position.copy(p); world.bulge.scale.set(0.9, 1.25, 0.6); world.bulge.lookAt(t.tree.x, p.y, t.tree.z); place(vec(t.tree.x, t.tree.y + t.h, t.tree.z)); orbitCamera(p, 3.6, 1.2); }
+    if (mode === 'trunk') { const p = world.trunkPoint(t.tree, t.h, t.az); place(vec(t.tree.x, t.tree.y + t.h, t.tree.z)); orbitCamera(p, 3.6, 1.2); }
   } else if (mode === 'crown' && crown) {
     const c = crown, x = stickX(), y = stickY();
     if (Math.abs(x) > 0.25) c.az += x * 1.7 * dt;
-    if (y > 0.5) { trunk = { tree: c.tree, h: crownHeight(c.tree) - 0.05, az: c.az, downHeld: 0 }; mode = 'trunk'; world.figure.visible = false; world.bulge.visible = true; }
+    if (y > 0.5) { trunk = { tree: c.tree, h: crownHeight(c.tree) - 0.05, az: c.az, downHeld: 0 }; mode = 'trunk'; }
     else if (y < -0.5) {
       const w = want(); let best: Tree | null = null, bestDot = 0.72;
       for (const o of hopTargets(c.tree)) { const d = vec(o.x - c.tree.x, 0, o.z - c.tree.z).normalize().dot(w); if (d > bestDot) { bestDot = d; best = o; } }
       if (best) { const az = Math.atan2(c.tree.z - best.z, c.tree.x - best.x); hop = { from: world.crownPoint(c.tree, c.az), to: world.crownPoint(best, az), t: 0, tree: best, az }; mode = 'hop'; hint('', 'hop'); }
     }
-    if (mode === 'crown') { const p = world.crownPoint(c.tree, c.az); world.figure.position.copy(p); world.figure.rotation.y = -player.yaw; place(p); orbitCamera(p, 5.2, 2.1); }
+    if (mode === 'crown') { const p = world.crownPoint(c.tree, c.az); place(p); orbitCamera(p, 5.2, 2.1); }
   } else if (mode === 'hop' && hop) {
     hop.t = Math.min(1, hop.t + dt / 0.9); const k = hop.t * hop.t * (3 - 2 * hop.t); const p = hop.from.clone().lerp(hop.to, k); p.y += Math.sin(hop.t * Math.PI) * 1.4;
-    world.figure.position.copy(p); world.figure.rotation.y = -player.yaw; place(p); orbitCamera(p, 5.2, 2.1);
+    place(p); orbitCamera(p, 5.2, 2.1);
     if (hop.t === 1) { crown = { tree: hop.tree, az: hop.az }; mode = 'crown'; hop = null; }
   } else if (mode === 'root' && root) {
     wantUnder = 1; const r = root, w = want(), speed = 3.4;
@@ -148,10 +174,10 @@ function frame(now: number) {
         }
       }
     }
-    const p = rootPoint(r.root, r.s); world.bulge.position.copy(p); world.bulge.scale.set(0.5, 0.5, 0.5); place(p); orbitCamera(p, 3.2, 1.3);
+    const p = rootPoint(r.root, r.s); place(p); orbitCamera(p, 3.2, 1.3);
   } else if ((mode === 'sink' || mode === 'rise') && move) {
     move.t = Math.min(1, move.t + dt / move.seconds); const k = move.t * move.t * (3 - 2 * move.t); const p = move.from.clone().lerp(move.to, k);
-    wantUnder = mode === 'sink' ? k : 1 - k; (mode === 'sink' ? world.bulge : world.figure).position.copy(p); place(p); orbitCamera(p, 3.2, 1.3);
+    wantUnder = mode === 'sink' ? k : 1 - k; place(p); orbitCamera(p, 3.2, 1.3);
     if (move.t === 1) { const then = move.then; move = null; then(); }
   } else if (mode === 'climb' && climb) {
     const c = climb, x = stickX(), y = stickY();
@@ -163,13 +189,11 @@ function frame(now: number) {
   } else if (mode === 'ivy' && ivy) {
     const v = ivy, rate = v.grown ? 1 / 1.3 : 1 / 3.2; v.k = v.down ? Math.max(0, v.k - dt / 1.3) : Math.min(1, v.k + dt * rate);
     if (!v.grown && !v.down) world.growIvy(v.site, v.k);
-    const x = ivySiteX(v.site), p = vec(x, v.k * WALL_H + 0.2, WALL_Z + 0.45); world.mass.position.copy(p); world.mass.rotation.y = -player.yaw; place(p); orbitCamera(p, 3.4, 1.3);
+    const x = ivySiteX(v.site), p = vec(x, v.k * WALL_H + 0.2, WALL_Z + 0.45); place(p); orbitCamera(p, 3.4, 1.3);
     if (!v.down && v.k >= 1) { if (!v.grown) { growth.ivy.push(v.site); save(); } standOn(x, WALL_Z - 0.95, Math.PI); ivy = null; }
     else if (v.down && v.k <= 0) { standOn(x, WALL_Z + 0.95, 0); ivy = null; }
   }
-  // Presentation consumes the motor; it never feeds movement back into it.
-  hulda.update(dt, player.motor.speed, player.avatar.rotation.y, mode === 'ground');
-  if (mode === 'ground') player.avatar.rotation.y = hulda.motion.heading;
+  present(dt);
   under += (wantUnder - under) * Math.min(1, dt * 4);
   world.update(under); lantern.intensity = under * 7;
   colour.copy(sky).lerp(soil, under); scene.background = colour; scene.fog = new THREE.FogExp2(colour, 0.012 + under * 0.03);
@@ -179,5 +203,5 @@ function frame(now: number) {
   renderer.render(scene, camera);
 }
 world.setTrail(growth); for (const site of growth.ivy) world.growIvy(site, 1);
-player.applyCamera(camera); scene.background = sky; renderer.render(scene, camera); intro.showModal(); requestAnimationFrame(frame);
-Object.assign(window, { __clearing: { hulda, scene, camera, renderer, player, trees: TREES, get mode() { return mode; }, get growth() { return JSON.parse(serializeGrowth(growth)); }, get trunk() { return trunk ? { tree: trunk.tree.id, h: trunk.h } : null; }, get crown() { return crown ? { tree: crown.tree.id, az: crown.az } : null; }, get root() { return root ? { root: root.root.id, s: root.s, forward: root.forward } : null; }, get climb() { return climb; }, get ivy() { return ivy ? { site: ivy.site, k: ivy.k, grown: ivy.grown } : null; }, get under() { return under; }, get transitioning() { return mode === 'hop' || mode === 'sink' || mode === 'rise'; } } });
+player.applyCamera(camera); present(0); scene.background = sky; renderer.render(scene, camera); intro.showModal(); requestAnimationFrame(frame);
+Object.assign(window, { __clearing: { hulda, presentation, scene, camera, renderer, player, trees: TREES, get mode() { return mode; }, get growth() { return JSON.parse(serializeGrowth(growth)); }, get trunk() { return trunk ? { tree: trunk.tree.id, h: trunk.h } : null; }, get crown() { return crown ? { tree: crown.tree.id, az: crown.az } : null; }, get root() { return root ? { root: root.root.id, s: root.s, forward: root.forward } : null; }, get climb() { return climb; }, get ivy() { return ivy ? { site: ivy.site, k: ivy.k, grown: ivy.grown } : null; }, get under() { return under; }, get transitioning() { return mode === 'hop' || mode === 'sink' || mode === 'rise'; } } });

@@ -76,7 +76,7 @@ export function createHulda() {
     blade(knee,0,-.27,-.054,.11,.29,0,leaf);
     return { side, shoulder, elbow, hand, hip, knee, ankle };
   });
-  function update(dt: number, speed: number, heading: number, grounded: boolean) {
+  function update(dt: number, speed: number, heading: number, grounded: boolean, fold = 0) {
     motion.update(dt,speed,heading,grounded);
     const {moving,run,phase,time}=motion;
     hips.position.y=.86 + moving*(.012+.022*run)*Math.cos(phase*2);
@@ -93,6 +93,17 @@ export function createHulda() {
       l.shoulder.rotation.x=-swing*(.34+.4*run);
       l.shoulder.rotation.z=l.side*(.08+.018*Math.sin(time*1.7));
       l.elbow.rotation.x=-.12-run*.95+Math.max(0,swing)*.15;
+    }
+    // Crouch, tuck the knees and wrap the arms before the wooden form takes over.
+    const k = THREE.MathUtils.clamp(fold,0,1);
+    hips.position.y = THREE.MathUtils.lerp(hips.position.y,.78,k);
+    spine.rotation.x = THREE.MathUtils.lerp(spine.rotation.x,.8,k);
+    neck.rotation.x = THREE.MathUtils.lerp(neck.rotation.x,-.4,k);
+    for(const l of limbs) {
+      l.hip.rotation.x=THREE.MathUtils.lerp(l.hip.rotation.x,1.35,k);
+      l.knee.rotation.x=THREE.MathUtils.lerp(l.knee.rotation.x,-2.1,k);
+      l.shoulder.rotation.x=THREE.MathUtils.lerp(l.shoulder.rotation.x,-1.3,k);
+      l.elbow.rotation.x=THREE.MathUtils.lerp(l.elbow.rotation.x,-1.6,k);
     }
     for(let i=0;i<locks.length;i++) locks[i].rotation.x=.1+run*.18+Math.sin(time*2.2+i*.7)*.035+Math.sin(phase+.4*i)*moving*.07;
   }

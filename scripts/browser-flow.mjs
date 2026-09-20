@@ -24,6 +24,22 @@ const stand=(page,x,z,yaw)=>page.evaluate(({x,z,yaw})=>{const c=window.__clearin
 try{
  const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});const errors=[];page.on('pageerror',e=>errors.push(String(e)));page.on('response',r=>{if(r.status()>=400)errors.push(r.status()+' '+r.url());});
  await page.goto('http://127.0.0.1:4185/Rootwake/flow/');await page.click('#begin');await page.waitForFunction(()=>window.__clearing);await page.waitForTimeout(800);await page.screenshot({path:out+'/01-clearing.png'});
+ // Sample the real frame loop: a mode change must never leave a blank character or two roots.
+ await page.evaluate(()=>{
+   const audit=window.__characterAudit={frames:0,mixed:0,failures:[],forms:[]};
+   function sample(){
+     const c=window.__clearing,p=c.presentation;
+     if(p && c.player.view==='third') {
+       audit.frames++; const w=Object.values(p.blend.weights);
+       if(Math.abs(w.reduce((a,b)=>a+b,0)-1)>1e-6) audit.failures.push('weight total');
+       if(!p.root.visible || !p.root.children.some(f=>f.visible)) audit.failures.push('blank frame '+c.mode);
+       if(c.scene.children.filter(o=>o.name==='HuldaPresentation').length!==1) audit.failures.push('duplicate owner');
+       if(w.filter(v=>v>0 && v<1).length>1) audit.mixed++;
+       if(!audit.forms.includes(p.blend.form)) audit.forms.push(p.blend.form);
+     }
+     requestAnimationFrame(sample);
+   } requestAnimationFrame(sample);
+ });
  assert.equal(await mode(page),'ground');assert.equal(await page.evaluate(()=>window.__clearing.player.view),'third','Third person is native');
  // Walk: the stick moves her and she leaves a trail.
  const z0=await page.evaluate(()=>window.__clearing.player.feet().z);const s=await stick(page,1);await s.down(0,-38);await page.waitForFunction(z=>window.__clearing.player.feet().z<z-1.2,z0);await s.up();
@@ -54,6 +70,15 @@ try{
  await stand(page,-6,-16-0.9,Math.PI);await page.waitForTimeout(300);await s.down(0,-38);await waitMode(page,'ivy');await s.up();await waitMode(page,'ground',30000);assert.ok(await page.evaluate(()=>window.__clearing.player.feet().z>-16),'Descended by the ivy');
  await stand(page,-6,-16+0.9,0);await page.waitForTimeout(300);const tIvy=Date.now();await s.down(0,-38);await waitMode(page,'ivy');assert.equal(await page.evaluate(()=>window.__clearing.ivy.grown),true,'Reconnects to grown ivy');await waitMode(page,'ground',30000);await s.up();assert.ok(Date.now()-tIvy<12000,'A grown climb is quick');
  await page.screenshot({path:out+'/08-ledge.png'});
+ const audit=await page.evaluate(()=>window.__characterAudit);
+ assert.deepEqual(audit.failures,[]); assert.ok(audit.frames>100); assert.ok(audit.mixed>5);
+ for(const form of ['human','burl','knot','leaf','ivy']) assert.ok(audit.forms.includes(form),form+' presented');
+ await writeFile(out+'/character-continuity.json',JSON.stringify(audit,null,2));
+ // First-person ground view hides all character geometry, then third-person restores it.
+ await page.click('#view'); await page.waitForTimeout(100);
+ assert.equal(await page.evaluate(()=>window.__clearing.presentation.root.visible),false);
+ await page.click('#view'); await page.waitForTimeout(100);
+ assert.equal(await page.evaluate(()=>window.__clearing.presentation.root.visible),true);
  // Reload keeps the trail and the ivy.
  const saved=await page.evaluate(()=>window.__clearing.growth);await page.reload();await page.click('#begin');await page.waitForFunction(()=>window.__clearing);await page.waitForTimeout(500);const loaded=await page.evaluate(()=>window.__clearing.growth);assert.deepEqual(loaded.ivy,saved.ivy);assert.equal(Object.keys(loaded.trail).length,Object.keys(saved.trail).length);
  await stand(page,0.5,15,0);await page.waitForTimeout(400);await page.screenshot({path:out+'/09-trail.png'});
@@ -61,16 +86,17 @@ try{
  // Character review views: render a cloned rig in an isolated scene, preserving the live journey.
  if(await page.evaluate(()=>!!window.__clearing.hulda)) {
    await page.setViewportSize({width:720,height:900});
-   for(const [name,speed,angle] of [['front',0,Math.PI],['back',0,0],['walk',.7,2.5],['run',2.8,2.5]]) {
-     const data=await page.evaluate(({speed,angle})=>{
+   for(const [name,speed,angle] of [['front',0,Math.PI],['back',0,0],['walk',.7,2.5],['run',2.8,2.5],['burl',0,0],['knot',0,0]]) {
+     const data=await page.evaluate(({speed,angle,name})=>{
        const c=window.__clearing, h=c.hulda;
        for(let i=0;i<67;i++) h.update(1/60,speed,0,true);
        const scene=new c.scene.constructor(); scene.background=c.scene.background.clone().set('#d5dece');
        for(const child of c.scene.children) if(child.isLight) scene.add(child.clone());
-       const figure=h.group.clone(true); figure.rotation.y=angle; scene.add(figure);
+       const wood=name==='burl'||name==='knot';
+       const figure=(wood?c.presentation.forms[name]:h.group).clone(true); figure.visible=true; figure.rotation.y=angle; if(wood) { figure.position.set(0,.36,0); figure.scale.setScalar(1); figure.traverse(o=>{if(o.isMesh){o.material=o.material.clone();o.material.opacity=1;o.material.transparent=false;}}); } scene.add(figure);
        const camera=c.camera.clone(); camera.aspect=720/900; camera.position.set(1,.65,1.7); camera.lookAt(0,.36,0); camera.updateProjectionMatrix();
        c.renderer.render(scene,camera); return c.renderer.domElement.toDataURL('image/png').split(',')[1];
-     },{speed,angle});
+     },{speed,angle,name});
      await writeFile(out+'/character-'+name+'.png',Buffer.from(data,'base64'));
    }
  }
