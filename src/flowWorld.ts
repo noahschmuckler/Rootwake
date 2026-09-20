@@ -80,7 +80,6 @@ export function buildClearing(scene: THREE.Scene) {
     e.leaves.visible = k >= 0.999;
   }
   // Her other shapes: the bulge that climbs a trunk, the figure of leaves at a crown, the ivy mass on a wall.
-  const bulge = new THREE.Mesh(new THREE.SphereGeometry(0.5, 12, 9), bark); bulge.scale.set(0.9, 1.25, 0.6); bulge.visible = false; scene.add(bulge);
   const figureMat = spriteMaterial('leaf', '#b9e58a', { emissive: '#4a7a2a', emissiveIntensity: 0.35 });
   const figure = new THREE.Group(); figure.visible = false; scene.add(figure);
   { const fr = mulberry32(77); const body = crownStandees(fr, new THREE.Vector3(0, 0.95, 0), 0.42, 0.55, 0.3, 9, 0.5); body.push({ position: new THREE.Vector3(0, 1.35, 0), yaw: 0.4, width: 0.42, height: 0.42, flat: true }); figure.add(new THREE.Mesh(standees(body), figureMat)); }
@@ -90,6 +89,6 @@ export function buildClearing(scene: THREE.Scene) {
   const crownPoint = (t: Tree, az: number): THREE.Vector3 => new THREE.Vector3(t.x + Math.cos(az) * 1.1 * t.size, t.y + crownHeight(t) + 0.15, t.z + Math.sin(az) * 1.1 * t.size);
   const trunkPoint = (t: Tree, h: number, az: number): THREE.Vector3 => new THREE.Vector3(t.x + Math.cos(az) * (trunkRadius(t) + 0.12), t.y + h, t.z + Math.sin(az) * (trunkRadius(t) + 0.12));
   function update(under: number): void { earth.opacity = 1 - under * 0.82; earth.depthWrite = under < 0.5; rootBark.emissiveIntensity = 0.05 + under * 0.45; }
-  return { update, setTrail, growIvy, ivyAt, bulge, figure, mass, crownPoint, trunkPoint };
+  return { update, setTrail, growIvy, ivyAt, figure, mass, crownPoint, trunkPoint };
 }
 export type Clearing = ReturnType<typeof buildClearing>;

@@ -1,12 +1,12 @@
-name: Verify and publish clearing free-flow study
+name: Verify and publish the Hulda character preview of the clearing
 on:
   push:
-    branches: [feat/free-flow]
+    branches: [feat/hulda-character]
   workflow_dispatch:
 permissions:
   contents: read
 concurrency:
-  group: rootwake-flow
+  group: rootwake-flow-character
   cancel-in-progress: false
 jobs:
   study:
@@ -26,34 +26,37 @@ jobs:
       - run: npm ci
       - run: npm run test:mobility
       - run: npm run test:lab
+      - run: npm run test:character
       - run: node scripts/test-flow.mjs
-      - run: npm run build -- --base=/Rootwake/flow/
+      - run: npm run build -- --base=/Rootwake/flow-character/
       - run: npm install --no-save --package-lock=false playwright@1.58.2
       - run: npx playwright install --with-deps chromium
       - run: node scripts/browser-flow.mjs
+        env:
+          STUDY_BASE: /Rootwake/flow-character/
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: flow-browser-results
+          name: flow-character-browser-results
           path: artifacts/flow
-      - name: Publish tested study without replacing existing demos
+      - name: Publish the preview to its own folder, leaving /flow and every other demo untouched
         run: |
           set -euo pipefail
           git fetch origin gh-pages
           study_checkout=$(mktemp -d)
           git worktree add "$study_checkout" origin/gh-pages
-          mkdir -p "$study_checkout/flow/assets"
-          cp dist/flow.html "$study_checkout/flow/index.html"
-          cp dist/assets/* "$study_checkout/flow/assets/"
-          rm -rf "$study_checkout/flow/models"
-          cp -r dist/models "$study_checkout/flow/models"
-          printf '{"sourceCommit":"%s","study":"flow-v1"}\n' "$GITHUB_SHA" > "$study_checkout/flow/revision.json"
+          mkdir -p "$study_checkout/flow-character/assets"
+          cp dist/flow.html "$study_checkout/flow-character/index.html"
+          cp dist/assets/* "$study_checkout/flow-character/assets/"
+          rm -rf "$study_checkout/flow-character/models"
+          cp -r dist/models "$study_checkout/flow-character/models"
+          printf '{"sourceCommit":"%s","study":"flow-character-preview"}\n' "$GITHUB_SHA" > "$study_checkout/flow-character/revision.json"
           touch "$study_checkout/.nojekyll"
           cd "$study_checkout"
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add flow .nojekyll
-          git commit -m "Publish verified clearing free-flow study ${GITHUB_SHA::7}"
+          git add flow-character .nojekyll
+          git commit -m "Publish Hulda character preview of the clearing ${GITHUB_SHA::7}"
           git push origin HEAD:gh-pages
       - name: Point Pages at the built gh-pages branch and request its build
         # Since 2026-09-11 the site's source had drifted to feat/broken-conduit, so
@@ -76,4 +79,5 @@ jobs:
       - name: Verify published revision and assets
         env:
           STUDY_COMMIT: ${{ github.sha }}
+          STUDY_URL: https://noahschmuckler.github.io/Rootwake/flow-character/
         run: node scripts/verify-flow-pages.mjs

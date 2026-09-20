@@ -1,4 +1,4 @@
-const base='https://noahschmuckler.github.io/Rootwake/flow/';
+const base=process.env.STUDY_URL??'https://noahschmuckler.github.io/Rootwake/flow/';
 let error;
 // Up to eight minutes: a Pages build plus CDN propagation can outlast the old three.
 for(let attempt=0;attempt<96;attempt++){

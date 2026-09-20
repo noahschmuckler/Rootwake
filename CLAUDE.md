@@ -295,3 +295,9 @@ waypoint-only description above is historical. `mobility.ts` and
 `npm run test:mobility` and `npm run test:lab` plus `npm run build`.
 Do not replace shared behavior with course-only movement or bypass the
 forge/equipment lifecycle when extending the powered legs.
+
+## Hulda character work
+For the rigged nature character and staged transformation work, read
+`CHARACTER_HANDOFF.md` first. Source branch: `feat/hulda-character`, based on
+`feat/free-flow`, not main. That guide contains the sprint boundaries,
+resume checkpoint, integration contracts, checks and remaining work.

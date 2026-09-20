@@ -6,7 +6,8 @@ import assert from 'node:assert/strict';
 const require=createRequire(import.meta.url);
 let chromium;try{({chromium}=require('playwright'));}catch{({chromium}=require(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES+'/playwright'));}
 const root=resolve('dist'),out=resolve('artifacts/flow');await mkdir(out,{recursive:true});
-const server=createServer(async(req,res)=>{try{let path=new URL(req.url,'http://localhost').pathname.replace(/^\/Rootwake\/flow\//,'/');if(path==='/')path='/flow.html';if(path==='/favicon.ico'){res.writeHead(204).end();return;}const file=resolve(root,'.'+path);if(!file.startsWith(root+'/'))throw Error('Bad path');res.setHeader('Content-Type',{'.html':'text/html','.js':'application/javascript','.css':'text/css'}[extname(file)]??'application/octet-stream');res.end(await readFile(file));}catch{res.writeHead(404).end();}});await new Promise(r=>server.listen(4185,'127.0.0.1',r));
+const BASE=process.env.STUDY_BASE??'/Rootwake/flow/';
+const server=createServer(async(req,res)=>{try{let path=new URL(req.url,'http://localhost').pathname;if(path.startsWith(BASE))path='/'+path.slice(BASE.length);if(path==='/')path='/flow.html';if(path==='/favicon.ico'){res.writeHead(204).end();return;}const file=resolve(root,'.'+path);if(!file.startsWith(root+'/'))throw Error('Bad path');res.setHeader('Content-Type',{'.html':'text/html','.js':'application/javascript','.css':'text/css'}[extname(file)]??'application/octet-stream');res.end(await readFile(file));}catch{res.writeHead(404).end();}});await new Promise(r=>server.listen(4185,'127.0.0.1',r));
 const browser=await chromium.launch({headless:true,...(process.env.CHROMIUM_PATH?{executablePath:process.env.CHROMIUM_PATH}:{}),args:['--no-sandbox','--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
 const report=[];
 async function settle(page){await page.waitForFunction(()=>window.__clearing&&!window.__clearing.transitioning,null,{timeout:120000});await page.waitForTimeout(750);}
@@ -23,8 +24,28 @@ const waitMode=(page,m,timeout=30000)=>page.waitForFunction(m=>window.__clearing
 const stand=(page,x,z,yaw)=>page.evaluate(({x,z,yaw})=>{const c=window.__clearing;c.player.teleport(x,z,yaw);c.player.pitch=.08;},{x,z,yaw});
 try{
  const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});const errors=[];page.on('pageerror',e=>errors.push(String(e)));page.on('response',r=>{if(r.status()>=400)errors.push(r.status()+' '+r.url());});
- await page.goto('http://127.0.0.1:4185/Rootwake/flow/');await page.click('#begin');await page.waitForFunction(()=>window.__clearing);await page.waitForTimeout(800);await page.screenshot({path:out+'/01-clearing.png'});
+ await page.goto('http://127.0.0.1:4185'+BASE);await page.click('#begin');await page.waitForFunction(()=>window.__clearing);await page.waitForTimeout(800);await page.screenshot({path:out+'/01-clearing.png'});
+ // Sample the real frame loop: a mode change must never leave a blank character or two roots.
+ await page.evaluate(()=>{
+   const audit=window.__characterAudit={frames:0,mixed:0,failures:[],forms:[]};
+   function sample(){
+     const c=window.__clearing,p=c.presentation;
+     if(p && c.player.view==='third') {
+       audit.frames++; const w=Object.values(p.blend.weights);
+       if(Math.abs(w.reduce((a,b)=>a+b,0)-1)>1e-6) audit.failures.push('weight total');
+       if(!p.root.visible || !p.root.children.some(f=>f.visible)) audit.failures.push('blank frame '+c.mode);
+       if(c.scene.children.filter(o=>o.name==='HuldaPresentation').length!==1) audit.failures.push('duplicate owner');
+       if(w.filter(v=>v>0 && v<1).length>1) audit.mixed++;
+       if(!audit.forms.includes(p.blend.form)) audit.forms.push(p.blend.form);
+     }
+     requestAnimationFrame(sample);
+   } requestAnimationFrame(sample);
+ });
  assert.equal(await mode(page),'ground');assert.equal(await page.evaluate(()=>window.__clearing.player.view),'third','Third person is native');
+ // Hulda wears the X Bot's skeleton: the Mixamo clips in public/models/clips load onto her own bones before the journey begins.
+ await page.waitForFunction(()=>window.__clearing.character.status!=='loading',null,{timeout:120000});const builtIn=await page.evaluate(()=>window.__clearing.character);
+ assert.equal(builtIn.status,'ready',builtIn.error);assert.equal(builtIn.bones,65);assert.deepEqual(builtIn.roles,{idle:'idle',walk:'walking',run:'running'},JSON.stringify(builtIn.roles));assert.ok(await page.evaluate(()=>window.__clearing.hulda.group.visible&&!window.__clearing.presentation.model),'Hulda herself, not a stand-in body');
+ await page.waitForTimeout(400);await page.screenshot({path:out+'/01b-hulda-on-the-rig.png'});
  // Walk: the stick moves her and she leaves a trail.
  const z0=await page.evaluate(()=>window.__clearing.player.feet().z);const s=await stick(page,1);await s.down(0,-38);await page.waitForFunction(z=>window.__clearing.player.feet().z<z-1.2,z0);await s.up();
  assert.ok(await page.evaluate(()=>Object.keys(window.__clearing.growth.trail).length>0),'Walking leaves a trail');
@@ -54,9 +75,43 @@ try{
  await stand(page,-6,-16-0.9,Math.PI);await page.waitForTimeout(300);await s.down(0,-38);await waitMode(page,'ivy');await s.up();await waitMode(page,'ground',30000);assert.ok(await page.evaluate(()=>window.__clearing.player.feet().z>-16),'Descended by the ivy');
  await stand(page,-6,-16+0.9,0);await page.waitForTimeout(300);const tIvy=Date.now();await s.down(0,-38);await waitMode(page,'ivy');assert.equal(await page.evaluate(()=>window.__clearing.ivy.grown),true,'Reconnects to grown ivy');await waitMode(page,'ground',30000);await s.up();assert.ok(Date.now()-tIvy<12000,'A grown climb is quick');
  await page.screenshot({path:out+'/08-ledge.png'});
+ const audit=await page.evaluate(()=>window.__characterAudit);
+ assert.deepEqual(audit.failures,[]); assert.ok(audit.frames>100); assert.ok(audit.mixed>5);
+ for(const form of ['human','burl','knot','leaf','ivy']) assert.ok(audit.forms.includes(form),form+' presented');
+ await writeFile(out+'/character-continuity.json',JSON.stringify(audit,null,2));
+ // First-person ground view hides all character geometry, then third-person restores it.
+ await page.click('#view');
+ await page.waitForFunction(()=>window.__clearing.player.view==='first' && !window.__clearing.presentation.root.visible,null,{timeout:10000});
+ await page.click('#view');
+ await page.waitForFunction(()=>window.__clearing.player.view==='third' && window.__clearing.presentation.root.visible,null,{timeout:10000});
  // Reload keeps the trail and the ivy.
  const saved=await page.evaluate(()=>window.__clearing.growth);await page.reload();await page.click('#begin');await page.waitForFunction(()=>window.__clearing);await page.waitForTimeout(500);const loaded=await page.evaluate(()=>window.__clearing.growth);assert.deepEqual(loaded.ivy,saved.ivy);assert.equal(Object.keys(loaded.trail).length,Object.keys(saved.trail).length);
  await stand(page,0.5,15,0);await page.waitForTimeout(400);await page.screenshot({path:out+'/09-trail.png'});
  for(const[name,size]of[['small',{width:375,height:667}],['landscape',{width:844,height:390}],['desktop',{width:1280,height:900}]]){await page.setViewportSize(size);await page.waitForTimeout(600);await page.screenshot({path:out+'/'+name+'.png'});}
- assert.deepEqual(errors,[]);report.push({passed:true,thirdPerson:true,trunk:true,crown:true,hop:true,roots:'down from the trunk and by ground double tap; out by stick double tap',climb:'up and down',ivy:'grown, kept, descended, reconnected',trail:true,saveReload:true,viewports:4});await writeFile(out+'/results.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
-}catch(e){for(const c of browser.contexts())for(const p of c.pages()){await p.screenshot({path:out+'/failure.png'}).catch(()=>{});console.log(await p.evaluate(()=>{const c=window.__clearing;return c?{mode:c.mode,feet:c.player.feet().toArray(),trunk:c.trunk,crown:c.crown,root:c.root,climb:c.climb,ivy:c.ivy}:null;}).catch(()=>null));}throw e;}finally{await browser.close();await new Promise(r=>server.close(r));}
+ // Character review views: render a cloned rig in an isolated scene, preserving the live journey.
+ if(await page.evaluate(()=>!!window.__clearing.hulda)) {
+   await page.setViewportSize({width:720,height:900});
+   for(const [name,speed,angle] of [['front',0,Math.PI],['back',0,0],['walk',.7,2.5],['run',2.8,2.5],['burl',0,0],['knot',0,0]]) {
+     const data=await page.evaluate(({speed,angle,name})=>{
+       const c=window.__clearing, h=c.hulda;
+       for(let i=0;i<67;i++) h.update(1/60,speed,0,true);
+       const scene=new c.scene.constructor(); scene.background=c.scene.background.clone().set('#d5dece');
+       for(const child of c.scene.children) if(child.isLight) scene.add(child.clone());
+       const wood=name==='burl'||name==='knot';
+       const figure=(wood?c.presentation.forms[name]:(c.presentation.model?c.presentation.model.root:h.group)).clone(true); figure.visible=true; figure.rotation.y=angle; if(wood) { figure.position.set(0,.36,0); figure.scale.setScalar(1); figure.traverse(o=>{if(o.isMesh){o.material=o.material.clone();o.material.opacity=1;o.material.transparent=false;}}); } scene.add(figure);
+       const camera=c.camera.clone(); camera.aspect=720/900; camera.position.set(1,.65,1.7); camera.lookAt(0,.36,0); camera.updateProjectionMatrix();
+       c.renderer.render(scene,camera); return c.renderer.domElement.toDataURL('image/png').split(',')[1];
+     },{speed,angle,name});
+     await writeFile(out+'/character-'+name+'.png',Buffer.from(data,'base64'));
+   }
+ }
+ // A rigged file with prefab clips takes over from the procedural figure: the sample two-bone rig loads by ?model=, its clips are told apart, and running drives its run clip.
+ await page.goto('http://127.0.0.1:4185'+BASE+'?model=models/samples/sample-rig.gltf');await page.click('#begin');await page.waitForFunction(()=>window.__clearing&&window.__clearing.model.status!=='loading',null,{timeout:60000});
+ const model=await page.evaluate(()=>window.__clearing.model);assert.equal(model.status,'ready',model.error);assert.deepEqual(model.roles,{idle:'Idle',walk:'Walking',run:'Running'});
+ assert.ok(await page.evaluate(()=>!window.__clearing.hulda.group.visible&&window.__clearing.presentation.model.root.parent===window.__clearing.presentation.forms.human),'The model stands in for the procedural figure');
+ await page.evaluate(()=>{window.__clearing.player.yaw=0;});await stand(page,0.5,15,0);await page.waitForTimeout(300);await s.down(0,-38);await page.waitForTimeout(1500);
+ const running=await page.evaluate(()=>{const c=window.__clearing,m=c.presentation.model;const spine=m.root.getObjectByName('Spine');return {weights:c.model.weights,spine:Math.abs(spine.rotation.x),speed:c.player.motor.speed};});await s.up();
+ assert.ok(running.weights.run>.8,`the run clip carries her at ${running.speed.toFixed(1)} m/s (${JSON.stringify(running.weights)})`);await page.screenshot({path:out+'/10-rigged-sample.png'});
+ await page.waitForTimeout(800);assert.ok(await page.evaluate(()=>window.__clearing.model.weights.idle>.8),'and the idle at rest');
+ assert.deepEqual(errors,[]);report.push({passed:true,character:'Hulda on the X Bot skeleton, '+builtIn.bones+' bones, clips '+Object.values(builtIn.roles).join(', '),riggedModel:'sample-rig.gltf: Idle / Walking / Running by name, run clip at speed, idle at rest',thirdPerson:true,trunk:true,crown:true,hop:true,roots:'down from the trunk and by ground double tap; out by stick double tap',climb:'up and down',ivy:'grown, kept, descended, reconnected',trail:true,saveReload:true,viewports:4});await writeFile(out+'/results.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
+}catch(e){for(const c of browser.contexts())for(const p of c.pages()){await p.screenshot({path:out+'/failure.png'}).catch(()=>{});console.log(await p.evaluate(()=>{const c=window.__clearing;return c?{view:c.player.view,presentationVisible:c.presentation?.root.visible,mode:c.mode,feet:c.player.feet().toArray(),trunk:c.trunk,crown:c.crown,root:c.root,climb:c.climb,ivy:c.ivy}:null;}).catch(()=>null));}throw e;}finally{await browser.close();await new Promise(r=>server.close(r));}
