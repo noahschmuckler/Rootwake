@@ -7,7 +7,7 @@ export default defineConfig({
   build: {
     rollupOptions: {
       // Two entries: the plateau (index.html) and the underworld (under.html).
-      input: { index: 'index.html', under: 'under.html', lab: 'lab.html', rootDiscovery: 'root-discovery.html', ravine: 'ravine.html', watershed: 'watershed.html' },
+      input: { index: 'index.html', under: 'under.html', lab: 'lab.html', rootDiscovery: 'root-discovery.html', ravine: 'ravine.html', watershed: 'watershed.html', karst: 'karst.html' },
     },
   },
 });
