@@ -45,6 +45,8 @@ jobs:
           mkdir -p "$study_checkout/flow/assets"
           cp dist/flow.html "$study_checkout/flow/index.html"
           cp dist/assets/* "$study_checkout/flow/assets/"
+          rm -rf "$study_checkout/flow/models"
+          cp -r dist/models "$study_checkout/flow/models"
           printf '{"sourceCommit":"%s","study":"flow-v1"}\n' "$GITHUB_SHA" > "$study_checkout/flow/revision.json"
           touch "$study_checkout/.nojekyll"
           cd "$study_checkout"

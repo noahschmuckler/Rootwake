@@ -15,6 +15,9 @@ the same.
   loaded with `?facing=-z`.
 - **Extra clips.** Mixamo lets a clip be exported without skin; load them with `?clips=models/a.fbx,models/b.fbx`.
 - **Trying a file without committing it.** `?model=models/yourfile.fbx` loads any file under this folder.
+- **What is here.** `hulda.fbx` is Mixamo's X Bot with the Female Basic Locomotion Pack in `clips/`:
+  idle, walking and running drive her; jump, the strafes and the turns are here for whoever wires
+  hops and turning next (the gait driver only knows idle / walk / run).
 - **The sample.** `samples/sample-rig.gltf` (from `node scripts/make-sample-rig.mjs`) is a two-bone
   skinned figure with Idle, Walking and Running clips that the browser journey loads to prove the path.
 

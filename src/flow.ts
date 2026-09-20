@@ -27,8 +27,10 @@ const presentation = createHuldaPresentation(scene, world.figure, world.mass);
 const hulda = presentation.hulda;
 // A rigged character file (public/models/README.md): the one found at build time, or ?model= for a trial. Until it loads, and if it fails, the procedural Hulda stands.
 const query = new URLSearchParams(location.search), modelUrl = query.get('model') ?? __HULDA_MODEL__;
+// A trial file brings its own clips; the built-in character's come from public/models/clips.
+const clipUrls = query.get('clips')?.split(',').filter(Boolean) ?? (query.get('model') ? [] : __HULDA_CLIPS__);
 let modelStatus: 'none' | 'loading' | 'ready' | 'failed' = modelUrl ? 'loading' : 'none', modelError = '';
-if (modelUrl) import('./huldaModel').then(({ loadHuldaModel }) => loadHuldaModel(import.meta.env.BASE_URL + modelUrl, query.get('facing') === '-z' ? '-z' : undefined, query.get('clips')?.split(',').filter(Boolean).map(c => import.meta.env.BASE_URL + c) ?? [])).then(m => { presentation.setModel(m); modelStatus = 'ready'; }, e => { modelStatus = 'failed'; modelError = String(e); console.warn('Hulda model', e); });
+if (modelUrl) import('./huldaModel').then(({ loadHuldaModel }) => loadHuldaModel(import.meta.env.BASE_URL + modelUrl, query.get('facing') === '-z' ? '-z' : undefined, clipUrls.map(c => import.meta.env.BASE_URL + c))).then(m => { presentation.setModel(m); modelStatus = 'ready'; }, e => { modelStatus = 'failed'; modelError = String(e); console.warn('Hulda model', e); });
 for (const child of [...player.avatar.children]) player.avatar.remove(child);
 // player.avatar remains an empty camera/controller proxy. Presentation owns visible geometry.
 player.teleport(0.5, 15, 0); player.pitch = 0.08; installMobilityControls(player);
