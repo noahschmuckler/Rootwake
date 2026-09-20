@@ -2,13 +2,13 @@
 
 ## Latest status: complete and live
 Play: https://noahschmuckler.github.io/Rootwake/karst/
-Source branch: feat/karst-slide (from the watershed branch, 378f550). Tested and published code commit: b2d8882 (handoff afd1e32).
-Successful verification and deployment run: https://github.com/noahschmuckler/Rootwake/actions/runs/35482188010 (karst, mobility and lab suites, the browser journey in GitHub's Chromium, publication of `karst/` only, public revision.json and asset check; screenshots in the run's `karst-browser-results` artifact). Deployment: `.github/workflows/deploy-karst.yml` on every push to the branch: mobility, lab and karst unit tests, the production build at `/Rootwake/karst/`, the browser journey in GitHub's Chromium, publication of `karst/` only on gh-pages, then the public revision.json and asset check.
+Source branch: feat/karst-slide (from the watershed branch, 378f550). Tested and published code commit: 884fc49 (the second pass; the first pass was b2d8882).
+Successful verification and deployment run: https://github.com/noahschmuckler/Rootwake/actions/runs/35483753415 (the first pass's run was 35482188010) (karst, mobility and lab suites, the browser journey in GitHub's Chromium, publication of `karst/` only, public revision.json and asset check; screenshots in the run's `karst-browser-results` artifact). Deployment: `.github/workflows/deploy-karst.yml` on every push to the branch: mobility, lab and karst unit tests, the production build at `/Rootwake/karst/`, the browser journey in GitHub's Chromium, publication of `karst/` only on gh-pages, then the public revision.json and asset check.
 
 Next step is Noah's phone feedback (questions below).
 
 ## The second pass: the earlier studies folded into the forest floor
-Noah asked for the prior demos' functionality on the forest floor. Built, tested and published as commit (see status):
+Noah asked for the prior demos' functionality on the forest floor. Built, tested and published (see the status above):
 - **Soil to sink into** (the first study): on the floor, Sink into the soil drops the body 1.7 m under over 2.6 s into the shared free volume, roofed by the forest floor, floored by bedrock at 6.5 m, with the pillar's foot going on down as solid rock. Drift where you look; hold centre for drift targets; Rise returns. The groves' own roots hang in the soil. Commune works from the soil near a floor plant (it rises into the root mouth).
 - **Cultivation** (the first study): the original tilted 3D board on the floor's surface gathers sap into one reservoir (cap 120), shown in the header with the plants met.
 - **The watershed** (the third study): the cavern's water emerges as a spring at the foot and feeds the oak grove (east) and the maple grove (west) through the seasons; the observer panel runs them at pause / 1x / 6x, with per-grove condition, moisture, canopy and litter mushrooms, the spring's fill, and the last events. Sap leans the spring (8) or evens it, or buys the moss basin (24). Seasons run in every zone and pause on the board, in help and when hidden; rain falls on the summit too.
