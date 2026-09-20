@@ -1,8 +1,9 @@
 # The Breathing Watershed: continuation guide
 
-## Latest status: built and tested locally; publication run recorded below
+## Latest status: complete and live
 Play: https://noahschmuckler.github.io/Rootwake/watershed/
-Source branch: feat/living-watershed (based on the ravine study, 27e681f).
+Source branch: feat/living-watershed (based on the ravine study, 27e681f). Tested and published code commit: 2cf3590 (handoff 5a1cf54).
+Successful verification and deployment run: https://github.com/noahschmuckler/Rootwake/actions/runs/35479113998 (all suites, the browser journey in GitHub's Chromium, publication of `watershed/` only, and the public revision.json and asset check). Screenshots and results are in the run's `watershed-browser-results` artifact.
 Deployment: `.github/workflows/deploy-watershed.yml` runs on every push to the branch: mobility, lab and watershed unit tests, the production build at `/Rootwake/watershed/`, the browser journey in GitHub's Chromium, then publishes only `watershed/` on gh-pages and verifies the public revision.json and every referenced JS/CSS asset. See the bottom of this file for the recorded run.
 
 Next step is Noah's phone feedback (questions below). Do not widen the ecology before it.
@@ -41,4 +42,4 @@ Authored ecology, not a hydrology or biology model; the numbers are stylized. No
 GitHub Pages serves gh-pages (restored by the first study's workflow; every study workflow checks it). Local browser runs use the preinstalled Chromium with `CHROMIUM_PATH=/opt/pw-browsers/chromium`; the ravine's notes about @sparticuz/chromium apply only to hosts without one. Build with `npm run build -- --base=/Rootwake/watershed/`, then `node scripts/browser-watershed.mjs`.
 
 ## Recorded verification
-Local (this host): `node scripts/test-watershed.mjs` 6 passed; `npm run test:mobility` 35 passed; `npm run test:lab` 10 passed; `npm run build -- --base=/Rootwake/watershed/` clean; `node scripts/browser-watershed.mjs` passed the whole journey at 390x844 plus 375x667, 844x390 and 1280x900 (screenshots in `artifacts/watershed`, ignored by git). The GitHub workflow run for the published revision is appended once it completes.
+Local (this host): `node scripts/test-watershed.mjs` 6 passed; `npm run test:mobility` 35 passed; `npm run test:lab` 10 passed; `npm run build -- --base=/Rootwake/watershed/` clean; `node scripts/browser-watershed.mjs` passed the whole journey at 390x844 plus 375x667, 844x390 and 1280x900 (screenshots in `artifacts/watershed`, ignored by git). The GitHub workflow run linked at the top passed end to end on 2026-09-20.
