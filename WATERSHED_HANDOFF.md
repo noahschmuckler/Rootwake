@@ -1,31 +1,44 @@
 # The Breathing Watershed: continuation guide
 
-## Authorization and current checkpoint
-Noah judged both Rootwake phone studies successful. He requested the next component be planned, built and made easy for Claude to continue if usage/context runs out. Publication is implied by the established demo workflow. Work on feat/living-watershed, based on the successful ravine branch 27e681f. Preserve shared Player/mobility/Board/BoardView. Publish a separate /Rootwake/watershed/ route, preserving previous demos.
+## Latest status: built and tested locally; publication run recorded below
+Play: https://noahschmuckler.github.io/Rootwake/watershed/
+Source branch: feat/living-watershed (based on the ravine study, 27e681f).
+Deployment: `.github/workflows/deploy-watershed.yml` runs on every push to the branch: mobility, lab and watershed unit tests, the production build at `/Rootwake/watershed/`, the browser journey in GitHub's Chromium, then publishes only `watershed/` on gh-pages and verifies the public revision.json and every referenced JS/CSS asset. See the bottom of this file for the recorded run.
 
-Checkpoint 1: scoped, implementation next. This file must be updated with concrete test results, deployment status, and blockers before stopping.
+Next step is Noah's phone feedback (questions below). Do not widen the ecology before it.
 
-## Hypothesis and scope
-Prove a small ecology can change a meaningful exploration route, remain interesting to observe, and respond legibly to Hulda's cultivation. Reuse the familiar ravine/root network so the only new major system is a living watershed. Hulda already knows root travel and fern communion in this study.
+## Authorization and checkpoints
+Noah judged both earlier phone studies successful and asked for the next component to be planned, built and left easy to continue. The scope below was written by the previous agent at checkpoint 1; the implementation, tests, workflow and this status are the continuation. Shared Player / mobility / Board / BoardView are unchanged from b6235aa. Existing routes (`/`, `/under.html`, `/lab/`, `/root-study/`, `/ravine/`, `/hulda/`, `/conduit/`) are untouched by the workflow.
 
-Two groves share spring storage. Repeating wet/dry phases affect storage, soil moisture, canopy condition and decomposition. A fine-root shortcut closes under stress and regrows after recovery; the longer deep-root route ALWAYS remains usable. Never trap an awareness already inside the shortcut: hold its passage until it exits, while showing the biological closure.
+## What it is
+Two groves share one spring in a small valley. Rain comes in seasons (10 wet days, 16 dry); the spring stores it and feeds both groves by an allocation Hulda can lean; moisture drives each canopy with a lag; litter from a thinning canopy decomposes where it is damp (mushrooms). A fine root joins the groves straight across; under sustained stress (the drier grove below 0.3 moisture for 1.5 days) it withdraws over 1.5 days and closes; after sustained recovery (both above 0.55 for 2 days) it regrows over 2 days. The deep route down through the spring is always passable.
 
-Match3 gathers sap using the original 3D board. Spend 8 sap to redirect flow toward either grove or restore balanced flow. This is a tradeoff: water given to one is unavailable to the other. Spend 24 sap once to cultivate a moss basin, catching more of the existing rainfall and storing it through dry periods. Avoid conjuring arbitrary water or rewarding clicks with immediate perfect health.
+Never trap an awareness: while Hulda is inside the fine root, a closure in progress holds (the root stays occupiable and visibly withdrawing) and completes only once she leaves. A saved `closing` state loads as `closed`, so a save cannot hold it open.
 
-Observe controls: pause, 1x and 6x game time, two-grove condition readouts, compact causal event history. Both groves advance regardless of camera location. Match3/help/hidden tabs pause ecology; observing runs it with movement held still. No offline catch-up. Standalone save key; reload resumes the saved watershed but returns awareness to a safe known anchor.
+Sap comes from the original 3D match board. Spend 8 sap to lean the spring west or east or to even it (the favoured grove gets three quarters of the draw; the other gets a quarter and suffers the dry days first). Spend 24 sap once for a moss basin: it catches half again as much of each rain and seeps half as fast, so the spring lasts the dry and the fine root never closes. Nothing conjures water; nothing rewards a tap with instant health.
 
-## Design limits
-Authored watershed, not planetary simulation, predation, human settlements, procedural history or combat. Stylized values must not be presented as biological realism. Equilibrium means repeatable seasonal recovery, not static meters. Cultivation improves resilience, not mandatory rescue of a perpetually failing world.
+Observer: pause / 1x / 6x (one game-day is 12 real seconds at 1x); per-grove condition word, moisture and canopy bars and decomposition dots; spring fill and flow; the last three causal events. The seasons run while watching (moving or still) and pause on the board, in help, and when the tab is hidden. No offline catch-up. Save key `rootwake-watershed-v1`; reload resumes the watershed and returns awareness to the west grove.
 
-## Implementation plan
-- src/watershedModel.ts: pure deterministic daily water ledger, stress/recovery, route hysteresis, events, purchases, save validation.
-- src/watershed.ts: adapt ravine study orchestration; use its original movement/match3 unchanged, add ecology clock and safe closing passage.
-- src/watershedWorld.ts: adapt authored scene to show changing canopy, spring water and decomposers.
-- watershed.html / CSS: phone observer panel and action feedback.
-- tests and browser script: long-run bounded recovery, exact water balance, intervention tradeoffs, route safety, real multi-frame board touches, observer controls, persistence and viewport layouts.
-- workflow deploy-watershed.yml: all tests, isolated route publication, public revision/assets verification.
+## Files
+- `src/watershedModel.ts`: the pure ledger (`advance`, `redirect`, `cultivateBasin`, `parseWatershed`), the root graph, `makeSoil` (corridor around passable roots), `insideFine`, `guide`. All tuning constants at the top.
+- `src/watershedWorld.ts`: the valley: per-grove soil tint and canopy colour/height, mushrooms by decomposition, spring pool and cistern fill, rain streaks, the moss basin once bought, the fine root fading and thinning as it withdraws.
+- `src/watershed.ts`, `watershed.html`, `src/watershed.css`: orchestration (sink at a grove's ring, rise at either grove), ecology clock, observer panel, purchases, board.
+- `tests/watershed.test.ts` (`node scripts/test-watershed.mjs`): bounded long run with repeatable seasonal recovery, exact water balance, lean tradeoff, basin, closure hysteresis with the held passage, save validation.
+- `scripts/browser-watershed.mjs`: real multi-frame touch journey: live 6x clock and pause, board pauses the seasons and earns sap, enter, look, the fine root withdrawing around the awareness and holding, closing once empty, the deep route both ways, lean and basin purchases, regrowth, rise, help pause, reload persistence and anchor, four viewports. `?debug=1` exposes `__watershed.advance(days)` for the seasons only in this test; it is not a play path.
 
-## Deployment and tools
-GitHub Pages serves gh-pages, fixed by Claude. Use deploy-ravine.yml as the current reference. Source writes through GitHub connector create_tree/create_commit/update_ref if local git push has no credentials; never force branch refs. Previous worktrees contain stale local docs; this isolated root-watershed worktree is authoritative for this task. Browser setup may need @sparticuz/chromium from npm: decompress chromium.br and swiftshader.tar.br into /tmp, extract with tar --no-same-owner. Playwright is in CODEX_PRIMARY_RUNTIME_NODE_MODULES. CHROMIUM_PATH selects the executable. GitHub runners can use normal playwright install.
+## Tuning to judge on the phone
+- One game-day is 12 s at 1x; a season is 5.2 min at 1x, 52 s at 6x. Is watching at 1x worth it, or should 6x be the default while walking?
+- Dry evaporation (0.11/day) is set so that an even share cannot hold a grove through the dry: the balanced watershed always stresses late in the dry and the fine root closes for roughly 4 to 7 days a cycle. Is that too punishing, or too tame, to read as "a breathing watershed"?
+- The lean's favoured grove barely gains in the wet (it is already full); its gain shows in the dry. Is 8 sap the right price, and does the other grove's loss read?
+- The basin removes closure entirely; is a permanent fix too strong, or the point of the 24 sap?
+- Does the withdrawing root (fading, thinning, held while you are inside) read as biology rather than a door?
+- Are the observer panel and the story line legible in portrait without hiding the valley?
 
-Do not report publication from a successful source push alone: verify public revision.json and referenced JS/CSS. Update CLAUDE.md to point here once the study is ready.
+## Honest limits
+Authored ecology, not a hydrology or biology model; the numbers are stylized. No predation, settlements, procedural history or combat. Browser emulation is not an iPhone; the phone playtest is still required.
+
+## Deployment notes
+GitHub Pages serves gh-pages (restored by the first study's workflow; every study workflow checks it). Local browser runs use the preinstalled Chromium with `CHROMIUM_PATH=/opt/pw-browsers/chromium`; the ravine's notes about @sparticuz/chromium apply only to hosts without one. Build with `npm run build -- --base=/Rootwake/watershed/`, then `node scripts/browser-watershed.mjs`.
+
+## Recorded verification
+Local (this host): `node scripts/test-watershed.mjs` 6 passed; `npm run test:mobility` 35 passed; `npm run test:lab` 10 passed; `npm run build -- --base=/Rootwake/watershed/` clean; `node scripts/browser-watershed.mjs` passed the whole journey at 390x844 plus 375x667, 844x390 and 1280x900 (screenshots in `artifacts/watershed`, ignored by git). The GitHub workflow run for the published revision is appended once it completes.

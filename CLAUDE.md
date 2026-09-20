@@ -1,6 +1,6 @@
-# Active phone study: Root Across the Ravine
+# Active phone study: The Breathing Watershed
 
-On branch `feat/root-ravine`, read **RAVINE_HANDOFF.md first** for the scoped mechanic, successful deployed revision, test commands, phone-tuning questions, and continuation history. Live: https://noahschmuckler.github.io/Rootwake/ravine/ . Preserve Claude's sink/drift controls and the original 3D match3; this is a separate route from the successful first study.
+On branch `feat/living-watershed`, read **WATERSHED_HANDOFF.md first** for the scoped ecology, its test commands, deployment status, phone-tuning questions and continuation history. Live: https://noahschmuckler.github.io/Rootwake/watershed/ . It builds on the ravine study (`RAVINE_HANDOFF.md`, https://noahschmuckler.github.io/Rootwake/ravine/) and the first study (`ROOT_STUDY.md`, `/root-study/`). Preserve the shared sink/drift controls and the original 3D match3; each study is its own route.
 
 # Rootwake — working notes
 
