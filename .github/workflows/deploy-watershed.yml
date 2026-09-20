@@ -1,0 +1,77 @@
+name: Verify and publish breathing watershed study
+on:
+  push:
+    branches: [feat/living-watershed]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: rootwake-watershed
+  cancel-in-progress: false
+jobs:
+  study:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      pages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:mobility
+      - run: npm run test:lab
+      - run: node scripts/test-watershed.mjs
+      - run: npm run build -- --base=/Rootwake/watershed/
+      - run: npm install --no-save --package-lock=false playwright@1.58.2
+      - run: npx playwright install --with-deps chromium
+      - run: node scripts/browser-watershed.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: watershed-browser-results
+          path: artifacts/watershed
+      - name: Publish tested study without replacing existing demos
+        run: |
+          set -euo pipefail
+          git fetch origin gh-pages
+          study_checkout=$(mktemp -d)
+          git worktree add "$study_checkout" origin/gh-pages
+          mkdir -p "$study_checkout/watershed/assets"
+          cp dist/watershed.html "$study_checkout/watershed/index.html"
+          cp dist/assets/* "$study_checkout/watershed/assets/"
+          printf '{"sourceCommit":"%s","study":"watershed-v1"}\n' "$GITHUB_SHA" > "$study_checkout/watershed/revision.json"
+          touch "$study_checkout/.nojekyll"
+          cd "$study_checkout"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add watershed .nojekyll
+          git commit -m "Publish verified breathing watershed study ${GITHUB_SHA::7}"
+          git push origin HEAD:gh-pages
+      - name: Point Pages at the built gh-pages branch and request its build
+        # Since 2026-09-11 the site's source had drifted to feat/broken-conduit, so
+        # everything published to gh-pages (root, lab, hulda, conduit, this study)
+        # was invisible. Restore the branch source every deploy here assumes.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          source=$(gh api "repos/$GITHUB_REPOSITORY/pages" --jq '[.build_type, .source.branch, .source.path] | join(" ")')
+          echo "Pages source before: $source"
+          if [ "$source" != "legacy gh-pages /" ]; then
+            if ! gh api --method PUT "repos/$GITHUB_REPOSITORY/pages" -f build_type=legacy -f 'source[branch]=gh-pages' -f 'source[path]=/'; then
+              echo "::error::Could not switch Pages to the gh-pages branch. In Settings > Pages choose Deploy from a branch, gh-pages, / (root), Save, then re-run this workflow: the built study is already on gh-pages."
+              exit 1
+            fi
+            echo "Pages source now: legacy gh-pages /"
+          fi
+          gh api --method POST "repos/$GITHUB_REPOSITORY/pages/builds"
+      - name: Verify published revision and assets
+        env:
+          STUDY_COMMIT: ${{ github.sha }}
+        run: node scripts/verify-watershed-pages.mjs
