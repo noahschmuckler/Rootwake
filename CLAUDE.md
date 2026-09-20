@@ -1,6 +1,6 @@
-# Active phone study: The Clearing
+# Active phone study: The Karst, free flow
 
-On branch `feat/free-flow`, read **FLOW_HANDOFF.md first**: third person, one stick, automatic contextual moves (into trunks, up to crowns, across canopies, down into roots, up stone by handholds or by ivy she grows and keeps, a trail she deepens). Live: https://noahschmuckler.github.io/Rootwake/flow/ . Earlier studies, each its own route and handoff: the karst (`KARST_HANDOFF.md`, `/karst/`), the watershed (`WATERSHED_HANDOFF.md`, `/watershed/`), the ravine (`RAVINE_HANDOFF.md`, `/ravine/`) and the first study (`ROOT_STUDY.md`, `/root-study/`). Preserve the shared player and mobility; each study only adds its own entry. Foliage is drawn as crossed standees (`src/sprites.ts`); roots as opaque tapered tubes (`src/flora.ts`).
+On branch `feat/karst-flow`, read **KARST_FLOW_HANDOFF.md first**: the karst pillar and its root connections ridden the Clearing's way (third person, one stick, press into a plant, the stick chooses the root, a double tap comes out; no springs, no screen text). Live: https://noahschmuckler.github.io/Rootwake/karst-flow/ . Earlier studies, each its own route and handoff: the clearing (`FLOW_HANDOFF.md`, `/flow/`, with the Hulda character preview at `/flow-character/`, `CHARACTER_HANDOFF.md`), the karst (`KARST_HANDOFF.md`, `/karst/`), the watershed (`WATERSHED_HANDOFF.md`, `/watershed/`), the ravine (`RAVINE_HANDOFF.md`, `/ravine/`) and the first study (`ROOT_STUDY.md`, `/root-study/`). Preserve the shared player and mobility; each study only adds its own entry. Foliage is drawn as crossed standees (`src/sprites.ts`); roots as opaque tapered tubes (`src/flora.ts`).
 
 # Rootwake — working notes
 

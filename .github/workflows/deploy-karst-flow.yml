@@ -1,0 +1,84 @@
+name: Verify and publish the karst free-flow study
+on:
+  push:
+    branches: [feat/karst-flow]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: rootwake-karst-flow
+  cancel-in-progress: false
+jobs:
+  study:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pages: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:mobility
+      - run: npm run test:lab
+      - run: npm run test:character
+      - run: node scripts/test-karst.mjs
+      - run: node scripts/test-flow.mjs
+      - run: node scripts/test-karst-flow.mjs
+      - run: npm run build -- --base=/Rootwake/karst-flow/
+      - run: npm install --no-save --package-lock=false playwright@1.58.2
+      - run: npx playwright install --with-deps chromium
+      - run: node scripts/browser-karst-flow.mjs
+        env:
+          STUDY_BASE: /Rootwake/karst-flow/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: karst-flow-browser-results
+          path: artifacts/karst-flow
+      - name: Publish the study to its own folder, leaving every other demo untouched
+        run: |
+          set -euo pipefail
+          git fetch origin gh-pages
+          study_checkout=$(mktemp -d)
+          git worktree add "$study_checkout" origin/gh-pages
+          mkdir -p "$study_checkout/karst-flow/assets"
+          cp dist/karst-flow.html "$study_checkout/karst-flow/index.html"
+          cp dist/assets/* "$study_checkout/karst-flow/assets/"
+          printf '{"sourceCommit":"%s","study":"karst-flow-v1"}\n' "$GITHUB_SHA" > "$study_checkout/karst-flow/revision.json"
+          touch "$study_checkout/.nojekyll"
+          cd "$study_checkout"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add karst-flow .nojekyll
+          git commit -m "Publish verified karst free-flow study ${GITHUB_SHA::7}"
+          git push origin HEAD:gh-pages
+      - name: Point Pages at the built gh-pages branch and request its build
+        # Since 2026-09-11 the site's source had drifted to feat/broken-conduit, so
+        # everything published to gh-pages (root, lab, hulda, conduit, this study)
+        # was invisible. Restore the branch source every deploy here assumes.
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          source=$(gh api "repos/$GITHUB_REPOSITORY/pages" --jq '[.build_type, .source.branch, .source.path] | join(" ")')
+          echo "Pages source before: $source"
+          if [ "$source" != "legacy gh-pages /" ]; then
+            if ! gh api --method PUT "repos/$GITHUB_REPOSITORY/pages" -f build_type=legacy -f 'source[branch]=gh-pages' -f 'source[path]=/'; then
+              echo "::error::Could not switch Pages to the gh-pages branch. In Settings > Pages choose Deploy from a branch, gh-pages, / (root), Save, then re-run this workflow: the built study is already on gh-pages."
+              exit 1
+            fi
+            echo "Pages source now: legacy gh-pages /"
+          fi
+          gh api --method POST "repos/$GITHUB_REPOSITORY/pages/builds"
+      - name: Verify published revision and assets
+        env:
+          STUDY_COMMIT: ${{ github.sha }}
+          STUDY_URL: https://noahschmuckler.github.io/Rootwake/karst-flow/
+          STUDY_TITLE: The Karst, free flow
+        run: node scripts/verify-flow-pages.mjs

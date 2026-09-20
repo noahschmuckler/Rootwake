@@ -1,0 +1,4 @@
+@import './rootDiscovery.css';
+:root{background:#8f9c98}header,#story,#actions,#footer,#board-tools{display:none}
+#side{position:fixed;z-index:22;left:14px;bottom:calc(env(safe-area-inset-bottom,0px) + 22px);display:flex;flex-direction:column;gap:8px}#side button{width:46px;height:46px;min-height:0;padding:0;border-radius:50%;font-size:12px;background:#0b191899}
+#tools #walk{right:17px!important;bottom:calc(env(safe-area-inset-bottom,0px) + 22px)!important}dialog p{font-size:14px}dialog h2{font-size:30px}
