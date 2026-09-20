@@ -25,6 +25,10 @@ const player = new Player(renderer.domElement, scene, camera); scene.add(player.
 // Flow-only visual replacement; keep the shared controller and its visibility parent.
 const presentation = createHuldaPresentation(scene, world.figure, world.mass);
 const hulda = presentation.hulda;
+// A rigged character file (public/models/README.md): the one found at build time, or ?model= for a trial. Until it loads, and if it fails, the procedural Hulda stands.
+const query = new URLSearchParams(location.search), modelUrl = query.get('model') ?? __HULDA_MODEL__;
+let modelStatus: 'none' | 'loading' | 'ready' | 'failed' = modelUrl ? 'loading' : 'none', modelError = '';
+if (modelUrl) import('./huldaModel').then(({ loadHuldaModel }) => loadHuldaModel(import.meta.env.BASE_URL + modelUrl, query.get('facing') === '-z' ? '-z' : undefined, query.get('clips')?.split(',').filter(Boolean).map(c => import.meta.env.BASE_URL + c) ?? [])).then(m => { presentation.setModel(m); modelStatus = 'ready'; }, e => { modelStatus = 'failed'; modelError = String(e); console.warn('Hulda model', e); });
 for (const child of [...player.avatar.children]) player.avatar.remove(child);
 // player.avatar remains an empty camera/controller proxy. Presentation owns visible geometry.
 player.teleport(0.5, 15, 0); player.pitch = 0.08; installMobilityControls(player);
@@ -204,4 +208,4 @@ function frame(now: number) {
 }
 world.setTrail(growth); for (const site of growth.ivy) world.growIvy(site, 1);
 player.applyCamera(camera); present(0); scene.background = sky; renderer.render(scene, camera); intro.showModal(); requestAnimationFrame(frame);
-Object.assign(window, { __clearing: { hulda, presentation, scene, camera, renderer, player, trees: TREES, get mode() { return mode; }, get growth() { return JSON.parse(serializeGrowth(growth)); }, get trunk() { return trunk ? { tree: trunk.tree.id, h: trunk.h } : null; }, get crown() { return crown ? { tree: crown.tree.id, az: crown.az } : null; }, get root() { return root ? { root: root.root.id, s: root.s, forward: root.forward } : null; }, get climb() { return climb; }, get ivy() { return ivy ? { site: ivy.site, k: ivy.k, grown: ivy.grown } : null; }, get under() { return under; }, get transitioning() { return mode === 'hop' || mode === 'sink' || mode === 'rise'; } } });
+Object.assign(window, { __clearing: { hulda, presentation, scene, camera, renderer, player, trees: TREES, get model() { const m = presentation.model; return { status: modelStatus, error: modelError, url: modelUrl, roles: m?.roles ?? null, weights: m ? Object.fromEntries(Object.entries(m.actions).map(([r, a]) => [r, a.getEffectiveWeight()])) : null }; }, get mode() { return mode; }, get growth() { return JSON.parse(serializeGrowth(growth)); }, get trunk() { return trunk ? { tree: trunk.tree.id, h: trunk.h } : null; }, get crown() { return crown ? { tree: crown.tree.id, az: crown.az } : null; }, get root() { return root ? { root: root.root.id, s: root.s, forward: root.forward } : null; }, get climb() { return climb; }, get ivy() { return ivy ? { site: ivy.site, k: ivy.k, grown: ivy.grown } : null; }, get under() { return under; }, get transitioning() { return mode === 'hop' || mode === 'sink' || mode === 'rise'; } } });

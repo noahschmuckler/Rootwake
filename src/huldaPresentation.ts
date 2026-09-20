@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createHulda } from './huldaCharacter';
 import { createWoodForms } from './huldaForms';
+import type { RiggedModel } from './huldaRig';
 
 export const FORMS = ['human','burl','knot','leaf','ivy'] as const;
 export type HuldaForm = typeof FORMS[number];
@@ -55,20 +56,27 @@ export function createHuldaPresentation(scene: THREE.Scene, leaf: THREE.Group, i
   const forms={human,burl:wood.burl,knot:wood.knot,leaf,ivy};
   const materials=new Map<HuldaForm,THREE.Material[]>();
   const ownedMaterials: THREE.Material[]=[];
-  for(const form of FORMS) {
-    root.add(forms[form]); const used: THREE.Material[]=[];
-    // Clone per form, once, so fading a character never fades the forest's shared materials.
-    const clones=new Map<THREE.Material,THREE.Material>();
+  /** Clone a form's materials, once, so fading a character never fades the forest's shared materials. */
+  function adopt(form: HuldaForm) {
+    const used: THREE.Material[]=[], clones=new Map<THREE.Material,THREE.Material>();
     forms[form].traverse(o=>{ if(!(o instanceof THREE.Mesh)) return;
       const copy=(m: THREE.Material)=>{ let c=clones.get(m); if(!c) { c=m.clone(); c.userData.huldaAlphaTest=m.alphaTest; clones.set(m,c); used.push(c); ownedMaterials.push(c); } return c; };
       o.material=Array.isArray(o.material)?o.material.map(copy):copy(o.material);
     }); materials.set(form,used);
   }
+  for(const form of FORMS) { root.add(forms[form]); adopt(form); }
+  /** A rigged, skinned file (huldaRig.ts) stands in for the procedural figure; the wooden forms and the blend are unchanged. */
+  let model: RiggedModel|null=null;
+  function setModel(next: RiggedModel|null) {
+    if(model) { model.dispose(); model=null; }
+    hulda.group.visible=!next; model=next;
+    if(next) { human.add(next.root); adopt('human'); }
+  }
   function update(dt: number, form: HuldaForm, position: THREE.Vector3, rotation: THREE.Quaternion, speed: number, heading: number, grounded: boolean, visible = true, key: string = form) {
     blend.update(dt,form,position,rotation,key);
     root.position.copy(blend.position); root.quaternion.copy(blend.rotation); root.visible=visible;
     const folding=1-blend.weights.human;
-    hulda.update(dt,speed,heading,grounded,folding);
+    if(model) model.update(dt,speed,heading,grounded,folding); else hulda.update(dt,speed,heading,grounded,folding);
     for(const f of FORMS) {
       const w=blend.weights[f]; forms[f].visible=w>0;
       // A single overlapping silhouette: shrink into the new shape while bark wraps around it.
@@ -76,6 +84,6 @@ export function createHuldaPresentation(scene: THREE.Scene, leaf: THREE.Group, i
       for(const m of materials.get(f)!) { m.transparent=w<1; m.opacity=w; m.depthWrite=w===1; m.alphaTest=m.userData.huldaAlphaTest*w; }
     }
   }
-  function dispose() { root.removeFromParent(); hulda.dispose(); wood.dispose(); for(const m of ownedMaterials) m.dispose(); }
-  return {root,hulda,blend,forms,update,dispose};
+  function dispose() { root.removeFromParent(); setModel(null); hulda.dispose(); wood.dispose(); for(const m of ownedMaterials) m.dispose(); }
+  return {root,hulda,blend,forms,update,setModel,get model() { return model; },dispose};
 }

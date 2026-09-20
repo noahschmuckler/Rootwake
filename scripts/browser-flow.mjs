@@ -94,12 +94,20 @@ try{
        const scene=new c.scene.constructor(); scene.background=c.scene.background.clone().set('#d5dece');
        for(const child of c.scene.children) if(child.isLight) scene.add(child.clone());
        const wood=name==='burl'||name==='knot';
-       const figure=(wood?c.presentation.forms[name]:h.group).clone(true); figure.visible=true; figure.rotation.y=angle; if(wood) { figure.position.set(0,.36,0); figure.scale.setScalar(1); figure.traverse(o=>{if(o.isMesh){o.material=o.material.clone();o.material.opacity=1;o.material.transparent=false;}}); } scene.add(figure);
+       const figure=(wood?c.presentation.forms[name]:(c.presentation.model?c.presentation.model.root:h.group)).clone(true); figure.visible=true; figure.rotation.y=angle; if(wood) { figure.position.set(0,.36,0); figure.scale.setScalar(1); figure.traverse(o=>{if(o.isMesh){o.material=o.material.clone();o.material.opacity=1;o.material.transparent=false;}}); } scene.add(figure);
        const camera=c.camera.clone(); camera.aspect=720/900; camera.position.set(1,.65,1.7); camera.lookAt(0,.36,0); camera.updateProjectionMatrix();
        c.renderer.render(scene,camera); return c.renderer.domElement.toDataURL('image/png').split(',')[1];
      },{speed,angle,name});
      await writeFile(out+'/character-'+name+'.png',Buffer.from(data,'base64'));
    }
  }
- assert.deepEqual(errors,[]);report.push({passed:true,thirdPerson:true,trunk:true,crown:true,hop:true,roots:'down from the trunk and by ground double tap; out by stick double tap',climb:'up and down',ivy:'grown, kept, descended, reconnected',trail:true,saveReload:true,viewports:4});await writeFile(out+'/results.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
+ // A rigged file with prefab clips takes over from the procedural figure: the sample two-bone rig loads by ?model=, its clips are told apart, and running drives its run clip.
+ await page.goto('http://127.0.0.1:4185'+BASE+'?model=models/samples/sample-rig.gltf');await page.click('#begin');await page.waitForFunction(()=>window.__clearing&&window.__clearing.model.status!=='loading',null,{timeout:60000});
+ const model=await page.evaluate(()=>window.__clearing.model);assert.equal(model.status,'ready',model.error);assert.deepEqual(model.roles,{idle:'Idle',walk:'Walking',run:'Running'});
+ assert.ok(await page.evaluate(()=>!window.__clearing.hulda.group.visible&&window.__clearing.presentation.model.root.parent===window.__clearing.presentation.forms.human),'The model stands in for the procedural figure');
+ await page.evaluate(()=>{window.__clearing.player.yaw=0;});await stand(page,0.5,15,0);await page.waitForTimeout(300);await s.down(0,-38);await page.waitForTimeout(1500);
+ const running=await page.evaluate(()=>{const c=window.__clearing,m=c.presentation.model;const spine=m.root.getObjectByName('Spine');return {weights:c.model.weights,spine:Math.abs(spine.rotation.x),speed:c.player.motor.speed};});await s.up();
+ assert.ok(running.weights.run>.8,`the run clip carries her at ${running.speed.toFixed(1)} m/s (${JSON.stringify(running.weights)})`);await page.screenshot({path:out+'/10-rigged-sample.png'});
+ await page.waitForTimeout(800);assert.ok(await page.evaluate(()=>window.__clearing.model.weights.idle>.8),'and the idle at rest');
+ assert.deepEqual(errors,[]);report.push({passed:true,riggedModel:'sample-rig.gltf: Idle / Walking / Running by name, run clip at speed, idle at rest',thirdPerson:true,trunk:true,crown:true,hop:true,roots:'down from the trunk and by ground double tap; out by stick double tap',climb:'up and down',ivy:'grown, kept, descended, reconnected',trail:true,saveReload:true,viewports:4});await writeFile(out+'/results.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
 }catch(e){for(const c of browser.contexts())for(const p of c.pages()){await p.screenshot({path:out+'/failure.png'}).catch(()=>{});console.log(await p.evaluate(()=>{const c=window.__clearing;return c?{view:c.player.view,presentationVisible:c.presentation?.root.visible,mode:c.mode,feet:c.player.feet().toArray(),trunk:c.trunk,crown:c.crown,root:c.root,climb:c.climb,ivy:c.ivy}:null;}).catch(()=>null));}throw e;}finally{await browser.close();await new Promise(r=>server.close(r));}
