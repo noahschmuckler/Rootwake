@@ -41,7 +41,7 @@ type Mode = 'ground' | 'trunk' | 'crown' | 'hop' | 'sink' | 'mouth' | 'ride' | '
 let mode: Mode = 'ground', time = 0, last = performance.now(), vision = 0;
 let zone: Zone = ZONES[NODES[progress.at].zone], at: Node = NODES[progress.at];
 let trunk: { h: number; az: number; downHeld: number } | null = null;
-let crown: { az: number } | null = null;
+let crown: { az: number; armed: boolean } | null = null;
 let hop: { from: THREE.Vector3; to: THREE.Vector3; t: number; node: Node; az: number } | null = null;
 let ride: { root: Root; from: string; s: number; speed: number } | null = null;
 let move: { from: THREE.Vector3; to: THREE.Vector3; t: number; seconds: number; then: () => void } | null = null;
@@ -136,15 +136,16 @@ function frame(now: number) {
   } else if (mode === 'trunk' && trunk) {
     const t = trunk, top = at.crownH, y = stickY();
     if (Math.abs(y) > 0.25) t.h += -y * TRUNK_CLIMB * dt; t.h = Math.min(top, Math.max(0, t.h));
-    if (t.h >= top - 1e-6 && y < -0.25) { crown = { az: t.az }; mode = 'crown'; trunk = null; }
+    // Into the crown; the stick must be let go once before a push leaps her, so the climb's push is not a leap toward whatever crown lies that way.
+    if (t.h >= top - 1e-6 && y < -0.25) { crown = { az: t.az, armed: false }; mode = 'crown'; trunk = null; }
     else if (t.h <= 0 && y > 0.5) { t.downHeld += dt; if (t.downHeld > PRESS_S) enterRoots(at, trunkPoint(at, 0, t.az)); }
     else t.downHeld = 0;
     if (mode === 'trunk') { const p = trunkPoint(at, t.h, t.az); place(vec(at.at.x, at.at.y + t.h, at.at.z)); orbitCamera(p, 3.6, 1.2); }
   } else if (mode === 'crown' && crown) {
-    const c = crown, x = stickX(), y = stickY();
+    const c = crown, x = stickX(), y = stickY(); if (!stickHeld) c.armed = true;
     if (Math.abs(x) > 0.25) c.az += x * CROWN_SLIDE * dt;
     if (y > 0.5) { trunk = { h: at.crownH - 0.05, az: c.az, downHeld: 0 }; mode = 'trunk'; crown = null; }
-    else if (y < -0.5) {
+    else if (y < -0.5 && c.armed) {
       const w = want(); let best: Node | null = null, bestDot = 0.72;
       for (const o of hopTargets(at)) { const d = vec(o.at.x - at.at.x, 0, o.at.z - at.at.z).normalize().dot(w); if (d > bestDot) { bestDot = d; best = o; } }
       if (best) { const az = Math.atan2(at.at.z - best.at.z, at.at.x - best.at.x); hop = { from: crownPoint(at, c.az), to: crownPoint(best, az), t: 0, node: best, az }; mode = 'hop'; crown = null; }
@@ -153,7 +154,7 @@ function frame(now: number) {
   } else if (mode === 'hop' && hop) {
     hop.t = Math.min(1, hop.t + dt / HOP_S); const k = hop.t * hop.t * (3 - 2 * hop.t); const p = hop.from.clone().lerp(hop.to, k); p.y += Math.sin(hop.t * Math.PI) * 1.4;
     place(p); orbitCamera(p, 5.2, 2.1);
-    if (hop.t === 1) { visit(hop.node); arrive(progress, hop.node.id); save(); crown = { az: hop.az }; mode = 'crown'; hop = null; }
+    if (hop.t === 1) { visit(hop.node); arrive(progress, hop.node.id); save(); crown = { az: hop.az, armed: true }; mode = 'crown'; hop = null; }
   } else if ((mode === 'sink' || mode === 'rise') && move) {
     move.t = Math.min(1, move.t + dt / move.seconds); const k = move.t * move.t * (3 - 2 * move.t); const p = move.from.clone().lerp(move.to, k);
     if (mode === 'sink') turnToward(mouthYaw(at), dt, 6); place(p); orbitCamera(p, 3.2, 1.3);
@@ -187,4 +188,4 @@ function frame(now: number) {
 }
 { const stand = standNear(at); standOn(at.zone, stand.x, stand.z, stand.yaw); player.pitch = 0.08; }
 world.setTrail(progress); player.applyCamera(camera); present(0); world.update(0, 0, null, null); scene.background = skyColour; renderer.render(scene, camera); intro.showModal(); requestAnimationFrame(frame);
-Object.assign(window, { __karstFlow: { hulda, presentation, scene, camera, renderer, player, nodes: NODES, zones: ZONES, pillarHeight: PILLAR_HEIGHT, get character() { const g = presentation.model ?? hulda.gait; return { status: clipStatus, error: clipError, clips: clipUrls, bones: hulda.bones.size, body: presentation.model ? 'xbot' : 'hulda', roles: g?.roles ?? null, weights: g ? Object.fromEntries(Object.entries(g.actions).map(([r, a]) => [r, a.getEffectiveWeight()])) : null }; }, get mode() { return mode; }, get at() { return at.id; }, get zone() { return zone.id; }, get vision() { return vision; }, get progress() { return JSON.parse(serializeProgress(progress)); }, get trunk() { return trunk ? { h: trunk.h, az: trunk.az } : null; }, get crown() { return crown ? { az: crown.az } : null; }, get ride() { return ride ? { root: ride.root.id, from: ride.from, s: ride.s, speed: ride.speed } : null; }, get choice() { return choice ? { root: choice.root.id, held: choice.held } : null; }, get transitioning() { return mode === 'sink' || mode === 'rise' || mode === 'ride' || mode === 'hop'; }, screenDirections: () => { camera.updateMatrixWorld(); return mode === 'mouth' ? screenDirections(at.id, screen) : []; }, standNear: (id: string) => standNear(NODES[id]), standAt: (id: string, facing = false) => { const n = NODES[id], s = standNear(n); standOn(n.zone, s.x, s.z, facing ? Math.atan2(-(n.at.x - s.x), -(n.at.z - s.z)) : s.yaw); at = n; zone = ZONES[n.zone]; player.pitch = 0.08; } } });
+Object.assign(window, { __karstFlow: { hulda, presentation, scene, camera, renderer, player, nodes: NODES, zones: ZONES, pillarHeight: PILLAR_HEIGHT, get character() { const g = presentation.model ?? hulda.gait; return { status: clipStatus, error: clipError, clips: clipUrls, bones: hulda.bones.size, body: presentation.model ? 'xbot' : 'hulda', roles: g?.roles ?? null, weights: g ? Object.fromEntries(Object.entries(g.actions).map(([r, a]) => [r, a.getEffectiveWeight()])) : null }; }, get mode() { return mode; }, get at() { return at.id; }, get zone() { return zone.id; }, get vision() { return vision; }, get progress() { return JSON.parse(serializeProgress(progress)); }, get trunk() { return trunk ? { h: trunk.h, az: trunk.az } : null; }, get crown() { return crown ? { az: crown.az, armed: crown.armed } : null; }, get ride() { return ride ? { root: ride.root.id, from: ride.from, s: ride.s, speed: ride.speed } : null; }, get choice() { return choice ? { root: choice.root.id, held: choice.held } : null; }, get transitioning() { return mode === 'sink' || mode === 'rise' || mode === 'ride' || mode === 'hop'; }, screenDirections: () => { camera.updateMatrixWorld(); return mode === 'mouth' ? screenDirections(at.id, screen) : []; }, standNear: (id: string) => standNear(NODES[id]), standAt: (id: string, facing = false) => { const n = NODES[id], s = standNear(n); standOn(n.zone, s.x, s.z, facing ? Math.atan2(-(n.at.x - s.x), -(n.at.z - s.z)) : s.yaw); at = n; zone = ZONES[n.zone]; player.pitch = 0.08; } } });
