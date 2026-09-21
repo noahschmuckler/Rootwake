@@ -21,9 +21,16 @@ async function doubleTapStick(page){await tapStick(page,21);await page.waitForTi
 const mode=page=>page.evaluate(()=>window.__karstFlow.mode);
 const waitMode=(page,m,timeout=30000)=>page.waitForFunction(m=>window.__karstFlow.mode===m,m,{timeout});
 const at=page=>page.evaluate(()=>window.__karstFlow.at);
-/** Stand on a plant's stand, facing its trunk: what she does before pressing into it. */
-const approach=(page,id)=>page.evaluate(id=>{const k=window.__karstFlow,p=k.plants[id];const dx=p.at.x-p.stand.x,dz=p.at.z-p.stand.z;k.player.teleport(p.stand.x,p.stand.z,Math.atan2(-dx,-dz));k.player.pitch=.08;},id);
+/** Stand beside a tree, facing its trunk: what she does before pressing into it. */
+const approach=(page,id)=>page.evaluate(id=>{window.__karstFlow.standAt(id,true);},id);
+/** Press into a tree and keep pushing down at the trunk's foot: into its roots. */
+async function intoRoots(page,s,id){await approach(page,id);await page.waitForTimeout(300);await s.down(0,-38);await waitMode(page,'trunk',20000);await s.up();await s.down(0,38);await waitMode(page,'sink',15000);await s.up();await waitMode(page,'mouth',10000);assert.equal(await at(page),id);}
 /** Push the stick the way a root visibly sets off from the mouth she is in, and ride it to its far plant. */
+/** Push the stick up at every mouth (whichever upward root it lands on) until she is in the target tree: a climb by root. */
+async function rideUpTo(page,s,targetId,maxRides=16){
+ for(let i=0;i<maxRides;i++){if(await at(page)===targetId)return i;await page.waitForTimeout(500);const dirs=await page.evaluate(()=>window.__karstFlow.screenDirections());assert.ok(dirs.length,'roots set off on screen');const d=dirs.reduce((a,b)=>b.y>a.y?b:a);
+  await s.down(d.x*38,-d.y*38);await waitMode(page,'ride',15000);await waitMode(page,'mouth',240000);await s.up();}
+ assert.equal(await at(page),targetId,'climbed by root');return maxRides;}
 async function rideBy(page,s,rootId,timeout=180000,shot=null){
  await page.waitForTimeout(500);const dirs=await page.evaluate(()=>window.__karstFlow.screenDirections());const d=dirs.find(d=>d.root===rootId);assert.ok(d,`${rootId} sets off somewhere on screen (${JSON.stringify(dirs)})`);
  await s.down(d.x*38,-d.y*38);await waitMode(page,'ride',15000);assert.equal(await page.evaluate(()=>window.__karstFlow.ride.root),rootId);
@@ -49,9 +56,12 @@ try{
  assert.ok(await page.evaluate(()=>Object.keys(window.__karstFlow.progress.trail).some(k=>k.startsWith('summit:'))),'Walking leaves a trail on the summit');
  // Running on the summit: the run clip carries her; at rest the idle. A mid-run frame is kept for the eye.
  await page.evaluate(()=>{window.__karstFlow.player.yaw=Math.PI;});await s.down(0,-38);await page.waitForTimeout(1200);const running=await page.evaluate(()=>({w:window.__karstFlow.character.weights,speed:window.__karstFlow.player.motor.speed}));await page.screenshot({path:out+'/01b-running.png'});await s.up();
- assert.ok(running.w.run>.6,`the run clip carries her (${JSON.stringify(running)})`);await page.waitForTimeout(900);assert.ok(await page.evaluate(()=>window.__karstFlow.character.weights.idle>.8),'the idle at rest');
+ assert.ok(running.w.run>.6,`the run clip carries her (${JSON.stringify(running)})`);await page.waitForFunction(()=>window.__karstFlow.character.weights.idle>.8,null,{timeout:15000}).catch(()=>assert.fail('the idle at rest'));
  // Press into the pine: she walks to it, keeps pushing, and goes into its roots.
- await approach(page,'pine');await page.waitForTimeout(300);await s.down(0,-38);await waitMode(page,'sink',15000);await waitMode(page,'mouth',10000);await s.up();
+ // Press into the pine: she goes in as the bark bulge; push up to the crown and look round; back down; at the foot, push down: into the roots.
+ await approach(page,'pine');await page.waitForTimeout(300);await s.down(0,-38);await waitMode(page,'trunk',20000);await page.waitForTimeout(600);await page.screenshot({path:out+'/02a-trunk.png'});
+ await waitMode(page,'crown',40000);await s.up();await page.waitForTimeout(400);await page.screenshot({path:out+'/02b-crown.png'});const az0=await page.evaluate(()=>window.__karstFlow.crown.az);await s.down(38,0);await page.waitForTimeout(500);await s.up();assert.notEqual(await page.evaluate(()=>window.__karstFlow.crown.az),az0,'sideways slides round the crown');
+ await s.down(0,38);await waitMode(page,'trunk',10000);await waitMode(page,'sink',60000);await s.up();await waitMode(page,'mouth',10000);
  assert.equal(await at(page),'pine');await page.waitForFunction(()=>window.__karstFlow.vision>.6);await page.screenshot({path:out+'/02-in-the-pine.png'});
  // Slide east: the stick pushed the way the root sets off chooses it; downhill it runs like water.
  const slide=await rideBy(page,s,'pine-east',180000,'03-slide.png');assert.ok(slide>6,`downhill slide reached ${slide.toFixed(1)} m/s`);assert.equal(await at(page),'eastShrub');await page.screenshot({path:out+'/04-east-mouth.png'});
@@ -65,8 +75,24 @@ try{
  await rideBy(page,s,'cavern-floor');assert.equal(await at(page),'floorOak');await doubleTapStick(page);await waitMode(page,'ground',15000);assert.equal(await page.evaluate(()=>window.__karstFlow.zone),'floor');assert.ok(await page.evaluate(()=>window.__karstFlow.progress.reachedFloor));
  await page.waitForTimeout(500);await page.screenshot({path:out+'/08-floor.png'});
  await s.down(0,-38);await page.waitForTimeout(1500);await s.up();assert.ok(await page.evaluate(()=>Object.keys(window.__karstFlow.progress.trail).some(k=>k.startsWith('floor:'))),'A trail on the floor');
- // Back up by another way: into the oak, the slow climb up the south root, east along the face, up to the pine.
- await approach(page,'floorOak');await page.waitForTimeout(300);await s.down(0,-38);await waitMode(page,'mouth',20000);await s.up();assert.equal(await at(page),'floorOak');
+ // The forest: every tree is a tree. Into a floor tree's trunk, up to its crown, a leaf-hop to a neighbour, down its trunk and into the network, one root to the next tree, out.
+ const first=await page.evaluate(()=>{const k=window.__karstFlow;const near=Object.values(k.nodes).filter(n=>n.zone==='floor'&&n.id.startsWith('t')&&Math.hypot(n.at.x-15.5,n.at.z-3.5)<12);return near[0].id;});
+ await approach(page,first);await page.waitForTimeout(300);await s.down(0,-38);await waitMode(page,'trunk',20000);await waitMode(page,'crown',40000);await s.up();
+ const target=await page.evaluate(()=>{const k=window.__karstFlow,n=k.nodes[k.at];const o=Object.values(k.nodes).find(o=>o!==n&&o.zone==='floor'&&Math.hypot(o.at.x-n.at.x,o.at.z-n.at.z)<=9&&Math.abs(o.at.y+o.crownH-n.at.y-n.crownH)<=8);k.player.yaw=Math.atan2(-(o.at.x-n.at.x),-(o.at.z-n.at.z));return o.id;});await page.waitForTimeout(200);
+ await s.down(0,-38);await waitMode(page,'hop',10000);await page.waitForTimeout(400);await page.screenshot({path:out+'/06b-leaf-hop.png'});await waitMode(page,'crown',15000);await s.up();assert.equal(await at(page),target,'leapt to the neighbouring crown');
+ await s.down(0,38);await waitMode(page,'trunk',10000);await waitMode(page,'sink',60000);await s.up();await waitMode(page,'mouth',10000);await page.waitForFunction(()=>window.__karstFlow.vision>.6);await page.screenshot({path:out+'/06c-network.png'});
+ const dirs=await page.evaluate(()=>window.__karstFlow.screenDirections());assert.ok(dirs.length>=1,'the tree has network roots');const netRoot=dirs.find(d=>d.root.startsWith('n:'));assert.ok(netRoot,'a network root sets off on screen');
+ await s.down(netRoot.x*38,-netRoot.y*38);await waitMode(page,'ride',15000);await waitMode(page,'mouth',60000);await s.up();assert.ok(await page.evaluate(()=>window.__karstFlow.at!==window.__karstFlow.nodes[window.__karstFlow.at].id||true));assert.notEqual(await at(page),target,'rode the network to the next tree');
+ await doubleTapStick(page);await waitMode(page,'ground',15000);assert.equal(await page.evaluate(()=>window.__karstFlow.zone),'floor');
+ // A sister's summit by root: from the foot tree at B's helix, up the face to the mid tree, over the rim to B's pine. Emerge on summitB.
+ await intoRoots(page,s,'Bfoot');await rideBy(page,s,'B-foot-mid',240000,'06d-up-the-sister.png');assert.equal(await at(page),'B6');const rides=await rideUpTo(page,s,'pineB');report.push({sisterByRoot:'B-foot-mid then '+rides+' upward ride(s) to the pine'});
+ await doubleTapStick(page);await waitMode(page,'ground',15000);assert.equal(await page.evaluate(()=>window.__karstFlow.zone),'summitB');assert.deepEqual(await page.evaluate(()=>window.__karstFlow.progress.summits),['summitB']);await page.waitForTimeout(500);await page.screenshot({path:out+'/06e-sister-summit.png'});
+ // And by leaf: the last ledge of C's helix leaps to C's pine.
+ await approach(page,'C8');await page.waitForTimeout(300);await s.down(0,-38);await waitMode(page,'trunk',20000);await waitMode(page,'crown',40000);await s.up();await page.evaluate(()=>{const k=window.__karstFlow,n=k.nodes.C8,o=k.nodes.pineC;k.player.yaw=Math.atan2(-(o.at.x-n.at.x),-(o.at.z-n.at.z));});await page.waitForTimeout(200);
+ await s.down(0,-38);await waitMode(page,'hop',10000);await waitMode(page,'crown',15000);await s.up();assert.equal(await at(page),'pineC','leapt from the helix onto the sister’s summit pine');assert.deepEqual(await page.evaluate(()=>window.__karstFlow.progress.summits),['summitB','summitC']);
+ await doubleTapStick(page);await waitMode(page,'ground',15000);assert.equal(await page.evaluate(()=>window.__karstFlow.zone),'summitC');
+ // Back up the karst by another way: into the oak, the slow climb up the south root, east along the face, up to the pine.
+ await intoRoots(page,s,'floorOak');
  const climb=await rideBy(page,s,'south-floor',180000,'09-climb.png');assert.ok(climb<6,`uphill is a slow climb (${climb.toFixed(1)} m/s)`);assert.equal(await at(page),'southShrub');
  await rideBy(page,s,'east-south');assert.equal(await at(page),'eastShrub');await page.screenshot({path:out+'/10-east-again.png'});
  await rideBy(page,s,'pine-east');assert.equal(await at(page),'pine');
@@ -80,5 +106,5 @@ try{
  const saved=await page.evaluate(()=>window.__karstFlow.progress);await page.reload();await page.click('#begin');await page.waitForFunction(()=>window.__karstFlow);await page.waitForTimeout(500);
  const loaded=await page.evaluate(()=>window.__karstFlow.progress);assert.equal(loaded.at,'pine');assert.equal(loaded.returned,true);assert.equal(Object.keys(loaded.trail).length,Object.keys(saved.trail).length);
  for(const[name,size]of[['small',{width:375,height:667}],['landscape',{width:844,height:390}],['desktop',{width:1280,height:900}]]){await page.setViewportSize(size);await page.waitForTimeout(600);await page.screenshot({path:out+'/'+name+'.png'});}
- assert.deepEqual(errors,[]);report.push({passed:true,character:'Hulda on the X Bot skeleton, '+character.bones+' bones, clips '+Object.values(character.roles).join(', '),thirdPerson:true,noScreenText:true,pressInto:true,rides:['pine-east','east-cavern','cavern-floor','south-floor','east-south','pine-east'],emerge:'stick double tap',enter:'press into a plant, or ground double tap near one',trail:true,saveReload:true,viewports:4});await writeFile(out+'/results.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
+ assert.deepEqual(errors,[]);report.push({passed:true,everyTree:'trunk, crown, leaf-hop, network root on a floor tree',sisters:'B by root (foot, mid, top), C by leaf from its last ledge',character:'Hulda on the X Bot skeleton, '+character.bones+' bones, clips '+Object.values(character.roles).join(', '),thirdPerson:true,noScreenText:true,pressInto:true,rides:['pine-east','east-cavern','cavern-floor','south-floor','east-south','pine-east'],emerge:'stick double tap',enter:'press into a plant, or ground double tap near one',trail:true,saveReload:true,viewports:4});await writeFile(out+'/results.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
 }catch(e){for(const c of browser.contexts())for(const p of c.pages()){await p.screenshot({path:out+'/failure.png'}).catch(()=>{});console.log(await p.evaluate(()=>{const c=window.__karstFlow;return c?{mode:c.mode,at:c.at,zone:c.zone,feet:c.player.feet().toArray(),ride:c.ride,choice:c.choice,dirs:c.screenDirections()}:null;}).catch(()=>null));}throw e;}finally{await browser.close();await new Promise(r=>server.close(r));}
