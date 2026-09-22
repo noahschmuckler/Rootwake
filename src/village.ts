@@ -6,10 +6,10 @@
 import './village.css';
 import * as THREE from 'three';
 import { Player } from './player';
-import { createHuldaPresentation, HUMAN_CENTRE } from './huldaPresentation';
+import { createHuldaPresentation, HUMAN_CENTRE, type HuldaForm } from './huldaPresentation';
 import { installMobilityControls } from './mobilityControls';
 import { buildVillage, relief, HOBBIT_HEIGHT } from './villageWorld';
-import { HOBBITS, HOUSES, HOUSE_RADIUS, MEADOW_RADIUS, TICKS_PER_SECOND, DAY_TICKS, freshVillage, parseVillage, serializeVillage, advance, clockOf, phaseAt, daylightAt, everyone, hobbitById, type Village } from './villageModel';
+import { HOBBITS, HOUSES, HOUSE_RADIUS, MEADOW_RADIUS, TICKS_PER_SECOND, DAY_TICKS, TREES, TREE_ROOTS, GRASS_SPEED, ROOT_SPEED, TRUNK_CLIMB, CROWN_SLIDE, HOP_S, PRESS_S, PRESS_RANGE, ENTER_RANGE, freshVillage, parseVillage, serializeVillage, advance, clockOf, phaseAt, daylightAt, everyone, hobbitById, thought, crownHeight, trunkRadius, nearestTree, nearestRoot, nextRoot, rootPoint, rootTangent, endTree, hopTargets, grassCan, inWater, type Village, type Tree, type RootEdge } from './villageModel';
 import { MODEL_HEIGHT } from './huldaRig';
 import type { TraversalWorld } from './mobility';
 const KEY = 'rootwake-village-v1';
@@ -22,8 +22,10 @@ const hemi = new THREE.HemisphereLight('#eef4e2', '#4d5f48', 2.3); scene.add(hem
 const world = buildVillage(scene);
 const groundWorld: TraversalWorld = {
   surfacesAt: (x, z) => (Math.hypot(x, z) <= MEADOW_RADIUS ? [relief(x, z)] : []),
-  canOccupy: (p, radius) => Math.hypot(p.x, p.z) <= MEADOW_RADIUS && p.y >= relief(p.x, p.z) - 0.03 && !HOUSES.some(h => Math.hypot(p.x - h.x, p.z - h.z) < HOUSE_RADIUS + radius),
+  canOccupy: (p, radius) => Math.hypot(p.x, p.z) <= MEADOW_RADIUS && p.y >= relief(p.x, p.z) - 0.03 && !HOUSES.some(h => Math.hypot(p.x - h.x, p.z - h.z) < HOUSE_RADIUS + radius) && !TREES.some(t => Math.hypot(p.x - t.x, p.z - t.z) < trunkRadius(t) + radius),
 };
+/** While she is a bulge, a figure of leaves or a knot in a root, the shared motor stays put but the stick still speaks. */
+const lockedWorld: TraversalWorld = { surfacesAt: () => [], canOccupy: () => false };
 const player = new Player(renderer.domElement, scene, camera); scene.add(player.avatar); player.view = 'third'; player.traversalWorld = groundWorld;
 const presentation = createHuldaPresentation(scene, world.figure, world.mass);
 const hulda = presentation.hulda;
@@ -33,7 +35,52 @@ let clipStatus: 'none' | 'loading' | 'ready' | 'failed' = clipUrls.length ? 'loa
 if (clipUrls.length) import('./huldaModel').then(({ loadHuldaClips }) => loadHuldaClips(clipUrls.map(base))).then(clips => { presentation.setClips(clips); for (const f of world.figures) f.setClips(clips); clipStatus = 'ready'; }, e => { clipStatus = 'failed'; clipError = String(e); console.warn('clips', e); });
 for (const child of [...player.avatar.children]) player.avatar.remove(child);
 player.teleport(0, -16, Math.PI); player.pitch = 0.08; installMobilityControls(player);
-let time = 0, last = performance.now(), tickBank = 0, saveClock = 0;
+let time = 0, last = performance.now(), tickBank = 0, saveClock = 0, simSeconds = 0;
+// Her ways through the meadow (the clearing's moves): into a trunk, up to the crown, across the crowns; under the
+// grass as a bulge, free and fast; onto a tree root, faster still but held to its path; out by a double tap.
+type Mode = 'ground' | 'trunk' | 'crown' | 'hop' | 'sink' | 'grass' | 'root' | 'rise';
+let mode: Mode = 'ground', under = 0, press = 0, lastStickTap = -Infinity, lastGroundTap = -Infinity, stickDown = 0, stickDownAt = { x: 0, y: 0 };
+let trunk: { tree: Tree; h: number; az: number; downHeld: number } | null = null;
+let crown: { tree: Tree; az: number; armed: boolean } | null = null;
+let hop: { from: THREE.Vector3; to: THREE.Vector3; t: number; tree: Tree; az: number } | null = null;
+let grass: { x: number; z: number; heading: number } | null = null;
+let root: { root: RootEdge; s: number; forward: boolean; off: number } | null = null;
+let move: { from: THREE.Vector3; to: THREE.Vector3; t: number; seconds: number; then: () => void } | null = null;
+function want(): THREE.Vector3 {
+  const g = player.gesture; if (!g.held || Math.hypot(g.x, g.y) < 0.25) return new THREE.Vector3();
+  const yaw = player.yaw, fx = -Math.sin(yaw), fz = -Math.cos(yaw), rx = Math.cos(yaw), rz = -Math.sin(yaw);
+  return new THREE.Vector3(rx * g.x + fx * -g.y, 0, rz * g.x + fz * -g.y).normalize();
+}
+const stickY = (): number => (player.gesture.held ? player.gesture.y : 0), stickX = (): number => (player.gesture.held ? player.gesture.x : 0);
+function orbitCamera(target: THREE.Vector3, back = 3.2, up = 1.3): void { const yaw = player.yaw, lift = up + player.pitch * 2.2; camera.position.set(target.x + Math.sin(yaw) * back, target.y + lift, target.z + Math.cos(yaw) * back); camera.lookAt(target.x, target.y + 0.4, target.z); }
+function lock(): void { player.traversalWorld = lockedWorld; player.motor.velocity.set(0, 0, 0); player.avatar.visible = false; }
+function place(p: THREE.Vector3): void { player.motor.feet.copy(p); player.position.x = p.x; player.position.z = p.z; }
+function standOn(x: number, z: number, yaw = player.yaw): void {
+  const n = nearestTree(x, z); if (n.distance < 0.35) { const a = Math.atan2(z - n.tree.z, x - n.tree.x); x = n.tree.x + Math.cos(a) * (trunkRadius(n.tree) + 0.4); z = n.tree.z + Math.sin(a) * (trunkRadius(n.tree) + 0.4); }
+  player.traversalWorld = groundWorld; player.motor.reset(new THREE.Vector3(x, relief(x, z), z)); place(new THREE.Vector3(x, relief(x, z), z)); player.yaw = yaw; player.canMove = true; mode = 'ground'; trunk = null; crown = null; hop = null; grass = null; root = null;
+}
+function enterTrunk(tree: Tree): void { lock(); trunk = { tree, h: 0.2, az: Math.atan2(player.feet().z - tree.z, player.feet().x - tree.x), downHeld: 0 }; mode = 'trunk'; }
+/** Into the grass: a bulge under the meadow from wherever she stands (or from a trunk's foot). */
+function enterGrass(from: THREE.Vector3): void { lock(); mode = 'sink'; trunk = null; move = { from: from.clone(), to: new THREE.Vector3(from.x, relief(from.x, from.z) - 0.1, from.z), t: 0, seconds: 0.5, then: () => { grass = { x: from.x, z: from.z, heading: player.yaw }; mode = 'grass'; } }; }
+function emerge(): void {
+  if (mode !== 'grass' && mode !== 'root' && mode !== 'trunk' && mode !== 'crown') return;
+  const p = mode === 'grass' && grass ? new THREE.Vector3(grass.x, relief(grass.x, grass.z), grass.z) : mode === 'root' && root ? rootPoint(root.root, root.s) : mode === 'trunk' && trunk ? world.trunkPoint(trunk.tree, trunk.h, trunk.az) : crown ? world.crownPoint(crown.tree, crown.az) : null;
+  if (!p) return; let gx = p.x, gz = p.z; const n = nearestTree(gx, gz); if (n.distance < 0.4) { const a = Math.atan2(gz - n.tree.z, gx - n.tree.x); gx = n.tree.x + Math.cos(a) * (trunkRadius(n.tree) + 0.5); gz = n.tree.z + Math.sin(a) * (trunkRadius(n.tree) + 0.5); }
+  if (!grassCan(gx, gz) || Math.hypot(gx, gz) > MEADOW_RADIUS) return;
+  const from = p.clone(); mode = 'rise'; grass = null; root = null; trunk = null; crown = null;
+  move = { from, to: new THREE.Vector3(gx, relief(gx, gz), gz), t: 0, seconds: 0.7, then: () => standOn(gx, gz) };
+}
+function pressInto(dt: number): void {
+  const w = want(), feet = player.feet(); if (w.lengthSq() === 0 || player.motor.speed > 0.35) { press = 0; return; }
+  const n = nearestTree(feet.x, feet.z), toTree = new THREE.Vector3(n.tree.x - feet.x, 0, n.tree.z - feet.z).normalize();
+  if (n.distance < PRESS_RANGE && toTree.dot(w) > 0.6) { press += dt; if (press > PRESS_S) { press = 0; enterTrunk(n.tree); } return; }
+  press = 0;
+}
+const walk = el('walk');
+walk.addEventListener('pointerdown', e => { stickDown = performance.now(); stickDownAt = { x: e.clientX, y: e.clientY }; }, true);
+walk.addEventListener('pointerup', e => { const now = performance.now(); if (now - stickDown < 230 && Math.hypot(e.clientX - stickDownAt.x, e.clientY - stickDownAt.y) < 10) { if (now - lastStickTap < 330) { lastStickTap = -Infinity; emerge(); } else lastStickTap = now; } }, true);
+player.onTap = () => { const now = performance.now(); if (now - lastGroundTap < 350) { lastGroundTap = -Infinity; if (mode === 'ground') { const f = player.feet(); if (grassCan(f.x, f.z)) enterGrass(f); } } else lastGroundTap = now; };
+void ENTER_RANGE;
 // Each hobbit's shown position eases after the model's tick, so a tick's step reads as walking, not a jump.
 const shown = HOBBITS.map((h, i) => { const s = village.hobbits[i]; return { x: s.x, z: s.z, heading: s.heading, speed: 0, label: document.createElement('div'), bubble: document.createElement('div'), name: h.name }; });
 const labels = el('labels'); for (const s of shown) { s.label.className = 'name'; s.label.textContent = s.name; s.bubble.className = 'bubble'; labels.append(s.label, s.bubble); }
@@ -45,11 +92,20 @@ window.addEventListener('pagehide', save); window.addEventListener('beforeunload
 window.addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); });
 const daySky = new THREE.Color('#a9bcae'), duskSky = new THREE.Color('#c9946a'), nightSky = new THREE.Color('#1d2836'), colour = new THREE.Color();
 const visualPosition = new THREE.Vector3(), visualRotation = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), tmp = new THREE.Vector3();
+const visualForward = new THREE.Vector3(0, 0, -1);
 function presentHulda(dt: number): void {
-  visualPosition.copy(player.feet()); visualPosition.y += HUMAN_CENTRE;
-  let heading = player.yaw; if (player.motor.speed > 0.08) heading = Math.atan2(-player.motor.velocity.x, -player.motor.velocity.z);
+  let form: HuldaForm = 'human';
+  visualPosition.copy(player.feet());
+  let heading = player.yaw; if (mode === 'ground' && player.motor.speed > 0.08) heading = Math.atan2(-player.motor.velocity.x, -player.motor.velocity.z);
   visualRotation.setFromAxisAngle(up, heading);
-  presentation.update(dt, 'human', visualPosition, visualRotation, player.motor.speed, heading, true, player.view === 'third', 'human');
+  if (mode === 'trunk' && trunk) { form = 'burl'; visualPosition.copy(world.trunkPoint(trunk.tree, trunk.h, trunk.az)); visualRotation.setFromAxisAngle(up, Math.PI / 2 - trunk.az); }
+  else if (mode === 'crown' && crown) { form = 'leaf'; visualPosition.copy(world.crownPoint(crown.tree, crown.az)); }
+  else if (mode === 'hop') form = 'leaf';
+  else if (mode === 'grass' && grass) { form = 'ivy'; visualPosition.set(grass.x, relief(grass.x, grass.z) - 0.05, grass.z); visualRotation.setFromAxisAngle(up, grass.heading); }
+  else if (mode === 'root' && root) { form = 'knot'; visualPosition.copy(rootPoint(root.root, root.s)); const t = rootTangent(root.root, root.s); if (!root.forward) t.negate(); visualRotation.setFromUnitVectors(visualForward, t.normalize()); }
+  else if (mode === 'sink' || mode === 'rise') form = 'ivy';
+  if (form === 'human' || form === 'leaf') visualPosition.y += HUMAN_CENTRE;
+  presentation.update(dt, form, visualPosition, visualRotation, player.motor.speed, heading, mode === 'ground', mode !== 'ground' || player.view === 'third', form);
   player.avatar.visible = false;
 }
 function presentHobbits(dt: number): void {
@@ -62,29 +118,82 @@ function presentHobbits(dt: number): void {
     const moving = step / Math.max(1e-6, dt); v.speed += (moving - v.speed) * Math.min(1, dt * 10);
     const targetHeading = d > 0.05 ? Math.atan2(dz, dx) : s.heading; v.heading += wrap(targetHeading - v.heading) * Math.min(1, dt * 8);
     f.group.visible = !s.inside; f.group.position.set(v.x, relief(v.x, v.z), v.z);
-    // The rig's heading is a yaw of the game's forward (-Z); the model's heading is an angle in the x,z plane.
-    f.group.rotation.y = Math.PI / 2 - v.heading;
+    // The rig faces -Z at yaw 0 and the model's heading is an angle in x,z: forward (-sin yaw, -cos yaw) = (cos h, sin h) gives yaw = -pi/2 - h.
+    f.group.rotation.y = -Math.PI / 2 - v.heading;
     // A hobbit is shorter: its stride is scaled, so the gait is fed the speed it would be at Hulda's size.
     f.update(dt, v.speed * (MODEL_HEIGHT / HOBBIT_HEIGHT), f.group.rotation.y, true, 0);
     // Name and thought bubble over the head, while near and in front of the camera.
     tmp.set(v.x, relief(v.x, v.z) + HOBBIT_HEIGHT + 0.12, v.z); const dist = tmp.distanceTo(camera.position); tmp.project(camera);
     const show = !s.inside && tmp.z < 1 && dist < 16 && Math.abs(tmp.x) < 1.1;
-    v.label.hidden = !show; v.bubble.hidden = !show || !(s.bubble && village.tick < s.bubbleUntil);
-    if (show) { const x = (tmp.x + 1) * innerWidth / 2, y = (1 - tmp.y) * innerHeight / 2; v.label.style.transform = `translate(${x}px,${y}px) translate(-50%,-100%)`; v.label.style.opacity = String(Math.min(1, (16 - dist) / 5)); v.bubble.style.transform = `translate(${x}px,${y - 20}px) translate(-50%,-100%)`; v.bubble.textContent = s.bubble; }
+    const text = thought(s, village.tick);
+    v.label.hidden = !show; v.bubble.hidden = !show || !text;
+    if (show) { const x = (tmp.x + 1) * innerWidth / 2, y = (1 - tmp.y) * innerHeight / 2; v.label.style.transform = `translate(${x}px,${y}px) translate(-50%,-100%)`; v.label.style.opacity = String(Math.min(1, (16 - dist) / 5)); v.bubble.style.transform = `translate(${x}px,${y - 20}px) translate(-50%,-100%)`; v.bubble.textContent = text; }
   }
 }
 function frame(now: number) {
-  requestAnimationFrame(frame); const dt = Math.min(0.05, Math.max(0, (now - last) / 1000)); last = now; if (document.hidden || intro.open) return; time += dt * 1000;
+  requestAnimationFrame(frame); const dt = Math.min(0.05, Math.max(0, (now - last) / 1000)); last = now; if (document.hidden || intro.open) return; time += dt * 1000; simSeconds += dt;
   // The village lives only while watched: whole ticks from the real seconds that passed, none while hidden.
   tickBank += dt * TICKS_PER_SECOND; const ticks = Math.floor(tickBank); if (ticks > 0) { advance(village, ticks); tickBank -= ticks; }
-  player.update(now, world.colliders, undefined); player.applyCamera(camera);
+  player.update(now, mode === 'ground' ? world.colliders : [], undefined);
+  const g = player.gesture, stickHeld = g.held && Math.hypot(g.x, g.y) >= 0.25;
+  let wantUnder = 0;
+  if (mode === 'ground') { player.applyCamera(camera); pressInto(dt); }
+  else if (mode === 'trunk' && trunk) {
+    const t = trunk, top = crownHeight(t.tree), y = stickY();
+    if (Math.abs(y) > 0.25) t.h += -y * TRUNK_CLIMB * dt; t.h = Math.min(top, Math.max(0, t.h));
+    if (t.h >= top - 1e-6 && y < -0.25) { crown = { tree: t.tree, az: t.az, armed: false }; mode = 'crown'; trunk = null; }
+    else if (t.h <= 0 && y > 0.5) { t.downHeld += dt; if (t.downHeld > PRESS_S) enterGrass(world.trunkPoint(t.tree, 0, t.az)); }
+    else t.downHeld = 0;
+    if (mode === 'trunk') { const p = world.trunkPoint(t.tree, t.h, t.az); place(new THREE.Vector3(t.tree.x, relief(t.tree.x, t.tree.z) + t.h, t.tree.z)); orbitCamera(p, 3.6, 1.2); }
+  } else if (mode === 'crown' && crown) {
+    const c = crown, x = stickX(), y = stickY(); if (!stickHeld) c.armed = true;
+    if (Math.abs(x) > 0.25) c.az += x * CROWN_SLIDE * dt;
+    if (y > 0.5) { trunk = { tree: c.tree, h: crownHeight(c.tree) - 0.05, az: c.az, downHeld: 0 }; mode = 'trunk'; crown = null; }
+    else if (y < -0.5 && c.armed) {
+      const w = want(); let best: Tree | null = null, bestDot = 0.72;
+      for (const o of hopTargets(c.tree)) { const d = new THREE.Vector3(o.x - c.tree.x, 0, o.z - c.tree.z).normalize().dot(w); if (d > bestDot) { bestDot = d; best = o; } }
+      if (best) { const az = Math.atan2(c.tree.z - best.z, c.tree.x - best.x); hop = { from: world.crownPoint(c.tree, c.az), to: world.crownPoint(best, az), t: 0, tree: best, az }; mode = 'hop'; crown = null; }
+    }
+    if (mode === 'crown') { const p = world.crownPoint(c.tree, c.az); place(p); orbitCamera(p, 5.2, 2.1); }
+  } else if (mode === 'hop' && hop) {
+    hop.t = Math.min(1, hop.t + dt / HOP_S); const k = hop.t * hop.t * (3 - 2 * hop.t); const p = hop.from.clone().lerp(hop.to, k); p.y += Math.sin(hop.t * Math.PI) * 1.4;
+    place(p); orbitCamera(p, 5.2, 2.1);
+    if (hop.t === 1) { crown = { tree: hop.tree, az: hop.az, armed: true }; mode = 'crown'; hop = null; }
+  } else if (mode === 'grass' && grass) {
+    // Free under the grass, faster than running; onto a tree root when she runs along one.
+    wantUnder = 1; const w = want(), gr = grass;
+    if (w.lengthSq() > 0) {
+      const nx = gr.x + w.x * GRASS_SPEED * dt, nz = gr.z + w.z * GRASS_SPEED * dt;
+      if (grassCan(nx, nz)) { gr.x = nx; gr.z = nz; } else if (grassCan(nx, gr.z)) gr.x = nx; else if (grassCan(gr.x, nz)) gr.z = nz;
+      gr.heading = Math.atan2(-w.x, -w.z);
+      const n = nearestRoot(gr); if (n.distance < 0.7) { const t = rootTangent(n.root, n.s), flat = new THREE.Vector3(t.x, 0, t.z).normalize(), dot = flat.dot(w); if (Math.abs(dot) > 0.6) { root = { root: n.root, s: n.s, forward: dot > 0, off: 0 }; grass = null; mode = 'root'; } }
+    }
+    const p = new THREE.Vector3(gr.x, relief(gr.x, gr.z), gr.z); place(p); orbitCamera(p, 3.2, 1.3);
+  } else if (mode === 'root' && root) {
+    // Held to the root's path, faster still; back reverses; sideways for a moment drops her into the grass; at a tree the aligned root, or a stop.
+    wantUnder = 1; const r = root, w = want();
+    if (w.lengthSq() > 0) {
+      const tan = rootTangent(r.root, r.s); if (!r.forward) tan.negate(); const flat = new THREE.Vector3(tan.x, 0, tan.z).normalize(), dot = flat.dot(w);
+      if (Math.abs(dot) < 0.35) { r.off += dt; if (r.off > 0.25) { const p = rootPoint(r.root, r.s); if (grassCan(p.x, p.z)) { grass = { x: p.x, z: p.z, heading: player.yaw }; root = null; mode = 'grass'; } } }
+      else { r.off = 0; if (dot < 0) r.forward = !r.forward; else {
+        r.s += (r.forward ? 1 : -1) * ROOT_SPEED * dt;
+        if (r.s >= r.root.length || r.s <= 0) { const atEnd = r.s >= r.root.length; r.s = Math.min(r.root.length, Math.max(0, r.s)); const next = nextRoot(endTree(r.root, atEnd), w, r.root); if (next) { r.root = next.root; r.forward = next.forward; r.s = next.forward ? 0 : next.root.length; } }
+      } }
+    } else r.off = 0;
+    if (mode === 'root') { const p = rootPoint(r.root, r.s); place(p); const t = rootTangent(r.root, r.s); if (!r.forward) t.negate(); const heading = Math.atan2(-t.x, -t.z); player.yaw += Math.atan2(Math.sin(heading - player.yaw), Math.cos(heading - player.yaw)) * Math.min(1, dt * 2.5); orbitCamera(p, 3.2, 1.3); }
+  } else if ((mode === 'sink' || mode === 'rise') && move) {
+    move.t = Math.min(1, move.t + dt / move.seconds); const k = move.t * move.t * (3 - 2 * move.t); const p = move.from.clone().lerp(move.to, k);
+    wantUnder = mode === 'sink' ? k : 1 - k; place(p); orbitCamera(p, 3.2, 1.3);
+    if (move.t === 1) { const then = move.then; move = null; then(); }
+  }
+  under += (wantUnder - under) * Math.min(1, dt * 4);
   presentHulda(dt); presentHobbits(dt);
   const light = daylightAt(village.tick), dusk = Math.max(0, 1 - Math.abs(light - 0.12) / 0.12);
   colour.copy(nightSky).lerp(daySky, Math.min(1, light * 1.6)).lerp(duskSky, dusk * 0.6); scene.background = colour; scene.fog = new THREE.FogExp2(colour, 0.011);
-  hemi.intensity = 0.5 + 1.9 * light; sun.intensity = 2.3 * light; world.update(light, time);
+  hemi.intensity = 0.5 + 1.9 * light; sun.intensity = 2.3 * light; world.update(light, time, under);
   const c = clockOf(village.tick); el('clock').textContent = `Day ${c.day} · ${String(c.hour).padStart(2, '0')}:${String(c.minute).padStart(2, '0')}`;
   saveClock += dt; if (saveClock > 5) { saveClock = 0; save(); }
   renderer.render(scene, camera);
 }
 player.applyCamera(camera); presentHulda(0); presentHobbits(0); world.update(daylightAt(village.tick), 0); scene.background = daySky; renderer.render(scene, camera); intro.showModal(); requestAnimationFrame(frame);
-Object.assign(window, { __village: { hulda, presentation, scene, camera, renderer, player, figures: world.figures, hobbits: HOBBITS, houses: HOUSES, get village() { return JSON.parse(serializeVillage(village)); }, get tick() { return village.tick; }, get phase() { return phaseAt(village.tick); }, get clock() { return clockOf(village.tick); }, dayTicks: DAY_TICKS, count: (where: 'inside' | 'green' | 'out') => everyone(village, where), advance: (n: number) => { advance(village, n); for (let i = 0; i < HOBBITS.length; i++) { const s = village.hobbits[i]; shown[i].x = s.x; shown[i].z = s.z; shown[i].heading = s.heading; } save(); }, hobbit: (id: string) => ({ ...village.hobbits.find(s => s.id === id)!, keeps: hobbitById(id).keeps }), get shown() { return shown.map(s => ({ x: s.x, z: s.z, speed: s.speed, label: !s.label.hidden, bubble: !s.bubble.hidden })); }, get character() { const g = hulda.gait; return { status: clipStatus, error: clipError, clips: clipUrls, bones: hulda.bones.size, body: 'hulda', roles: g?.roles ?? null, weights: g ? Object.fromEntries(Object.entries(g.actions).map(([r, a]) => [r, a.getEffectiveWeight()])) : null, hobbitWeights: world.figures.map(f => f.gait ? Object.fromEntries(Object.entries(f.gait.actions).map(([r, a]) => [r, a.getEffectiveWeight()])) : null) }; } } });
+Object.assign(window, { __village: { hulda, presentation, scene, camera, renderer, player, figures: world.figures, hobbits: HOBBITS, houses: HOUSES, trees: TREES, roots: TREE_ROOTS.length, get mode() { return mode; }, get simSeconds() { return simSeconds; }, get under() { return under; }, get grass() { return grass ? { ...grass } : null; }, get root() { return root ? { root: root.root.id, s: root.s, forward: root.forward } : null; }, get trunk() { return trunk ? { tree: trunk.tree.id, h: trunk.h } : null; }, get crown() { return crown ? { tree: crown.tree.id, az: crown.az, armed: crown.armed } : null; }, get transitioning() { return mode === 'hop' || mode === 'sink' || mode === 'rise'; }, sinkAt: (x: number, z: number) => { standOn(x, z); enterGrass(new THREE.Vector3(x, relief(x, z), z)); }, standAt: (x: number, z: number, yaw: number) => standOn(x, z, yaw), thoughts: () => village.hobbits.map(s => thought(s, village.tick)), facing: () => world.figures.map((f, i) => { const s = village.hobbits[i], fwd = { x: -Math.sin(f.group.rotation.y), z: -Math.cos(f.group.rotation.y) }; return { moving: s.speed > 0 && s.path.length > 0, dot: s.path.length ? (fwd.x * (s.path[0].x - s.x) + fwd.z * (s.path[0].z - s.z)) / (Math.hypot(s.path[0].x - s.x, s.path[0].z - s.z) || 1) : 0 }; }), inWater, get village() { return JSON.parse(serializeVillage(village)); }, get tick() { return village.tick; }, get phase() { return phaseAt(village.tick); }, get clock() { return clockOf(village.tick); }, dayTicks: DAY_TICKS, count: (where: 'inside' | 'green' | 'out') => everyone(village, where), advance: (n: number) => { advance(village, n); for (let i = 0; i < HOBBITS.length; i++) { const s = village.hobbits[i]; shown[i].x = s.x; shown[i].z = s.z; shown[i].heading = s.heading; } save(); }, hobbit: (id: string) => ({ ...village.hobbits.find(s => s.id === id)!, keeps: hobbitById(id).keeps }), get shown() { return shown.map(s => ({ x: s.x, z: s.z, speed: s.speed, label: !s.label.hidden, bubble: !s.bubble.hidden })); }, get character() { const g = hulda.gait; return { status: clipStatus, error: clipError, clips: clipUrls, bones: hulda.bones.size, body: 'hulda', roles: g?.roles ?? null, weights: g ? Object.fromEntries(Object.entries(g.actions).map(([r, a]) => [r, a.getEffectiveWeight()])) : null, hobbitWeights: world.figures.map(f => f.gait ? Object.fromEntries(Object.entries(f.gait.actions).map(([r, a]) => [r, a.getEffectiveWeight()])) : null) }; } } });

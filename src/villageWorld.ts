@@ -4,18 +4,19 @@
 // Hulda's skeleton at half her height.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { HOUSES, HOBBITS, SITES, HOUSE_RADIUS, MEADOW_RADIUS, GREEN, type Hobbit } from './villageModel';
+import { HOUSES, HOBBITS, SITES, HOUSE_RADIUS, MEADOW_RADIUS, GREEN, TREES, TREE_ROOTS, STREAM_Z, crownHeight, trunkRadius, type Hobbit, type Tree } from './villageModel';
 import { mulberry32 } from './colors';
 import type { Collider } from './player';
 import { spriteMaterial, standees, crownStandees, type Standee } from './sprites';
-import { treeParts } from './flora';
+import { treeParts, taperedTube } from './flora';
 import { createHulda } from './huldaCharacter';
 
 export const relief = (x: number, z: number): number => 0.05 * Math.sin(x * 0.5) * Math.cos(z * 0.45);
 export const HOBBIT_HEIGHT = 0.46;
 export function buildVillage(scene: THREE.Scene) {
   const rand = mulberry32(220926);
-  const earth = new THREE.MeshStandardMaterial({ color: '#57734a', roughness: 1 });
+  // The meadow thins to glass while she is in the roots beneath it, so the tree roots' fast lanes show.
+  const earth = new THREE.MeshStandardMaterial({ color: '#57734a', roughness: 1, transparent: true, opacity: 1, side: THREE.DoubleSide });
   const ground = new THREE.CircleGeometry(MEADOW_RADIUS + 40, 72); ground.rotateX(-Math.PI / 2);
   { const pos = ground.attributes.position as THREE.BufferAttribute; for (let i = 0; i < pos.count; i++) pos.setY(i, relief(pos.getX(i), pos.getZ(i))); ground.computeVertexNormals(); }
   scene.add(new THREE.Mesh(ground, earth));
@@ -29,7 +30,7 @@ export function buildVillage(scene: THREE.Scene) {
   scene.add(new THREE.Mesh(mergeGeometries(pathGeos)!, worn));
   // The stream: a ribbon of water along the north edge, banks of dark earth, past the stream site.
   const water = new THREE.MeshStandardMaterial({ color: '#4f93a8', emissive: '#1a4a58', emissiveIntensity: 0.4, roughness: 0.2, metalness: 0.2, transparent: true, opacity: 0.85 });
-  const stream = new THREE.CatmullRomCurve3([new THREE.Vector3(-60, 0.02, 20), new THREE.Vector3(-30, 0.02, 27), new THREE.Vector3(-7, 0.02, 27.5), new THREE.Vector3(15, 0.02, 31), new THREE.Vector3(45, 0.02, 26), new THREE.Vector3(70, 0.02, 30)]);
+  const stream = new THREE.CatmullRomCurve3(Array.from({ length: 14 }, (_, i) => { const x = -70 + i * 10.8; return new THREE.Vector3(x, 0.02, STREAM_Z(x)); }));
   const ribbon = (curve: THREE.Curve<THREE.Vector3>, width: number, y: number): THREE.BufferGeometry => { const n = 60, pos: number[] = [], idx: number[] = []; for (let i = 0; i <= n; i++) { const t = i / n, p = curve.getPointAt(t), tan = curve.getTangentAt(t); const nx = -tan.z, nz = tan.x; pos.push(p.x + nx * width / 2, y, p.z + nz * width / 2, p.x - nx * width / 2, y, p.z - nz * width / 2); if (i < n) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } } const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals(); return g; };
   scene.add(new THREE.Mesh(ribbon(stream, 5, 0.06), new THREE.MeshStandardMaterial({ color: '#3d4a33', roughness: 1 })), new THREE.Mesh(ribbon(stream, 3.4, 0.08), water));
   // Houses: a round wall, a cone of thatch, a round door to the green, a window that glows at night.
@@ -66,22 +67,32 @@ export function buildVillage(scene: THREE.Scene) {
   // Trees: the copse, and the wood round the meadow's edge; all colliders.
   const bark = new THREE.MeshStandardMaterial({ color: '#6d5f48', roughness: 1 }), leafMat = spriteMaterial('leaf', '#5f8657'), rootBark = new THREE.MeshStandardMaterial({ color: '#8a6f4e', roughness: 0.95 });
   const wood: THREE.BufferGeometry[] = [], cards: Standee[] = [], collars: THREE.BufferGeometry[] = [];
-  const plant = (x: number, z: number, size: number): void => { const t = treeParts(rand, x, relief(x, z), z, size); wood.push(...t.wood); cards.push(...t.cards); collars.push(...t.roots); colliders.push({ x, z, radius: 0.32 * size, minY: -0.2, maxY: 3.5 * size }); };
-  for (let i = 0; i < 6; i++) { const a = rand() * 6.28, r = 1 + rand() * 3; plant(SITES.copse.x + Math.cos(a) * r, SITES.copse.z + Math.sin(a) * r, 0.9 + rand() * 0.5); }
-  for (let i = 0; i < 140; i++) { const a = rand() * 6.28, r = MEADOW_RADIUS - 4 + rand() * 40, x = Math.cos(a) * r, z = Math.sin(a) * r; if (Math.abs(z - 28) < 4 && x > -60 && x < 70) continue; plant(x, z, 0.9 + rand() * 0.7); }
+  for (const t of TREES) { const parts = treeParts(rand, t.x, relief(t.x, t.z), t.z, t.size); wood.push(...parts.wood); cards.push(...parts.cards); collars.push(...parts.roots); colliders.push({ x: t.x, z: t.z, radius: trunkRadius(t), minY: -0.2, maxY: crownHeight(t) }); }
   scene.add(new THREE.Mesh(mergeGeometries(wood)!, bark), new THREE.Mesh(standees(cards), leafMat), new THREE.Mesh(mergeGeometries(collars)!, rootBark));
+  // The tree roots under the soil: her fast lanes, seen when the meadow goes glassy.
+  const laneMat = new THREE.MeshStandardMaterial({ color: '#8a6f4e', emissive: '#c9a24a', emissiveIntensity: 0.05, roughness: 0.95 });
+  const lanes: THREE.BufferGeometry[] = [];
+  for (const r of TREE_ROOTS) lanes.push(taperedTube(r.curve, Math.ceil(r.length * 2), 6, t => 0.15 * (0.55 + 0.45 * Math.abs(2 * t - 1)), 0.22));
+  scene.add(new THREE.Mesh(mergeGeometries(lanes)!, laneMat));
   const grassMat = spriteMaterial('grass', '#9fc06a'), grass: Standee[] = [];
   for (let i = 0; i < 900; i++) { const a = rand() * 6.28, r = Math.sqrt(rand()) * (MEADOW_RADIUS + 2), x = Math.cos(a) * r, z = Math.sin(a) * r; if (Math.hypot(x, z) < 5.5 || HOUSES.some(h => Math.hypot(x - h.x, z - h.z) < HOUSE_RADIUS + 0.4)) continue; const k = 0.22 + rand() * 0.3; grass.push({ position: new THREE.Vector3(x, relief(x, z), z), yaw: rand() * Math.PI, width: k, height: k * (0.8 + rand() * 0.5) }); }
   scene.add(new THREE.Mesh(standees(grass), grassMat));
   // The hobbits: Hulda's skeleton at half her height, in cloth, each with their own colours.
   const figures = HOBBITS.map((h: Hobbit) => { const f = createHulda({ name: h.name, height: HOBBIT_HEIGHT, skin: '#e0c4a0', cloth: h.colour, clothLight: h.colour, hair: h.hair, feet: '#5a4a3a', locks: false, leaves: false, skirt: true }); scene.add(f.group); return f; });
-  // Her shapes for later passes: none yet; empty groups keep the presentation's contract.
-  const figure = new THREE.Group(), mass = new THREE.Group();
-  /** daylight 0..1 sets the fire and the windows: lit as the sun goes. */
-  function update(daylight: number, t: number): void {
+  // Her other shapes: the figure of leaves at a crown, and the bulge of grass she is under the meadow.
+  const figureMat = spriteMaterial('leaf', '#b9e58a', { emissive: '#4a7a2a', emissiveIntensity: 0.35 });
+  const figure = new THREE.Group(); figure.visible = false; scene.add(figure);
+  { const fr = mulberry32(77); const body = crownStandees(fr, new THREE.Vector3(0, 0.95, 0), 0.42, 0.55, 0.3, 9, 0.5); body.push({ position: new THREE.Vector3(0, 1.35, 0), yaw: 0.4, width: 0.42, height: 0.42, flat: true }); figure.add(new THREE.Mesh(standees(body), figureMat)); }
+  const mass = new THREE.Group(); mass.visible = false; scene.add(mass);
+  { const mr = mulberry32(78); const tufts: Standee[] = []; for (let i = 0; i < 14; i++) { const a = mr() * 6.28, r = mr() * 0.42, k = 0.28 + mr() * 0.22; tufts.push({ position: new THREE.Vector3(Math.cos(a) * r, 0.3 - r * 0.35, Math.sin(a) * r), yaw: mr() * Math.PI, width: k, height: k * 1.2 }); } mass.add(new THREE.Mesh(standees(tufts), spriteMaterial('grass', '#b6d47a', { emissive: '#3a5a20', emissiveIntensity: 0.25 }))); }
+  const crownPoint = (t: Tree, az: number): THREE.Vector3 => new THREE.Vector3(t.x + Math.cos(az) * 1.1 * t.size, relief(t.x, t.z) + crownHeight(t) + 0.15, t.z + Math.sin(az) * 1.1 * t.size);
+  const trunkPoint = (t: Tree, h: number, az: number): THREE.Vector3 => new THREE.Vector3(t.x + Math.cos(az) * (trunkRadius(t) + 0.12), relief(t.x, t.z) + h, t.z + Math.sin(az) * (trunkRadius(t) + 0.12));
+  /** daylight 0..1 sets the fire and the windows: lit as the sun goes; under 0..1 thins the meadow for the roots beneath. */
+  function update(daylight: number, t: number, under = 0): void {
+    earth.opacity = 1 - under * 0.6; earth.depthWrite = under < 0.5; laneMat.emissiveIntensity = 0.05 + under * 0.5;
     const night = 1 - Math.min(1, daylight * 2.5);
     fireLight.intensity = 14 * night; flames.visible = night > 0.05; flames.scale.setScalar(0.8 + night * (0.2 + Math.sin(t * 0.012) * 0.08)); windowMat.emissiveIntensity = 1.4 * night;
   }
-  return { colliders, figures, figure, mass, update, stream };
+  return { colliders, figures, figure, mass, update, stream, crownPoint, trunkPoint };
 }
 export type VillageWorld = ReturnType<typeof buildVillage>;

@@ -40,3 +40,29 @@ test('the village is deterministic from its seed, pauses when not advanced, and 
   advance(back, 100); advance(a, 100); assert.equal(everyone(back, 'inside'), everyone(a, 'inside'));
   assert.deepEqual(parseVillage('junk'), freshVillage()); assert.deepEqual(parseVillage('{"hobbits":[]}'), freshVillage()); assert.equal(parseVillage('{"tick":-5,"hobbits":' + JSON.stringify(freshVillage().hobbits) + '}').tick, 0);
 });
+
+import { TREES, TREE_ROOTS, rootsAt, nearestRoot, nextRoot, rootPoint, rootTangent, endTree, nearestTree, hopTargets, grassCan, inWater, thought, freshVillage as fresh, advance as run, GRASS_SPEED, ROOT_SPEED, STREAM_Z, MEADOW_RADIUS, SITES as S2, hobbitById as byId } from '../src/villageModel';
+import { NORMAL_MOBILITY } from '../src/mobility';
+test('her ways: grass everywhere she can walk, faster than running; tree roots joining the copse and the wood, faster still and held to their path', () => {
+  assert.ok(GRASS_SPEED > NORMAL_MOBILITY.runSpeed, 'grass beats running'); assert.ok(ROOT_SPEED > GRASS_SPEED, 'tree roots beat grass');
+  assert.ok(TREES.length > 100); assert.ok(TREE_ROOTS.length > 100); for (const r of TREE_ROOTS) { assert.ok(r.length > 2 && r.length < 16); for (let i = 1; i < 8; i++) assert.ok(r.curve.getPointAt(i / 8).y < -0.2, 'under the soil'); }
+  const joined = TREES.filter(t => rootsAt(t.id).length > 0).length; assert.ok(joined > TREES.length * 0.9, `${joined} of ${TREES.length} trees have roots`);
+  const copse = TREES.slice(0, 6); assert.ok(copse.every(t => rootsAt(t.id).length >= 1), 'the copse is joined'); assert.ok(rootsAt(copse[0].id).every(r => r.length < 9), 'and its roots are short');
+  const r = TREE_ROOTS[0], from = TREES[r.a], to = TREES[r.b], want = { x: to.x - from.x, z: to.z - from.z }; const l = Math.hypot(want.x, want.z); want.x /= l; want.z /= l;
+  const next = nextRoot(r.a, want); assert.ok(next && next.root.id === r.id && next.forward, 'the aligned root is taken'); assert.equal(endTree(r, true), r.b); assert.ok(Math.abs(rootTangent(r, 1).length() - 1) < 1e-6);
+  const n = nearestRoot({ x: (from.x + to.x) / 2, z: (from.z + to.z) / 2 }); assert.ok(n.distance < 1.2); assert.ok(rootPoint(n.root, n.s).y < 0);
+  assert.ok(grassCan(5, -14)); assert.equal(grassCan(0, STREAM_Z(0)), false, 'not under the water'); assert.ok(inWater(3, STREAM_Z(3))); assert.equal(grassCan(9 * Math.cos(0.3), 9 * Math.sin(0.3)), false, 'not under a house'); assert.equal(grassCan(MEADOW_RADIUS + 40, 0), false);
+  for (const t of TREES) assert.ok(!inWater(t.x, t.z), 'no tree in the stream');
+  assert.ok(hopTargets(copse[0]).length >= 1, 'the copse has crowns to leap to'); assert.equal(nearestTree(copse[2].x + 0.5, copse[2].z).tree.id, copse[2].id);
+});
+test('thoughts are always there: what they are doing, where they are going, and the chatter while it lasts', () => {
+  const v = fresh(1); run(v, 30); const pip = v.hobbits.find(s => s.id === 'pip')!; assert.ok(['walking to the stream', 'fetching water'].includes(thought(pip, v.tick)), thought(pip, v.tick));
+  run(v, 170); for (const s of v.hobbits) { const h = byId(s.id); assert.equal(thought(s, v.tick), h.keeps === 'fire' ? 'keeping the fire' : S2[h.keeps].verb, `${h.name} at work`); }
+  run(v, 340 - 200); const going = v.hobbits.filter(s => thought(s, v.tick) === 'walking to the fire' || thought(s, v.tick) === 'talking by the fire' || thought(s, v.tick) === 'keeping the fire'); assert.ok(going.length >= 7, `${going.length} bound for the fire`);
+  run(v, 400 - 340); const talking = v.hobbits.filter(s => thought(s, v.tick) === 'talking by the fire').length; assert.ok(talking >= 5);
+  run(v, 760 - 400); assert.ok(v.hobbits.some(s => thought(s, v.tick) === 'going home'), 'at dusk someone is going home');
+  run(v, 900 - 760); assert.ok(v.hobbits.every(s => thought(s, v.tick) === ''), 'no thoughts indoors');
+  const w = fresh(1); run(w, 200); let turned = 0, stepped = 0; const wren = () => w.hobbits.find(s => s.id === 'wren')!; let h0 = wren().heading, p0 = { x: wren().x, z: wren().z };
+  for (let i = 0; i < 60; i++) { run(w, 1); const s = wren(); if (Math.abs(Math.atan2(Math.sin(s.heading - h0), Math.cos(s.heading - h0))) > 0.3) { turned++; h0 = s.heading; } if (Math.hypot(s.x - p0.x, s.z - p0.z) > 0.8) { stepped++; p0 = { x: s.x, z: s.z }; } }
+  assert.ok(turned >= 3, `Wren turns to face things at the field (${turned})`); assert.ok(stepped >= 1, `and steps between spots (${stepped})`);
+});

@@ -16,8 +16,14 @@ The question: do figures going in and out of houses on a day's rhythm already re
 - **Light.** The sun by the clock; sky through dusk to a night blue; the fire and the windows lit at night.
 - **Hulda** walks in the free-flow controls, third person, first person by the button. They do not see her. No sinking, no trunks here yet.
 
+## V0.1: her ways, thoughts always, facing and fidgeting (Noah's first phone notes)
+- **Her ways through the meadow** (the clearing's moves, ported): press into any tree to enter its trunk, rise to the crown, slide round it and leap to a crown within reach; double tap the ground and she is a bulge under the grass (`GRASS_SPEED` 3.8 m/s, faster than her run, free in any direction, not under the houses or the water); run along one of the tree roots that join the copse and the wood and it takes her (`ROOT_SPEED` 6.5 m/s, held to its path, the aligned root at a tree, back to reverse, sideways for a quarter second to drop into the grass); pushing down at a trunk's foot sinks her into the grass; a double tap of the stick brings her out. The meadow goes glassy while she is under it, so the fast lanes show.
+- **Thoughts always.** A hobbit out of doors always has one: what they are doing ("gathering berries", "milking the goats", "keeping the fire"), where they are going ("walking to the thicket", "walking to the fire", "going home"), talk by the fire, and the chatter for a few ticks when it comes.
+- **Facing.** They walked backwards because the rig faces −Z at yaw 0 and the model's heading is an angle in x,z: yaw = −π/2 − heading. Fixed and checked in the journey (the share of walking frames that face forward).
+- **At a place** they turn to face one thing and then another every few ticks and step to a new spot twice as often as before, instead of standing still.
+
 ## Files
-- `src/villageModel.ts`: the day (ticks, phases, clock, daylight), the layout (houses, sites, the green), the eight hobbits, `wants`, `route` by the green, `advance` (deterministic from the seed), `everyone`, `inHouse`, parse and serialise. Tuning constants beside each thing.
+- `src/villageModel.ts`: the day (ticks, phases, clock, daylight), the layout (houses, sites, the green), the eight hobbits, `wants`, `route` by the green, `advance` (deterministic from the seed), `thought`, `everyone`, `inHouse`, parse and serialise; her ways: `TREES`, `TREE_ROOTS`, `nearestRoot`, `nextRoot`, `hopTargets`, `grassCan`, the stream's course. Tuning constants beside each thing.
 - `src/villageWorld.ts`: the scene, the figures (`HOBBIT_HEIGHT`), `update(daylight)`.
 - `src/village.ts`, `village.html`, `src/village.css`: the tick bank, the eased figures, name labels and bubbles, the clock, light by the hour, the `__village` handle (`advance(n)` jumps the day for checking).
 - `tests/village.test.ts` (`node scripts/test-village.mjs`): the layout, the day, the rhythm over two days with nobody through a house and nobody teleporting, routes by the green, determinism, pause and saves.
@@ -30,4 +36,4 @@ The question: do figures going in and out of houses on a day's rhythm already re
 - The bubble's moments: on every change, or only at the fire and the door?
 
 ## Honest limits
-No needs, no stores, no picking: V1's. They walk straight lines between waypoints and ignore each other on the way. The stream is a ribbon she can wade. Browser emulation is not a phone.
+No needs, no stores, no picking: V1's. They walk straight lines between waypoints and ignore each other on the way. The stream is a ribbon she can wade on foot but not pass under the grass. Browser emulation is not a phone.
