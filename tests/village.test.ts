@@ -17,7 +17,7 @@ test('the day: 1440 ticks in twenty real minutes, dawn at six, phases in order, 
 test('the rhythm: out at dawn to their places, together on the green at noon, home by night, and never through a house', () => {
   const v = freshVillage(1); assert.equal(everyone(v, 'inside'), 8, 'they wake indoors');
   advance(v, 200); assert.equal(everyone(v, 'inside'), 0, 'all out by morning'); assert.ok(v.hobbits.every(s => s.activity === 'working' || s.activity === 'walking' || s.activity === 'talking'));
-  for (const s of v.hobbits) { const h = hobbitById(s.id), site = SITES[h.keeps]; assert.ok(Math.hypot(s.x - site.x, s.z - site.z) <= site.radius + 0.3, `${h.name} is ${h.keeps === 'fire' ? 'at the fire' : site.verb}`); }
+  for (const s of v.hobbits) { const h = hobbitById(s.id), site = SITES[h.keeps]; assert.ok(s.errand !== null || s.path.length > 0 || Math.hypot(s.x - site.x, s.z - site.z) <= site.radius + 0.3, `${h.name} is ${h.keeps === 'fire' ? 'at the fire' : site.verb} (or on an errand to a store and back)`); }
   advance(v, 420 - 200); assert.ok(everyone(v, 'green') >= 7, `${everyone(v, 'green')} on the green at one o'clock`); assert.ok(v.hobbits.filter(s => s.activity === 'talking').length >= 6);
   advance(v, 600 - 420); assert.equal(everyone(v, 'green'), 1, 'only the fire-keeper stays by the fire in the afternoon');
   advance(v, 900 - 600); assert.equal(everyone(v, 'inside'), 8, 'all home by night'); assert.ok(v.hobbits.every(s => s.activity === 'sleeping'));
@@ -60,7 +60,7 @@ test('thoughts are always there: what they are doing, where they are going, and 
   run(v, 170); for (const s of v.hobbits) { const h = byId(s.id); assert.equal(thought(s, v.tick), h.keeps === 'fire' ? 'keeping the fire' : S2[h.keeps].verb, `${h.name} at work`); }
   run(v, 340 - 200); const going = v.hobbits.filter(s => thought(s, v.tick) === 'walking to the fire' || thought(s, v.tick) === 'talking by the fire' || thought(s, v.tick) === 'keeping the fire'); assert.ok(going.length >= 7, `${going.length} bound for the fire`);
   run(v, 400 - 340); const talking = v.hobbits.filter(s => thought(s, v.tick) === 'talking by the fire').length; assert.ok(talking >= 5);
-  run(v, 760 - 400); assert.ok(v.hobbits.some(s => thought(s, v.tick) === 'going home'), 'at dusk someone is going home');
+  run(v, 760 - 400); assert.ok(v.hobbits.some(s => ['going home', 'fetching supper', 'home with supper'].includes(thought(s, v.tick))), 'at dusk someone is going home, by way of supper');
   run(v, 900 - 760); assert.ok(v.hobbits.every(s => thought(s, v.tick) === ''), 'no thoughts indoors');
   const w = fresh(1); run(w, 200); let turned = 0, stepped = 0; const wren = () => w.hobbits.find(s => s.id === 'wren')!; let h0 = wren().heading, p0 = { x: wren().x, z: wren().z };
   for (let i = 0; i < 60; i++) { run(w, 1); const s = wren(); if (Math.abs(Math.atan2(Math.sin(s.heading - h0), Math.cos(s.heading - h0))) > 0.3) { turned++; h0 = s.heading; } if (Math.hypot(s.x - p0.x, s.z - p0.z) > 0.8) { stepped++; p0 = { x: s.x, z: s.z }; } }
@@ -78,4 +78,50 @@ test('a root takes her when she runs along it: any root within reach that agrees
   const far = (rr: typeof r1) => TREES[rr.a === t.id ? rr.b : rr.a], d2 = far(r2), u2 = { x: d2.x - t.x, z: d2.z - t.z }, l2 = Math.hypot(u2.x, u2.z); u2.x /= l2; u2.z /= l2;
   const d1 = far(r1), u1 = { x: d1.x - t.x, z: d1.z - t.z }, l1 = Math.hypot(u1.x, u1.z); u1.x /= l1; u1.z /= l1;
   if (Math.abs(u1.x * u2.x + u1.z * u2.z) < 0.6) { const p = { x: t.x + u1.x * 0.5 + u2.x * 0.4, z: t.z + u1.z * 0.5 + u2.z * 0.4 }; const h = alignedRoot(p, u2, 0.7, 0.6); assert.ok(h && h.root === r2, 'the aligned root wins over the nearer one'); }
+});
+
+import { STORES, STORE_LIST, FOODS, YIELD_OF, BERRY_CAP, BERRY_REGROW, BRANCHES_PER_DAY, MILK_PER_DAY, CROP_DAYS, GRAIN_PER_STRIP, WOOD_PER_NIGHT, CARRY, landStock, fullestFood, balance, inFlight, storeSpot, DAY_TICKS as DT, freshVillage as freshV, advance as step, thought as think, hobbitById as who, serializeVillage as ser, parseVillage as par } from '../src/villageModel';
+test('the land gives by the day: berries regrow on the bushes, branches drop at dawn, the goats have their milk at dawn, the strips ripen over days', () => {
+  const v = freshV(1); v.land.berries = 10; v.land.branches = 0; v.land.milk = 0;
+  // Nobody picks in the night: run a night's worth and read the regrowth alone.
+  v.tick = 900; step(v, 300); assert.ok(Math.abs(v.land.berries - (10 + BERRY_REGROW * 300 / DT)) < 0.01, `berries regrow at ${BERRY_REGROW} a day (${v.land.berries})`);
+  step(v, DT - 1200 + 1); // through the next dawn's first tick
+  assert.equal(v.land.branches, BRANCHES_PER_DAY, 'branches drop at dawn'); assert.equal(v.land.milk, MILK_PER_DAY, 'milk at dawn');
+  const w = freshV(1); const c0 = w.land.crops[0]; w.tick = 900; step(w, 100); assert.ok(Math.abs(w.land.crops[0] - c0 - 100 / (CROP_DAYS * DT)) < 1e-9, `a strip ripens over ${CROP_DAYS} days`);
+  assert.equal(landStock(freshV(1), 'water'), Infinity, 'the stream is endless');
+});
+test('gathering is seen: a unit at a time at the place into an armful, carried to the store on the green and handed over; the caps bound the take', () => {
+  const v = freshV(1); v.stores.berries = 1; let carried = 0, delivered = 0, maxCarry = 0; const before = { ...v.stores };
+  for (let t = 0; t < 330; t++) { const tansy = v.hobbits.find(s => s.id === 'tansy')!, had = tansy.carry?.n ?? 0; step(v, 1); if (tansy.carry) { carried++; maxCarry = Math.max(maxCarry, tansy.carry.n); assert.equal(tansy.carry.kind, 'berries'); } if (had > 0 && !tansy.carry && !tansy.inside) delivered++; }
+  assert.ok(carried > 20, `Tansy carries berries for a while (${carried} ticks)`); assert.ok(maxCarry <= CARRY.berries, 'an armful at most'); assert.ok(delivered >= 1, 'and hands over at the baskets at least once');
+  assert.ok(v.stores.berries >= before.berries, 'the baskets fill'); for (const k of STORE_LIST) assert.ok(v.stores[k] <= STORES[k].cap + 1e-9, `${k} never over its cap`);
+  assert.ok(v.land.berries < BERRY_CAP, 'the bushes are picked'); assert.ok(v.take.berries > 0 && v.take.milk > 0 && v.take.wood > 0 && v.take.water > 0, `the day's take is counted ${JSON.stringify(v.take)}`);
+  // Two gatherers do not both fill the last of the room: what is in flight counts.
+  const w = freshV(1); w.stores.berries = STORES.berries.cap - 2; step(w, 300); assert.ok(w.stores.berries <= STORES.berries.cap, 'no overflow lost');
+  assert.ok(inFlight(w, 'berries') <= STORES.berries.cap - w.stores.berries + 1e-9 || w.hobbits.every(s => s.carry?.kind !== 'berries'), 'in flight fits the room');
+  const sp = storeSpot(STORES.berries); assert.ok(Math.hypot(sp.x, sp.z) < Math.hypot(STORES.berries.x, STORES.berries.z), 'one stands a step in from the store');
+});
+test('two meals a day from the fullest store by share: noon at the fire with water, supper fetched on the way home; hunger falls at each; the fire burns the wood Odo lays', () => {
+  const v = freshV(1); const food = () => FOODS.reduce((n, f) => n + v.stores[f], 0);
+  step(v, 340); const f0 = food(), w0 = v.stores.water; let sawEating = 0; for (let t = 340; t < 430; t++) { step(v, 1); sawEating += v.hobbits.filter(s => s.activity === 'eating').length; }
+  assert.ok(v.hobbits.every(s => s.ateDay === 0), 'everyone ate at noon'); assert.ok(f0 - food() + v.take.berries + v.take.milk + v.take.grain >= 8, 'eight units gone to the noon meal (before what was gathered)'); assert.ok(sawEating >= 8 * 10, `eating is an activity seen for a while (${sawEating} hobbit-ticks)`);
+  assert.ok(v.stores.water < w0 + v.take.water, 'water drunk at noon');
+  step(v, 700 - 430); assert.equal(v.fireWood, 0, 'no wood on the fire before Odo fetches it'); const odo = () => v.hobbits.find(s => s.id === 'odo')!;
+  let fetched = false; for (let t = 700; t < 745; t++) { step(v, 1); if (odo().carry?.kind === 'wood') fetched = true; } assert.ok(fetched, 'Odo carries wood to the fire'); assert.ok(v.fireWood >= WOOD_PER_NIGHT - 1e-9, `the fire has its wood (${v.fireWood})`);
+  let supper = 0; for (let t = 745; t < 830; t++) { step(v, 1); for (const s of v.hobbits) if (s.errand === 'supper' || (s.activity === 'returning' && s.carry?.n === 1)) supper++; } assert.ok(supper > 0, 'supper is fetched from the stores on the way home');
+  assert.ok(v.hobbits.every(s => s.inside && s.hunger < 0.2), 'home, fed, hunger low'); step(v, DT - 830); assert.ok(v.fireWood < 0.05, 'the wood is burnt by dawn');
+  const hungry = freshV(1); step(hungry, 330); for (const k of FOODS) hungry.stores[k] = 0; hungry.land.berries = 0; hungry.land.milk = 0; hungry.land.crops = hungry.land.crops.map(() => 0); for (const s of hungry.hobbits) { s.carry = null; s.errand = null; }
+  let missed = false; for (let t = 0; t < 100; t++) { step(hungry, 1); if (hungry.hobbits.some(s => s.bubble === 'nothing to eat')) missed = true; }
+  assert.ok(missed, 'with empty stores the noon meal is missed and says so'); assert.equal(fullestFood(hungry), null); assert.ok(hungry.hobbits.every(s => s.hunger > 0.3), 'no one was fed');
+});
+test('left alone the village holds: eight days on, the stores are never empty at a meal, the thicket stays near full, the take is under the regrowth, no one starves', () => {
+  const v = freshV(3); let minFood = Infinity, maxHunger = 0;
+  for (let d = 0; d < 8; d++) for (let t = 0; t < DT; t++) { step(v, 1); if (t === 400 || t === 760) minFood = Math.min(minFood, FOODS.reduce((n, f) => n + v.stores[f], 0)); for (const s of v.hobbits) maxHunger = Math.max(maxHunger, s.hunger); }
+  assert.ok(minFood >= 8, `food in the stores at every meal (${minFood})`); assert.ok(v.land.berries > BERRY_CAP * 0.6, `the thicket near full (${v.land.berries.toFixed(1)})`); assert.ok(balance(v) < 1, `take under regrowth (${balance(v).toFixed(2)})`);
+  assert.ok(maxHunger < 0.9, `nobody goes hungry (${maxHunger.toFixed(2)})`); assert.ok(v.stores.wood >= WOOD_PER_NIGHT, 'wood for the night in the pile');
+  assert.ok(v.land.crops.some(c => c >= 0.9) || v.lastTake.grain > 0, 'the field yields in its turn');
+  const same = freshV(3); step(same, 8 * DT); assert.equal(ser(same), ser(v), 'deterministic');
+  const back = par(ser(v)); assert.equal(ser(back), ser(v), 'the stores, the land and the armfuls survive a save');
+  assert.deepEqual(Object.keys(YIELD_OF).sort(), ['copse', 'field', 'pen', 'stream', 'thicket'], 'every working place feeds one store');
+  assert.equal(GRAIN_PER_STRIP, CARRY.grain, 'a strip is one armful');
 });

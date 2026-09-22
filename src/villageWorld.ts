@@ -1,10 +1,13 @@
-// The village as a scene, V0: a meadow by a stream, six round houses on a ring with their doors to the
+// The village as a scene, V1: a meadow by a stream, six round houses on a ring with their doors to the
 // green, the fire at its centre, the places they keep to (a berry thicket, the stream's bank, a copse,
 // a field, a goat pen, a standing stone), a wood round the edge, and the eight hobbits themselves on
-// Hulda's skeleton at half her height.
+// Hulda's skeleton at half her height. V1 shows the land's stock and the stores by count: berries on the
+// bushes, branches under the copse, the strips' stalks by growth, the goats' pails, the baskets, the
+// trough, the woodpile, the bin and the pails on the green's edge, an armful in a hobbit's hand, and the
+// fire by the wood laid on it (updateLand).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { HOUSES, HOBBITS, SITES, HOUSE_RADIUS, MEADOW_RADIUS, GREEN, TREES, TREE_ROOTS, STREAM_Z, crownHeight, trunkRadius, type Hobbit, type Tree } from './villageModel';
+import { HOUSES, HOBBITS, SITES, STORES, STORE_LIST, HOUSE_RADIUS, MEADOW_RADIUS, GREEN, TREES, TREE_ROOTS, STREAM_Z, BERRY_CAP, BRANCH_CAP, MILK_PER_DAY, CROP_STRIPS, WOOD_PER_NIGHT, crownHeight, trunkRadius, type Hobbit, type Tree, type Village, type Store } from './villageModel';
 import { mulberry32 } from './colors';
 import type { Collider } from './player';
 import { spriteMaterial, standees, crownStandees, type Standee } from './sprites';
@@ -53,16 +56,38 @@ export function buildVillage(scene: THREE.Scene) {
   const fireLight = new THREE.PointLight('#ffa040', 0, 12, 1.6); fireLight.position.set(GREEN.x, 1.0, GREEN.z); scene.add(fireLight);
   // The places: a thicket of berry bushes, a field of tilled strips, a pen with a fence, a standing stone, the copse.
   const bushMat = spriteMaterial('leaf', '#4f7a3e'), berryMat = new THREE.MeshStandardMaterial({ color: '#8a2a4a', emissive: '#4a1020', emissiveIntensity: 0.3, roughness: 0.6 });
-  const bushCards: Standee[] = [];
-  for (let i = 0; i < 7; i++) { const a = rand() * 6.28, r = rand() * 2.6, c = new THREE.Vector3(SITES.thicket.x + Math.cos(a) * r, 0, SITES.thicket.z + Math.sin(a) * r); bushCards.push(...crownStandees(rand, c.clone().setY(0.55), 0.9, 0.5, 0.9, 6, 0.7)); for (let k = 0; k < 5; k++) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.05, 5, 4), berryMat); b.position.set(c.x + (rand() - 0.5) * 1.2, 0.4 + rand() * 0.5, c.z + (rand() - 0.5) * 1.2); scene.add(b); } }
+  const bushCards: Standee[] = [], berries: THREE.Mesh[] = [];
+  // Seven bushes with BERRY_CAP berries between them; the model's count says how many show, so picking thins the thicket in view.
+  for (let i = 0; i < 7; i++) { const a = rand() * 6.28, r = rand() * 2.6, c = new THREE.Vector3(SITES.thicket.x + Math.cos(a) * r, 0, SITES.thicket.z + Math.sin(a) * r); bushCards.push(...crownStandees(rand, c.clone().setY(0.55), 0.9, 0.5, 0.9, 6, 0.7)); for (let k = 0; k < BERRY_CAP / 7; k++) { const b = new THREE.Mesh(new THREE.SphereGeometry(0.055, 5, 4), berryMat); b.position.set(c.x + (rand() - 0.5) * 1.2, 0.4 + rand() * 0.5, c.z + (rand() - 0.5) * 1.2); scene.add(b); berries.push(b); } }
+  for (let i = berries.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [berries[i], berries[j]] = [berries[j], berries[i]]; }
   scene.add(new THREE.Mesh(standees(bushCards), bushMat));
   const tilled = new THREE.MeshStandardMaterial({ color: '#5a4630', roughness: 1 });
-  for (let i = -2; i <= 2; i++) { const strip = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 5), tilled); strip.rotation.x = -Math.PI / 2; strip.rotation.z = 0.3; strip.position.set(SITES.field.x + i * 1.0, 0.05, SITES.field.z + i * 0.3); scene.add(strip); }
+  // Five strips, each a row of stalks that rise with the strip's growth and turn gold when ripe; harvested, the strip is bare and sown again.
+  const stalkMats: THREE.MeshStandardMaterial[] = [], strips: THREE.Group[] = [];
+  for (let n = 0; n < CROP_STRIPS; n++) { const i = n - 2, strip = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 5), tilled); strip.rotation.x = -Math.PI / 2; strip.rotation.z = 0.3; strip.position.set(SITES.field.x + i * 1.0, 0.05, SITES.field.z + i * 0.3); scene.add(strip);
+    const mat = new THREE.MeshStandardMaterial({ color: '#7fa64a', roughness: 0.9 }), g = new THREE.Group(); g.position.copy(strip.position); g.rotation.y = -0.3; scene.add(g); stalkMats.push(mat); strips.push(g);
+    const stalks: THREE.BufferGeometry[] = []; for (let k = 0; k < 14; k++) { const st = new THREE.CylinderGeometry(0.012, 0.02, 1, 4); st.translate((rand() - 0.5) * 0.45, 0.5, -2.2 + k * 0.33 + (rand() - 0.5) * 0.15); const head = new THREE.ConeGeometry(0.05, 0.16, 5); head.translate(0, 1.05, 0); head.translate((rand() - 0.5) * 0.45, 0, -2.2 + k * 0.33 + (rand() - 0.5) * 0.15); stalks.push(st, head); }
+    g.add(new THREE.Mesh(mergeGeometries(stalks)!, mat)); }
   const post = new THREE.MeshStandardMaterial({ color: '#7a6448', roughness: 1 }), posts: THREE.BufferGeometry[] = [];
   for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2, p = new THREE.CylinderGeometry(0.06, 0.07, 0.9, 5); p.translate(SITES.pen.x + Math.cos(a) * 2.4, 0.45, SITES.pen.z + Math.sin(a) * 2.4); posts.push(p); const b = (i + 1) / 10 * Math.PI * 2, rail = new THREE.BoxGeometry(Math.hypot(Math.cos(b) - Math.cos(a), Math.sin(b) - Math.sin(a)) * 2.4, 0.06, 0.06); rail.rotateY(-Math.atan2(Math.sin(b) - Math.sin(a), Math.cos(b) - Math.cos(a))); rail.translate(SITES.pen.x + Math.cos((a + b) / 2) * 2.4 * Math.cos(Math.PI / 10), 0.7, SITES.pen.z + Math.sin((a + b) / 2) * 2.4 * Math.cos(Math.PI / 10)); posts.push(rail); }
   scene.add(new THREE.Mesh(mergeGeometries(posts)!, post));
   const goat = new THREE.MeshStandardMaterial({ color: '#d9d2c4', roughness: 1 });
   for (let i = 0; i < 3; i++) { const g = new THREE.Group(); g.position.set(SITES.pen.x + (rand() - 0.5) * 2.5, 0, SITES.pen.z + (rand() - 0.5) * 2.5); g.rotation.y = rand() * 6.28; const body = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6), goat); body.scale.set(1.5, 1, 1); body.position.y = 0.42; g.add(body); const head = new THREE.Mesh(new THREE.SphereGeometry(0.14, 7, 5), goat); head.position.set(0.5, 0.58, 0); g.add(head); for (const [x, z] of [[-0.25, -0.12], [-0.25, 0.12], [0.25, -0.12], [0.25, 0.12]]) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.4, 5), goat); leg.position.set(x, 0.2, z); g.add(leg); } scene.add(g); }
+  // The goats' milk for the day stands by the gate as pails until Bram carries them; the branches lie under the copse until Marlo gathers them.
+  const pailMat = new THREE.MeshStandardMaterial({ color: '#c9c2b0', roughness: 0.5, metalness: 0.3 }), milkMat = new THREE.MeshStandardMaterial({ color: '#f4f1e6', roughness: 0.8 });
+  const pail = (): THREE.Group => { const g = new THREE.Group(); const body = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.085, 0.16, 8, 1, true), pailMat); body.position.y = 0.08; body.material.side = THREE.DoubleSide; g.add(body); const top = new THREE.Mesh(new THREE.CircleGeometry(0.095, 8), milkMat); top.rotation.x = -Math.PI / 2; top.position.y = 0.15; g.add(top); return g; };
+  const penPails: THREE.Group[] = []; for (let i = 0; i < MILK_PER_DAY; i++) { const g = pail(); const a = 2.9 + i * 0.22; g.position.set(SITES.pen.x + Math.cos(a) * 2.9, relief(SITES.pen.x, SITES.pen.z), SITES.pen.z + Math.sin(a) * 2.9); scene.add(g); penPails.push(g); }
+  const stickMat = new THREE.MeshStandardMaterial({ color: '#6b5238', roughness: 1 }), sticks: THREE.Mesh[] = [];
+  for (let i = 0; i < BRANCH_CAP; i++) { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.045, 0.7 + rand() * 0.4, 5), stickMat); const a = rand() * 6.28, r = 0.6 + rand() * 3.0; m.position.set(SITES.copse.x + Math.cos(a) * r, 0.05, SITES.copse.z + Math.sin(a) * r); m.rotation.set(Math.PI / 2, 0, rand() * 6.28); m.rotation.order = 'ZXY'; scene.add(m); sticks.push(m); }
+  // The stores on the green's edge, each on the side of its place: a rack of baskets, a trough, a woodpile, a bin of sacks, a shelf of pails. Each shows its count.
+  const basketMat = new THREE.MeshStandardMaterial({ color: '#a8894f', roughness: 1 }), sackMat = new THREE.MeshStandardMaterial({ color: '#d2b98a', roughness: 1 }), troughMat = new THREE.MeshStandardMaterial({ color: '#6f5a3e', roughness: 1 });
+  const storeItems: Record<Store, THREE.Object3D[]> = { berries: [], water: [], wood: [], grain: [], milk: [] };
+  const storeFrame = (id: Store, w: number, d: number, h: number): THREE.Group => { const st = STORES[id], g = new THREE.Group(); g.position.set(st.x, relief(st.x, st.z), st.z); g.rotation.y = -Math.atan2(st.z, st.x); scene.add(g); const base = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), troughMat); base.position.y = h / 2; g.add(base); return g; };
+  { const g = storeFrame('berries', 1.4, 0.5, 0.08); for (let i = 0; i < STORES.berries.cap; i++) { const b = new THREE.Group(); const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.08, 0.12, 8, 1, true), basketMat); cup.material.side = THREE.DoubleSide; cup.position.y = 0.06; b.add(cup); const fill = new THREE.Mesh(new THREE.CircleGeometry(0.1, 8), berryMat); fill.rotation.x = -Math.PI / 2; fill.position.y = 0.11; b.add(fill); b.position.set(-0.55 + (i % 4) * 0.36, 0.08 + Math.floor(i / 4) * 0.13, -0.12 + Math.floor(i / 4) * 0.12); g.add(b); storeItems.berries.push(b); } }
+  { const st = STORES.water, g = new THREE.Group(); g.position.set(st.x, relief(st.x, st.z), st.z); g.rotation.y = -Math.atan2(st.z, st.x); scene.add(g); const box = new THREE.Mesh(new THREE.BoxGeometry(1.3, 0.4, 0.6), troughMat); box.position.y = 0.2; g.add(box); for (let i = 0; i < st.cap; i++) { const w = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.03, 0.5), water); w.position.y = 0.08 + i * 0.034; g.add(w); storeItems.water.push(w); } }
+  { const g = storeFrame('wood', 1.5, 0.6, 0.05); for (let i = 0; i < STORES.wood.cap; i++) { const log = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 1.3, 7), stickMat); log.rotation.z = Math.PI / 2; const row = Math.floor(i / 4); log.position.set(0, 0.12 + row * 0.13, -0.2 + (i % 4) * 0.15 - row * 0.07); g.add(log); storeItems.wood.push(log); } }
+  { const g = storeFrame('grain', 1.2, 0.7, 0.06); for (let i = 0; i < STORES.grain.cap; i++) { const sack = new THREE.Mesh(new THREE.SphereGeometry(0.13, 7, 6), sackMat); sack.scale.set(1, 0.8, 1); const row = Math.floor(i / 6); sack.position.set(-0.5 + (i % 6) * 0.2 + row * 0.1, 0.16 + row * 0.2, -0.12 + row * 0.02); g.add(sack); storeItems.grain.push(sack); } }
+  { const g = storeFrame('milk', 1.5, 0.45, 0.35); for (let i = 0; i < STORES.milk.cap; i++) { const p = pail(); p.position.set(-0.6 + (i % 4) * 0.4, i < 4 ? 0.35 : 0.02, i < 4 ? 0 : 0.32); g.add(p); storeItems.milk.push(p); } }
   const menhir = new THREE.Mesh(new THREE.BoxGeometry(0.7, 2.2, 0.45), stone); menhir.position.set(SITES.shrine.x, 1.1, SITES.shrine.z); menhir.rotation.set(0.05, 0.6, 0.06); scene.add(menhir);
   // Trees: the copse, and the wood round the meadow's edge; all colliders.
   const bark = new THREE.MeshStandardMaterial({ color: '#6d5f48', roughness: 1 }), leafMat = spriteMaterial('leaf', '#5f8657'), rootBark = new THREE.MeshStandardMaterial({ color: '#8a6f4e', roughness: 0.95 });
@@ -79,6 +104,14 @@ export function buildVillage(scene: THREE.Scene) {
   scene.add(new THREE.Mesh(standees(grass), grassMat));
   // The hobbits: Hulda's skeleton at half her height, in cloth, each with their own colours.
   const figures = HOBBITS.map((h: Hobbit) => { const f = createHulda({ name: h.name, height: HOBBIT_HEIGHT, skin: '#e0c4a0', cloth: h.colour, clothLight: h.colour, hair: h.hair, feet: '#5a4a3a', locks: false, leaves: false, skirt: true }); scene.add(f.group); return f; });
+  // An armful in the right hand: a basket, a bucket, a bundle of sticks, a sack or a pail, one of them shown while the model says the hobbit carries. The skeleton is in centimetres, so the things are sized in centimetres in the hand's space.
+  const carried = figures.map(f => { const hand = f.bones.get('mixamorigRightHand')!, anchor = new THREE.Group(); anchor.position.set(0, 9, 2); hand.add(anchor); const items: Record<Store, THREE.Object3D> = {
+    berries: (() => { const g = new THREE.Group(); const cup = new THREE.Mesh(new THREE.CylinderGeometry(8, 6, 8, 8, 1, true), basketMat); cup.material = basketMat.clone(); (cup.material as THREE.MeshStandardMaterial).side = THREE.DoubleSide; g.add(cup); const fill = new THREE.Mesh(new THREE.CircleGeometry(7.5, 8), berryMat); fill.rotation.x = -Math.PI / 2; fill.position.y = 3.6; g.add(fill); return g; })(),
+    water: (() => { const g = new THREE.Group(); const b = new THREE.Mesh(new THREE.CylinderGeometry(6, 5, 10, 8, 1, true), pailMat); b.material = pailMat.clone(); (b.material as THREE.MeshStandardMaterial).side = THREE.DoubleSide; g.add(b); const w = new THREE.Mesh(new THREE.CircleGeometry(5.5, 8), water); w.rotation.x = -Math.PI / 2; w.position.y = 4; g.add(w); return g; })(),
+    wood: (() => { const g = new THREE.Group(); for (let i = 0; i < 3; i++) { const st = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 2, 40, 5), stickMat); st.rotation.z = Math.PI / 2 + 0.25; st.position.set(0, i * 3.2, (i - 1) * 3); g.add(st); } return g; })(),
+    grain: (() => { const sack = new THREE.Mesh(new THREE.SphereGeometry(9, 7, 6), sackMat); sack.scale.set(1, 1.2, 1); return sack; })(),
+    milk: (() => { const g = new THREE.Group(); const b = new THREE.Mesh(new THREE.CylinderGeometry(6, 5, 10, 8, 1, true), pailMat); b.material = pailMat.clone(); (b.material as THREE.MeshStandardMaterial).side = THREE.DoubleSide; g.add(b); const m = new THREE.Mesh(new THREE.CircleGeometry(5.5, 8), milkMat); m.rotation.x = -Math.PI / 2; m.position.y = 4; g.add(m); return g; })(),
+  }; for (const k of STORE_LIST) { items[k].visible = false; anchor.add(items[k]); } return items; });
   // Her other shapes: the figure of leaves at a crown, and the bulge of grass she is under the meadow.
   const figureMat = spriteMaterial('leaf', '#b9e58a', { emissive: '#4a7a2a', emissiveIntensity: 0.35 });
   const figure = new THREE.Group(); figure.visible = false; scene.add(figure);
@@ -91,8 +124,23 @@ export function buildVillage(scene: THREE.Scene) {
   function update(daylight: number, t: number, under = 0): void {
     earth.opacity = 1 - under * 0.6; earth.depthWrite = under < 0.5; laneMat.emissiveIntensity = 0.05 + under * 0.5;
     const night = 1 - Math.min(1, daylight * 2.5);
-    fireLight.intensity = 14 * night; flames.visible = night > 0.05; flames.scale.setScalar(0.8 + night * (0.2 + Math.sin(t * 0.012) * 0.08)); windowMat.emissiveIntensity = 1.4 * night;
+    // The fire is as big as the wood on it: full from Odo's armful at dusk, dying by dawn; nothing laid, embers only.
+    const fuel = Math.min(1, fireWood / WOOD_PER_NIGHT), size = 0.25 + 0.75 * fuel;
+    fireLight.intensity = 14 * night * (0.15 + 0.85 * fuel); flames.visible = night > 0.05 && fuel > 0.02; flames.scale.setScalar(size * (0.8 + night * (0.2 + Math.sin(t * 0.012) * 0.08))); windowMat.emissiveIntensity = 1.4 * night;
   }
-  return { colliders, figures, figure, mass, update, stream, crownPoint, trunkPoint };
+  /** The land and the stores by the model's counts, the armfuls in hand, and the fire by the wood laid on it. */
+  function updateLand(v: Village): void {
+    const nb = Math.floor(v.land.berries); for (let i = 0; i < berries.length; i++) berries[i].visible = i < nb;
+    for (let i = 0; i < sticks.length; i++) sticks[i].visible = i < v.land.branches;
+    for (let i = 0; i < penPails.length; i++) penPails[i].visible = i < v.land.milk;
+    for (let i = 0; i < strips.length; i++) { const c = v.land.crops[i]; strips[i].scale.y = 0.08 + 0.92 * c; strips[i].visible = c > 0.02; stalkMats[i].color.set(c >= 1 ? '#d9b44a' : c > 0.7 ? '#b9a852' : '#7fa64a'); }
+    for (const k of STORE_LIST) { const n = Math.floor(v.stores[k]); storeItems[k].forEach((o, i) => { o.visible = i < n; }); }
+    for (let i = 0; i < HOBBITS.length; i++) { const c = v.hobbits[i].carry; for (const k of STORE_LIST) carried[i][k].visible = !!c && c.kind === k; }
+    fireWood = v.fireWood;
+  }
+  let fireWood = 0;
+  /** Which armful each figure shows, for checks. */
+  const armfuls = (): (Store | null)[] => carried.map(c => STORE_LIST.find(k => c[k].visible) ?? null);
+  return { colliders, figures, figure, mass, update, updateLand, armfuls, stream, crownPoint, trunkPoint };
 }
 export type VillageWorld = ReturnType<typeof buildVillage>;

@@ -131,6 +131,7 @@ clear; a village clearing is one more exclusion) so that Hulda's traversal and t
   the greenery and wakes in a safe grove. The top of the karst is her first safe place and where she
   returns if she collapses.
 - Eight hobbits first.
+- (2026-09-22, V1 brief) Clear graphical indicators of needs, stores and gathering. Berries replenish daily at a rate; crops grow more slowly; goat milk is available daily; branches drop and are gathered daily. Stores are outdoors and visible as they fill and are depleted for meals and crafting. Without interference the village holds a steady state: no births or deaths yet, only the daily rhythm.
 - (2026-09-22, second notes) The same screen drag turns the camera the same way in every form she takes. The double tap that enters and leaves grass and roots is on the thumbstick only, never on the screen. Once a hobbit has a destination it walks there at one continuous pace, not run, stop, run.
 
 ## Open questions (Noah's to decide, flagged here rather than picked silently)

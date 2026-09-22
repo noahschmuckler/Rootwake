@@ -1,7 +1,11 @@
-// The village, V0: presence. Eight named hobbits in six houses round a green, on a day's rhythm:
-// out at dawn to the place each keeps to, together on the green at noon, back to their doors at
-// dusk, asleep inside at night. No needs, no stores yet: the question this pass asks is whether
-// figures going in and out of houses on a day's rhythm already read as people living there.
+// The village, V1: hunger and the land. Eight named hobbits in six houses round a green, on a day's
+// rhythm: out at dawn to the place each keeps to, together on the green at noon, back to their doors
+// at dusk, asleep inside at night. Now they gather what the land gives each day (berries that regrow,
+// branches that drop, milk the goats have, grain from strips that ripen over days, water from the
+// stream), carry it in view to stores on the green's edge, and eat from those stores twice a day; the
+// fire burns the wood Odo fetches. The stores' caps bound the take, so left alone the village holds a
+// steady state: no births, no deaths, the daily rhythm. The question this pass asks is whether the
+// village is legible as a system, and whether what it takes from the land can be read off the land.
 // A pure model: deterministic from its seed, stepped in ticks, saved as state. No Three.js here.
 import { CatmullRomCurve3, Vector3 } from 'three';
 import { mulberry32 } from './colors';
@@ -37,6 +41,40 @@ export const SITES: Record<SiteKind, Site> = {
   pen: { id: 'pen', ...gap(4, 19), radius: 2.5, name: 'the pen', verb: 'milking the goats' },
   shrine: { id: 'shrine', ...gap(5, 22), radius: 2, name: 'the stone', verb: 'tending the stone' },
 };
+
+// The stores and the land (V1). What a place yields goes to one store on the green's edge, in the open,
+// on the side of the green that faces the place it comes from; the stores are what the village eats and
+// burns, and their caps are what bounds the take: a full basket rack sends the gatherer home empty-handed.
+export type Store = 'berries' | 'milk' | 'grain' | 'wood' | 'water';
+export const STORE_LIST: Store[] = ['berries', 'water', 'wood', 'grain', 'milk'];
+/** The three that are food; a meal is one unit from whichever is fullest by share of its cap. */
+export const FOODS: Store[] = ['berries', 'milk', 'grain'];
+export interface StoreSpot { id: Store; x: number; z: number; name: string; cap: number; unit: string }
+/** Stores stand on the green's edge at STORE_RING m from the fire, each at the gap that leads to its place. Caps: tuning. */
+export const STORE_RING = 3.7;
+export const STORES: Record<Store, StoreSpot> = {
+  berries: { id: 'berries', ...gap(0, STORE_RING), name: 'the baskets', cap: 8, unit: 'berries' },
+  water: { id: 'water', ...gap(1, STORE_RING), name: 'the trough', cap: 10, unit: 'water' },
+  wood: { id: 'wood', ...gap(2, STORE_RING), name: 'the woodpile', cap: 12, unit: 'wood' },
+  grain: { id: 'grain', ...gap(3, STORE_RING), name: 'the bin', cap: 12, unit: 'grain' },
+  milk: { id: 'milk', ...gap(4, STORE_RING), name: 'the pails', cap: 8, unit: 'milk' },
+};
+/** What each place yields, and where it goes. The fire and the stone yield nothing. */
+export const YIELD_OF: Partial<Record<SiteKind, Store>> = { thicket: 'berries', stream: 'water', copse: 'wood', field: 'grain', pen: 'milk' };
+/** The land's rates, per day unless said. Berries regrow steadily on the bushes up to BERRY_CAP; branches drop under the copse at dawn (up to BRANCH_CAP lying); the goats have MILK_PER_DAY at dawn and no more; each of CROP_STRIPS strips ripens over CROP_DAYS days and gives GRAIN_PER_STRIP, then is sown again; the stream is endless. Tuning. */
+export const BERRY_CAP = 35, BERRY_REGROW = 12, BRANCHES_PER_DAY = 6, BRANCH_CAP = 12, MILK_PER_DAY = 6, CROP_STRIPS = 5, CROP_DAYS = 4, GRAIN_PER_STRIP = 6;
+/** Gathering: one unit every GATHER_TICKS at the place; an armful is CARRY units, carried in view to the store. Tuning. */
+export const GATHER_TICKS = 12, CARRY: Record<Store, number> = { berries: 6, milk: 3, grain: 6, wood: 3, water: 2 };
+/** Eating: two meals a day (noon at the fire, supper fetched on the way home), each one unit of the fullest food and, at noon, one of water; a meal takes EAT_TICKS. Hunger climbs from 0 to 1 in HUNGER_DAYS of a day. Tuning. */
+export const EAT_TICKS = 14, HUNGER_DAYS = 0.6, HUNGER_PER_TICK = 1 / (DAY_TICKS * HUNGER_DAYS);
+/** The fire: Odo fetches WOOD_PER_NIGHT from the woodpile at FIRE_WOOD_TICK (a little before dusk) and the fire burns it through the night. Tuning. */
+export const WOOD_PER_NIGHT = 5, FIRE_WOOD_TICK = 690;
+export interface Land { berries: number; branches: number; milk: number; crops: number[] }
+export interface Carry { kind: Store; n: number }
+/** What the village takes from the land in a day, against what the land regrows: the balance Hulda will protect. Kept for the day so far and the last whole day. */
+export interface Take { berries: number; wood: number; milk: number; grain: number; water: number }
+export const freshTake = (): Take => ({ berries: 0, wood: 0, milk: 0, grain: 0, water: 0 });
+
 /** A hobbit: a name, a home, the place they keep to, and the small differences that show before there are roles. */
 export interface Hobbit { id: string; name: string; home: number; keeps: SiteKind; rises: number; pace: number; colour: string; hair: string }
 /** Eight hobbits, two to a house in two of the six. `rises` is minutes after dawn they leave; `pace` their walking speed in m/s. Tuning. */
@@ -50,14 +88,20 @@ export const HOBBITS: Hobbit[] = [
   { id: 'odo', name: 'Odo', home: 4, keeps: 'fire', rises: 45, pace: 0.75, colour: '#7a7a6a', hair: '#d8d0c0' },
   { id: 'nell', name: 'Nell', home: 5, keeps: 'shrine', rises: 10, pace: 0.95, colour: '#5a6a7a', hair: '#3a2a2a' },
 ];
-export type Activity = 'sleeping' | 'walking' | 'working' | 'talking' | 'returning';
+export type Activity = 'sleeping' | 'walking' | 'working' | 'talking' | 'returning' | 'carrying' | 'eating';
 export type Want = 'home' | 'place' | 'green';
-export interface HobbitState { id: string; x: number; z: number; heading: number; activity: Activity; want: Want; path: Vec2[]; speed: number; inside: boolean; bubble: string; bubbleUntil: number; wanderAt: number; faceAt: number }
-export interface Village { seed: number; tick: number; hobbits: HobbitState[] }
+/** An errand breaks the rhythm's walk: to a store with an armful ('deliver'), to the fullest food store for supper on the way home ('supper'), to the woodpile and back to the fire ('firewood'). */
+export type Errand = 'deliver' | 'supper' | 'firewood' | null;
+export interface HobbitState { id: string; x: number; z: number; heading: number; activity: Activity; want: Want; path: Vec2[]; speed: number; inside: boolean; bubble: string; bubbleUntil: number; wanderAt: number; faceAt: number; hunger: number; carry: Carry | null; errand: Errand; gatherAt: number; eatUntil: number; ateDay: number; suppedDay: number }
+export interface Village { seed: number; tick: number; hobbits: HobbitState[]; stores: Record<Store, number>; land: Land; fireWood: number; take: Take; lastTake: Take }
 export const hobbitById = (id: string): Hobbit => HOBBITS.find(h => h.id === id)!;
 export const houseOf = (h: Hobbit): House => HOUSES[h.home];
+/** The first morning: the stores hold some food and a night's wood already (the village has lived here a while), the bushes are full, a few branches lie, the strips are at different stages so that one ripens every day or so. */
 export function freshVillage(seed = 1): Village {
-  return { seed, tick: 0, hobbits: HOBBITS.map(h => { const d = houseOf(h).door; return { id: h.id, x: d.x, z: d.z, heading: houseOf(h).facing, activity: 'sleeping', want: 'home', path: [], speed: 0, inside: true, bubble: '', bubbleUntil: 0, wanderAt: 0, faceAt: 0 }; }) };
+  return {
+    seed, tick: 0, stores: { berries: 3, milk: 2, grain: 6, wood: 8, water: 5 }, land: { berries: BERRY_CAP, branches: 6, milk: MILK_PER_DAY, crops: Array.from({ length: CROP_STRIPS }, (_, i) => (i + 0.5) / CROP_STRIPS) }, fireWood: 0, take: freshTake(), lastTake: freshTake(),
+    hobbits: HOBBITS.map(h => { const d = houseOf(h).door; return { id: h.id, x: d.x, z: d.z, heading: houseOf(h).facing, activity: 'sleeping', want: 'home', path: [], speed: 0, inside: true, bubble: '', bubbleUntil: 0, wanderAt: 0, faceAt: 0, hunger: 0.3, carry: null, errand: null, gatherAt: 0, eatUntil: 0, ateDay: -1, suppedDay: -1 }; }),
+  };
 }
 /** Where the day's rhythm wants a hobbit to be: home, their place, or the green. */
 export function wants(h: Hobbit, tick: number): Want {
@@ -82,27 +126,53 @@ export function route(from: Vec2, to: Vec2): Vec2[] {
 }
 /** A spot near a site to stand at, off its centre, so a group does not stand in one point. */
 function spotAt(site: Site, rand: () => number, ring = 0.55): Vec2 { const a = rand() * Math.PI * 2, r = site.radius * (0.35 + rand() * ring); return { x: site.x + Math.cos(a) * r, z: site.z + Math.sin(a) * r }; }
+/** Where one stands to hand over at a store: a step in from it, toward the fire. */
+export const storeSpot = (st: StoreSpot): Vec2 => { const a = Math.atan2(st.z, st.x); return { x: st.x - Math.cos(a) * 0.7, z: st.z - Math.sin(a) * 0.7 }; };
 /** Walking is shown at real pace: a hobbit at 1 m/s covers a metre per real second, which is TICKS_PER_SECOND ticks; so a tick moves 1/TICKS_PER_SECOND of the pace. */
 export const PACE_TICK = 1 / TICKS_PER_SECOND;
 /** At a place they take a step to a new spot every WANDER_EVERY to twice that ticks, and turn to face something else every FACE_EVERY to twice that. Tuning. */
 export const BUBBLE_TICKS = 8, WANDER_EVERY = 14, FACE_EVERY = 5;
 const CHATTER = ['…', 'the berries are early', 'the stream is low', 'Odo says rain', 'Pip fell in', 'a fox by the pen', 'the stone was warm'];
+export const dayOf = (tick: number): number => Math.floor(tick / DAY_TICKS);
+/** The fullest food store, by its share of its cap, with a unit in it; null when the village has nothing to eat. By share, so the diet spreads over the three foods and no one store is eaten down and re-picked while another waits full. */
+/** What is already on its way to a store in someone's arms, so two gatherers do not both fill the last of the room. */
+export const inFlight = (v: Village, kind: Store): number => v.hobbits.reduce((n, s) => n + (s.carry && s.carry.kind === kind ? s.carry.n : 0), 0);
+export function fullestFood(v: Village): Store | null { let best: Store | null = null; for (const f of FOODS) if (v.stores[f] >= 1 && (best === null || v.stores[f] / STORES[f].cap > v.stores[best] / STORES[best].cap)) best = f; return best; }
+/** What the land has to give at a place right now, in whole units. */
+export function landStock(v: Village, kind: Store): number {
+  if (kind === 'berries') return Math.floor(v.land.berries); if (kind === 'wood') return v.land.branches; if (kind === 'milk') return v.land.milk;
+  if (kind === 'grain') return v.land.crops.filter(c => c >= 1).length * GRAIN_PER_STRIP; return Infinity;
+}
+/** The take against the regrowth, for the last whole day: under 1 the land is gaining, over 1 it is being stripped. Berries, wood and milk are what regrows; grain and water are not counted (the field is the village's own, the stream endless). */
+export function balance(v: Village): number { const take = v.lastTake.berries + v.lastTake.wood + v.lastTake.milk, regrow = BERRY_REGROW + BRANCHES_PER_DAY + MILK_PER_DAY; return take / regrow; }
 /** Advance the village by whole ticks. Deterministic: the only randomness is the seeded stream, drawn in a fixed order. */
 export function advance(v: Village, ticks: number): void {
   for (let n = 0; n < ticks; n++) {
-    const rand = mulberry32((v.seed * 7919 + v.tick * 131) >>> 0);
+    const rand = mulberry32((v.seed * 7919 + v.tick * 131) >>> 0), t = v.tick % DAY_TICKS, day = dayOf(v.tick);
+    // The land by the day: at dawn the branches drop and the goats have their milk; the bushes and the strips grow every minute; the fire burns down through the night.
+    if (t === 0) { v.land.branches = Math.min(BRANCH_CAP, v.land.branches + BRANCHES_PER_DAY); v.land.milk = MILK_PER_DAY; v.lastTake = v.take; v.take = freshTake(); }
+    v.land.berries = Math.min(BERRY_CAP, v.land.berries + BERRY_REGROW / DAY_TICKS);
+    for (let i = 0; i < v.land.crops.length; i++) v.land.crops[i] = Math.min(1, v.land.crops[i] + 1 / (CROP_DAYS * DAY_TICKS));
+    if (phaseAt(v.tick) === 'night' && v.fireWood > 0) v.fireWood = Math.max(0, v.fireWood - WOOD_PER_NIGHT / (DAY_TICKS - PHASES[5][1]));
     for (const s of v.hobbits) {
-      const h = hobbitById(s.id), house = houseOf(h), want = wants(h, v.tick);
+      const h = hobbitById(s.id), house = houseOf(h), want = wants(h, v.tick), kind = YIELD_OF[h.keeps] ?? null;
       const say = (text: string): void => { s.bubble = text; s.bubbleUntil = v.tick + BUBBLE_TICKS; };
       const site = want === 'home' ? null : want === 'green' ? SITES.fire : SITES[h.keeps];
+      const goal = (): Vec2 => (site ? spotAt(site, rand) : house.door);
+      s.hunger = Math.min(1, s.hunger + HUNGER_PER_TICK * (s.inside ? 0.5 : 1));
       if (want !== s.want) {
-        // The rhythm has moved on: a new place to be. Out of the door first if inside.
-        s.want = want;
+        // The rhythm has moved on: a new place to be. Out of the door first if inside. An armful goes to its store on the way; going home, supper is fetched from the fullest store first.
+        s.want = want; s.eatUntil = 0;
         if (s.inside) { s.inside = false; s.x = house.door.x; s.z = house.door.z; s.heading = house.facing; }
-        s.path = route(s, site ? spotAt(site, rand) : house.door); s.activity = want === 'home' ? 'returning' : 'walking';
+        if (s.carry && s.errand !== 'firewood') { s.errand = 'deliver'; s.path = route(s, storeSpot(STORES[s.carry.kind])); s.activity = 'carrying'; }
+        else if (want === 'home' && fullestFood(v)) { s.errand = 'supper'; s.path = route(s, storeSpot(STORES[fullestFood(v)!])); s.activity = 'returning'; }
+        else { s.errand = null; s.path = route(s, goal()); s.activity = want === 'home' ? 'returning' : 'walking'; }
         say('');
       }
+      // Odo keeps the fire: a little before dusk he fetches the night's wood from the pile and lays it.
+      if (h.keeps === 'fire' && t === FIRE_WOOD_TICK && !s.inside && !s.errand && v.stores.wood >= 1) { s.errand = 'firewood'; s.path = route(s, storeSpot(STORES.wood)); s.activity = 'walking'; }
       if (s.inside) { s.activity = 'sleeping'; s.speed = 0; continue; }
+      if (s.eatUntil > v.tick) { s.activity = 'eating'; s.speed = 0; s.heading = Math.atan2(SITES.fire.z - s.z, SITES.fire.x - s.x); continue; }
       if (s.path.length) {
         const step = s.path[0], d = dist(s, step), move = Math.min(d, h.pace * PACE_TICK);
         if (d > 1e-6) { s.heading = Math.atan2(step.z - s.z, step.x - s.x); s.x += (step.x - s.x) / d * move; s.z += (step.z - s.z) / d * move; }
@@ -110,48 +180,91 @@ export function advance(v: Village, ticks: number): void {
         if (d <= move + 1e-6) {
           s.path.shift();
           if (s.path.length === 0) {
-            if (!site) { s.inside = true; s.activity = 'sleeping'; s.speed = 0; s.x = house.door.x; s.z = house.door.z; say(''); }
-            else { s.speed = 0; s.wanderAt = v.tick + WANDER_EVERY + Math.floor(rand() * WANDER_EVERY); }
+            if (s.errand === 'deliver' && s.carry) {
+              // Handing over: the armful goes into its store, and the rhythm's walk resumes from here.
+              const st = STORES[s.carry.kind]; v.stores[st.id] = Math.min(st.cap, v.stores[st.id] + s.carry.n); s.carry = null; s.errand = null;
+              s.path = route(s, goal()); s.activity = want === 'home' ? 'returning' : 'walking'; s.heading = Math.atan2(st.z - s.z, st.x - s.x);
+              if (want === 'home' && fullestFood(v)) { s.errand = 'supper'; s.path = route(s, storeSpot(STORES[fullestFood(v)!])); }
+            } else if (s.errand === 'supper') {
+              // Supper from the fullest store, carried home; nothing there means a hungry night.
+              const f = fullestFood(v); if (f) { v.stores[f] -= 1; s.carry = { kind: f, n: 1 }; }
+              s.errand = null; s.path = route(s, house.door); s.activity = 'returning';
+            } else if (s.errand === 'firewood') {
+              if (!s.carry) { const n = Math.min(WOOD_PER_NIGHT, Math.floor(v.stores.wood)); v.stores.wood -= n; s.carry = { kind: 'wood', n }; s.path = [{ x: SITES.fire.x + 1.0, z: SITES.fire.z + 0.4 }]; s.activity = 'carrying'; say('wood for the night'); }
+              else { v.fireWood = Math.min(WOOD_PER_NIGHT * 2, v.fireWood + s.carry.n); s.carry = null; s.errand = null; s.speed = 0; s.wanderAt = v.tick + WANDER_EVERY; say('feeding the fire'); }
+            } else if (!site) { s.inside = true; s.activity = 'sleeping'; s.speed = 0; s.x = house.door.x; s.z = house.door.z; if (s.carry) { s.carry = null; s.hunger = 0; s.suppedDay = day; } say(''); }
+            else { s.speed = 0; s.wanderAt = v.tick + WANDER_EVERY + Math.floor(rand() * WANDER_EVERY); s.gatherAt = v.tick + GATHER_TICKS; }
           }
         }
         continue;
       }
-      // At their place: stand, turn to face one thing then another, and now and then take a step to a new spot; on the green, face the fire and talk.
+      // At their place: stand, turn to face one thing then another, and now and then take a step to a new spot; on the green, face the fire, eat the noon meal and talk.
       s.speed = 0;
-      if (want === 'green' || h.keeps === 'fire') { s.activity = 'talking'; s.heading = Math.atan2(SITES.fire.z - s.z, SITES.fire.x - s.x); if (v.tick % 40 === 0 && rand() < 0.5) say(CHATTER[Math.floor(rand() * CHATTER.length)]); }
-      else { s.activity = 'working'; if (site && v.tick >= s.faceAt) { s.heading = Math.atan2(site.z - s.z, site.x - s.x) + (rand() - 0.5) * 2.4; s.faceAt = v.tick + FACE_EVERY + Math.floor(rand() * FACE_EVERY); } }
+      if (want === 'green' || h.keeps === 'fire') {
+        s.activity = 'talking'; s.heading = Math.atan2(SITES.fire.z - s.z, SITES.fire.x - s.x);
+        if (want === 'green' && s.ateDay < day) { s.ateDay = day; const f = fullestFood(v); if (f) { v.stores[f] -= 1; if (v.stores.water >= 1) v.stores.water -= 1; s.hunger = 0; s.eatUntil = v.tick + EAT_TICKS; s.activity = 'eating'; say(`eating ${STORES[f].unit}`); continue; } else say('nothing to eat'); }
+        if (v.tick % 40 === 0 && rand() < 0.5) say(CHATTER[Math.floor(rand() * CHATTER.length)]);
+      } else {
+        s.activity = 'working'; if (site && v.tick >= s.faceAt) { s.heading = Math.atan2(site.z - s.z, site.x - s.x) + (rand() - 0.5) * 2.4; s.faceAt = v.tick + FACE_EVERY + Math.floor(rand() * FACE_EVERY); }
+        // Gathering: a unit every GATHER_TICKS while the land has one and the store has room for it; an armful, or the last of what there is, goes to the store.
+        if (kind && want === 'place' && v.tick >= s.gatherAt) {
+          s.gatherAt = v.tick + GATHER_TICKS; const carried = s.carry?.n ?? 0, room = STORES[kind].cap - v.stores[kind] - inFlight(v, kind), stock = landStock(v, kind);
+          if (stock >= 1 && room >= 1 && carried < CARRY[kind]) {
+            if (kind === 'berries') v.land.berries -= 1; else if (kind === 'wood') v.land.branches -= 1; else if (kind === 'milk') v.land.milk -= 1;
+            else if (kind === 'grain') { const i = v.land.crops.findIndex(c => c >= 1); v.land.crops[i] = 0; }
+            const n = kind === 'grain' ? GRAIN_PER_STRIP : 1; s.carry = { kind, n: carried + n }; v.take[kind] += n;
+          }
+          if (s.carry && (s.carry.n >= CARRY[kind] || stock < 1 || room < 1)) { s.errand = 'deliver'; s.path = route(s, storeSpot(STORES[kind])); s.activity = 'carrying'; continue; }
+        }
+      }
       if (site && v.tick >= s.wanderAt) { s.path = [spotAt(site, rand, 0.65)]; s.activity = 'walking'; s.wanderAt = v.tick + WANDER_EVERY + Math.floor(rand() * WANDER_EVERY); }
     }
     v.tick++;
   }
 }
-/** What a hobbit is thinking, always: the chatter while it lasts, else where they are going or what they are doing. */
+/** What a hobbit is thinking, always: the chatter while it lasts, else what they carry, where they are going or what they are doing; hunger when it is bad. */
 export function thought(s: HobbitState, tick: number): string {
   if (s.inside) return '';
   if (s.bubble && tick < s.bubbleUntil) return s.bubble;
   const h = hobbitById(s.id);
-  if (s.activity === 'returning') return 'going home';
+  if (s.activity === 'eating') return 'eating';
+  if (s.hunger > 0.85) return 'hungry';
+  if (s.errand === 'deliver' && s.carry) return `carrying ${STORES[s.carry.kind].unit} to ${STORES[s.carry.kind].name}`;
+  if (s.errand === 'supper') return 'fetching supper';
+  if (s.errand === 'firewood') return s.carry ? 'wood for the fire' : 'to the woodpile';
+  if (s.activity === 'returning') return s.carry ? 'home with supper' : 'going home';
   if (s.activity === 'walking' && s.path.length && s.want !== 'place') return s.want === 'green' ? 'walking to the fire' : 'going home';
   if (s.activity === 'walking' && s.path.length > 1) return `walking to ${SITES[h.keeps].name}`;
   if (s.want === 'green' || (s.activity === 'talking' && h.keeps === 'fire')) return h.keeps === 'fire' && s.want !== 'green' ? SITES.fire.verb : 'talking by the fire';
+  if (h.keeps === 'field' && s.activity === 'working') return s.carry ? 'harvesting' : SITES.field.verb;
   return SITES[h.keeps].verb;
 }
 export const everyone = (v: Village, where: 'inside' | 'green' | 'out'): number => v.hobbits.filter(s => where === 'inside' ? s.inside : where === 'green' ? !s.inside && dist(s, SITES.fire) <= SITES.fire.radius + 0.3 : !s.inside).length;
 export const inHouse = (p: Vec2): House | null => HOUSES.find(h => dist(p, h) < HOUSE_RADIUS - 0.05) ?? null;
+const ACTIVITIES: Activity[] = ['sleeping', 'walking', 'working', 'talking', 'returning', 'carrying', 'eating'];
 export function parseVillage(raw: string | null): Village {
   try {
     const p = JSON.parse(raw ?? 'null'); if (!p || typeof p !== 'object' || !Array.isArray(p.hobbits) || p.hobbits.length !== HOBBITS.length) return freshVillage();
     const v = freshVillage(Number.isFinite(p.seed) ? p.seed : 1); v.tick = Number.isInteger(p.tick) && p.tick >= 0 ? p.tick : 0;
+    const num = (x: unknown, lo: number, hi: number, d: number): number => (typeof x === 'number' && Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : d);
+    if (p.stores && typeof p.stores === 'object') for (const k of STORE_LIST) v.stores[k] = num(p.stores[k], 0, STORES[k].cap, v.stores[k]);
+    if (p.land && typeof p.land === 'object') { v.land.berries = num(p.land.berries, 0, BERRY_CAP, v.land.berries); v.land.branches = Math.floor(num(p.land.branches, 0, BRANCH_CAP, v.land.branches)); v.land.milk = Math.floor(num(p.land.milk, 0, MILK_PER_DAY, v.land.milk)); if (Array.isArray(p.land.crops) && p.land.crops.length === CROP_STRIPS) v.land.crops = p.land.crops.map((c: unknown, i: number) => num(c, 0, 1, v.land.crops[i])); }
+    v.fireWood = num(p.fireWood, 0, WOOD_PER_NIGHT * 2, 0);
+    for (const which of ['take', 'lastTake'] as const) if (p[which] && typeof p[which] === 'object') for (const k of STORE_LIST) v[which][k] = num(p[which][k], 0, 1e4, 0);
     for (let i = 0; i < HOBBITS.length; i++) {
       const s = p.hobbits[i], t = v.hobbits[i]; if (!s || s.id !== t.id) return freshVillage();
-      for (const k of ['x', 'z', 'heading', 'speed', 'bubbleUntil', 'wanderAt', 'faceAt'] as const) if (Number.isFinite(s[k])) (t as unknown as Record<string, number>)[k] = s[k];
-      t.inside = s.inside === true; t.activity = ['sleeping', 'walking', 'working', 'talking', 'returning'].includes(s.activity) ? s.activity : 'sleeping'; t.want = ['home', 'place', 'green'].includes(s.want) ? s.want : 'home';
+      for (const k of ['x', 'z', 'heading', 'speed', 'bubbleUntil', 'wanderAt', 'faceAt', 'gatherAt', 'eatUntil', 'ateDay', 'suppedDay'] as const) if (Number.isFinite(s[k])) (t as unknown as Record<string, number>)[k] = s[k];
+      t.hunger = num(s.hunger, 0, 1, t.hunger);
+      t.inside = s.inside === true; t.activity = ACTIVITIES.includes(s.activity) ? s.activity : 'sleeping'; t.want = ['home', 'place', 'green'].includes(s.want) ? s.want : 'home';
+      t.errand = ['deliver', 'supper', 'firewood'].includes(s.errand) ? s.errand : null;
+      t.carry = s.carry && STORE_LIST.includes(s.carry.kind) && Number.isFinite(s.carry.n) && s.carry.n > 0 ? { kind: s.carry.kind, n: Math.min(GRAIN_PER_STRIP, Math.floor(s.carry.n)) } : null;
+      if (t.errand === 'deliver' && !t.carry) t.errand = null;
       t.path = Array.isArray(s.path) ? s.path.filter((q: unknown) => q && Number.isFinite((q as Vec2).x) && Number.isFinite((q as Vec2).z)).map((q: Vec2) => ({ x: q.x, z: q.z })).slice(0, 4) : []; t.bubble = typeof s.bubble === 'string' ? s.bubble.slice(0, 40) : '';
     }
     return v;
   } catch { return freshVillage(); }
 }
-export const serializeVillage = (v: Village): string => JSON.stringify({ seed: v.seed, tick: v.tick, hobbits: v.hobbits.map(s => ({ ...s, x: Math.round(s.x * 100) / 100, z: Math.round(s.z * 100) / 100, heading: Math.round(s.heading * 1000) / 1000 })) });
+export const serializeVillage = (v: Village): string => JSON.stringify({ seed: v.seed, tick: v.tick, stores: v.stores, land: { ...v.land, berries: Math.round(v.land.berries * 100) / 100, crops: v.land.crops.map(c => Math.round(c * 1000) / 1000) }, fireWood: Math.round(v.fireWood * 100) / 100, take: v.take, lastTake: v.lastTake, hobbits: v.hobbits.map(s => ({ ...s, x: Math.round(s.x * 100) / 100, z: Math.round(s.z * 100) / 100, heading: Math.round(s.heading * 1000) / 1000, hunger: Math.round(s.hunger * 1000) / 1000 })) });
 
 // Hulda's ways through the meadow. Grass roots are everywhere she can walk: a free medium, faster than
 // running, shown as a bulge under the grass. Tree roots join the trees of the copse and the wood: fixed
