@@ -48,7 +48,7 @@ try{
  assert.ok(onRoot,'running along a copse root takes her onto it');
  // Along the root: the camera turns to its heading, so pushing forward follows it; she is carried faster than she walks, or reaches its end or a junction.
  await page.waitForTimeout(400);const r0=await v(page,()=>({root:window.__village.root,t:window.__village.simSeconds}));await s.down(0,-38);await page.waitForTimeout(1200);const r1=await v(page,()=>({root:window.__village.root,mode:window.__village.mode,t:window.__village.simSeconds}));await s.up();
- const carried=r1.mode!=='root'||r1.root.root!==r0.root.root||Math.abs(r1.root.s-r0.root.s)/(r1.t-r0.t)>2.5||Math.abs(r1.root.s-r0.root.s)>2;assert.ok(carried,`the root carries her (${JSON.stringify({r0,r1})})`);
+ const carried=r1.mode!=='root'||r1.root.root!==r0.root.root||Math.abs(r1.root.s-r0.root.s)/(r1.t-r0.t)>2.5||Math.abs(r1.root.s-r0.root.s)>2||r1.root.s>r1.root.length-0.1||r1.root.s<0.1;assert.ok(carried,`the root carries her (${JSON.stringify({r0,r1})})`);
  await page.screenshot({path:out+'/02c-root.png'});await doubleTapStick(page);await page.waitForFunction(()=>window.__village.mode==='ground',null,{timeout:10000});
  // Into a copse trunk, up to the crown, a leap to a neighbour, down, and at the foot into the grass.
  await v(page,()=>{const k=window.__village,t=k.trees[1],a=Math.random()*6.28;const x=t.x+Math.cos(a)*(0.32*t.size+0.6),z=t.z+Math.sin(a)*(0.32*t.size+0.6);k.standAt(x,z,Math.atan2(-(t.x-x),-(t.z-z)));});await page.waitForTimeout(300);
