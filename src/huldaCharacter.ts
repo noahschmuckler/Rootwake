@@ -14,14 +14,18 @@ export const BONE_PREFIX = 'mixamorig';
 export const HULDA_HEIGHT = MODEL_HEIGHT;
 const bone = (short: string): string => BONE_PREFIX + short;
 
-export function createHulda() {
-  const group = new THREE.Group(); group.name = 'Hulda';
+/** How a figure on this skeleton is dressed: Hulda by default; a hobbit is shorter, in cloth, without her leaves and vines. */
+export interface FigureOptions { name: string; height: number; skin: string; cloth: string; clothLight: string; hair: string; feet: string; locks: boolean; leaves: boolean; skirt: boolean }
+export const HULDA_FIGURE: FigureOptions = { name: 'Hulda', height: MODEL_HEIGHT, skin: '#b9cca0', cloth: '#326b42', clothLight: '#78a44c', hair: '#93462e', feet: '#514838', locks: true, leaves: true, skirt: true };
+export function createHulda(options: Partial<FigureOptions> = {}) {
+  const o: FigureOptions = { ...HULDA_FIGURE, ...options };
+  const group = new THREE.Group(); group.name = o.name;
   const motion = new HuldaMotion();
-  const skin = new THREE.MeshStandardMaterial({ color: '#b9cca0', roughness: 0.83 });
-  const leaf = new THREE.MeshStandardMaterial({ color: '#326b42', roughness: 0.85 });
-  const lightLeaf = new THREE.MeshStandardMaterial({ color: '#78a44c', roughness: 0.82 });
-  const hair = new THREE.MeshStandardMaterial({ color: '#93462e', roughness: 0.85 });
-  const bark = new THREE.MeshStandardMaterial({ color: '#514838', roughness: 1 });
+  const skin = new THREE.MeshStandardMaterial({ color: o.skin, roughness: 0.83 });
+  const leaf = new THREE.MeshStandardMaterial({ color: o.cloth, roughness: 0.85 });
+  const lightLeaf = new THREE.MeshStandardMaterial({ color: o.clothLight, roughness: 0.82 });
+  const hair = new THREE.MeshStandardMaterial({ color: o.hair, roughness: 0.85 });
+  const bark = new THREE.MeshStandardMaterial({ color: o.feet, roughness: 1 });
   const eyes = new THREE.MeshStandardMaterial({ color: '#203d31', roughness: 0.5 });
   const sphere = new THREE.SphereGeometry(1, 12, 8);
   // A pointed folded leaf, with actual thickness/readable facets at phone scale.
@@ -42,7 +46,7 @@ export function createHulda() {
   rig.updateMatrixWorld(true);
   const top = new THREE.Vector3(); bones.get(bone('HeadTop_End'))!.getWorldPosition(top);
   const skeletonHeight = top.y, s = skeletonHeight / 1.9; // s: her authored sizes (a 1.9-tall figure) in the file's units.
-  rig.scale.setScalar(HULDA_HEIGHT / skeletonHeight); rig.rotation.y = Math.PI;
+  rig.scale.setScalar(o.height / skeletonHeight); rig.rotation.y = Math.PI;
   const J = (short: string): THREE.Bone => { const j = bones.get(bone(short)); if (!j) throw new Error(`no bone ${short}`); return j; };
   const childOf = (child: string): THREE.Vector3 => J(child).position.clone();
   /** An ellipsoid along a bone toward its child: the limb segment, sized by the bone's length. */
@@ -62,12 +66,12 @@ export function createHulda() {
   ellipsoid(hips, leaf, 0, -0.02 * s, 0, 0.21 * s, 0.15 * s, 0.135 * s);
   // One torso along the whole spine (the three spine bones are short), and the chest over it.
   segment('Spine', 'Spine1', leaf, 0.16 * s, 0.12 * s, 3.4); segment('Spine2', 'Neck', leaf, 0.215 * s, 0.14 * s, 0.9);
-  for (let i = 0; i < 9; i++) {
+  for (let i = 0; i < (o.skirt ? 9 : 0); i++) {
     const a = i * Math.PI * 2 / 9, panel = new THREE.Group(); panel.name = 'skirtLeaf' + i; panel.position.set(Math.sin(a) * 0.17 * s, -0.04 * s, -Math.cos(a) * 0.12 * s); panel.rotation.y = a + Math.PI; hips.add(panel);
     blade(panel, 0, 0, 0, 0.22 * s, 0.36 * s, Math.PI, i % 3 === 0 ? lightLeaf : leaf); panel.rotation.x = 0.22;
   }
   const chest = J('Spine2');
-  for (const side of [-1, 1]) { blade(chest, side * 0.12 * s, 0.03 * s, 0.11 * s, 0.17 * s, 0.30 * s, side * -0.35, lightLeaf); blade(chest, side * 0.19 * s, 0.14 * s, -0.01 * s, 0.19 * s, 0.24 * s, side * -0.95); }
+  if (o.leaves) for (const side of [-1, 1]) { blade(chest, side * 0.12 * s, 0.03 * s, 0.11 * s, 0.17 * s, 0.30 * s, side * -0.35, lightLeaf); blade(chest, side * 0.19 * s, 0.14 * s, -0.01 * s, 0.19 * s, 0.24 * s, side * -0.95); }
   segment('Neck', 'Head', skin, 0.062 * s, 0.063 * s);
   // The head, sized to the rig rather than her old big-headed self; the face is at +Z, the vine locks behind.
   const head = J('Head'), hx = 0.105 * s, hy = 0.14 * s, hz = 0.1 * s, headTop = childOf('HeadTop_End');
@@ -77,18 +81,18 @@ export function createHulda() {
   for (const x of [-0.42, 0.42]) ellipsoid(head, eyes, x * hx, headCentre.y + 0.2 * hy, headCentre.z + hz * 0.9, 0.027 * s, 0.014 * s, 0.016 * s);
   ellipsoid(head, hair, 0, headCentre.y + 0.3 * hy, headCentre.z - 0.38 * hz, hx * 1.1, hy * 0.92, hz * 1.06);
   const locks: THREE.Group[] = [];
-  for (let i = 0; i < 5; i++) { const lock = new THREE.Group(); lock.name = 'vineHair' + i; lock.position.set((i - 2) * 0.05 * s, headCentre.y + 0.35 * hy, headCentre.z - 0.7 * hz); head.add(lock); ellipsoid(lock, hair, 0, -0.19 * s, -0.03 * s, 0.045 * s, 0.26 * s, 0.05 * s); locks.push(lock); }
-  for (let i = 0; i < 3; i++) blade(head, (-0.13 + i * 0.045) * s, headCentre.y + 0.5 * hy, headCentre.z + 0.4 * hz, 0.09 * s, 0.14 * s, -0.6 + i * 0.3, lightLeaf);
+  for (let i = 0; i < (o.locks ? 5 : 0); i++) { const lock = new THREE.Group(); lock.name = 'vineHair' + i; lock.position.set((i - 2) * 0.05 * s, headCentre.y + 0.35 * hy, headCentre.z - 0.7 * hz); head.add(lock); ellipsoid(lock, hair, 0, -0.19 * s, -0.03 * s, 0.045 * s, 0.26 * s, 0.05 * s); locks.push(lock); }
+  if (o.leaves) for (let i = 0; i < 3; i++) blade(head, (-0.13 + i * 0.045) * s, headCentre.y + 0.5 * hy, headCentre.z + 0.4 * hz, 0.09 * s, 0.14 * s, -0.6 + i * 0.3, lightLeaf);
   // Limbs along the bones; fingers too, so a hand clip reads. Bark feet.
   const limbs = [-1, 1].map(side => {
     const P = side < 0 ? 'Left' : 'Right';
     segment(P + 'Shoulder', P + 'Arm', leaf, 0.075 * s, 0.065 * s);
     segment(P + 'Arm', P + 'ForeArm', skin, 0.066 * s, 0.065 * s); segment(P + 'ForeArm', P + 'Hand', skin, 0.05 * s);
-    const forearm = J(P + 'ForeArm'), fd = childOf(P + 'Hand'); blade(forearm, 0, fd.y * 0.85, -0.045 * s, 0.095 * s, 0.21 * s, Math.PI + 0.12 * side); // points back up the forearm
+    const forearm = J(P + 'ForeArm'), fd = childOf(P + 'Hand'); if (o.leaves) blade(forearm, 0, fd.y * 0.85, -0.045 * s, 0.095 * s, 0.21 * s, Math.PI + 0.12 * side); // points back up the forearm
     segment(P + 'Hand', P + 'HandMiddle1', skin, 0.045 * s, 0.03 * s);
     for (const f of ['Thumb', 'Index', 'Middle', 'Ring', 'Pinky']) for (let k = 1; k <= 3; k++) segment(`${P}Hand${f}${k}`, `${P}Hand${f}${k + 1}`, skin, 0.012 * s);
     segment(P + 'UpLeg', P + 'Leg', skin, 0.09 * s); segment(P + 'Leg', P + 'Foot', skin, 0.061 * s);
-    const shin = J(P + 'Leg'), sd = childOf(P + 'Foot'); blade(shin, 0, sd.y * 0.9, -0.054 * s, 0.11 * s, 0.29 * s, Math.PI); // points up the shin
+    const shin = J(P + 'Leg'), sd = childOf(P + 'Foot'); if (o.leaves) blade(shin, 0, sd.y * 0.9, -0.054 * s, 0.11 * s, 0.29 * s, Math.PI); // points up the shin
     segment(P + 'Foot', P + 'ToeBase', bark, 0.045 * s, 0.032 * s, 1.15); segment(P + 'ToeBase', P + 'Toe_End', bark, 0.04 * s, 0.02 * s, 1.3);
     return { side, shoulder: J(P + 'Arm'), elbow: J(P + 'ForeArm'), hand: J(P + 'Hand'), hip: J(P + 'UpLeg'), knee: J(P + 'Leg'), ankle: J(P + 'Foot') };
   });
@@ -152,5 +156,5 @@ export function createHulda() {
     setClips(null); group.removeFromParent(); sphere.dispose(); leafGeo.dispose();
     for (const material of [skin, leaf, lightLeaf, hair, bark, eyes]) material.dispose();
   }
-  return { group, rig, motion, joints, bones, bindLocal, skeletonHeight, update, setClips, get gait() { return gait; }, dispose };
+  return { group, rig, motion, joints, bones, bindLocal, skeletonHeight, height: o.height, update, setClips, get gait() { return gait; }, dispose };
 }

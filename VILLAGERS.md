@@ -122,12 +122,15 @@ dense forest and the pillar's traversal would distract from the question each pa
 village can be seeded into the karst floor's clearing (the forest generator already keeps stands
 clear; a village clearing is one more exclusion) so that Hulda's traversal and the village meet.
 
+## Decided (Noah, 2026-09-22)
+- Names and thought bubbles as text are fine.
+- Sim time: 20 real minutes to a village day. The world pauses while the page is closed; no catch-up.
+- Hobbits do not see Hulda in V0.
+- Her setback is not live until there are threats worth facing. When it comes it is like the plateau's
+  fatigue (`vitality.ts`: drains, food, rest), but complete exhaustion never kills: she fades out into
+  the greenery and wakes in a safe grove. The top of the karst is her first safe place and where she
+  returns if she collapses.
+- Eight hobbits first.
+
 ## Open questions (Noah's to decide, flagged here rather than picked silently)
-- Names and thought bubbles are text. Is that the right amount, or should names be pictograms too?
-- Sim time: 20 real minutes to a village day, or slower? Do they live while the page is closed
-  (catch-up on reopen, as the watershed's seasons do), or only while watched?
-- Do the hobbits see Hulda at all in V0, or is she invisible to them until the whispering pass?
-- What a setback is: the plateau's vitality (drains, food, rest, collapse and wake-up) or the
-  underworld's energy (a floor it never falls below)? The brief says weakened, never dead: energy's
-  floor is the closer fit, vitality's rest-and-food loop the richer one.
-- One village of 8 first, or 12? Eight is enough for roles to be distinct; twelve for two families.
+- When the thought bubble should speak: on every change of activity, or only on the ones that matter (noon, home, a meeting)?
