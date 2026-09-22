@@ -28,7 +28,10 @@ async function intoRoots(page,s,id){await approach(page,id);await page.waitForTi
 /** Push the stick the way a root visibly sets off from the mouth she is in, and ride it to its far plant. */
 /** Push the stick up at every mouth (whichever upward root it lands on) until she is in the target tree: a climb by root. */
 async function rideUpTo(page,s,targetId,maxRides=16){
- for(let i=0;i<maxRides;i++){if(await at(page)===targetId)return i;await page.waitForTimeout(500);const dirs=await page.evaluate(()=>window.__karstFlow.screenDirections());assert.ok(dirs.length,'roots set off on screen');const d=dirs.reduce((a,b)=>b.y>a.y?b:a);
+ // Climb by whichever root on offer ends highest (a mouth not yet visited first), pushing the stick the way that root sets off on screen; the camera rule is the shared one, so "up on screen" alone is not the climb.
+ const seen=new Set();for(let i=0;i<maxRides;i++){const here=await at(page);if(here===targetId)return i;seen.add(here);await page.waitForTimeout(500);const dirs=await page.evaluate(()=>window.__karstFlow.screenDirections());assert.ok(dirs.length,'roots set off on screen');
+  const ends=await page.evaluate(id=>{const k=window.__karstFlow;return k.rootsAt(id).map(r=>({root:r.id,to:r.a===id?r.b:r.a,y:k.nodeHeight(r.a===id?r.b:r.a)}));},here);
+  const d=dirs.map(d=>({...d,...(ends.find(e=>e.root===d.root)??{y:-Infinity,to:''})})).reduce((a,b)=>(seen.has(b.to)?-1e6:0)+b.y>(seen.has(a.to)?-1e6:0)+a.y?b:a);
   await s.down(d.x*38,-d.y*38);await waitMode(page,'ride',15000);await waitMode(page,'mouth',240000);await s.up();}
  assert.equal(await at(page),targetId,'climbed by root');return maxRides;}
 async function rideBy(page,s,rootId,timeout=180000,shot=null){
