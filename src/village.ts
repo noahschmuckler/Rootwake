@@ -12,6 +12,8 @@ import { buildVillage, relief, HOBBIT_HEIGHT } from './villageWorld';
 import { HOBBITS, HOUSES, HOUSE_RADIUS, MEADOW_RADIUS, TICKS_PER_SECOND, DAY_TICKS, TREES, TREE_ROOTS, GRASS_SPEED, alignedRoot, ROOT_SPEED, TRUNK_CLIMB, CROWN_SLIDE, HOP_S, PRESS_S, PRESS_RANGE, ENTER_RANGE, freshVillage, parseVillage, serializeVillage, advance, clockOf, phaseAt, daylightAt, everyone, hobbitById, thought, crownHeight, trunkRadius, nearestTree, nextRoot, rootPoint, rootTangent, endTree, hopTargets, grassCan, inWater, type Village, type Tree, type RootEdge } from './villageModel';
 /** Grass → root: a root within ROOT_CATCH m whose run agrees with hers by |cos| ≥ ROOT_CATCH_DOT takes her; the step is sampled every ROOT_CATCH_STEP m. Tuning. */
 const ROOT_CATCH = 0.7, ROOT_CATCH_DOT = 0.6, ROOT_CATCH_STEP = 0.25;
+/** The longest gap between frames the village clock counts as watched time. Tuning. */
+const WALL_CAP = 2;
 import { MODEL_HEIGHT } from './huldaRig';
 import type { TraversalWorld } from './mobility';
 const KEY = 'rootwake-village-v1';
@@ -133,9 +135,10 @@ function presentHobbits(dt: number): void {
   }
 }
 function frame(now: number) {
-  requestAnimationFrame(frame); const dt = Math.min(0.05, Math.max(0, (now - last) / 1000)); last = now; if (document.hidden || intro.open) return; time += dt * 1000; simSeconds += dt;
+  // Two clocks: the animation step is capped (a hitch must not throw her), but the village's ticks come from the real seconds that passed while the page was watched, however slow the frames (only a stall of over WALL_CAP s is dropped).
+  requestAnimationFrame(frame); const wall = Math.min(WALL_CAP, Math.max(0, (now - last) / 1000)), dt = Math.min(0.05, wall); last = now; if (document.hidden || intro.open) return; time += dt * 1000; simSeconds += dt;
   // The village lives only while watched: whole ticks from the real seconds that passed, none while hidden.
-  tickBank += dt * TICKS_PER_SECOND; const ticks = Math.floor(tickBank); if (ticks > 0) { advance(village, ticks); tickBank -= ticks; }
+  tickBank += wall * TICKS_PER_SECOND; const ticks = Math.floor(tickBank); if (ticks > 0) { advance(village, ticks); tickBank -= ticks; }
   player.update(now, mode === 'ground' ? world.colliders : [], undefined);
   const g = player.gesture, stickHeld = g.held && Math.hypot(g.x, g.y) >= 0.25;
   let wantUnder = 0;
