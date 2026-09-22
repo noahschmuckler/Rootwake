@@ -46,7 +46,7 @@ let hop: { from: THREE.Vector3; to: THREE.Vector3; t: number; node: Node; az: nu
 let ride: { root: Root; from: string; s: number; speed: number } | null = null;
 let move: { from: THREE.Vector3; to: THREE.Vector3; t: number; seconds: number; then: () => void } | null = null;
 let choice: { root: Root; held: number } | null = null, lastRoot: Root | null = null, settle = 0, released = true;
-let press = 0, trailDirty = false, trailClock = 0, saveClock = 0, lastStickTap = -Infinity, lastGroundTap = -Infinity, stickDown = 0, stickDownAt = { x: 0, y: 0 };
+let press = 0, trailDirty = false, trailClock = 0, saveClock = 0, lastStickTap = -Infinity, stickDown = 0, stickDownAt = { x: 0, y: 0 };
 const rideTangent = new THREE.Vector3(0, 0, -1);
 /** The stick as a world direction, relative to where the camera looks. */
 function want(): THREE.Vector3 {
@@ -58,10 +58,8 @@ const stickY = (): number => (player.gesture.held ? player.gesture.y : 0), stick
 /** A world point on the screen, in pixels with y up; null behind the camera. */
 const screen: Screen = p => { const v = p.clone().applyMatrix4(camera.matrixWorldInverse); if (v.z > -0.05) return null; v.applyMatrix4(camera.projectionMatrix); return { x: v.x * innerWidth / 2, y: v.y * innerHeight / 2 }; };
 /** Her camera when she is not walking: over the shoulder of whatever she is now, orbited by the same drag. */
-function orbitCamera(target: THREE.Vector3, back = 3.2, up = 1.3): void {
-  const yaw = player.yaw, lift = up + player.pitch * 2.2;
-  camera.position.set(target.x + Math.sin(yaw) * back, target.y + lift, target.z + Math.cos(yaw) * back); camera.lookAt(target.x, target.y + 0.4, target.z);
-}
+/** Her camera when she is not walking: the same rule as the shared third person (behind her by yaw, a fixed lift, the look tilted by pitch), so a drag reads the same whatever she is. */
+function orbitCamera(target: THREE.Vector3, back = 3.2, up = 1.3): void { const yaw = player.yaw, f = player.forward(); camera.position.set(target.x + Math.sin(yaw) * back, target.y + up, target.z + Math.cos(yaw) * back); camera.lookAt(target.x + f.x * 2, target.y + 0.4 + f.y * 2, target.z + f.z * 2); }
 const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
 /** The camera at a mouth looks at the tree's foot from outside its pillar (from the pool side in the cavern), where every root's departure can be seen. */
 function mouthYaw(n: Node): number { const p = pillarById(ZONES[n.zone].pillar), dx = n.mouth.x - p.x, dz = n.mouth.z - p.z, r = Math.hypot(dx, dz) || 1, k = n.zone === 'cavern' ? -1 : 1; return Math.atan2(k * dx / r, k * dz / r); }
@@ -101,8 +99,7 @@ function pressInto(dt: number): void {
 // Double taps: on the stick, come out; on the ground near a tree, straight into its roots.
 const walk = el('walk');
 walk.addEventListener('pointerdown', e => { stickDown = performance.now(); stickDownAt = { x: e.clientX, y: e.clientY }; }, true);
-walk.addEventListener('pointerup', e => { const now = performance.now(); if (now - stickDown < 230 && Math.hypot(e.clientX - stickDownAt.x, e.clientY - stickDownAt.y) < 10) { if (now - lastStickTap < 330) { lastStickTap = -Infinity; emerge(); } else lastStickTap = now; } }, true);
-player.onTap = () => { const now = performance.now(); if (now - lastGroundTap < 350) { lastGroundTap = -Infinity; if (mode === 'ground') { const f = player.feet(), n = nearestNode(zone.id, f.x, f.z); if (n.distance < ENTER_RANGE) enterRoots(n.node, f); } } else lastGroundTap = now; };
+walk.addEventListener('pointerup', e => { const now = performance.now(); if (now - stickDown < 230 && Math.hypot(e.clientX - stickDownAt.x, e.clientY - stickDownAt.y) < 10) { if (now - lastStickTap < 330) { lastStickTap = -Infinity; if (mode === 'ground') { const f = player.feet(), n = nearestNode(zone.id, f.x, f.z); if (n.distance < ENTER_RANGE) enterRoots(n.node, f); } else emerge(); } else lastStickTap = now; } }, true);
 el('view').onclick = () => { player.view = player.view === 'third' ? 'first' : 'third'; el('view').textContent = player.view === 'third' ? '3rd' : '1st'; };
 const intro = el<HTMLDialogElement>('intro'); el('help').onclick = () => { player.cancelInput(); intro.showModal(); }; el('begin').onclick = () => { intro.close(); last = performance.now(); };
 document.addEventListener('contextmenu', e => e.preventDefault()); document.addEventListener('visibilitychange', () => { last = performance.now(); player.cancelInput(); if (document.hidden) save(); });

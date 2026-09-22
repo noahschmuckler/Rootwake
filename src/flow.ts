@@ -46,7 +46,7 @@ let root: { root: RootEdge; s: number; forward: boolean; stopped: number } | nul
 let climb: { x: number; y: number } | null = null;
 let ivy: { site: number; k: number; grown: boolean; down: boolean } | null = null;
 let move: { from: THREE.Vector3; to: THREE.Vector3; t: number; seconds: number; then: () => void } | null = null;
-let press = 0, under = 0, trailDirty = false, trailClock = 0, saveClock = 0, lastStickTap = -Infinity, lastGroundTap = -Infinity, stickDown = 0, stickDownAt = { x: 0, y: 0 };
+let press = 0, under = 0, trailDirty = false, trailClock = 0, saveClock = 0, lastStickTap = -Infinity, stickDown = 0, stickDownAt = { x: 0, y: 0 };
 const focus = new THREE.Vector3(), seen = new Set<string>();
 let hintUntil = 0;
 const hintEl = el('hint');
@@ -59,10 +59,8 @@ function want(): THREE.Vector3 {
 }
 const stickY = (): number => (player.gesture.held ? player.gesture.y : 0), stickX = (): number => (player.gesture.held ? player.gesture.x : 0);
 /** Her camera when she is not walking: over the shoulder of whatever she is now, orbited by the same drag. */
-function orbitCamera(target: THREE.Vector3, back = 3.4, up = 1.5): void {
-  focus.copy(target); const yaw = player.yaw, lift = up + player.pitch * 2.2;
-  camera.position.set(target.x + Math.sin(yaw) * back, target.y + lift, target.z + Math.cos(yaw) * back); camera.lookAt(target.x, target.y + 0.5, target.z);
-}
+/** Her camera when she is not walking: the same rule as the shared third person (behind her by yaw, a fixed lift, the look tilted by pitch), so a drag reads the same whatever she is. */
+function orbitCamera(target: THREE.Vector3, back = 3.4, up = 1.5): void { focus.copy(target); const yaw = player.yaw, f = player.forward(); camera.position.set(target.x + Math.sin(yaw) * back, target.y + up, target.z + Math.cos(yaw) * back); camera.lookAt(target.x + f.x * 2, target.y + 0.5 + f.y * 2, target.z + f.z * 2); }
 /** Take the shared motor off the ground without dropping the stick: she keeps pushing, and the next form answers. */
 function lock(): void { player.traversalWorld = lockedWorld; player.motor.velocity.set(0, 0, 0); player.avatar.visible = false; }
 /** Move her while the shared motor is locked: feet and the legacy datum together, or the player reads a teleport and drops the stick. */
@@ -107,8 +105,7 @@ function enterWall(x: number, down: boolean): void {
 // Double taps: on the stick, come out of tree or root; on the ground, go into the roots.
 const walk = el('walk');
 walk.addEventListener('pointerdown', e => { stickDown = performance.now(); stickDownAt = { x: e.clientX, y: e.clientY }; }, true);
-walk.addEventListener('pointerup', e => { const now = performance.now(); if (now - stickDown < 230 && Math.hypot(e.clientX - stickDownAt.x, e.clientY - stickDownAt.y) < 10) { if (now - lastStickTap < 330) { lastStickTap = -Infinity; if (mode === 'trunk' || mode === 'crown' || mode === 'root') emerge(); } else lastStickTap = now; } }, true);
-player.onTap = () => { const now = performance.now(); if (now - lastGroundTap < 350) { lastGroundTap = -Infinity; sinkHere(); } else lastGroundTap = now; };
+walk.addEventListener('pointerup', e => { const now = performance.now(); if (now - stickDown < 230 && Math.hypot(e.clientX - stickDownAt.x, e.clientY - stickDownAt.y) < 10) { if (now - lastStickTap < 330) { lastStickTap = -Infinity; if (mode === 'trunk' || mode === 'crown' || mode === 'root') emerge(); else if (mode === 'ground') sinkHere(); } else lastStickTap = now; } }, true);
 el('view').onclick = () => { player.view = player.view === 'third' ? 'first' : 'third'; el('view').textContent = player.view === 'third' ? '3rd' : '1st'; };
 const intro = el<HTMLDialogElement>('intro'); el('help').onclick = () => { player.cancelInput(); intro.showModal(); }; el('begin').onclick = () => { intro.close(); last = performance.now(); };
 document.addEventListener('contextmenu', e => e.preventDefault()); document.addEventListener('visibilitychange', () => { last = performance.now(); player.cancelInput(); if (document.hidden) save(); });

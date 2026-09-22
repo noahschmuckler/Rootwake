@@ -41,7 +41,7 @@ test('the village is deterministic from its seed, pauses when not advanced, and 
   assert.deepEqual(parseVillage('junk'), freshVillage()); assert.deepEqual(parseVillage('{"hobbits":[]}'), freshVillage()); assert.equal(parseVillage('{"tick":-5,"hobbits":' + JSON.stringify(freshVillage().hobbits) + '}').tick, 0);
 });
 
-import { TREES, TREE_ROOTS, rootsAt, nearestRoot, nextRoot, rootPoint, rootTangent, endTree, nearestTree, hopTargets, grassCan, inWater, thought, freshVillage as fresh, advance as run, GRASS_SPEED, ROOT_SPEED, STREAM_Z, MEADOW_RADIUS, SITES as S2, hobbitById as byId } from '../src/villageModel';
+import { TREES, TREE_ROOTS, rootsAt, nearestRoot, alignedRoot, nextRoot, rootPoint, rootTangent, endTree, nearestTree, hopTargets, grassCan, inWater, thought, freshVillage as fresh, advance as run, GRASS_SPEED, ROOT_SPEED, STREAM_Z, MEADOW_RADIUS, SITES as S2, hobbitById as byId } from '../src/villageModel';
 import { NORMAL_MOBILITY } from '../src/mobility';
 test('her ways: grass everywhere she can walk, faster than running; tree roots joining the copse and the wood, faster still and held to their path', () => {
   assert.ok(GRASS_SPEED > NORMAL_MOBILITY.runSpeed, 'grass beats running'); assert.ok(ROOT_SPEED > GRASS_SPEED, 'tree roots beat grass');
@@ -65,4 +65,17 @@ test('thoughts are always there: what they are doing, where they are going, and 
   const w = fresh(1); run(w, 200); let turned = 0, stepped = 0; const wren = () => w.hobbits.find(s => s.id === 'wren')!; let h0 = wren().heading, p0 = { x: wren().x, z: wren().z };
   for (let i = 0; i < 60; i++) { run(w, 1); const s = wren(); if (Math.abs(Math.atan2(Math.sin(s.heading - h0), Math.cos(s.heading - h0))) > 0.3) { turned++; h0 = s.heading; } if (Math.hypot(s.x - p0.x, s.z - p0.z) > 0.8) { stepped++; p0 = { x: s.x, z: s.z }; } }
   assert.ok(turned >= 3, `Wren turns to face things at the field (${turned})`); assert.ok(stepped >= 1, `and steps between spots (${stepped})`);
+});
+test('a root takes her when she runs along it: any root within reach that agrees with her run, not only the nearest, and never one she crosses square', () => {
+  const r = TREE_ROOTS[0], a = TREES[r.a], b = TREES[r.b], d = { x: b.x - a.x, z: b.z - a.z }, len = Math.hypot(d.x, d.z); d.x /= len; d.z /= len;
+  const on = { x: a.x + d.x * 1.2, z: a.z + d.z * 1.2 };
+  const hit = alignedRoot(on, d, 0.7, 0.6); assert.ok(hit && hit.root === r && hit.forward, 'running along it from a toward b, forward');
+  const back = alignedRoot(on, { x: -d.x, z: -d.z }, 0.7, 0.6); assert.ok(back && back.root === r && !back.forward, 'the other way, backward');
+  assert.equal(alignedRoot(on, { x: -d.z, z: d.x }, 0.7, 0.6), null, 'square across it, not taken');
+  assert.equal(alignedRoot({ x: a.x + d.x * 1.2 - d.z * 1.5, z: a.z + d.z * 1.2 + d.x * 1.5 }, d, 0.7, 0.6), null, 'out of reach, not taken');
+  // Two roots leave the same tree: standing nearer one but running along the other, the aligned one is taken.
+  const pair = TREES.map(t => rootsAt(t.id)).find(rs => rs.length >= 2)!; const [r1, r2] = pair; const t = TREES[r1.a === r2.a || r1.a === r2.b ? r1.a : r1.b];
+  const far = (rr: typeof r1) => TREES[rr.a === t.id ? rr.b : rr.a], d2 = far(r2), u2 = { x: d2.x - t.x, z: d2.z - t.z }, l2 = Math.hypot(u2.x, u2.z); u2.x /= l2; u2.z /= l2;
+  const d1 = far(r1), u1 = { x: d1.x - t.x, z: d1.z - t.z }, l1 = Math.hypot(u1.x, u1.z); u1.x /= l1; u1.z /= l1;
+  if (Math.abs(u1.x * u2.x + u1.z * u2.z) < 0.6) { const p = { x: t.x + u1.x * 0.5 + u2.x * 0.4, z: t.z + u1.z * 0.5 + u2.z * 0.4 }; const h = alignedRoot(p, u2, 0.7, 0.6); assert.ok(h && h.root === r2, 'the aligned root wins over the nearer one'); }
 });

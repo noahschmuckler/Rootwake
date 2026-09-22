@@ -9,7 +9,9 @@ import { Player } from './player';
 import { createHuldaPresentation, HUMAN_CENTRE, type HuldaForm } from './huldaPresentation';
 import { installMobilityControls } from './mobilityControls';
 import { buildVillage, relief, HOBBIT_HEIGHT } from './villageWorld';
-import { HOBBITS, HOUSES, HOUSE_RADIUS, MEADOW_RADIUS, TICKS_PER_SECOND, DAY_TICKS, TREES, TREE_ROOTS, GRASS_SPEED, ROOT_SPEED, TRUNK_CLIMB, CROWN_SLIDE, HOP_S, PRESS_S, PRESS_RANGE, ENTER_RANGE, freshVillage, parseVillage, serializeVillage, advance, clockOf, phaseAt, daylightAt, everyone, hobbitById, thought, crownHeight, trunkRadius, nearestTree, nearestRoot, nextRoot, rootPoint, rootTangent, endTree, hopTargets, grassCan, inWater, type Village, type Tree, type RootEdge } from './villageModel';
+import { HOBBITS, HOUSES, HOUSE_RADIUS, MEADOW_RADIUS, TICKS_PER_SECOND, DAY_TICKS, TREES, TREE_ROOTS, GRASS_SPEED, alignedRoot, ROOT_SPEED, TRUNK_CLIMB, CROWN_SLIDE, HOP_S, PRESS_S, PRESS_RANGE, ENTER_RANGE, freshVillage, parseVillage, serializeVillage, advance, clockOf, phaseAt, daylightAt, everyone, hobbitById, thought, crownHeight, trunkRadius, nearestTree, nextRoot, rootPoint, rootTangent, endTree, hopTargets, grassCan, inWater, type Village, type Tree, type RootEdge } from './villageModel';
+/** Grass → root: a root within ROOT_CATCH m whose run agrees with hers by |cos| ≥ ROOT_CATCH_DOT takes her; the step is sampled every ROOT_CATCH_STEP m. Tuning. */
+const ROOT_CATCH = 0.7, ROOT_CATCH_DOT = 0.6, ROOT_CATCH_STEP = 0.25;
 import { MODEL_HEIGHT } from './huldaRig';
 import type { TraversalWorld } from './mobility';
 const KEY = 'rootwake-village-v1';
@@ -39,7 +41,7 @@ let time = 0, last = performance.now(), tickBank = 0, saveClock = 0, simSeconds 
 // Her ways through the meadow (the clearing's moves): into a trunk, up to the crown, across the crowns; under the
 // grass as a bulge, free and fast; onto a tree root, faster still but held to its path; out by a double tap.
 type Mode = 'ground' | 'trunk' | 'crown' | 'hop' | 'sink' | 'grass' | 'root' | 'rise';
-let mode: Mode = 'ground', under = 0, press = 0, lastStickTap = -Infinity, lastGroundTap = -Infinity, stickDown = 0, stickDownAt = { x: 0, y: 0 };
+let mode: Mode = 'ground', under = 0, press = 0, lastStickTap = -Infinity, stickDown = 0, stickDownAt = { x: 0, y: 0 };
 let trunk: { tree: Tree; h: number; az: number; downHeld: number } | null = null;
 let crown: { tree: Tree; az: number; armed: boolean } | null = null;
 let hop: { from: THREE.Vector3; to: THREE.Vector3; t: number; tree: Tree; az: number } | null = null;
@@ -52,7 +54,8 @@ function want(): THREE.Vector3 {
   return new THREE.Vector3(rx * g.x + fx * -g.y, 0, rz * g.x + fz * -g.y).normalize();
 }
 const stickY = (): number => (player.gesture.held ? player.gesture.y : 0), stickX = (): number => (player.gesture.held ? player.gesture.x : 0);
-function orbitCamera(target: THREE.Vector3, back = 3.2, up = 1.3): void { const yaw = player.yaw, lift = up + player.pitch * 2.2; camera.position.set(target.x + Math.sin(yaw) * back, target.y + lift, target.z + Math.cos(yaw) * back); camera.lookAt(target.x, target.y + 0.4, target.z); }
+/** Her camera when she is not walking: the same rule as the shared third person (behind her by yaw, a fixed lift, the look tilted by pitch), so a drag reads the same whatever she is. */
+function orbitCamera(target: THREE.Vector3, back = 3.2, up = 1.3): void { const yaw = player.yaw, f = player.forward(); camera.position.set(target.x + Math.sin(yaw) * back, target.y + up, target.z + Math.cos(yaw) * back); camera.lookAt(target.x + f.x * 2, target.y + 0.4 + f.y * 2, target.z + f.z * 2); }
 function lock(): void { player.traversalWorld = lockedWorld; player.motor.velocity.set(0, 0, 0); player.avatar.visible = false; }
 function place(p: THREE.Vector3): void { player.motor.feet.copy(p); player.position.x = p.x; player.position.z = p.z; }
 function standOn(x: number, z: number, yaw = player.yaw): void {
@@ -78,8 +81,7 @@ function pressInto(dt: number): void {
 }
 const walk = el('walk');
 walk.addEventListener('pointerdown', e => { stickDown = performance.now(); stickDownAt = { x: e.clientX, y: e.clientY }; }, true);
-walk.addEventListener('pointerup', e => { const now = performance.now(); if (now - stickDown < 230 && Math.hypot(e.clientX - stickDownAt.x, e.clientY - stickDownAt.y) < 10) { if (now - lastStickTap < 330) { lastStickTap = -Infinity; emerge(); } else lastStickTap = now; } }, true);
-player.onTap = () => { const now = performance.now(); if (now - lastGroundTap < 350) { lastGroundTap = -Infinity; if (mode === 'ground') { const f = player.feet(); if (grassCan(f.x, f.z)) enterGrass(f); } } else lastGroundTap = now; };
+walk.addEventListener('pointerup', e => { const now = performance.now(); if (now - stickDown < 230 && Math.hypot(e.clientX - stickDownAt.x, e.clientY - stickDownAt.y) < 10) { if (now - lastStickTap < 330) { lastStickTap = -Infinity; if (mode === 'ground') { const f = player.feet(); if (grassCan(f.x, f.z)) enterGrass(f); } else emerge(); } else lastStickTap = now; } }, true);
 void ENTER_RANGE;
 // Each hobbit's shown position eases after the model's tick, so a tick's step reads as walking, not a jump.
 const shown = HOBBITS.map((h, i) => { const s = village.hobbits[i]; return { x: s.x, z: s.z, heading: s.heading, speed: 0, label: document.createElement('div'), bubble: document.createElement('div'), name: h.name }; });
@@ -112,8 +114,8 @@ function presentHobbits(dt: number): void {
   camera.updateMatrixWorld();
   for (let i = 0; i < HOBBITS.length; i++) {
     const s = village.hobbits[i], v = shown[i], f = world.figures[i], h = HOBBITS[i];
-    // Ease toward the model's place a little faster than they walk, so the eased figure keeps up with the ticks.
-    const dx = s.x - v.x, dz = s.z - v.z, d = Math.hypot(dx, dz), step = Math.min(d, (h.pace * 1.35 + 0.2) * dt);
+    // The model moves in ticks; the shown figure walks toward its place at the hobbit's own pace (a touch faster, so the lag never grows), so a tick's step is a stride, not a sprint and a wait. Only a hitch catches up quickly.
+    const dx = s.x - v.x, dz = s.z - v.z, d = Math.hypot(dx, dz), step = d < 0.03 ? d : Math.min(d, (d > 2.5 ? h.pace * 2.5 : h.pace * 1.08) * dt);
     if (d > 1e-4) { v.x += dx / d * step; v.z += dz / d * step; }
     const moving = step / Math.max(1e-6, dt); v.speed += (moving - v.speed) * Math.min(1, dt * 10);
     const targetHeading = d > 0.05 ? Math.atan2(dz, dx) : s.heading; v.heading += wrap(targetHeading - v.heading) * Math.min(1, dt * 8);
@@ -163,10 +165,12 @@ function frame(now: number) {
     // Free under the grass, faster than running; onto a tree root when she runs along one.
     wantUnder = 1; const w = want(), gr = grass;
     if (w.lengthSq() > 0) {
-      const nx = gr.x + w.x * GRASS_SPEED * dt, nz = gr.z + w.z * GRASS_SPEED * dt;
+      const ox = gr.x, oz = gr.z, nx = gr.x + w.x * GRASS_SPEED * dt, nz = gr.z + w.z * GRASS_SPEED * dt;
       if (grassCan(nx, nz)) { gr.x = nx; gr.z = nz; } else if (grassCan(nx, gr.z)) gr.x = nx; else if (grassCan(gr.x, nz)) gr.z = nz;
       gr.heading = Math.atan2(-w.x, -w.z);
-      const n = nearestRoot(gr); if (n.distance < 0.7) { const t = rootTangent(n.root, n.s), flat = new THREE.Vector3(t.x, 0, t.z).normalize(), dot = flat.dot(w); if (Math.abs(dot) > 0.6) { root = { root: n.root, s: n.s, forward: dot > 0, off: 0 }; grass = null; mode = 'root'; } }
+      // A root she runs along takes her: checked along the whole step (a slow frame must not carry her over one), any root within reach that agrees with her run.
+      const steps = Math.max(1, Math.ceil(Math.hypot(gr.x - ox, gr.z - oz) / ROOT_CATCH_STEP));
+      for (let i = 1; i <= steps && mode === 'grass'; i++) { const k = i / steps, hit = alignedRoot({ x: ox + (gr.x - ox) * k, z: oz + (gr.z - oz) * k }, w, ROOT_CATCH, ROOT_CATCH_DOT); if (hit) { root = { root: hit.root, s: hit.s, forward: hit.forward, off: 0 }; grass = null; mode = 'root'; } }
     }
     const p = new THREE.Vector3(gr.x, relief(gr.x, gr.z), gr.z); place(p); orbitCamera(p, 3.2, 1.3);
   } else if (mode === 'root' && root) {

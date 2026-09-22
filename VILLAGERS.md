@@ -131,6 +131,7 @@ clear; a village clearing is one more exclusion) so that Hulda's traversal and t
   the greenery and wakes in a safe grove. The top of the karst is her first safe place and where she
   returns if she collapses.
 - Eight hobbits first.
+- (2026-09-22, second notes) The same screen drag turns the camera the same way in every form she takes. The double tap that enters and leaves grass and roots is on the thumbstick only, never on the screen. Once a hobbit has a destination it walks there at one continuous pace, not run, stop, run.
 
 ## Open questions (Noah's to decide, flagged here rather than picked silently)
 - When the thought bubble should speak: on every change of activity, or only on the ones that matter (noon, home, a meeting)?

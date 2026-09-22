@@ -186,6 +186,17 @@ export function nearestRoot(p: { x: number; z: number }): { root: RootEdge; s: n
   for (const r of TREE_ROOTS) for (let i = 0; i < r.samples.length; i++) { const d = Math.hypot(p.x - r.samples[i].x, p.z - r.samples[i].z); if (d < best.distance) best = { root: r, s: i / (r.samples.length - 1) * r.length, distance: d }; }
   return best;
 }
+/** The root she takes when running through the grass: any root within reach whose run agrees with hers (|cos| ≥ minDot), the best aligned first. Every root near her is a candidate, not only the nearest, so a crossing is not missed for a neighbour. */
+export function alignedRoot(p: { x: number; z: number }, dir: { x: number; z: number }, within: number, minDot: number): { root: RootEdge; s: number; forward: boolean } | null {
+  let best: { root: RootEdge; s: number; forward: boolean; dot: number } | null = null;
+  for (const r of TREE_ROOTS) {
+    let near = { i: -1, d: Infinity }; for (let i = 0; i < r.samples.length; i++) { const d = Math.hypot(p.x - r.samples[i].x, p.z - r.samples[i].z); if (d < near.d) near = { i, d }; }
+    if (near.d > within) continue;
+    const s = near.i / (r.samples.length - 1) * r.length, t = rootTangent(r, s), len = Math.hypot(t.x, t.z) || 1, dot = (t.x * dir.x + t.z * dir.z) / len;
+    if (Math.abs(dot) >= minDot && (!best || Math.abs(dot) > Math.abs(best.dot))) best = { root: r, s, forward: dot > 0, dot };
+  }
+  return best && { root: best.root, s: best.s, forward: best.forward };
+}
 export const rootPoint = (r: RootEdge, s: number): Vector3 => r.curve.getPointAt(Math.min(1, Math.max(0, s / r.length)));
 export const rootTangent = (r: RootEdge, s: number): Vector3 => r.curve.getTangentAt(Math.min(1, Math.max(0, s / r.length)));
 export const endTree = (r: RootEdge, atEnd: boolean): number => (atEnd ? r.b : r.a);
