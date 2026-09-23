@@ -71,7 +71,7 @@ The question: do the nightly raids give the gathering stakes, and does fighting 
 - **Not yet:** villagers waking or fleeing, the Dark Young hurting them, prayer for a kill, match-3 for sap, any balance. Noah plays, then suggests.
 
 ## Next
-Balancing passes on E1 after Noah plays; W1.1 births; then W2 the tree of miracles and W3 the rival (VILLAGERS.md, "The worship loop").
+The wider world (VILLAGERS.md, "The wider world": M1a the pinch, the overworld and the chunked land with the karst as a crossing; M1b the dark forest, the lair's manifestation and a first level), then balancing passes on E1 after Noah plays; W1.1 births; then W2 the tree of miracles and W3 the rival (VILLAGERS.md, "The worship loop").
 
 ## Files
 - `src/villageModel.ts`: the day (ticks, phases, clock, daylight), the layout (houses, sites, the green, the stores `STORES` and `storeSpot`), the land's rates, the eight hobbits, `wants`, `route` by the green, `advance` (deterministic from the seed: the land by the day, gathering into armfuls, errands to the stores, meals, Odo's wood), `thought`, `fullestFood`, `landStock`, `inFlight`, `balance`, `everyone`, `inHouse`, parse and serialise; her ways: `TREES`, `TREE_ROOTS`, `nearestRoot`, `alignedRoot`, `nextRoot`, `hopTargets`, `grassCan`, the stream's course. Tuning constants beside each thing.

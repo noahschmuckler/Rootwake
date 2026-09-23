@@ -221,6 +221,62 @@ service or the same without the price.
   supplied, a spirit doing a job, costs rising. Journey: collect, deliver, a villager at the
   stone, a spirit summoned.
 
+## The wider world (Noah's brief, 2026-09-23; assessment recorded, build to be decided)
+
+**The brief.** An overworld map and a larger connected world, with chunk loading and some procedural
+generation. In play and in a fight, pinch to zoom out to an overhead view; at the end of that zoom,
+pinch again to open the explored overworld. No fast travel; markers for significant places. Three of
+them now: the karst, the village, and the lair of the mother of goats: a forest, dark and abhorrent,
+whose presence alone drains her. One of the first goals of levelling up is to be strong enough to
+delve to its centre and defeat her: not the entity, a local manifestation, which (like pillager
+outposts) spawns within a certain distance of villages.
+
+**Noted for later, not built:** what the Dark Young are to the village beyond the stores. Killing
+them might yield a resource; they might move the village's happiness, or its alignment between her
+and chaos, where appeasing them is a protection racket; the mother of goats is fertility, so a
+village that appeases them might bear more children at the cost of more infant deaths. These belong
+to W3 (the rival) and the balancing passes on E1.
+
+### What is reasonably buildable now (the builder's assessment)
+The studies are each an authored world in its own entry; a connected world is a different shape,
+so this is the pass where the shape changes. Buildable at this stage, in two halves so each is
+judged on the phone:
+
+- **M1a. The map and the land.**
+  - *Pinch.* Two fingers on the screen: the third-person camera pulls up and back through a few
+    steps to an overhead tactical view (the fight readable at a glance); past the last step the
+    overworld opens. Spread to come back. Cheap, and worth most to the fights.
+  - *The overworld.* A drawn map (a 2D canvas over the game) in the world's own coordinates: the
+    land she has explored (a coarse grid of cells revealed within a radius of her, saved), the
+    village, the karst and the lair as markers (the lair once seen or once its drain has been felt),
+    her own mark. No fast travel: the map only shows.
+  - *The land beyond the meadow.* Chunks of procedural ground (about 64 m, loaded in a ring round
+    her, unloaded behind): height by noise, biome by noise (meadow, wood, and the dark forest that
+    deepens toward the lair), trees per chunk from the chunk's seed as the standee trees the
+    village already draws, trunks as colliders. The village meadow stays as authored, an island
+    the chunks defer to. Walking is unbounded; the grass form works everywhere; trunk, crown and
+    leap work on chunk trees. Tree roots stay the village's for now (a root network per chunk
+    is its own pass). The world is not edited outside the village yet, so chunks need no save.
+  - *The karst.* A marker, and a crossing: the karst study is its own heavy authored world, so
+    at this stage reaching its region on foot saves and opens the karst entry, and a trail at the
+    karst floor's edge comes back. Connected by a load, honestly, until the karst is a feature the
+    chunks can hold (a later pass, with the two entries' modes merged).
+- **M1b. The dark forest, the lair, the first climb.**
+  - *The dark forest.* A biome round the lair site (placed by the seed 350 to 500 m from the
+    village, as an outpost is placed from a village): black trees, a violet fog that thickens
+    inward, a drain on her vigor (and later her sap) by depth while she is inside, so the centre
+    costs something to reach and to stay in.
+  - *The manifestation.* At the centre a local mother of goats: a great dark mass with many horns
+    that does not walk, with its own hp, tentacle sweeps within reach, and Dark Young born from it
+    while she is near. Defeated, it dissipates and the raids stop for some days; then a new one
+    grows elsewhere within reach of the village (later, one per village).
+  - *Levelling, first cut.* A level from what she has slain: each level a little more vigor and a
+    little more to the strike, shown on the bars. Enough to make "strong enough to delve" a real
+    threshold, before any real progression design.
+- **Deferred, on purpose:** chunk roots; more than one village and its own manifestation; chunk
+  edits and their save; the alignment and appeasement above; any balance.
+
 ## Open questions (Noah's to decide, flagged here rather than picked silently)
 - When the thought bubble should speak: on every change of activity, or only on the ones that matter (noon, home, a meeting)?
+- The wider world (M1): the pinch steps and whether the overhead view is enough for a fight; the karst as a crossing for now; the lair's distance; what a level should give.
 - Worship loop (W1): one drop-off ring or a ring per store; the gathering rate that puts the village at the edge; whether her collecting costs sap; whether match-3 has any place in miracles (recommended: no, for now).
