@@ -132,6 +132,7 @@ clear; a village clearing is one more exclusion) so that Hulda's traversal and t
   returns if she collapses.
 - Eight hobbits first.
 - (2026-09-22, V1 brief) Clear graphical indicators of needs, stores and gathering. Berries replenish daily at a rate; crops grow more slowly; goat milk is available daily; branches drop and are gathered daily. Stores are outdoors and visible as they fill and are depleted for meals and crafting. Without interference the village holds a steady state: no births or deaths yet, only the daily rhythm.
+- (2026-09-23, W1 decisions) One drop-off ring per store. Gathering is paced per villager: three meals a day from the stores, and a gatherer's session yields about the next meal's share. If the stores hold enough for the next mealtime, the gatherers worship instead. Excess for long enough will spawn baby villagers whose needs rise before they can gather (recorded, not built in this phase). Collecting costs her no sap, only time: a meal's worth in a few seconds at a place's ring, a quick drop-off. No match-3 for now.
 - (2026-09-22, second notes) The same screen drag turns the camera the same way in every form she takes. The double tap that enters and leaves grass and roots is on the thumbstick only, never on the screen. Once a hobbit has a destination it walks there at one continuous pace, not run, stop, run.
 
 ## The worship loop (Noah's idea, 2026-09-23; plan and input recorded, implementation to be decided)

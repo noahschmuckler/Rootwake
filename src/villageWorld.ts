@@ -7,7 +7,7 @@
 // fire by the wood laid on it (updateLand).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { HOUSES, HOBBITS, SITES, STORES, STORE_LIST, HOUSE_RADIUS, MEADOW_RADIUS, GREEN, TREES, TREE_ROOTS, STREAM_Z, BERRY_CAP, BRANCH_CAP, MILK_PER_DAY, CROP_STRIPS, WOOD_PER_NIGHT, crownHeight, trunkRadius, type Hobbit, type Tree, type Village, type Store } from './villageModel';
+import { HOUSES, HOBBITS, SITES, STORES, STORE_LIST, STATIONS, STACK_CAP, HOUSE_RADIUS, MEADOW_RADIUS, GREEN, TREES, TREE_ROOTS, STREAM_Z, BERRY_CAP, BRANCH_CAP, MILK_PER_DAY, CROP_STRIPS, WOOD_PER_NIGHT, crownHeight, trunkRadius, type Hobbit, type Tree, type Village, type Store } from './villageModel';
 import { mulberry32 } from './colors';
 import type { Collider } from './player';
 import { spriteMaterial, standees, crownStandees, type Standee } from './sprites';
@@ -88,7 +88,20 @@ export function buildVillage(scene: THREE.Scene) {
   { const g = storeFrame('wood', 1.5, 0.6, 0.05); for (let i = 0; i < STORES.wood.cap; i++) { const log = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 1.3, 7), stickMat); log.rotation.z = Math.PI / 2; const row = Math.floor(i / 4); log.position.set(0, 0.12 + row * 0.13, -0.2 + (i % 4) * 0.15 - row * 0.07); g.add(log); storeItems.wood.push(log); } }
   { const g = storeFrame('grain', 1.2, 0.7, 0.06); for (let i = 0; i < STORES.grain.cap; i++) { const sack = new THREE.Mesh(new THREE.SphereGeometry(0.13, 7, 6), sackMat); sack.scale.set(1, 0.8, 1); const row = Math.floor(i / 6); sack.position.set(-0.5 + (i % 6) * 0.2 + row * 0.1, 0.16 + row * 0.2, -0.12 + row * 0.02); g.add(sack); storeItems.grain.push(sack); } }
   { const g = storeFrame('milk', 1.5, 0.45, 0.35); for (let i = 0; i < STORES.milk.cap; i++) { const p = pail(); p.position.set(-0.6 + (i % 4) * 0.4, i < 4 ? 0.35 : 0.02, i < 4 ? 0 : 0.32); g.add(p); storeItems.milk.push(p); } }
-  const menhir = new THREE.Mesh(new THREE.BoxGeometry(0.7, 2.2, 0.45), stone); menhir.position.set(SITES.shrine.x, 1.1, SITES.shrine.z); menhir.rotation.set(0.05, 0.6, 0.06); scene.add(menhir);
+  // The stone glows with the prayer it holds (updatePrayer), a cool light of its own at night.
+  const stoneMat = new THREE.MeshStandardMaterial({ color: '#6f6a5f', emissive: '#b8a0ff', emissiveIntensity: 0, roughness: 0.9, flatShading: true });
+  const menhir = new THREE.Mesh(new THREE.BoxGeometry(0.7, 2.2, 0.45), stoneMat); menhir.position.set(SITES.shrine.x, 1.1, SITES.shrine.z); menhir.rotation.set(0.05, 0.6, 0.06); scene.add(menhir);
+  const stoneLight = new THREE.PointLight('#b8a0ff', 0, 9, 1.8); stoneLight.position.set(SITES.shrine.x, 1.6, SITES.shrine.z); scene.add(stoneLight);
+  // Her stations: rings on the ground at each yielding place, each store and the stone; a ring brightens while she stands in it (setStation).
+  const ringMats: Record<string, THREE.MeshBasicMaterial> = {}, rings: Record<string, THREE.Mesh> = {};
+  for (const st of STATIONS) { const mat = new THREE.MeshBasicMaterial({ color: st.kind === 'gather' ? '#d8f07a' : st.kind === 'deliver' ? '#f0c060' : '#c8a8ff', transparent: true, opacity: 0.35, depthWrite: false }); const ring = new THREE.Mesh(new THREE.RingGeometry(st.r - 0.1, st.r, 40), mat); ring.rotation.x = -Math.PI / 2; ring.position.set(st.x, relief(st.x, st.z) + 0.06, st.z); scene.add(ring); ringMats[st.id] = mat; rings[st.id] = ring; }
+  let activeStation: string | null = null;
+  function setStation(id: string | null, t: number): void { activeStation = id; for (const k in ringMats) { const on = k === id; ringMats[k].opacity = on ? 0.75 + Math.sin(t * 0.01) * 0.2 : 0.35; rings[k].scale.setScalar(on ? 1 + Math.sin(t * 0.008) * 0.03 : 1); } }
+  // Her stack: what she carries from a place to a store, on her back, one slab a unit, coloured by kind (setStack).
+  const stackMats: Record<Store, THREE.MeshStandardMaterial> = { berries: new THREE.MeshStandardMaterial({ color: '#8a2a4a', roughness: 0.7 }), water: new THREE.MeshStandardMaterial({ color: '#4f93a8', roughness: 0.3 }), wood: new THREE.MeshStandardMaterial({ color: '#6b5238', roughness: 1 }), grain: new THREE.MeshStandardMaterial({ color: '#d2b98a', roughness: 1 }), milk: new THREE.MeshStandardMaterial({ color: '#f4f1e6', roughness: 0.8 }) };
+  const stack = new THREE.Group(); stack.visible = false; scene.add(stack); const slabs: THREE.Mesh[] = [];
+  for (let i = 0; i < STACK_CAP; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.09, 0.2), stackMats.berries); m.position.y = i * 0.1; m.rotation.y = (i % 2) * 0.12; stack.add(m); slabs.push(m); }
+  function setStack(kind: Store | null, n: number): void { stack.visible = !!kind && n > 0; for (let i = 0; i < slabs.length; i++) { slabs[i].visible = i < n; if (kind) slabs[i].material = stackMats[kind]; } }
   // Trees: the copse, and the wood round the meadow's edge; all colliders.
   const bark = new THREE.MeshStandardMaterial({ color: '#6d5f48', roughness: 1 }), leafMat = spriteMaterial('leaf', '#5f8657'), rootBark = new THREE.MeshStandardMaterial({ color: '#8a6f4e', roughness: 0.95 });
   const wood: THREE.BufferGeometry[] = [], cards: Standee[] = [], collars: THREE.BufferGeometry[] = [];
@@ -116,6 +129,12 @@ export function buildVillage(scene: THREE.Scene) {
   const figureMat = spriteMaterial('leaf', '#b9e58a', { emissive: '#4a7a2a', emissiveIntensity: 0.35 });
   const figure = new THREE.Group(); figure.visible = false; scene.add(figure);
   { const fr = mulberry32(77); const body = crownStandees(fr, new THREE.Vector3(0, 0.95, 0), 0.42, 0.55, 0.3, 9, 0.5); body.push({ position: new THREE.Vector3(0, 1.35, 0), yaw: 0.4, width: 0.42, height: 0.42, flat: true }); figure.add(new THREE.Mesh(standees(body), figureMat)); }
+  // The forest spirits she summons: small figures of leaves in her own pale green, one made as each is summoned (spiritFigure).
+  const spiritMat = spriteMaterial('leaf', '#cfeea0', { emissive: '#6aa040', emissiveIntensity: 0.5 }), spiritFigures: THREE.Group[] = [];
+  function spiritFigure(i: number): THREE.Group {
+    while (spiritFigures.length <= i) { const fr = mulberry32(900 + spiritFigures.length), g = new THREE.Group(); const body = crownStandees(fr, new THREE.Vector3(0, 0.42, 0), 0.24, 0.32, 0.18, 7, 0.5); body.push({ position: new THREE.Vector3(0, 0.66, 0), yaw: 0.4, width: 0.24, height: 0.24, flat: true }); g.add(new THREE.Mesh(standees(body), spiritMat)); const load = new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 5), sackMat); load.name = 'load'; load.position.set(0, 0.2, -0.16); load.visible = false; g.add(load); scene.add(g); spiritFigures.push(g); }
+    return spiritFigures[i];
+  }
   const mass = new THREE.Group(); mass.visible = false; scene.add(mass);
   { const mr = mulberry32(78); const tufts: Standee[] = []; for (let i = 0; i < 14; i++) { const a = mr() * 6.28, r = mr() * 0.42, k = 0.28 + mr() * 0.22; tufts.push({ position: new THREE.Vector3(Math.cos(a) * r, 0.3 - r * 0.35, Math.sin(a) * r), yaw: mr() * Math.PI, width: k, height: k * 1.2 }); } mass.add(new THREE.Mesh(standees(tufts), spriteMaterial('grass', '#b6d47a', { emissive: '#3a5a20', emissiveIntensity: 0.25 }))); }
   const crownPoint = (t: Tree, az: number): THREE.Vector3 => new THREE.Vector3(t.x + Math.cos(az) * 1.1 * t.size, relief(t.x, t.z) + crownHeight(t) + 0.15, t.z + Math.sin(az) * 1.1 * t.size);
@@ -137,10 +156,13 @@ export function buildVillage(scene: THREE.Scene) {
     for (const k of STORE_LIST) { const n = Math.floor(v.stores[k]); storeItems[k].forEach((o, i) => { o.visible = i < n; }); }
     for (let i = 0; i < HOBBITS.length; i++) { const c = v.hobbits[i].carry; for (const k of STORE_LIST) carried[i][k].visible = !!c && c.kind === k; }
     fireWood = v.fireWood;
+    for (let i = 0; i < v.spirits.length; i++) { const f = spiritFigure(i), load = f.getObjectByName('load'); if (load) load.visible = !!v.spirits[i].carry; }
   }
+  /** The stone by the prayer it holds, 0..1 of the cap. */
+  function updatePrayer(share: number): void { stoneMat.emissiveIntensity = share * 0.9; stoneLight.intensity = share * 6; }
   let fireWood = 0;
   /** Which armful each figure shows, for checks. */
   const armfuls = (): (Store | null)[] => carried.map(c => STORE_LIST.find(k => c[k].visible) ?? null);
-  return { colliders, figures, figure, mass, update, updateLand, armfuls, stream, crownPoint, trunkPoint };
+  return { colliders, figures, figure, mass, update, updateLand, updatePrayer, armfuls, setStation, get activeStation() { return activeStation; }, setStack, stack, spiritFigure, spiritFigures, stream, crownPoint, trunkPoint };
 }
 export type VillageWorld = ReturnType<typeof buildVillage>;
