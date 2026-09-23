@@ -69,9 +69,12 @@ export function createKarstFeature(scene: THREE.Scene, player: Player, camera: T
     if (n.distance < PRESS_RANGE && toward.dot(w) > 0.6) { press += dt; if (press > PRESS_S) { press = 0; if (n.node.climb) enterTrunk(n.node); else enterRoots(n.node, f); return true; } return false; }
     press = 0; return false;
   }
+  /** The karst is drawn only while she is within KARST_DRAW_M of it: past that it is fog anyway, and its four hundred trees cost a phone frames. */
+  const KARST_DRAW_M = 260;
   /** The modes above the ground, each frame. */
   function update(dt: number, time: number, stick: { held: boolean; x: number; y: number }): void {
     const stickHeld = stick.held; if (!stickHeld) released = true;
+    { const f = player.feet(); group.visible = Math.hypot(f.x - origin.x, f.z - origin.z) < KARST_DRAW_M; }
     if (mode === 'trunk' && trunk) {
       const t = trunk, top = at.crownH, y = stick.y;
       if (Math.abs(y) > 0.25) t.h += -y * TRUNK_CLIMB * dt; t.h = Math.min(top, Math.max(0, t.h));

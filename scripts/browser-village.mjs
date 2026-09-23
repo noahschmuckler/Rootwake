@@ -42,7 +42,7 @@ try{
  await page.screenshot({path:out+'/02e-stack.png'});
  const prayed=await v(page,()=>{const k=window.__village;k.setStore('milk',8);k.setStore('grain',12);k.advance(200-k.tick);for(let i=0;i<20;i++){k.advance(10);if(k.praying().length>0)break;}return {praying:k.praying(),prayer:k.prayer};});assert.ok(prayed.praying.length>0,`supplied, someone prays (${JSON.stringify(prayed)})`);
  // Before the stone with prayer enough, the miracle is offered; asked, a spirit for the thicket appears and takes up the job.
- await v(page,()=>{const k=window.__village;k.prayer=60;const st=k.stations.find(s=>s.id==='shrine');k.standAt(st.x,st.z,0);});await page.waitForTimeout(500);assert.ok(await page.locator('#miracles').isVisible(),'the miracles offered before the stone');
+ await v(page,()=>{const k=window.__village;k.prayer=60;const st=k.stations.find(s=>s.id==='shrine');k.standAt(st.x,st.z,0);});await page.waitForSelector('#miracles:not([hidden])',{timeout:8000});assert.ok(await page.locator('#miracles').isVisible(),'the miracles offered before the stone');
  await page.click('#miracles [data-keeps="thicket"]');await page.waitForTimeout(300);const sp=await v(page,()=>({n:window.__village.spirits.length,prayer:window.__village.prayer,figures:window.__village.figures.length}));assert.equal(sp.n,1,'a spirit summoned');assert.ok(sp.prayer<60,'prayer spent');
  const worked=await v(page,()=>{const k=window.__village;let carried=false;for(let i=0;i<60&&!carried;i++){k.advance(10);carried=!!k.spirits[0].carry;}return carried;});assert.ok(worked,'the spirit gathers');await page.screenshot({path:out+'/02f-spirit.png'});
  await v(page,()=>{window.__village.reset();window.__village.speed=1;});await page.waitForTimeout(300);
