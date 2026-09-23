@@ -175,3 +175,16 @@ test('fighting: a cheap strike ahead of her, a thorn burst round her and a root 
   for (let i = 0; i < 30; i++) stepRaiders(v, 1, null); assert.ok(!v.raiders.some(r => r.state === 'dead'), 'the dead are gone'); assert.ok(v.slain >= 1);
   const back = par(ser(v)); assert.equal(back.raiders.length, v.raiders.length); assert.equal(back.hero.vigor, Math.round(v.hero.vigor * 10) / 10, 'her vigor and the raid survive a save'); assert.ok(SAP_MAX > THORN_SAP + ROOT_SAP);
 });
+
+import { freshOverworld, explore, isRevealed, knownPlaces, places, parseOverworld, serializeOverworld, CELL, EXPLORE_RADIUS, LAIR_DISTANCE, KARST_AT, ZOOM_MIN, ZOOM_MAX, zoomElevation, ELEV_LOW, ELEV_HIGH } from '../src/overworldModel';
+test('the overworld: the village at the origin, the karst north, the lair placed by the seed 400 m away from the karst\'s side; exploring reveals cells round her and the places she comes near; the pinch rises from the shoulder to overhead', () => {
+  const ps = places(1); assert.deepEqual(ps.map(p => p.id), ['village', 'karst', 'lair']); assert.deepEqual({ x: ps[0].x, z: ps[0].z }, { x: 0, z: 0 }); assert.deepEqual({ x: ps[1].x, z: ps[1].z }, KARST_AT);
+  const lair = ps[2]; assert.ok(Math.abs(Math.hypot(lair.x, lair.z) - LAIR_DISTANCE) < 2, 'the lair at its distance'); assert.ok(lair.z > 0, 'away from the karst'); assert.ok(Math.hypot(lair.x - KARST_AT.x, lair.z - KARST_AT.z) > 500, 'and far from it');
+  assert.notDeepEqual(places(2)[2], lair, 'placed by the seed');
+  const o = freshOverworld(1); assert.deepEqual(knownPlaces(o).map(p => p.id), ['village', 'karst'], 'the village and the karst known from the start');
+  const n = explore(o, 0, 0); assert.ok(n > 20 && n < 60, `cells revealed round her (${n})`); assert.ok(isRevealed(o, 10, 10) && isRevealed(o, 0, EXPLORE_RADIUS - 5) && !isRevealed(o, 0, EXPLORE_RADIUS + CELL * 2), 'within the radius, not beyond');
+  assert.equal(explore(o, 0, 0), 0, 'nothing new standing still'); assert.ok(explore(o, 30, 0) > 0, 'a step on reveals more');
+  assert.ok(!o.known.has('lair')); explore(o, lair.x - lair.radius - 40, lair.z); assert.ok(o.known.has('lair'), 'the lair is known once she comes near its edge');
+  const back = parseOverworld(serializeOverworld(o)); assert.equal(back.revealed.size, o.revealed.size); assert.deepEqual([...back.known], [...o.known]); assert.equal(parseOverworld('junk').revealed.size, 0);
+  assert.equal(zoomElevation(ZOOM_MIN), ELEV_LOW); assert.equal(zoomElevation(ZOOM_MAX), ELEV_HIGH); assert.ok(zoomElevation(20) > ELEV_LOW && zoomElevation(20) < ELEV_HIGH);
+});

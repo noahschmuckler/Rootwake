@@ -70,10 +70,16 @@ The question: do the nightly raids give the gathering stakes, and does fighting 
 - **Save** carries the raid, her vigor and sap. `__village`: `raiders()`, `hero`, `vigor` (settable), `attack(kind)`, `cooldowns`, `slain`, `eaten`.
 - **Not yet:** villagers waking or fleeing, the Dark Young hurting them, prayer for a kill, match-3 for sap, any balance. Noah plays, then suggests.
 
+## M1a.1: the pinch and the overworld (Noah's decisions of 2026-09-24)
+- **The pinch.** Two fingers closing on the screen pull the camera from her shoulder to overhead, continuously (`ZOOM_MIN` 3 m to `ZOOM_MAX` 40 m, the elevation rising from `ELEV_LOW` to `ELEV_HIGH` with the distance: `zoomElevation`), the camera sitting on her yaw and looking at her, so the stick and the strike keep their meaning from above. While two fingers are down the look drag is held off. Spreading brings it back. Past the top, one pinch more opens the map; a spread on the map, or its button, closes it.
+- **The overworld** (`src/overworldModel.ts`, pure): the village at the origin, the karst 330 m north (`KARST_AT`), the lair placed by the seed `LAIR_DISTANCE` 400 m off on the side away from the karst, the dark forest `FOREST_RADIUS` 75 m about it. She explores cells of `CELL` 24 m within `EXPLORE_RADIUS` 70 m every half second (`explore`); a place becomes known when she comes within its radius and her reach of it; the village and the karst are known from the start. Saved apart from the village (`rootwake-overworld-v1`). The map (a canvas over the game) draws the revealed cells, the known places as marks with names, her mark and heading, north up, a hundred-metre bar; drag to pan. It only shows: no travel.
+- **Not yet:** the land beyond the meadow (M1a.2), the karst as a feature (M1a.3), the forest and the lair (M1b). The lair's mark appears only once she has been near it.
+
 ## Next
 The wider world (VILLAGERS.md, "The wider world": M1a the pinch, the overworld and the chunked land with the karst as a crossing; M1b the dark forest, the lair's manifestation and a first level), then balancing passes on E1 after Noah plays; W1.1 births; then W2 the tree of miracles and W3 the rival (VILLAGERS.md, "The worship loop").
 
 ## Files
+- `src/overworldModel.ts`: the places, exploration and the pinch's elevation (M1).
 - `src/villageModel.ts`: the day (ticks, phases, clock, daylight), the layout (houses, sites, the green, the stores `STORES` and `storeSpot`), the land's rates, the eight hobbits, `wants`, `route` by the green, `advance` (deterministic from the seed: the land by the day, gathering into armfuls, errands to the stores, meals, Odo's wood), `thought`, `fullestFood`, `landStock`, `inFlight`, `balance`, `everyone`, `inHouse`, parse and serialise; her ways: `TREES`, `TREE_ROOTS`, `nearestRoot`, `alignedRoot`, `nextRoot`, `hopTargets`, `grassCan`, the stream's course. Tuning constants beside each thing.
 - `src/villageWorld.ts`: the scene, the figures (`HOBBIT_HEIGHT`), the land and stores by count and the armfuls in hand (`updateLand(village)`), `update(daylight)` with the fire by its wood.
 - `src/village.ts`, `village.html`, `src/village.css`: the tick bank, the eased figures, name labels and bubbles, the clock, light by the hour, the `__village` handle (`advance(n)` jumps the day for checking).
