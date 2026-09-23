@@ -128,6 +128,7 @@ function presentHulda(dt: number): void {
 // Her stations (W1): in a place's ring on her feet she collects into her stack, a unit every COLLECT_S; in a store's ring she delivers, one every DELIVER_S; before the stone the miracles are offered. A loaded stack refuses her other forms (a wobble says so).
 let collectClock = 0, deliverClock = 0, wobble = 0, lastStation: string | null = null;
 const miracles = el('miracles'), prayerEl = el('prayer');
+/** `dt` here is real time (capped at a quarter second), like the village's ticks: her collecting keeps its pace however slow the frames. */
 function stations(dt: number): void {
   const f = player.feet(), st = mode === 'ground' ? stationAt(f.x, f.z) : null, id = st?.id ?? null;
   if (id !== lastStation) { collectClock = 0; deliverClock = 0; lastStation = id; }
@@ -234,7 +235,7 @@ function frame(now: number) {
     if (move.t === 1) { const then = move.then; move = null; then(); }
   }
   under += (wantUnder - under) * Math.min(1, dt * 4);
-  stations(dt); presentHulda(dt); presentHobbits(dt); presentSpirits(dt);
+  stations(Math.min(0.25, wall)); presentHulda(dt); presentHobbits(dt); presentSpirits(dt);
   const light = daylightAt(village.tick), dusk = Math.max(0, 1 - Math.abs(light - 0.12) / 0.12);
   colour.copy(nightSky).lerp(daySky, Math.min(1, light * 1.6)).lerp(duskSky, dusk * 0.6); scene.background = colour; scene.fog = new THREE.FogExp2(colour, 0.011);
   hemi.intensity = 0.5 + 1.9 * light; sun.intensity = 2.3 * light; world.updateLand(village); world.update(light, time, under);

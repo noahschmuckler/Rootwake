@@ -140,7 +140,9 @@ export const STATION_R = 1.4, STORE_RING_R = 1.1, SHRINE_RING_R = 1.5;
 export const STATIONS: Station[] = (() => {
   const out: Station[] = [];
   const inward = (x: number, z: number, by: number): Vec2 => { const a = Math.atan2(z, x); return { x: x - Math.cos(a) * by, z: z - Math.sin(a) * by }; };
-  for (const k of ['thicket', 'stream', 'copse', 'field', 'pen'] as SiteKind[]) { const st = SITES[k], p = inward(st.x, st.z, 1.0); out.push({ id: `gather-${k}`, kind: 'gather', ...p, r: STATION_R, keeps: k }); }
+  // Each gather ring sits on the green side of its place, clear of the bushes, the trees, the strips and the fence, so she stands in the open beside the work.
+  const clear: Record<string, number> = { thicket: 3.6, stream: 1.4, copse: 5.2, field: 3.6, pen: 3.8 };
+  for (const k of ['thicket', 'stream', 'copse', 'field', 'pen'] as SiteKind[]) { const st = SITES[k], p = inward(st.x, st.z, clear[k]); out.push({ id: `gather-${k}`, kind: 'gather', ...p, r: STATION_R, keeps: k }); }
   for (const k of STORE_LIST) { const p = storeSpot(STORES[k]); out.push({ id: `deliver-${k}`, kind: 'deliver', ...p, r: STORE_RING_R, store: k }); }
   { const st = SITES.shrine, p = inward(st.x, st.z, 1.6); out.push({ id: 'shrine', kind: 'shrine', ...p, r: SHRINE_RING_R }); }
   return out;
