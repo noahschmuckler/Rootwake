@@ -153,7 +153,7 @@ export function buildVillage(scene: THREE.Scene) {
     for (let i = 0; i < 4; i++) { const g = new THREE.Group(); g.position.set(1.1 + (i % 2) * 0.15, 1.85, (i - 1.5) * 0.14); const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(-0.15, 0.35, (i - 1.5) * 0.12), new THREE.Vector3(-0.45, 0.55, (i - 1.5) * 0.3), new THREE.Vector3(-0.55, 0.9, (i - 1.5) * 0.45)]); g.add(new THREE.Mesh(taperedTube(curve, 12, 5, t => 0.07 * (1 - t * 0.85), 0), hornMat)); group.add(g); horns.push(g); }
     for (let i = 0; i < 6; i++) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.05, 0.95, 5), hide); leg.position.set(-0.75 + Math.floor(i / 2) * 0.75, 0.48, (i % 2 ? 1 : -1) * 0.38); group.add(leg); legs.push(leg); }
     const coil = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.06, 6, 20), coilMat); coil.rotation.x = -Math.PI / 2; coil.position.y = 0.12; coil.visible = false; group.add(coil);
-    group.scale.setScalar(1.15); scene.add(group); f = { group, horns, legs, coil, hide }; raiderFigures.set(id, f); return f;
+    group.scale.setScalar(0.82); scene.add(group); f = { group, horns, legs, coil, hide }; raiderFigures.set(id, f); return f;
   }
   /** Place and animate a Dark Young: walking legs, writhing horns, the hurt flash, the root coil, the fall of the dead. */
   function setRaider(id: number, x: number, z: number, heading: number, t: number, moving: boolean, hurt: number, rooted: number, dead: number): void {

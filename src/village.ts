@@ -183,7 +183,7 @@ function presentRaiders(dt: number): void {
   for (const r of village.raiders) {
     seen.add(r.id); world.setRaider(r.id, r.x, r.z, r.heading, time, r.state === 'coming' || r.state === 'hunting' || r.state === 'leaving', r.hurt, r.rooted, r.state === 'dead' ? r.gone : 0);
     let l = raiderLabels.get(r.id); if (!l) { const label = document.createElement('div'); label.className = 'name foe'; label.textContent = 'dark young'; const meter = document.createElement('i'); meter.className = 'hunger'; const hp = document.createElement('b'); meter.append(hp); label.append(meter); labels.append(label); l = { label, hp }; raiderLabels.set(r.id, l); }
-    tmp.set(r.x, relief(r.x, r.z) + 2.4, r.z); const dist = tmp.distanceTo(camera.position); tmp.project(camera); const show = r.state !== 'dead' && tmp.z < 1 && dist < 22 && Math.abs(tmp.x) < 1.1;
+    tmp.set(r.x, relief(r.x, r.z) + 1.9, r.z); const dist = tmp.distanceTo(camera.position); tmp.project(camera); const show = r.state !== 'dead' && tmp.z < 1 && dist < 22 && Math.abs(tmp.x) < 1.1;
     l.label.hidden = !show; if (show) { const x = (tmp.x + 1) * innerWidth / 2, y = (1 - tmp.y) * innerHeight / 2; l.label.style.transform = `translate(${x}px,${y}px) translate(-50%,-100%)`; l.label.style.opacity = '1'; l.hp.style.width = `${r.hp / DY_HP * 100}%`; l.hp.style.background = '#e0603a'; }
   }
   for (const [id, l] of raiderLabels) if (!seen.has(id)) { l.label.remove(); raiderLabels.delete(id); world.hideRaider(id); }
