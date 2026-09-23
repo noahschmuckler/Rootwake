@@ -147,3 +147,31 @@ test('left alone the village holds: eight days on, three meals each every day, t
   v.stack = { kind: 'wood', n: 3 }; const back = par(ser(v)); assert.equal(ser(back), ser(v), 'the stores, the land, the prayer, the spirits and her stack survive a save');
   assert.deepEqual(Object.keys(YIELD_OF).sort(), ['copse', 'field', 'pen', 'stream', 'thicket']); assert.equal(GRAIN_PER_STRIP, CARRY.grain);
 });
+
+import { stepRaiders, strike, thornBurst, rootBind, raidSize, fullestStore, RAID_TICK, RAID_END, DY_HP, DY_FILL, STRIKE_DMG, THORN_DMG, THORN_SAP, ROOT_SAP, ROOT_S, DY_BITE, VIGOR_MAX, SAP_MAX, FAINT_VIGOR, TICKS_PER_SECOND as TPS, storeSpot as spotOf, STORES as ST } from '../src/villageModel';
+test('the Dark Young come after nightfall while the village sleeps, go to the fullest store, eat their fill and leave before dawn; more of them as the days go on; a jump over a night leaves none behind', () => {
+  const v = freshV(1); step(v, RAID_TICK + 1); assert.equal(v.raiders.length, raidSize(0), 'the first night brings one'); assert.ok(v.hobbits.every(s => s.inside), 'everyone asleep');
+  const r = v.raiders[0]; assert.ok(Math.hypot(r.x, r.z) > 60, 'from the wood\'s edge'); assert.equal(r.state, 'coming');
+  const s0 = { ...v.stores }; let arrived = -1; for (let t = RAID_TICK + 1; t < DT; t++) { step(v, 1); stepRaiders(v, 1 / TPS, null); if (arrived < 0 && v.raiders[0]?.state === 'eating') arrived = t; }
+  assert.ok(arrived > 0 && arrived < RAID_TICK + 200, `it reaches a store within the evening (${arrived})`); assert.equal(v.eaten, DY_FILL, 'it eats its fill'); assert.ok(STORE_LIST.some(k => v.stores[k] < s0[k]), 'from the stores'); assert.equal(v.stores.water, s0.water, 'never the trough');
+  assert.equal(v.raiders.length, 0, 'gone by dawn'); assert.equal(fullestStore(freshV(1)), 'wood', 'the woodpile is the fullest by share on the first morning');
+  assert.equal(raidSize(0), 1); assert.equal(raidSize(2), 2); assert.equal(raidSize(9), 3, 'never more than three');
+  const w = freshV(1); step(w, 3 * DT + RAID_TICK + 1); assert.equal(w.raiders.length, raidSize(3), 'nights jumped over leave nothing behind');
+  const late = freshV(1); step(late, RAID_END + 5); stepRaiders(late, 1, null); assert.ok(late.raiders.every(r => r.state === 'leaving'), 'at the end of the night they all leave');
+});
+test('fighting: a cheap strike ahead of her, a thorn burst round her and a root bind that holds one, the specials on sap; struck, a Dark Young hunts and bites her vigor; at none she faints and wakes weakened, never dead', () => {
+  const v = freshV(1); step(v, 3 * DT + RAID_TICK + 1); for (let i = 0; i < 400 && !v.raiders.some(r => r.state === 'eating'); i++) stepRaiders(v, 0.25, null); assert.ok(v.raiders.length >= 2 && v.raiders.some(r => r.state === 'eating'), `two on the fourth night, one at a store (${v.raiders.map(r => r.state)})`);
+  v.raiders.sort((a, b) => (a.state === 'eating' ? -1 : 0) - (b.state === 'eating' ? -1 : 0)); const r0 = v.raiders[0], her = spotOf(ST[r0.target!]); const face = () => { const d = Math.hypot(r0.x - her.x, r0.z - her.z); return { fx: (r0.x - her.x) / d, fz: (r0.z - her.z) / d }; };
+  const away = strike(v, { x: her.x + 20, z: her.z + 20 }, 1, 0); assert.equal(away, null, 'out of reach strikes nothing');
+  const hit = strike(v, her, face().fx, face().fz); assert.equal(hit, r0, 'the nearest ahead is struck'); assert.equal(r0.hp, DY_HP - STRIKE_DMG); assert.equal(r0.state, 'eating'); stepRaiders(v, 0.1, her); assert.equal(r0.state, 'hunting', 'and it turns on her');
+  let bites = 0, vig = v.hero.vigor; for (let i = 0; i < 40 && r0.state !== 'dead'; i++) { stepRaiders(v, 0.45, her); if (v.hero.vigor < vig) { bites++; vig = v.hero.vigor; } const f = face(); strike(v, her, f.fx, f.fz); }
+  assert.equal(r0.state, 'dead', 'six strikes kill it'); assert.ok(bites >= 1 && v.hero.vigor < VIGOR_MAX, `it bit her on the way (${bites})`); assert.ok(v.slain >= 1, 'slain is counted');
+  const b = freshV(1); step(b, 3 * DT + RAID_TICK + 1); for (let i = 0; i < 100; i++) stepRaiders(b, 0.25, null); const other = b.raiders[0], hp0 = other.hp, sap0 = b.hero.sap, hurtN = thornBurst(b, { x: other.x, z: other.z }); assert.ok(hurtN >= 1, 'the burst hurts all round her'); assert.equal(b.hero.sap, sap0 - THORN_SAP); assert.equal(other.hp, hp0 - THORN_DMG, 'the burst\'s damage');
+  const bound = rootBind(b, { x: other.x + 2, z: other.z }); assert.equal(bound, other); assert.equal(other.rooted, ROOT_S); assert.equal(b.hero.sap, sap0 - THORN_SAP - ROOT_SAP); const px = other.x; stepRaiders(b, 1, { x: other.x + 2, z: other.z }); assert.equal(other.x, px, 'rooted, it cannot move');
+  b.hero.sap = 0; assert.equal(thornBurst(b, her), -1, 'no sap, no burst'); assert.equal(rootBind(b, her), undefined, 'no sap, no bind'); stepRaiders(b, 5, null); assert.ok(b.hero.sap > 0, 'sap refills');
+  // Bitten down: faint, then up again at FAINT_VIGOR; the dead fade.
+  const u = freshV(1); step(u, RAID_TICK + 1); for (let i = 0; i < 400; i++) stepRaiders(u, 0.25, null); const foe = u.raiders[0], at = { x: foe.x, z: foe.z }; strike(u, at, 1, 0); u.hero.vigor = DY_BITE; for (let i = 0; i < 20 && u.hero.faint === 0; i++) stepRaiders(u, 0.5, at);
+  assert.ok(u.hero.faint > 0 && u.hero.vigor === 0, 'bitten to nothing she faints'); for (let i = 0; i < 10; i++) stepRaiders(u, 0.5, null); assert.equal(u.hero.faint, 0); assert.ok(u.hero.vigor >= FAINT_VIGOR && u.hero.vigor < FAINT_VIGOR + 8, `and wakes weakened, never dead (${u.hero.vigor})`);
+  for (let i = 0; i < 30; i++) stepRaiders(v, 1, null); assert.ok(!v.raiders.some(r => r.state === 'dead'), 'the dead are gone'); assert.ok(v.slain >= 1);
+  const back = par(ser(v)); assert.equal(back.raiders.length, v.raiders.length); assert.equal(back.hero.vigor, Math.round(v.hero.vigor * 10) / 10, 'her vigor and the raid survive a save'); assert.ok(SAP_MAX > THORN_SAP + ROOT_SAP);
+});

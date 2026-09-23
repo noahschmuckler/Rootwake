@@ -140,6 +140,39 @@ export function buildVillage(scene: THREE.Scene) {
     while (spiritFigures.length <= i) { const fr = mulberry32(900 + spiritFigures.length), g = new THREE.Group(); const body = crownStandees(fr, new THREE.Vector3(0, 0.42, 0), 0.24, 0.32, 0.18, 7, 0.5); body.push({ position: new THREE.Vector3(0, 0.66, 0), yaw: 0.4, width: 0.24, height: 0.24, flat: true }); g.add(new THREE.Mesh(standees(body), spiritMat)); const load = new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 5), sackMat); load.name = 'load'; load.position.set(0, 0.2, -0.16); load.visible = false; g.add(load); scene.add(g); spiritFigures.push(g); }
     return spiritFigures[i];
   }
+  // The Dark Young: an oversized goat, dark as a wet stone, six legs, a head with four tentacle horns that writhe (setRaider), eyes with their own light; struck, it flashes; rooted, a coil of root holds its feet; dead, it lies on its side and sinks.
+  const hideMat = new THREE.MeshStandardMaterial({ color: '#2b2130', emissive: '#000000', roughness: 0.95, flatShading: true }), hornMat = new THREE.MeshStandardMaterial({ color: '#4a2a3a', emissive: '#3a1020', emissiveIntensity: 0.3, roughness: 0.8 }), eyeMat = new THREE.MeshBasicMaterial({ color: '#d8ff60' }), coilMat = new THREE.MeshStandardMaterial({ color: '#8a6f4e', emissive: '#c9a24a', emissiveIntensity: 0.4, roughness: 0.9 });
+  const raiderFigures = new Map<number, { group: THREE.Group; horns: THREE.Group[]; legs: THREE.Mesh[]; coil: THREE.Mesh; hide: THREE.MeshStandardMaterial }>();
+  function raiderFigure(id: number) {
+    let f = raiderFigures.get(id); if (f) return f;
+    const group = new THREE.Group(), hide = hideMat.clone(), horns: THREE.Group[] = [], legs: THREE.Mesh[] = [];
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.62, 10, 8), hide); body.scale.set(1.7, 0.95, 0.85); body.position.y = 1.05; group.add(body);
+    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 0.7, 7), hide); neck.position.set(1.0, 1.35, 0); neck.rotation.z = -0.9; group.add(neck);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 6), hide); head.scale.set(1.5, 0.9, 0.8); head.position.set(1.35, 1.6, 0); group.add(head);
+    for (const zz of [-0.12, 0.12]) { const eye = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 5), eyeMat); eye.position.set(1.6, 1.68, zz); group.add(eye); }
+    for (let i = 0; i < 4; i++) { const g = new THREE.Group(); g.position.set(1.1 + (i % 2) * 0.15, 1.85, (i - 1.5) * 0.14); const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(-0.15, 0.35, (i - 1.5) * 0.12), new THREE.Vector3(-0.45, 0.55, (i - 1.5) * 0.3), new THREE.Vector3(-0.55, 0.9, (i - 1.5) * 0.45)]); g.add(new THREE.Mesh(taperedTube(curve, 12, 5, t => 0.07 * (1 - t * 0.85), 0), hornMat)); group.add(g); horns.push(g); }
+    for (let i = 0; i < 6; i++) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.05, 0.95, 5), hide); leg.position.set(-0.75 + Math.floor(i / 2) * 0.75, 0.48, (i % 2 ? 1 : -1) * 0.38); group.add(leg); legs.push(leg); }
+    const coil = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.06, 6, 20), coilMat); coil.rotation.x = -Math.PI / 2; coil.position.y = 0.12; coil.visible = false; group.add(coil);
+    group.scale.setScalar(1.15); scene.add(group); f = { group, horns, legs, coil, hide }; raiderFigures.set(id, f); return f;
+  }
+  /** Place and animate a Dark Young: walking legs, writhing horns, the hurt flash, the root coil, the fall of the dead. */
+  function setRaider(id: number, x: number, z: number, heading: number, t: number, moving: boolean, hurt: number, rooted: number, dead: number): void {
+    const f = raiderFigure(id); f.group.visible = true; f.group.position.set(x, relief(x, z), z); f.group.rotation.y = -heading;
+    for (let i = 0; i < f.horns.length; i++) { const h = f.horns[i]; h.rotation.z = Math.sin(t * 0.0021 + i * 1.7) * 0.5; h.rotation.x = Math.cos(t * 0.0017 + i * 2.3) * 0.5; }
+    for (let i = 0; i < f.legs.length; i++) f.legs[i].rotation.z = moving ? Math.sin(t * 0.008 + i * 1.05) * 0.35 : 0;
+    f.hide.emissive.set(hurt > 0 ? '#b03030' : '#000000'); f.coil.visible = rooted > 0; f.coil.scale.setScalar(1 + Math.sin(t * 0.01) * 0.05);
+    if (dead > 0) { f.group.rotation.z = Math.min(1.4, dead * 3); f.group.position.y = relief(x, z) - Math.max(0, dead - 4) * 0.25; }
+    else f.group.rotation.z = 0;
+  }
+  function hideRaider(id: number): void { const f = raiderFigures.get(id); if (f) f.group.visible = false; }
+  // Her strokes: a slash of thorns before her, a burst ring round her, both short-lived (flashSlash, flashBurst).
+  const slashMat = new THREE.MeshBasicMaterial({ color: '#d8f07a', transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false }), burstMat = new THREE.MeshBasicMaterial({ color: '#b9e58a', transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false });
+  const slash = new THREE.Mesh(new THREE.RingGeometry(0.6, 1.9, 24, 1, -0.9, 1.8), slashMat); slash.rotation.x = -Math.PI / 2; slash.visible = false; scene.add(slash);
+  const burst = new THREE.Mesh(new THREE.RingGeometry(0.7, 1.0, 40), burstMat); burst.rotation.x = -Math.PI / 2; burst.visible = false; scene.add(burst);
+  let slashT = 0, burstT = 0;
+  function flashSlash(x: number, y: number, z: number, yaw: number): void { slash.position.set(x, y + 0.5, z); slash.rotation.z = -yaw - Math.PI / 2; slashT = 0.18; slash.visible = true; }
+  function flashBurst(x: number, y: number, z: number): void { burst.position.set(x, y + 0.15, z); burstT = 0.4; burst.visible = true; }
+  function updateStrokes(dt: number): void { if (slashT > 0) { slashT -= dt; slashMat.opacity = Math.max(0, slashT / 0.18); slash.visible = slashT > 0; } if (burstT > 0) { burstT -= dt; const k = 1 - burstT / 0.4; burst.scale.setScalar(0.5 + k * 3.0); burstMat.opacity = 0.8 * (1 - k); burst.visible = burstT > 0; } }
   const mass = new THREE.Group(); mass.visible = false; scene.add(mass);
   { const mr = mulberry32(78); const tufts: Standee[] = []; for (let i = 0; i < 14; i++) { const a = mr() * 6.28, r = mr() * 0.42, k = 0.28 + mr() * 0.22; tufts.push({ position: new THREE.Vector3(Math.cos(a) * r, 0.3 - r * 0.35, Math.sin(a) * r), yaw: mr() * Math.PI, width: k, height: k * 1.2 }); } mass.add(new THREE.Mesh(standees(tufts), spriteMaterial('grass', '#b6d47a', { emissive: '#3a5a20', emissiveIntensity: 0.25 }))); }
   const crownPoint = (t: Tree, az: number): THREE.Vector3 => new THREE.Vector3(t.x + Math.cos(az) * 1.1 * t.size, relief(t.x, t.z) + crownHeight(t) + 0.15, t.z + Math.sin(az) * 1.1 * t.size);
@@ -168,6 +201,6 @@ export function buildVillage(scene: THREE.Scene) {
   let fireWood = 0;
   /** Which armful each figure shows, for checks. */
   const armfuls = (): (Store | null)[] => carried.map(c => STORE_LIST.find(k => c[k].visible) ?? null);
-  return { colliders, figures, figure, mass, update, updateLand, updatePrayer, armfuls, setStation, get activeStation() { return activeStation; }, setStack, stack, spiritFigure, spiritFigures, stream, crownPoint, trunkPoint };
+  return { colliders, figures, figure, mass, update, updateLand, updatePrayer, armfuls, setRaider, hideRaider, flashSlash, flashBurst, updateStrokes, setStation, get activeStation() { return activeStation; }, setStack, stack, spiritFigure, spiritFigures, stream, crownPoint, trunkPoint };
 }
 export type VillageWorld = ReturnType<typeof buildVillage>;

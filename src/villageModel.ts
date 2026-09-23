@@ -99,13 +99,22 @@ export type Job = 'gather' | 'pray';
 export interface HobbitState { id: string; x: number; z: number; heading: number; activity: Activity; want: Want; job: Job; path: Vec2[]; speed: number; inside: boolean; bubble: string; bubbleUntil: number; wanderAt: number; faceAt: number; hunger: number; carry: Carry | null; errand: Errand; gatherAt: number; eatUntil: number; jobAt: number; meals: number; ate: number }
 /** A forest spirit: summoned for one place's job, it gathers and carries there tirelessly by day, and stands at its place by night. No needs, no home. */
 export interface Spirit { id: number; keeps: SiteKind; x: number; z: number; heading: number; path: Vec2[]; speed: number; carry: Carry | null; errand: 'deliver' | null; gatherAt: number; wanderAt: number }
-export interface Village { seed: number; tick: number; hobbits: HobbitState[]; stores: Record<Store, number>; land: Land; fireWood: number; take: Take; lastTake: Take; prayer: number; prayed: number; spirits: Spirit[]; stack: Carry | null }
+// The Dark Young (the first enemy): oversized goats with writhing tentacle horns and six legs, the get of the
+// mother of goats. They shamble in from the wood after nightfall while the villagers sleep, go to the fullest
+// store and eat, and slink back to the wood before dawn. The player outpaces them by gathering more than they
+// can eat, or fights them. Their walking and eating run in real seconds (stepRaiders), like her fighting, and
+// nothing happens while the page is closed; the night's arrival is set by the tick (advance).
+export type RaiderState = 'coming' | 'eating' | 'hunting' | 'leaving' | 'dead';
+export interface Raider { id: number; x: number; z: number; heading: number; hp: number; state: RaiderState; target: Store | null; ate: number; eatClock: number; aggro: number; rooted: number; biteClock: number; hurt: number; gone: number }
+/** Her fighting stat (vigor: bitten down, never to death; at nothing she fades and wakes at the stone, weakened) and her sap (spent by the specials, refilling slowly for now; match-3 is reserved for building it later). */
+export interface Hero { vigor: number; sap: number; faint: number; calm: number }
+export interface Village { seed: number; tick: number; hobbits: HobbitState[]; stores: Record<Store, number>; land: Land; fireWood: number; take: Take; lastTake: Take; prayer: number; prayed: number; spirits: Spirit[]; stack: Carry | null; raiders: Raider[]; hero: Hero; raidDay: number; slain: number; eaten: number }
 export const hobbitById = (id: string): Hobbit => HOBBITS.find(h => h.id === id)!;
 export const houseOf = (h: Hobbit): House => HOUSES[h.home];
 /** The first morning: the stores hold some food and a night's wood already (the village has lived here a while), the bushes are full, a few branches lie, the strips are at different stages so that one ripens every day or so. */
 export function freshVillage(seed = 1): Village {
   return {
-    seed, tick: 0, stores: { berries: 3, milk: 2, grain: 6, wood: 8, water: 5 }, land: { berries: BERRY_CAP, branches: 6, milk: MILK_PER_DAY, crops: Array.from({ length: CROP_STRIPS }, (_, i) => (i + 0.5) / CROP_STRIPS) }, fireWood: 0, take: freshTake(), lastTake: freshTake(), prayer: 0, prayed: 0, spirits: [], stack: null,
+    seed, tick: 0, stores: { berries: 3, milk: 2, grain: 6, wood: 8, water: 5 }, land: { berries: BERRY_CAP, branches: 6, milk: MILK_PER_DAY, crops: Array.from({ length: CROP_STRIPS }, (_, i) => (i + 0.5) / CROP_STRIPS) }, fireWood: 0, take: freshTake(), lastTake: freshTake(), prayer: 0, prayed: 0, spirits: [], stack: null, raiders: [], hero: { vigor: VIGOR_MAX, sap: SAP_MAX, faint: 0, calm: 0 }, raidDay: -1, slain: 0, eaten: 0,
     hobbits: HOBBITS.map(h => { const d = houseOf(h).door; return { id: h.id, x: d.x, z: d.z, heading: houseOf(h).facing, activity: 'sleeping', want: 'home', job: 'gather', path: [], speed: 0, inside: true, bubble: '', bubbleUntil: 0, wanderAt: 0, faceAt: 0, hunger: 0.3, carry: null, errand: null, gatherAt: 0, eatUntil: 0, jobAt: 0, meals: 0, ate: -1 }; }),
   };
 }
@@ -216,15 +225,64 @@ export function deliver(v: Village, store: Store): boolean {
 function eat(v: Village, s: HobbitState, drink: boolean, say: (t: string) => void): void {
   s.ate = mealSlot(v.tick); const f = fullestFood(v); if (f) { v.stores[f] -= 1; if (drink && v.stores.water >= 1) v.stores.water -= 1; s.hunger = 0; s.meals++; s.eatUntil = v.tick + EAT_TICKS; s.activity = 'eating'; say(`eating ${STORES[f].unit}`); } else say('nothing to eat');
 }
+/** The raid: at RAID_TICK (a while after night falls) raidSize(day) Dark Young appear at the wood's edge (RAID_FROM m out), each walks at DY_PACE to the fullest store but the trough, eats one unit every DY_EAT_S seconds until it has had DY_FILL, then leaves; at RAID_END (before dawn) all leave, and one at the wood's edge is gone. Tuning. */
+export const RAID_TICK = 870, RAID_END = 1380, RAID_FROM = WALK_RADIUS - 12, DY_PACE = 0.9, DY_EAT_S = 6, DY_FILL = 6, DY_HP = 30;
+export const raidSize = (day: number): number => Math.min(3, 1 + Math.floor(day / 2));
+/** Fighting. Hers: a strike (STRIKE_DMG within STRIKE_RANGE ahead, every STRIKE_CD s, no sap), a thorn burst (THORN_DMG to all within THORN_RANGE, THORN_CD s to recharge, THORN_SAP), a root bind (holds one within ROOT_RANGE for ROOT_S, ROOT_CD, ROOT_SAP). Theirs: struck, a Dark Young hunts her for DY_AGGRO_S at DY_CHARGE m/s and bites DY_BITE every DY_BITE_S within DY_REACH. Vigor refills VIGOR_REGEN a second after VIGOR_CALM_S unbitten; sap SAP_REGEN a second. At no vigor she faints for FAINT_S and wakes at the stone with FAINT_VIGOR. Tuning. */
+export const STRIKE_DMG = 5, STRIKE_RANGE = 1.9, STRIKE_CD = 0.45, THORN_DMG = 14, THORN_RANGE = 3.2, THORN_CD = 10, THORN_SAP = 25, ROOT_S = 4, ROOT_RANGE = 5, ROOT_CD = 14, ROOT_SAP = 15;
+export const DY_AGGRO_S = 8, DY_CHARGE = 1.7, DY_BITE = 12, DY_BITE_S = 1.4, DY_REACH = 1.5, VIGOR_MAX = 100, VIGOR_REGEN = 3, VIGOR_CALM_S = 4, SAP_MAX = 100, SAP_REGEN = 2, FAINT_S = 3, FAINT_VIGOR = 40, DY_CORPSE_S = 12;
+/** The fullest store but the trough, by share of cap, with a unit in it: what a Dark Young goes for. */
+export function fullestStore(v: Village): Store | null { let best: Store | null = null; for (const k of STORE_LIST) if (k !== 'water' && v.stores[k] >= 1 && (best === null || v.stores[k] / STORES[k].cap > v.stores[best] / STORES[best].cap)) best = k; return best; }
+export function spawnRaid(v: Village, rand: () => number): void {
+  const n = raidSize(dayOf(v.tick)), a0 = rand() * Math.PI * 2;
+  for (let i = 0; i < n; i++) { const a = a0 + (i - (n - 1) / 2) * 0.35 + (rand() - 0.5) * 0.2, id = v.raiders.reduce((m, r) => Math.max(m, r.id), -1) + 1; let x = Math.cos(a) * RAID_FROM, z = Math.sin(a) * RAID_FROM; if (inWater(x, z)) { x = Math.cos(a + 1.2) * RAID_FROM; z = Math.sin(a + 1.2) * RAID_FROM; } v.raiders.push({ id, x, z, heading: Math.atan2(-z, -x), hp: DY_HP, state: 'coming', target: null, ate: 0, eatClock: 0, aggro: 0, rooted: 0, biteClock: 0, hurt: 0, gone: 0 }); }
+  v.raidDay = dayOf(v.tick);
+}
+const towards = (r: { x: number; z: number; heading: number }, to: Vec2, m: number): number => { const d = Math.hypot(to.x - r.x, to.z - r.z); if (d < 1e-6) return 0; const step = Math.min(d, m); r.heading = Math.atan2(to.z - r.z, to.x - r.x); r.x += (to.x - r.x) / d * step; r.z += (to.z - r.z) / d * step; return d - step; };
+/** The Dark Young by real seconds: walking, eating, hunting her, biting, leaving, and the dead fading; her vigor and sap refilling. `her` is where she stands (null while she is not on her feet). */
+export function stepRaiders(v: Village, dt: number, her: Vec2 | null): void {
+  const h = v.hero; h.calm += dt; h.sap = Math.min(SAP_MAX, h.sap + SAP_REGEN * dt); if (h.faint > 0) { h.faint = Math.max(0, h.faint - dt); if (h.faint === 0) h.vigor = Math.max(h.vigor, FAINT_VIGOR); } else if (h.calm > VIGOR_CALM_S) h.vigor = Math.min(VIGOR_MAX, h.vigor + VIGOR_REGEN * dt);
+  const t = v.tick % DAY_TICKS, night = phaseAt(v.tick) === 'night', leaveAll = !night || t >= RAID_END;
+  for (const r of v.raiders) {
+    r.hurt = Math.max(0, r.hurt - dt); if (r.state === 'dead') { r.gone += dt; continue; }
+    if (r.rooted > 0) { r.rooted = Math.max(0, r.rooted - dt); r.aggro = Math.max(0, r.aggro - dt); continue; }
+    if (r.aggro > 0 && her && h.faint === 0) {
+      // Hunting her: to her at a charge, a bite within reach.
+      r.state = 'hunting'; r.aggro -= dt; const d = Math.hypot(her.x - r.x, her.z - r.z);
+      if (d > DY_REACH) towards(r, her, DY_CHARGE * dt); else { r.heading = Math.atan2(her.z - r.z, her.x - r.x); r.biteClock += dt; if (r.biteClock >= DY_BITE_S) { r.biteClock = 0; h.vigor = Math.max(0, h.vigor - DY_BITE); h.calm = 0; if (h.vigor === 0) { h.faint = FAINT_S; r.aggro = 0; } } }
+      if (r.aggro <= 0) { r.aggro = 0; r.state = 'coming'; r.target = null; }
+      continue;
+    }
+    if (leaveAll || r.ate >= DY_FILL) r.state = 'leaving';
+    if (r.state === 'leaving') { const a = Math.atan2(r.z, r.x), out = { x: Math.cos(a) * (RAID_FROM + 2), z: Math.sin(a) * (RAID_FROM + 2) }; if (towards(r, out, DY_PACE * dt) < 0.5) r.gone = DY_CORPSE_S; continue; }
+    if (r.state === 'coming' || r.state === 'hunting') { if (!r.target || v.stores[r.target] < 1) r.target = fullestStore(v); if (!r.target) { r.state = 'leaving'; continue; } const spot = storeSpot(STORES[r.target]); if (towards(r, spot, DY_PACE * dt) < 0.3) { r.state = 'eating'; r.eatClock = 0; r.heading = Math.atan2(STORES[r.target].z - r.z, STORES[r.target].x - r.x); } continue; }
+    if (r.state === 'eating') { if (!r.target || v.stores[r.target] < 1) { r.target = null; r.state = 'coming'; continue; } r.eatClock += dt; if (r.eatClock >= DY_EAT_S) { r.eatClock = 0; v.stores[r.target] -= 1; r.ate += 1; v.eaten += 1; } }
+  }
+  v.raiders = v.raiders.filter(r => !(r.state === 'dead' && r.gone >= DY_CORPSE_S) && !(r.state === 'leaving' && r.gone >= DY_CORPSE_S));
+}
+/** Hurt a Dark Young: it turns on her; at no hp it is dead. */
+function hurt(v: Village, r: Raider, dmg: number): void { r.hp = Math.max(0, r.hp - dmg); r.hurt = 0.3; r.aggro = DY_AGGRO_S; if (r.hp === 0) { r.state = 'dead'; r.gone = 0; r.aggro = 0; v.slain += 1; } }
+const alive = (v: Village): Raider[] => v.raiders.filter(r => r.state !== 'dead');
+/** Her strike: the nearest Dark Young within reach and ahead of her (facing (fx, fz)). Returns it, or null when nothing was there. */
+export function strike(v: Village, her: Vec2, fx: number, fz: number): Raider | null {
+  let best: Raider | null = null, bd = Infinity; for (const r of alive(v)) { const dx = r.x - her.x, dz = r.z - her.z, d = Math.hypot(dx, dz); if (d <= STRIKE_RANGE + 0.6 && (dx * fx + dz * fz) / (d || 1) > -0.2 && d < bd) { best = r; bd = d; } }
+  if (best) hurt(v, best, STRIKE_DMG); return best;
+}
+/** Her thorn burst: everything within THORN_RANGE, for THORN_SAP. Returns how many were hurt, or -1 without the sap. */
+export function thornBurst(v: Village, her: Vec2): number { if (v.hero.sap < THORN_SAP) return -1; v.hero.sap -= THORN_SAP; let n = 0; for (const r of alive(v)) if (Math.hypot(r.x - her.x, r.z - her.z) <= THORN_RANGE + 0.6) { hurt(v, r, THORN_DMG); n++; } return n; }
+/** Her root bind: the nearest within ROOT_RANGE held for ROOT_S, for ROOT_SAP. Returns it, null when none, or undefined without the sap. */
+export function rootBind(v: Village, her: Vec2): Raider | null | undefined { if (v.hero.sap < ROOT_SAP) return undefined; let best: Raider | null = null, bd = Infinity; for (const r of alive(v)) { const d = Math.hypot(r.x - her.x, r.z - her.z); if (d <= ROOT_RANGE + 0.6 && d < bd) { best = r; bd = d; } } if (!best) return null; v.hero.sap -= ROOT_SAP; best.rooted = ROOT_S; best.aggro = Math.max(best.aggro, DY_AGGRO_S); return best; }
 /** Advance the village by whole ticks. Deterministic: the only randomness is the seeded stream, drawn in a fixed order. */
 export function advance(v: Village, ticks: number): void {
   for (let n = 0; n < ticks; n++) {
     const rand = mulberry32((v.seed * 7919 + v.tick * 131) >>> 0), t = v.tick % DAY_TICKS, phase = phaseAt(v.tick);
     // The land by the day: at dawn the branches drop and the goats have their milk; the bushes and the strips grow every minute; the fire burns down through the night.
-    if (t === 0) { v.land.branches = Math.min(BRANCH_CAP, v.land.branches + BRANCHES_PER_DAY); v.land.milk = MILK_PER_DAY; v.lastTake = v.take; v.take = freshTake(); }
+    if (t === 0) { v.land.branches = Math.min(BRANCH_CAP, v.land.branches + BRANCHES_PER_DAY); v.land.milk = MILK_PER_DAY; v.lastTake = v.take; v.take = freshTake(); v.raiders = []; }
     v.land.berries = Math.min(BERRY_CAP, v.land.berries + BERRY_REGROW / DAY_TICKS);
     for (let i = 0; i < v.land.crops.length; i++) v.land.crops[i] = Math.min(1, v.land.crops[i] + 1 / (CROP_DAYS * DAY_TICKS));
     if (phase === 'night' && v.fireWood > 0) v.fireWood = Math.max(0, v.fireWood - WOOD_PER_NIGHT / (DAY_TICKS - PHASES[5][1]));
+    // Nightfall's raid: the Dark Young come once a night, while everyone sleeps.
+    if (t === RAID_TICK && v.raidDay < dayOf(v.tick)) spawnRaid(v, rand);
     let praying = 0, nell = false;
     for (const s of v.hobbits) {
       const h = hobbitById(s.id), house = houseOf(h), want = wants(h, v.tick), kind = YIELD_OF[h.keeps] ?? null;
@@ -347,6 +405,9 @@ export function parseVillage(raw: string | null): Village {
     for (const which of ['take', 'lastTake'] as const) if (p[which] && typeof p[which] === 'object') for (const k of STORE_LIST) v[which][k] = num(p[which][k], 0, 1e4, 0);
     const carryOf = (c: unknown): Carry | null => { const k = c as Carry; return k && STORE_LIST.includes(k.kind) && Number.isFinite(k.n) && k.n > 0 ? { kind: k.kind, n: Math.min(STACK_CAP, Math.floor(k.n)) } : null; };
     v.stack = carryOf(p.stack);
+    if (p.hero && typeof p.hero === 'object') { v.hero.vigor = num(p.hero.vigor, 0, VIGOR_MAX, VIGOR_MAX); v.hero.sap = num(p.hero.sap, 0, SAP_MAX, SAP_MAX); v.hero.faint = num(p.hero.faint, 0, FAINT_S, 0); v.hero.calm = num(p.hero.calm, 0, 1e6, 0); }
+    v.raidDay = num(p.raidDay, -1, 1e6, -1); v.slain = num(p.slain, 0, 1e6, 0); v.eaten = num(p.eaten, 0, 1e6, 0);
+    if (Array.isArray(p.raiders)) for (const q of p.raiders.slice(0, 12)) { if (!q || typeof q !== 'object') continue; const st: RaiderState = ['coming', 'eating', 'hunting', 'leaving', 'dead'].includes(q.state) ? q.state : 'coming'; v.raiders.push({ id: num(q.id, 0, 1e6, v.raiders.length), x: num(q.x, -200, 200, 0), z: num(q.z, -200, 200, 0), heading: num(q.heading, -10, 10, 0), hp: num(q.hp, 0, DY_HP, DY_HP), state: st, target: STORE_LIST.includes(q.target) ? q.target : null, ate: num(q.ate, 0, 99, 0), eatClock: 0, aggro: num(q.aggro, 0, DY_AGGRO_S, 0), rooted: num(q.rooted, 0, ROOT_S, 0), biteClock: 0, hurt: 0, gone: num(q.gone, 0, DY_CORPSE_S, 0) }); }
     const pathOf = (x: unknown): Vec2[] => (Array.isArray(x) ? x.filter((q: unknown) => q && Number.isFinite((q as Vec2).x) && Number.isFinite((q as Vec2).z)).map((q: Vec2) => ({ x: q.x, z: q.z })).slice(0, 4) : []);
     if (Array.isArray(p.spirits)) for (const q of p.spirits.slice(0, 12)) { if (!q || !(q.keeps in YIELD_OF)) continue; const site = SITES[q.keeps as SiteKind]; v.spirits.push({ id: v.spirits.length, keeps: q.keeps, x: num(q.x, -200, 200, site.x), z: num(q.z, -200, 200, site.z), heading: num(q.heading, -10, 10, 0), path: pathOf(q.path), speed: 0, carry: carryOf(q.carry), errand: q.errand === 'deliver' && carryOf(q.carry) ? 'deliver' : null, gatherAt: num(q.gatherAt, 0, 1e9, v.tick), wanderAt: num(q.wanderAt, 0, 1e9, v.tick) }); }
     for (let i = 0; i < HOBBITS.length; i++) {
@@ -362,7 +423,7 @@ export function parseVillage(raw: string | null): Village {
     return v;
   } catch { return freshVillage(); }
 }
-export const serializeVillage = (v: Village): string => JSON.stringify({ seed: v.seed, tick: v.tick, stores: v.stores, land: { ...v.land, berries: Math.round(v.land.berries * 100) / 100, crops: v.land.crops.map(c => Math.round(c * 1000) / 1000) }, fireWood: Math.round(v.fireWood * 100) / 100, take: v.take, lastTake: v.lastTake, prayer: Math.round(v.prayer * 1000) / 1000, prayed: Math.round(v.prayed * 1000) / 1000, stack: v.stack, spirits: v.spirits.map(s => ({ ...s, x: Math.round(s.x * 100) / 100, z: Math.round(s.z * 100) / 100, heading: Math.round(s.heading * 1000) / 1000 })), hobbits: v.hobbits.map(s => ({ ...s, x: Math.round(s.x * 100) / 100, z: Math.round(s.z * 100) / 100, heading: Math.round(s.heading * 1000) / 1000, hunger: Math.round(s.hunger * 1000) / 1000 })) });
+export const serializeVillage = (v: Village): string => JSON.stringify({ seed: v.seed, tick: v.tick, stores: v.stores, land: { ...v.land, berries: Math.round(v.land.berries * 100) / 100, crops: v.land.crops.map(c => Math.round(c * 1000) / 1000) }, fireWood: Math.round(v.fireWood * 100) / 100, take: v.take, lastTake: v.lastTake, prayer: Math.round(v.prayer * 1000) / 1000, prayed: Math.round(v.prayed * 1000) / 1000, stack: v.stack, hero: { vigor: Math.round(v.hero.vigor * 10) / 10, sap: Math.round(v.hero.sap * 10) / 10, faint: Math.round(v.hero.faint * 100) / 100, calm: Math.round(v.hero.calm * 100) / 100 }, raidDay: v.raidDay, slain: v.slain, eaten: v.eaten, raiders: v.raiders.map(r => ({ ...r, x: Math.round(r.x * 100) / 100, z: Math.round(r.z * 100) / 100, heading: Math.round(r.heading * 1000) / 1000, hp: Math.round(r.hp * 10) / 10, aggro: Math.round(r.aggro * 100) / 100, rooted: Math.round(r.rooted * 100) / 100, gone: Math.round(r.gone * 100) / 100 })), spirits: v.spirits.map(s => ({ ...s, x: Math.round(s.x * 100) / 100, z: Math.round(s.z * 100) / 100, heading: Math.round(s.heading * 1000) / 1000 })), hobbits: v.hobbits.map(s => ({ ...s, x: Math.round(s.x * 100) / 100, z: Math.round(s.z * 100) / 100, heading: Math.round(s.heading * 1000) / 1000, hunger: Math.round(s.hunger * 1000) / 1000 })) });
 
 // Hulda's ways through the meadow. Grass roots are everywhere she can walk: a free medium, faster than
 // running, shown as a bulge under the grass. Tree roots join the trees of the copse and the wood: fixed
