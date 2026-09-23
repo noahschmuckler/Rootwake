@@ -2,12 +2,12 @@
 // Pure: no Three.js. Height and biome by value noise from the world seed; each chunk's trees from the
 // chunk's own seed, so a chunk is the same whenever it is loaded. The meadow (the village's wood
 // included) is an island the chunks defer to: no hills and no chunk trees within MEADOW_ISLAND of the
-// village, and a clearing is kept where the karst will stand.
+// village, and the karst stands on an island of its own (KARST_ISLAND), its clearing kept free of chunk trees.
 import { mulberry32 } from './colors';
 import { places, FOREST_RADIUS, KARST_AT } from './overworldModel';
 import type { Tree } from './villageModel';
 
-export const CHUNK = 64, LOAD_RING = 2, MEADOW_ISLAND = 90, ISLAND_FADE = 60, KARST_CLEARING = 70;
+export const CHUNK = 64, LOAD_RING = 2, MEADOW_ISLAND = 90, ISLAND_FADE = 60, KARST_CLEARING = 100, KARST_ISLAND = 96, KARST_FADE = 50;
 export type Biome = 'meadow' | 'wood' | 'dark';
 const hash2 = (x: number, z: number, seed: number): number => { let h = (x * 374761393 + z * 668265263 + seed * 1442695041) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
 const smooth = (t: number): number => t * t * (3 - 2 * t);
@@ -18,7 +18,7 @@ export function noise(x: number, z: number, wavelength: number, seed: number): n
   return (a * (1 - tx) + b * tx) * (1 - tz) + (c * (1 - tx) + d * tx) * tz;
 }
 /** How much the land beyond the meadow shows here: 0 inside the island, 1 beyond its fade. */
-export const beyond = (x: number, z: number): number => { const r = Math.hypot(x, z); return Math.min(1, Math.max(0, (r - MEADOW_ISLAND) / ISLAND_FADE)); };
+export const beyond = (x: number, z: number): number => { const r = Math.hypot(x, z), rk = Math.hypot(x - KARST_AT.x, z - KARST_AT.z); return Math.min(1, Math.max(0, (r - MEADOW_ISLAND) / ISLAND_FADE), Math.max(0, (rk - KARST_ISLAND) / KARST_FADE)); };
 /** The hills: two octaves, up to HILL_M high, fading in past the meadow. Tuning. */
 export const HILL_M = 7;
 export function hills(x: number, z: number, seed = 1): number { const k = beyond(x, z); if (k <= 0) return 0; return k * HILL_M * (noise(x, z, 140, seed) * 0.7 + noise(x, z, 46, seed + 7) * 0.3 - 0.45); }

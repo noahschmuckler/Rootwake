@@ -3,7 +3,8 @@
 // disposed behind her; the loaded chunks' trees are offered to the model's tree lookups (treeProvider).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { CHUNK, chunkKey, chunksAround, chunkTrees, biomeAt } from './chunkModel';
+import { CHUNK, KARST_ISLAND, chunkKey, chunksAround, chunkTrees, biomeAt } from './chunkModel';
+import { KARST_AT } from './overworldModel';
 import { relief } from './villageWorld';
 import { mulberry32 } from './colors';
 import { spriteMaterial, standees, type Standee } from './sprites';
@@ -20,7 +21,7 @@ export function createChunks(scene: THREE.Scene, seed: number) {
   function build(cx: number, cz: number): Chunk {
     const group = new THREE.Group(), geometries: THREE.BufferGeometry[] = [], n = 16;
     const geo = new THREE.PlaneGeometry(CHUNK, CHUNK, n, n); geo.rotateX(-Math.PI / 2); geo.translate((cx + 0.5) * CHUNK, 0, (cz + 0.5) * CHUNK);
-    { const pos = geo.attributes.position as THREE.BufferAttribute, col: number[] = []; for (let i = 0; i < pos.count; i++) { const x = pos.getX(i), z = pos.getZ(i); pos.setY(i, relief(x, z) - 0.02); col.push(...colourOf(x, z)); } geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); geo.computeVertexNormals(); }
+    { const pos = geo.attributes.position as THREE.BufferAttribute, col: number[] = []; for (let i = 0; i < pos.count; i++) { const x = pos.getX(i), z = pos.getZ(i); pos.setY(i, relief(x, z) - 0.02 - (Math.hypot(x - KARST_AT.x, z - KARST_AT.z) < KARST_ISLAND ? 0.35 : 0)); col.push(...colourOf(x, z)); } geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); geo.computeVertexNormals(); }
     group.add(new THREE.Mesh(geo, ground)); geometries.push(geo);
     const trees = chunkTrees(cx, cz, seed), rand = mulberry32((cx * 31 + cz * 17 + seed) >>> 0), colliders: Collider[] = [];
     const wood: THREE.BufferGeometry[] = [], cards: Standee[] = [], collars: THREE.BufferGeometry[] = [], dwood: THREE.BufferGeometry[] = [], dcards: Standee[] = [];

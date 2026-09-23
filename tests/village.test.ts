@@ -199,6 +199,7 @@ test('the land beyond the meadow: noise in range and seeded, no hills on the isl
   for (let i = 0; i < a.length; i++) for (let k = i + 1; k < a.length; k++) assert.ok(Math.hypot(a[i].x - a[k].x, a[i].z - a[k].z) >= 4.5, 'spaced');
   assert.equal(chunkTrees(0, 0, 1).length, 0, 'none on the island'); const kc = chunkOf(KARST_AT.x, KARST_AT.z); assert.ok(chunkTrees(kc.cx, kc.cz, 1).every(t => Math.hypot(t.x - KARST_AT.x, t.z - KARST_AT.z) >= KARST_CLEARING), 'the karst\'s clearing kept');
   assert.equal(chunksAround(0, 0).length, (2 * LOAD_RING + 1) ** 2);
+  assert.equal(hills(KARST_AT.x + 10, KARST_AT.z - 10), 0, 'the karst stands on flat ground'); assert.equal(hills(KARST_AT.x, KARST_AT.z + 90), 0);
   const far = chunkTrees(4, 4, 1); setTreeProvider((x, z, r) => far.filter(t => Math.hypot(t.x - x, t.z - z) <= r)); const t0 = far[0]; assert.equal(nearest(t0.x + 0.5, t0.z).tree.id, t0.id, 'the nearest tree can be a chunk tree'); assert.ok(treesNear(t0.x, t0.z, 3).some(t => t.id === t0.id)); const h = hops(t0); assert.ok(h.every(o => o.id !== t0.id)); setTreeProvider(() => []);
   assert.equal(nearest(t0.x, t0.z).tree.id < 100000, true, 'without the provider, the village\'s trees again');
 });
