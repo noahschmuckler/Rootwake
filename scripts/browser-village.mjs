@@ -13,7 +13,8 @@ const report=[];
 const stick=(page,id)=>({down:async(dx,dy)=>{await page.locator('#walk').dispatchEvent('pointerdown',{pointerId:id,clientX:315,clientY:710,pointerType:'touch',bubbles:true});await page.locator('#walk').dispatchEvent('pointermove',{pointerId:id,clientX:315+dx,clientY:710+dy,pointerType:'touch',bubbles:true});},up:async()=>{await page.locator('#walk').dispatchEvent('pointerup',{pointerId:id,clientX:315,clientY:710,pointerType:'touch',bubbles:true});await page.waitForTimeout(150);}});
 const v=(page,expr)=>page.evaluate(expr);
 const waitMode=(page,m,timeout=20000)=>page.waitForFunction(m=>window.__village.mode===m,m,{timeout});
-async function doubleTapStick(page){for(const id of [21,22]){await page.locator('#walk').dispatchEvent('pointerdown',{pointerId:id,clientX:315,clientY:710,pointerType:'touch',bubbles:true});await page.waitForTimeout(60);await page.locator('#walk').dispatchEvent('pointerup',{pointerId:id,clientX:315,clientY:710,pointerType:'touch',bubbles:true});await page.waitForTimeout(90);}}
+// The four events go in one go: the tap's thresholds are wall-clock, and a slow frame between them (the karst's scene under the software renderer) would otherwise undo the tap.
+async function doubleTapStick(page){await page.evaluate(()=>{const w=document.getElementById('walk');for(const id of [21,22]){for(const type of ['pointerdown','pointerup'])w.dispatchEvent(new PointerEvent(type,{pointerId:id,clientX:315,clientY:710,pointerType:'touch',bubbles:true}));}});await page.waitForTimeout(150);}
 const touch=(id,x,y)=>({pointerId:id,clientX:x,clientY:y,pointerType:'touch',isPrimary:true,bubbles:true});
 async function press(page,x,y,holdMs=120){const canvas=page.locator('canvas').first();await canvas.dispatchEvent('pointerdown',touch(7,x,y));await page.waitForTimeout(holdMs);await canvas.dispatchEvent('pointerup',touch(7,x,y));}
 try{
