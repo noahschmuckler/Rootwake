@@ -159,6 +159,7 @@ function presentSpirits(dt: number): void {
 const cooldown = { strike: 0, thorn: 0, root: 0 };
 const fightEl = { strike: el<HTMLButtonElement>('strike'), thorn: el<HTMLButtonElement>('thorn'), root: el<HTMLButtonElement>('root'), vigor: el('vigor').firstElementChild as HTMLElement, sap: el('sap').firstElementChild as HTMLElement };
 function herFacing(): { fx: number; fz: number } { return { fx: -Math.sin(player.yaw), fz: -Math.cos(player.yaw) }; }
+/** `simDt` is real time at the clock's speed (the Dark Young), `dt` real time (her cooldowns and the strokes' fade): both keep their pace however slow the frames. */
 function fight(simDt: number, dt: number): void {
   const her = mode === 'ground' && village.hero.faint === 0 ? { x: player.feet().x, z: player.feet().z } : null;
   stepRaiders(village, simDt, her);
@@ -271,7 +272,7 @@ function frame(now: number) {
     if (move.t === 1) { const then = move.then; move = null; then(); }
   }
   under += (wantUnder - under) * Math.min(1, dt * 4);
-  fight(Math.min(0.25, wall) * speed, dt); stations(Math.min(0.25, wall)); presentHulda(dt); presentHobbits(dt); presentSpirits(dt); presentRaiders(dt);
+  fight(Math.min(0.25, wall) * speed, Math.min(0.25, wall)); stations(Math.min(0.25, wall)); presentHulda(dt); presentHobbits(dt); presentSpirits(dt); presentRaiders(dt);
   const light = daylightAt(village.tick), dusk = Math.max(0, 1 - Math.abs(light - 0.12) / 0.12);
   colour.copy(nightSky).lerp(daySky, Math.min(1, light * 1.6)).lerp(duskSky, dusk * 0.6); scene.background = colour; scene.fog = new THREE.FogExp2(colour, 0.011);
   hemi.intensity = 0.5 + 1.9 * light; sun.intensity = 2.3 * light; world.updateLand(village); world.update(light, time, under);
