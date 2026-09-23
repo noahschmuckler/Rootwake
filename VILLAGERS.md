@@ -134,5 +134,91 @@ clear; a village clearing is one more exclusion) so that Hulda's traversal and t
 - (2026-09-22, V1 brief) Clear graphical indicators of needs, stores and gathering. Berries replenish daily at a rate; crops grow more slowly; goat milk is available daily; branches drop and are gathered daily. Stores are outdoors and visible as they fill and are depleted for meals and crafting. Without interference the village holds a steady state: no births or deaths yet, only the daily rhythm.
 - (2026-09-22, second notes) The same screen drag turns the camera the same way in every form she takes. The double tap that enters and leaves grass and roots is on the thumbstick only, never on the screen. Once a hobbit has a destination it walks there at one continuous pace, not run, stop, run.
 
+## The worship loop (Noah's idea, 2026-09-23; plan and input recorded, implementation to be decided)
+
+**The idea.** The station mechanic of the mobile ad genre: a third-person figure walked to a place
+does the place's work by being there, and walked to the drop-off delivers. When the player judges a
+village worth supporting, Hulda helps it gather by that mechanism. Villagers whose stores are
+supplied are freed, and go to the shrine to pray to her. Prayer accumulates as points she spends on
+miracles: first, permanent forest spirits that do a gathering job, freeing the villagers further;
+then a tree of them, with her capacity for prayer rising and the cost of each next miracle rising;
+gifts of knowledge among them (more nourishing food, kinds of building, roads, defences). It implies
+a rival: agents of chaos who compete for a village's prayer by granting like boons and asking
+horrible things (sacrifice, raids on the unaligned), whom she beats by the same means, a better
+service or the same without the price.
+
+### Input (the builder's, for Noah to weigh)
+- **It closes the loop V1 opened.** V1 made the take bounded by the stores' caps, so a supplied
+  village stands idle at its places. The worship loop gives that idleness a use: freed time is
+  prayer. It also makes her help legible in the land's own terms: what she picks comes off the
+  same bushes, counted in the same take, and the thicket thins the same way if she over-picks.
+  Her help is not free to the land, only to the villagers.
+- **The rates must move first.** With today's tuning the stores fill in the first two hours
+  without her, so prayer would come almost free and her stations would be decoration. The
+  gathering rate should drop until a villager's day just meets the village's eating (the steady
+  state sits at the edge), so that her armfuls are what make the surplus. Tune with the sim probe
+  before building the stations. Proposal: `GATHER_TICKS` about 24 to 30, worship when a store is
+  at or above three quarters of its cap.
+- **Weight, still.** Her stack should be visible and bounded (about eight of one kind), slow her a
+  little, and refuse her other forms: no bulge under the grass with a basket on her back. The
+  double tap with a load does nothing but a wobble. Weight is the rule that keeps this from being
+  the ad game it borrows from.
+- **Where she drops off.** Two readings of "the stockpile": one ring on the green where everything
+  flies to its store, or a ring at each store. Recommend a ring at each store: the stores are
+  objects with places (V1's whole point), and one drop-off would teach that they are a menu.
+- **Prayer should saturate per village.** If every villager prays all day forever, points are a
+  faucet and the tree is a shop. Make a village's prayer rate rise with the number praying but
+  saturate (a shrine has so much attention), so growth means more villages (V5) and deeper
+  service, not longer idling. And freed villagers should not only pray: freed time is also what
+  V3's relationships and later crafts and building are made of. Worship competes with those wants.
+- **Spirits are a trade, not an upgrade.** A spirit does a job tirelessly, which is why it costs
+  prayer that the village's own labour would otherwise not have produced. But a village with
+  every job done by spirits has nothing to lose, and nothing to give but prayer. The rival is what
+  restores the stakes: they can be taken, and so can their prayer. Build the rival soon after the
+  first miracle, not last.
+- **Match-3.** Recommend keeping match-3 for her own sap (the plateau's cultivating board is her
+  body's work; its energy is hers) and not for miracles. Prayer is a social economy; spending it
+  should be a rite at the shrine, a visible beat (stand in the shrine's ring, hold, choose), not
+  a puzzle. Keep the board in reserve for shaping a spirit's nature later if a miracle wants a
+  tactile beat, and for the sap that later gates her own forms and fatigue.
+- **Sacrifice and the rival are a value system**, not just a cost. The player's judgement (the
+  brief's core) becomes: whom do the villagers serve, and what were they asked for. That is the
+  first place the "judgement material" of the brief becomes play. Worth designing the rival's
+  offers as readable acts (a fire on the stone, a hobbit led away, a raid party leaving) before
+  their numbers.
+
+### The passes (W for worship; W1 comes before V2, which it reshapes)
+- **W1. Her hands, their prayer.** Every resource place has a ring; standing in it in her own form
+  gathers into her stack (one kind, capacity, weight); the ring at the store takes it. A villager
+  whose store is supplied goes to the stone instead and prays ("praying"; Nell there doubles the
+  rate); prayer points accrue and show at the shrine and in a small count. One miracle: at the
+  shrine's ring, a rite summons a forest spirit for a named job (a small figure of leaves that
+  does the villager's gather-and-carry loop, day only, permanent). Question: does her helping
+  read as a relationship, and does the village's turning to the stone read as thanks?
+- **W2. The tree.** Capacity that rises with worship (the stone grows), costs that rise per
+  miracle, knowledge gifts (bread from grain and water, a well, a road, a palisade, a smokehouse)
+  each a visible change to the village and a visible change in what the villagers do. Question:
+  does the player plan, and do the gifts change the village's look enough to be read?
+- **W3. The rival.** An agent of chaos courts the village: boons of the same kinds, demands that
+  are acts (a sacrifice at the stone, a raid). Allegiance per patron; the villagers pray to whom
+  they owe. She wins them back by out-giving or by lifting the demand. Question: does the choice
+  between patrons produce the judgements the brief wants?
+
+### For W1, the implementation as proposed (to decide before building)
+- Model: `stations` (a ring per place and per store, radius about 1.2 m); her `stack` (kind, n,
+  cap 8); collecting one unit every `COLLECT_S` while she stands in a place's ring with room in
+  the store (same `landStock`, same take); delivering all at once in the store's ring. `prayer`
+  and `PRAYER_CAP`; a villager's `worship` want when their store is at or above the threshold;
+  `PRAYER_PER_TICK` per worshipper, Nell's factor; `spirits` as workers in the model with the
+  gather loop and no needs; `SPIRIT_COST` rising per spirit. All deterministic, all saved.
+- Scene: rings on the ground that brighten while she is in them; the stack on her back; the
+  stone glowing with prayer; the spirits as small figures of leaves in the ivy material.
+- Entry: the rite at the shrine (stand in its ring, a long hold on the stick opens the miracle
+  choice); the count by the clock; her forms refused while loaded.
+- Tests: the edge tuning (a day's work meets a day's eating without her), prayer only when
+  supplied, a spirit doing a job, costs rising. Journey: collect, deliver, a villager at the
+  stone, a spirit summoned.
+
 ## Open questions (Noah's to decide, flagged here rather than picked silently)
 - When the thought bubble should speak: on every change of activity, or only on the ones that matter (noon, home, a meeting)?
+- Worship loop (W1): one drop-off ring or a ring per store; the gathering rate that puts the village at the edge; whether her collecting costs sap; whether match-3 has any place in miracles (recommended: no, for now).
