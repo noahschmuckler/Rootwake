@@ -26,6 +26,8 @@ export interface Vec2 { x: number; z: number }
 /** The layout: houses on a ring round the green, the fire at its centre, the places they go at the gaps. */
 /** Houses are hobbit-sized: a round wall 1.35 m across the radius, under a thatch that peaks at about a metre and three quarters. */
 export const GREEN = { x: 0, z: 0 }, HOUSE_RING = 9, HOUSE_RADIUS = 1.35, MEADOW_RADIUS = 44;
+/** How far out she can walk: the meadow and the wood round it (the wood's trees stand out to MEADOW_RADIUS + 36). */
+export const WALK_RADIUS = MEADOW_RADIUS + 40;
 export interface House { id: number; x: number; z: number; facing: number; door: Vec2 }
 export const HOUSES: House[] = Array.from({ length: 6 }, (_, i) => { const a = i / 6 * Math.PI * 2 + 0.3, x = Math.cos(a) * HOUSE_RING, z = Math.sin(a) * HOUSE_RING, facing = a + Math.PI; return { id: i, x, z, facing, door: { x: x + Math.cos(facing) * (HOUSE_RADIUS + 0.4), z: z + Math.sin(facing) * (HOUSE_RADIUS + 0.4) } }; });
 export type SiteKind = 'thicket' | 'stream' | 'copse' | 'field' | 'pen' | 'shrine' | 'fire';
@@ -331,4 +333,4 @@ export function nearestTree(x: number, z: number): { tree: Tree; distance: numbe
 }
 export const hopTargets = (t: Tree): Tree[] => TREES.filter(o => o !== t && Math.hypot(o.x - t.x, o.z - t.z) <= HOP_REACH && Math.abs(crownHeight(o) - crownHeight(t)) <= HOP_RISE);
 /** Where the grass takes her: the meadow, not the houses, not the water. */
-export const grassCan = (x: number, z: number): boolean => Math.hypot(x, z) <= MEADOW_RADIUS + 30 && !inWater(x, z) && !HOUSES.some(h => Math.hypot(x - h.x, z - h.z) < HOUSE_RADIUS + 0.2);
+export const grassCan = (x: number, z: number): boolean => Math.hypot(x, z) <= WALK_RADIUS && !inWater(x, z) && !HOUSES.some(h => Math.hypot(x - h.x, z - h.z) < HOUSE_RADIUS + 0.2);
