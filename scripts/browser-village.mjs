@@ -33,6 +33,9 @@ try{
  await v(page,()=>{const k=window.__village;k.speed=0;const st=k.stations.find(s=>s.id==='gather-thicket');k.standAt(st.x,st.z,0);});await page.waitForTimeout(4500);
  const stack=await v(page,()=>window.__village.stack);assert.ok(stack&&stack.kind==='berries'&&stack.n>=6,`a stack of berries from standing in the ring (${JSON.stringify(stack)})`);assert.ok(await v(page,()=>window.__village.land.berries<35),'off the bushes');
  await doubleTapStick(page);await page.waitForTimeout(400);assert.equal(await v(page,()=>window.__village.mode),'ground','a loaded stack refuses the grass');
+ // With the baskets full she is told so and collects only the overfill; the heap beside the rack takes it.
+ await v(page,()=>{const k=window.__village;k.setStore('berries',8);const st=k.stations.find(s=>s.id==='gather-thicket');k.standAt(st.x,st.z,0);});await page.waitForTimeout(2500);
+ assert.ok(await page.locator('#tip').isVisible()&&/full/.test(await page.locator('#tip').textContent()),'the tip says the baskets are full');assert.ok((await v(page,()=>window.__village.stack.n))<=8,'her stack is bounded by the room');
  await v(page,()=>{const k=window.__village;k.setStore('berries',0);const st=k.stations.find(s=>s.id==='deliver-berries');k.standAt(st.x,st.z,0);});await page.waitForTimeout(2500);
  const handed=await v(page,()=>({stack:window.__village.stack,berries:window.__village.stores.berries}));assert.ok(!handed.stack,`handed over, all of it (${JSON.stringify(handed)})`);assert.equal(handed.berries,8,`the baskets hold it (${handed.berries})`);
  await page.screenshot({path:out+'/02e-stack.png'});

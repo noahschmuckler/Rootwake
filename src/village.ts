@@ -9,7 +9,7 @@ import { Player } from './player';
 import { createHuldaPresentation, HUMAN_CENTRE, type HuldaForm } from './huldaPresentation';
 import { installMobilityControls } from './mobilityControls';
 import { buildVillage, relief, HOBBIT_HEIGHT } from './villageWorld';
-import { HOBBITS, HOUSES, STORES, STATIONS, SITES, balance, stationAt, collect, deliver, summonSpirit, spiritCost, COLLECT_S, DELIVER_S, PRAYER_CAP, HOUSE_RADIUS, WALK_RADIUS, PHASES, type SiteKind, type Store, TICKS_PER_SECOND, DAY_TICKS, TREES, TREE_ROOTS, GRASS_SPEED, alignedRoot, ROOT_SPEED, TRUNK_CLIMB, CROWN_SLIDE, HOP_S, PRESS_S, PRESS_RANGE, ENTER_RANGE, freshVillage, parseVillage, serializeVillage, advance, clockOf, phaseAt, daylightAt, everyone, hobbitById, thought, crownHeight, trunkRadius, nearestTree, nextRoot, rootPoint, rootTangent, endTree, hopTargets, grassCan, inWater, type Village, type Tree, type RootEdge } from './villageModel';
+import { HOBBITS, HOUSES, STORES, STATIONS, SITES, YIELD_OF, balance, stationAt, storeFull, collect, deliver, summonSpirit, spiritCost, COLLECT_S, DELIVER_S, PRAYER_CAP, HOUSE_RADIUS, WALK_RADIUS, PHASES, type SiteKind, type Store, TICKS_PER_SECOND, DAY_TICKS, TREES, TREE_ROOTS, GRASS_SPEED, alignedRoot, ROOT_SPEED, TRUNK_CLIMB, CROWN_SLIDE, HOP_S, PRESS_S, PRESS_RANGE, ENTER_RANGE, freshVillage, parseVillage, serializeVillage, advance, clockOf, phaseAt, daylightAt, everyone, hobbitById, thought, crownHeight, trunkRadius, nearestTree, nextRoot, rootPoint, rootTangent, endTree, hopTargets, grassCan, inWater, type Village, type Tree, type RootEdge } from './villageModel';
 /** Grass → root: a root within ROOT_CATCH m whose run agrees with hers by |cos| ≥ ROOT_CATCH_DOT takes her; the step is sampled every ROOT_CATCH_STEP m. Tuning. */
 const ROOT_CATCH = 0.7, ROOT_CATCH_DOT = 0.6, ROOT_CATCH_STEP = 0.25;
 /** The longest gap between frames the village clock counts as watched time. Tuning. */
@@ -127,14 +127,16 @@ function presentHulda(dt: number): void {
 }
 // Her stations (W1): in a place's ring on her feet she collects into her stack, a unit every COLLECT_S; in a store's ring she delivers, one every DELIVER_S; before the stone the miracles are offered. A loaded stack refuses her other forms (a wobble says so).
 let collectClock = 0, deliverClock = 0, wobble = 0, lastStation: string | null = null;
-const miracles = el('miracles'), prayerEl = el('prayer');
+const miracles = el('miracles'), prayerEl = el('prayer'), tip = el('tip');
 /** `dt` here is real time (capped at a quarter second), like the village's ticks: her collecting keeps its pace however slow the frames. */
 function stations(dt: number): void {
   const f = player.feet(), st = mode === 'ground' ? stationAt(f.x, f.z) : null, id = st?.id ?? null;
   if (id !== lastStation) { collectClock = 0; deliverClock = 0; lastStation = id; }
   world.setStation(id, time);
-  if (st?.kind === 'gather' && st.keeps) { collectClock += dt; while (collectClock >= COLLECT_S) { collectClock -= COLLECT_S; if (!collect(village, st.keeps)) { collectClock = 0; break; } } }
-  else if (st?.kind === 'deliver' && st.store) { deliverClock += dt; while (deliverClock >= DELIVER_S) { deliverClock -= DELIVER_S; if (!deliver(village, st.store)) { deliverClock = 0; break; } } }
+  let say = '';
+  if (st?.kind === 'gather' && st.keeps) { const kind = YIELD_OF[st.keeps]!; collectClock += dt; while (collectClock >= COLLECT_S) { collectClock -= COLLECT_S; if (!collect(village, st.keeps)) { collectClock = 0; break; } } if (storeFull(village, kind)) say = `${STORES[kind].name} are full`; else if (village.stack && village.stack.kind !== kind) say = `her hands are full of ${STORES[village.stack.kind].unit}`; }
+  else if (st?.kind === 'deliver' && st.store) { deliverClock += dt; while (deliverClock >= DELIVER_S) { deliverClock -= DELIVER_S; if (!deliver(village, st.store)) { deliverClock = 0; break; } } if (village.stack && village.stack.kind !== st.store) say = `${STORES[st.store].name} take ${STORES[st.store].unit}, not ${STORES[village.stack.kind].unit}`; else if (village.stack && storeFull(village, st.store)) say = `${STORES[st.store].name} are full`; }
+  tip.hidden = !say; if (say) tip.textContent = say;
   miracles.hidden = st?.kind !== 'shrine'; if (!miracles.hidden) { const cost = spiritCost(village); for (const b of miracles.querySelectorAll('button')) { b.disabled = village.prayer < cost; b.querySelector('i')!.textContent = String(cost); } }
   prayerEl.textContent = `prayer ${Math.floor(village.prayer)} / ${PRAYER_CAP}`; world.updatePrayer(village.prayer / PRAYER_CAP);
   wobble = Math.max(0, wobble - dt);

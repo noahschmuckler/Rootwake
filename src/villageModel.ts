@@ -197,14 +197,19 @@ function takeOne(v: Village, kind: Store, carry: Carry | null, room: number): Ca
 }
 /** Her hands: standing in a place's ring she collects one unit into her stack (one kind at a time, up to STACK_CAP), from the same land, counted in the same take; standing in a store's ring she puts one unit in. No sap, only time. */
 export const STACK_CAP = 8;
+/** A store can overfill by OVERFILL units, as a heap beside it, for what she brings; the villagers keep to the cap. Her collecting is limited to what the store can still take (counting what is on its way), so she is never left holding what has nowhere to go. Tuning. */
+export const OVERFILL = 4;
+export const roomFor = (v: Village, kind: Store): number => STORES[kind].cap + OVERFILL - v.stores[kind] - inFlight(v, kind);
+export const storeFull = (v: Village, kind: Store): boolean => roomFor(v, kind) < 1;
 export function collect(v: Village, keeps: SiteKind): boolean {
   const kind = YIELD_OF[keeps]; if (!kind || (v.stack && v.stack.kind !== kind) || (v.stack?.n ?? 0) >= STACK_CAP || landStock(v, kind) < 1) return false;
+  if (roomFor(v, kind) < (kind === 'grain' ? GRAIN_PER_STRIP : 1)) return false;
   if (kind === 'grain') { const i = v.land.crops.findIndex(c => c >= 1); v.land.crops[i] = 0; v.stack = { kind, n: Math.min(STACK_CAP, (v.stack?.n ?? 0) + GRAIN_PER_STRIP) }; v.take.grain += GRAIN_PER_STRIP; return true; }
   if (kind === 'berries') v.land.berries -= 1; else if (kind === 'wood') v.land.branches -= 1; else if (kind === 'milk') v.land.milk -= 1;
   v.take[kind] += 1; v.stack = { kind, n: (v.stack?.n ?? 0) + 1 }; return true;
 }
 export function deliver(v: Village, store: Store): boolean {
-  if (!v.stack || v.stack.kind !== store || v.stores[store] >= STORES[store].cap) return false;
+  if (!v.stack || v.stack.kind !== store || v.stores[store] >= STORES[store].cap + OVERFILL) return false;
   v.stores[store] += 1; v.stack.n -= 1; if (v.stack.n <= 0) v.stack = null; return true;
 }
 /** One meal: a unit of the fullest food, and at noon a drink; hunger falls; nothing to eat leaves them hungry. */
@@ -336,7 +341,7 @@ export function parseVillage(raw: string | null): Village {
     const p = JSON.parse(raw ?? 'null'); if (!p || typeof p !== 'object' || !Array.isArray(p.hobbits) || p.hobbits.length !== HOBBITS.length) return freshVillage();
     const v = freshVillage(Number.isFinite(p.seed) ? p.seed : 1); v.tick = Number.isInteger(p.tick) && p.tick >= 0 ? p.tick : 0;
     const num = (x: unknown, lo: number, hi: number, d: number): number => (typeof x === 'number' && Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : d);
-    if (p.stores && typeof p.stores === 'object') for (const k of STORE_LIST) v.stores[k] = num(p.stores[k], 0, STORES[k].cap, v.stores[k]);
+    if (p.stores && typeof p.stores === 'object') for (const k of STORE_LIST) v.stores[k] = num(p.stores[k], 0, STORES[k].cap + OVERFILL, v.stores[k]);
     if (p.land && typeof p.land === 'object') { v.land.berries = num(p.land.berries, 0, BERRY_CAP, v.land.berries); v.land.branches = Math.floor(num(p.land.branches, 0, BRANCH_CAP, v.land.branches)); v.land.milk = Math.floor(num(p.land.milk, 0, MILK_PER_DAY, v.land.milk)); if (Array.isArray(p.land.crops) && p.land.crops.length === CROP_STRIPS) v.land.crops = p.land.crops.map((c: unknown, i: number) => num(c, 0, 1, v.land.crops[i])); }
     v.fireWood = num(p.fireWood, 0, WOOD_PER_NIGHT * 2, 0); v.prayer = num(p.prayer, 0, PRAYER_CAP, 0); v.prayed = num(p.prayed, 0, 1e6, 0);
     for (const which of ['take', 'lastTake'] as const) if (p[which] && typeof p[which] === 'object') for (const k of STORE_LIST) v[which][k] = num(p[which][k], 0, 1e4, 0);

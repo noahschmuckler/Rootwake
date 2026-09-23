@@ -56,6 +56,10 @@ The question: does her helping read as a relationship, and does the village's tu
 - **Save** carries prayer, the spirits and her stack. `__village`: `stations`, `stack`, `prayer` (settable), `spirits`, `summon(keeps)`, `spiritCost()`, `praying()`.
 - **Not yet, by Noah's call for this phase:** births (excess for long enough spawns a child whose needs come before its hands), the tree of miracles, the rival. Match-3 stays out.
 
+## W1.1: full stores, rings on the ground (Noah's phone notes)
+- **Overfill, and never stuck.** She gathered berries with the baskets full and had nowhere to put them. A store now takes `OVERFILL` 4 past its cap, shown as a heap on the ground beside it (baskets, buckets, logs, sacks, pails); the villagers keep to the cap. Her collecting is limited to the room the store still has (`roomFor`: cap and overfill, less the store and what is on its way in anyone's arms, hers included), so she can never hold what has nowhere to go. In a place's ring with no room a tip says "the baskets are full"; in a store's ring with the wrong kind, or none left, the tip says so too.
+- **Rings on the ground.** The rings were flat while the meadow undulates, so they sank under the ground in places and fought the road by the pen. Each ring now follows the relief vertex by vertex and is drawn last, over the paths.
+
 ## Next
 W1.1 births; then W2 the tree of miracles and W3 the rival (VILLAGERS.md, "The worship loop").
 
