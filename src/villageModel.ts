@@ -434,7 +434,9 @@ export const crownHeight = (t: Tree): number => 3.4 * t.size;
 export const trunkRadius = (t: Tree): number => 0.32 * t.size;
 /** The stream's course, for what is water: a bank either side of this line. */
 export const STREAM_Z = (x: number): number => 27 + 2.5 * Math.sin(x * 0.11 + 0.4), STREAM_HALF = 1.9;
-export const inWater = (x: number, z: number): boolean => Math.abs(z - STREAM_Z(x)) < STREAM_HALF;
+/** The stream runs past the village for STREAM_REACH either way and no farther (the land beyond is the chunks'). */
+export const STREAM_REACH = 90;
+export const inWater = (x: number, z: number): boolean => Math.abs(x) <= STREAM_REACH && Math.abs(z - STREAM_Z(x)) < STREAM_HALF;
 export const TREES: Tree[] = (() => {
   const rand = mulberry32(220926 + 7), out: Tree[] = [];
   for (let i = 0; i < 60 && out.length < 6; i++) { const a = rand() * 6.28, r = 1 + rand() * 3.2, x = SITES.copse.x + Math.cos(a) * r, z = SITES.copse.z + Math.sin(a) * r; if (out.some(t => Math.hypot(t.x - x, t.z - z) < 2.6)) continue; out.push({ id: out.length, x, z, size: 0.9 + rand() * 0.5 }); }
@@ -483,11 +485,17 @@ export function nextRoot(treeId: number, want: { x: number; z: number }, exclude
   }
   return best;
 }
+/** The land beyond the meadow offers its trees through this hook (the loaded chunks); the village's own are always here. */
+export let treeProvider: (x: number, z: number, r: number) => Tree[] = () => [];
+export const setTreeProvider = (f: (x: number, z: number, r: number) => Tree[]): void => { treeProvider = f; };
+export const treesNear = (x: number, z: number, r: number): Tree[] => [...TREES.filter(t => Math.hypot(t.x - x, t.z - z) <= r), ...treeProvider(x, z, r)];
 export function nearestTree(x: number, z: number): { tree: Tree; distance: number } {
   let best = { tree: TREES[0], distance: Infinity };
-  for (const t of TREES) { const d = Math.hypot(x - t.x, z - t.z) - trunkRadius(t); if (d < best.distance) best = { tree: t, distance: d }; }
+  for (const t of treesNear(x, z, 40)) { const d = Math.hypot(x - t.x, z - t.z) - trunkRadius(t); if (d < best.distance) best = { tree: t, distance: d }; }
+  if (best.distance === Infinity) for (const t of TREES) { const d = Math.hypot(x - t.x, z - t.z) - trunkRadius(t); if (d < best.distance) best = { tree: t, distance: d }; }
   return best;
 }
-export const hopTargets = (t: Tree): Tree[] => TREES.filter(o => o !== t && Math.hypot(o.x - t.x, o.z - t.z) <= HOP_REACH && Math.abs(crownHeight(o) - crownHeight(t)) <= HOP_RISE);
+export const hopTargets = (t: Tree): Tree[] => treesNear(t.x, t.z, HOP_REACH).filter(o => o !== t && o.id !== t.id && Math.hypot(o.x - t.x, o.z - t.z) <= HOP_REACH && Math.abs(crownHeight(o) - crownHeight(t)) <= HOP_RISE);
 /** Where the grass takes her: the meadow, not the houses, not the water. */
-export const grassCan = (x: number, z: number): boolean => Math.hypot(x, z) <= WALK_RADIUS && !inWater(x, z) && !HOUSES.some(h => Math.hypot(x - h.x, z - h.z) < HOUSE_RADIUS + 0.2);
+/** Where the grass takes her: anywhere on the land (the chunks are unbounded), not the water, not the houses. */
+export const grassCan = (x: number, z: number): boolean => !inWater(x, z) && !HOUSES.some(h => Math.hypot(x - h.x, z - h.z) < HOUSE_RADIUS + 0.2);

@@ -51,7 +51,7 @@ test('her ways: grass everywhere she can walk, faster than running; tree roots j
   const r = TREE_ROOTS[0], from = TREES[r.a], to = TREES[r.b], want = { x: to.x - from.x, z: to.z - from.z }; const l = Math.hypot(want.x, want.z); want.x /= l; want.z /= l;
   const next = nextRoot(r.a, want); assert.ok(next && next.root.id === r.id && next.forward, 'the aligned root is taken'); assert.equal(endTree(r, true), r.b); assert.ok(Math.abs(rootTangent(r, 1).length() - 1) < 1e-6);
   const n = nearestRoot({ x: (from.x + to.x) / 2, z: (from.z + to.z) / 2 }); assert.ok(n.distance < 1.2); assert.ok(rootPoint(n.root, n.s).y < 0);
-  assert.ok(grassCan(5, -14)); assert.equal(grassCan(0, STREAM_Z(0)), false, 'not under the water'); assert.ok(inWater(3, STREAM_Z(3))); assert.equal(grassCan(9 * Math.cos(0.3), 9 * Math.sin(0.3)), false, 'not under a house'); assert.equal(grassCan(MEADOW_RADIUS + 41, 0), false, 'the world ends past the wood');
+  assert.ok(grassCan(5, -14)); assert.equal(grassCan(0, STREAM_Z(0)), false, 'not under the water'); assert.ok(inWater(3, STREAM_Z(3))); assert.equal(grassCan(9 * Math.cos(0.3), 9 * Math.sin(0.3)), false, 'not under a house'); assert.ok(grassCan(MEADOW_RADIUS + 41, 0), 'the land goes on past the wood (the chunks)'); assert.equal(inWater(200, STREAM_Z(200)), false, 'the stream ends past the village');
   for (const t of TREES) assert.ok(!inWater(t.x, t.z), 'no tree in the stream');
   assert.ok(hopTargets(copse[0]).length >= 1, 'the copse has crowns to leap to'); assert.equal(nearestTree(copse[2].x + 0.5, copse[2].z).tree.id, copse[2].id);
 });
@@ -187,4 +187,18 @@ test('the overworld: the village at the origin, the karst north, the lair placed
   assert.ok(!o.known.has('lair')); explore(o, lair.x - lair.radius - 40, lair.z); assert.ok(o.known.has('lair'), 'the lair is known once she comes near its edge');
   const back = parseOverworld(serializeOverworld(o)); assert.equal(back.revealed.size, o.revealed.size); assert.deepEqual([...back.known], [...o.known]); assert.equal(parseOverworld('junk').revealed.size, 0);
   assert.equal(zoomElevation(ZOOM_MIN), ELEV_LOW); assert.equal(zoomElevation(ZOOM_MAX), ELEV_HIGH); assert.ok(zoomElevation(20) > ELEV_LOW && zoomElevation(20) < ELEV_HIGH);
+});
+
+import { CHUNK, LOAD_RING, MEADOW_ISLAND, KARST_CLEARING, noise, hills, beyond, biomeAt, chunkTrees, chunksAround, chunkOf } from '../src/chunkModel';
+import { treesNear, setTreeProvider, nearestTree as nearest, hopTargets as hops } from '../src/villageModel';
+test('the land beyond the meadow: noise in range and seeded, no hills on the island, the dark forest about the lair, a chunk\'s trees the same each time and never on the island or in the karst\'s clearing; the model sees chunk trees through the provider', () => {
+  for (let i = 0; i < 50; i++) { const v = noise(i * 13.7, i * 7.1, 100, 1); assert.ok(v >= 0 && v <= 1); } assert.notEqual(noise(50, 50, 100, 1), noise(50, 50, 100, 2), 'seeded');
+  assert.equal(hills(10, 10), 0, 'the village is flat'); assert.equal(beyond(0, MEADOW_ISLAND - 1), 0); assert.equal(beyond(0, MEADOW_ISLAND + 200), 1); assert.ok(Math.abs(hills(300, 300)) <= 7.1, 'hills within their height');
+  const lair = places(1)[2]; assert.equal(biomeAt(lair.x, lair.z, 1), 'dark'); assert.notEqual(biomeAt(0, 0, 1), 'dark'); assert.ok(['meadow', 'wood'].includes(biomeAt(400, -400, 1)));
+  const a = chunkTrees(3, 3, 1), b = chunkTrees(3, 3, 1); assert.deepEqual(a, b, 'the same whenever loaded'); assert.ok(a.length > 0 && a.length <= 16); assert.ok(a.every(t => t.x >= 3 * CHUNK && t.x < 4 * CHUNK && t.z >= 3 * CHUNK && t.z < 4 * CHUNK), 'within the chunk'); assert.ok(a.every(t => t.id >= 100000), 'ids apart from the village\'s');
+  for (let i = 0; i < a.length; i++) for (let k = i + 1; k < a.length; k++) assert.ok(Math.hypot(a[i].x - a[k].x, a[i].z - a[k].z) >= 4.5, 'spaced');
+  assert.equal(chunkTrees(0, 0, 1).length, 0, 'none on the island'); const kc = chunkOf(KARST_AT.x, KARST_AT.z); assert.ok(chunkTrees(kc.cx, kc.cz, 1).every(t => Math.hypot(t.x - KARST_AT.x, t.z - KARST_AT.z) >= KARST_CLEARING), 'the karst\'s clearing kept');
+  assert.equal(chunksAround(0, 0).length, (2 * LOAD_RING + 1) ** 2);
+  const far = chunkTrees(4, 4, 1); setTreeProvider((x, z, r) => far.filter(t => Math.hypot(t.x - x, t.z - z) <= r)); const t0 = far[0]; assert.equal(nearest(t0.x + 0.5, t0.z).tree.id, t0.id, 'the nearest tree can be a chunk tree'); assert.ok(treesNear(t0.x, t0.z, 3).some(t => t.id === t0.id)); const h = hops(t0); assert.ok(h.every(o => o.id !== t0.id)); setTreeProvider(() => []);
+  assert.equal(nearest(t0.x, t0.z).tree.id < 100000, true, 'without the provider, the village\'s trees again');
 });

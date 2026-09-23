@@ -9,12 +9,14 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { HOUSES, HOBBITS, SITES, STORES, STORE_LIST, STATIONS, STACK_CAP, OVERFILL, HOUSE_RADIUS, MEADOW_RADIUS, GREEN, TREES, TREE_ROOTS, STREAM_Z, BERRY_CAP, BRANCH_CAP, MILK_PER_DAY, CROP_STRIPS, WOOD_PER_NIGHT, crownHeight, trunkRadius, type Hobbit, type Tree, type Village, type Store } from './villageModel';
 import { mulberry32 } from './colors';
+import { hills } from './chunkModel';
 import type { Collider } from './player';
 import { spriteMaterial, standees, crownStandees, type Standee } from './sprites';
 import { treeParts, taperedTube } from './flora';
 import { createHulda } from './huldaCharacter';
 
-export const relief = (x: number, z: number): number => 0.05 * Math.sin(x * 0.5) * Math.cos(z * 0.45);
+/** The ground's height: the meadow's gentle relief, and beyond the island the chunks' hills (zero within the village). */
+export const relief = (x: number, z: number): number => 0.05 * Math.sin(x * 0.5) * Math.cos(z * 0.45) + hills(x, z);
 export const HOBBIT_HEIGHT = 0.46;
 export function buildVillage(scene: THREE.Scene) {
   const rand = mulberry32(220926);
