@@ -30,7 +30,7 @@ try{
  // Time passes only while watched: a real second is about 1.2 ticks.
  const t0=await v(page,()=>window.__village.tick);await page.waitForTimeout(3000);const t1=await v(page,()=>window.__village.tick);assert.ok(t1-t0>=2&&t1-t0<=6,`ticks in three seconds: ${t1-t0}`);
  // The clock's dev control: tap the clock, jump an hour, to noon, to the next dawn, run at thirty times; the village follows.
- await page.click('#clock');assert.ok(await page.locator('#timectl').isVisible(),'the time panel opens on the clock');
+ await page.click('#clock');assert.ok(await page.locator('#timectl').isVisible(),'the time panel opens on the clock');await v(page,()=>{window.__village.speed=0;});// the clock held still, so the jumps are exact
  const tc0=await v(page,()=>window.__village.tick);await page.click('#timectl [data-jump="60"]');assert.equal(await v(page,()=>window.__village.tick),tc0+60,'an hour on');
  await page.click('#timectl [data-to="noon"]');assert.equal(await v(page,()=>window.__village.tick%1440),330,'to noon');assert.ok((await v(page,()=>window.__village.count('green')))>=0);
  await page.click('#timectl [data-to="dawn"]');assert.equal(await v(page,()=>window.__village.tick),1440,'to the next dawn (a day on)');
