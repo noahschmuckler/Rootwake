@@ -16,7 +16,9 @@ interface Chunk { key: string; group: THREE.Group; trees: Tree[]; colliders: Col
 export function createChunks(scene: THREE.Scene, seed: number) {
   const loaded = new Map<string, Chunk>();
   const bark = new THREE.MeshStandardMaterial({ color: '#6d5f48', roughness: 1 }), leaf = spriteMaterial('leaf', '#5f8657'), darkBark = new THREE.MeshStandardMaterial({ color: '#2a2230', roughness: 1 }), darkLeaf = spriteMaterial('leaf', '#2e2a3a', { emissive: '#1a0a20', emissiveIntensity: 0.25 }), collar = new THREE.MeshStandardMaterial({ color: '#8a6f4e', roughness: 0.95 });
-  const ground = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1 });
+  // The land's ground thins to glass with the meadow's while she is in the roots beneath it (setUnder), or its tiles would hide them.
+  const ground = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 1, transparent: true, opacity: 1 });
+  function setUnder(under: number): void { ground.opacity = 1 - under * 0.6; ground.depthWrite = under < 0.5; }
   const colourOf = (x: number, z: number): [number, number, number] => { const b = biomeAt(x, z, seed); return b === 'meadow' ? [0.36, 0.47, 0.29] : b === 'wood' ? [0.3, 0.42, 0.26] : [0.16, 0.13, 0.19]; };
   function build(cx: number, cz: number): Chunk {
     const group = new THREE.Group(), geometries: THREE.BufferGeometry[] = [], n = 16;
@@ -39,5 +41,5 @@ export function createChunks(scene: THREE.Scene, seed: number) {
   }
   const treesNear = (x: number, z: number, r: number): Tree[] => { const out: Tree[] = []; for (const ch of loaded.values()) for (const t of ch.trees) if (Math.hypot(t.x - x, t.z - z) <= r) out.push(t); return out; };
   const colliders = (): Collider[] => { const out: Collider[] = []; for (const ch of loaded.values()) out.push(...ch.colliders); return out; };
-  return { update, treesNear, colliders, get count() { return loaded.size; }, get trees() { let n = 0; for (const ch of loaded.values()) n += ch.trees.length; return n; } };
+  return { update, treesNear, colliders, setUnder, get count() { return loaded.size; }, get trees() { let n = 0; for (const ch of loaded.values()) n += ch.trees.length; return n; } };
 }

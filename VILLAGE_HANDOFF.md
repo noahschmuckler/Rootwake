@@ -91,6 +91,11 @@ The question: do the nightly raids give the gathering stakes, and does fighting 
 - **Levelling.** Kills count: a Dark Young `XP_DY` 1, the manifestation `XP_LAIR` 10; levels at `LEVEL_XP` 2, 5, 9, 14, capped at `LEVEL_CAP` 5. Each level owes a choice, offered as a panel until taken: vigor (`PERK_VIGOR` +15 to the cap), strike (`PERK_STRIKE` +2), sap (`PERK_SAP` +20 to the cap). The level and the way to the next show under the bars. Saved with the hero.
 - **Not yet:** the karst's summit as her safe grove after a faint; a second manifestation elsewhere; villagers who notice the peace; balance of any of it.
 
+## M1.1: the roots seen again, a ghost finger, a compass (Noah's phone notes)
+- **The roots seen again.** The chunk tiles run under the meadow too, two centimetres below it, so when the meadow went glassy an opaque tile still hid the roots. The land's ground now thins with the meadow's (`chunks.setUnder`).
+- **A ghost finger.** A second finger lifted over a button (the stick, the fight buttons) never sent its release to the canvas, so the pinch tracker kept it: from then on one finger counted as two, a single finger zoomed to the map and two rotated the view. Every finger on the canvas is captured now, so its release reaches the canvas wherever it lifts; a finger that leaves or loses capture is forgotten; a third finger resets the count.
+- **The compass.** A strip at the top (`#compass`, a canvas drawn each frame) that slides with her heading: the cardinal points and ticks every 15° within `COMPASS_FOV` 100° either side, the known places as marks with their distance (the lair once known, in its violet). North is the karst's way, negative z (`bearingOf`, `wrapDeg` in the overworld model).
+
 ## Next
 The wider world (VILLAGERS.md, "The wider world": M1a the pinch, the overworld and the chunked land with the karst as a crossing; M1b the dark forest, the lair's manifestation and a first level), then balancing passes on E1 after Noah plays; M1b's balance after Noah plays; W1.1 births; then W2 the tree of miracles and W3 the rival (VILLAGERS.md, "The worship loop").
 

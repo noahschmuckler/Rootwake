@@ -38,3 +38,7 @@ export function parseOverworld(raw: string | null): Overworld {
 /** The pinch: the camera pulls from ZOOM_MIN m at her shoulder to ZOOM_MAX m overhead, its elevation rising from ELEV_LOW to ELEV_HIGH with the distance; past the end, the map. Tuning. */
 export const ZOOM_MIN = 3, ZOOM_MAX = 40, ELEV_LOW = 0.38, ELEV_HIGH = 1.36;
 export const zoomElevation = (zoom: number): number => ELEV_LOW + (ELEV_HIGH - ELEV_LOW) * Math.min(1, Math.max(0, (zoom - ZOOM_MIN) / (ZOOM_MAX - ZOOM_MIN)));
+/** A bearing in degrees for a direction on the land: 0 north (negative z, the karst's way), 90 east (positive x), 180 south, 270 west. */
+export const bearingOf = (dx: number, dz: number): number => ((Math.atan2(dx, -dz) * 180 / Math.PI) + 360) % 360;
+/** A difference of bearings wrapped to -180..180. */
+export const wrapDeg = (d: number): number => ((d + 540) % 360) - 180;

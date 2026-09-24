@@ -176,7 +176,7 @@ test('fighting: a cheap strike ahead of her, a thorn burst round her and a root 
   const back = par(ser(v)); assert.equal(back.raiders.length, v.raiders.length); assert.equal(back.hero.vigor, Math.round(v.hero.vigor * 10) / 10, 'her vigor and the raid survive a save'); assert.ok(SAP_MAX > THORN_SAP + ROOT_SAP);
 });
 
-import { freshOverworld, explore, isRevealed, knownPlaces, places, parseOverworld, serializeOverworld, CELL, EXPLORE_RADIUS, LAIR_DISTANCE, KARST_AT, ZOOM_MIN, ZOOM_MAX, zoomElevation, ELEV_LOW, ELEV_HIGH } from '../src/overworldModel';
+import { freshOverworld, explore, isRevealed, knownPlaces, places, parseOverworld, serializeOverworld, CELL, EXPLORE_RADIUS, LAIR_DISTANCE, KARST_AT, ZOOM_MIN, ZOOM_MAX, zoomElevation, ELEV_LOW, ELEV_HIGH, bearingOf, wrapDeg } from '../src/overworldModel';
 test('the overworld: the village at the origin, the karst north, the lair placed by the seed 400 m away from the karst\'s side; exploring reveals cells round her and the places she comes near; the pinch rises from the shoulder to overhead', () => {
   const ps = places(1); assert.deepEqual(ps.map(p => p.id), ['village', 'karst', 'lair']); assert.deepEqual({ x: ps[0].x, z: ps[0].z }, { x: 0, z: 0 }); assert.deepEqual({ x: ps[1].x, z: ps[1].z }, KARST_AT);
   const lair = ps[2]; assert.ok(Math.abs(Math.hypot(lair.x, lair.z) - LAIR_DISTANCE) < 2, 'the lair at its distance'); assert.ok(lair.z > 0, 'away from the karst'); assert.ok(Math.hypot(lair.x - KARST_AT.x, lair.z - KARST_AT.z) > 500, 'and far from it');
@@ -186,6 +186,7 @@ test('the overworld: the village at the origin, the karst north, the lair placed
   assert.equal(explore(o, 0, 0), 0, 'nothing new standing still'); assert.ok(explore(o, 30, 0) > 0, 'a step on reveals more');
   assert.ok(!o.known.has('lair')); explore(o, lair.x - lair.radius - 40, lair.z); assert.ok(o.known.has('lair'), 'the lair is known once she comes near its edge');
   const back = parseOverworld(serializeOverworld(o)); assert.equal(back.revealed.size, o.revealed.size); assert.deepEqual([...back.known], [...o.known]); assert.equal(parseOverworld('junk').revealed.size, 0);
+  assert.equal(bearingOf(0, -1), 0, 'north is the karst\'s way'); assert.equal(bearingOf(1, 0), 90); assert.equal(bearingOf(0, 1), 180); assert.equal(bearingOf(-1, 0), 270); assert.ok(Math.abs(bearingOf(KARST_AT.x, KARST_AT.z) - 350) < 1, 'the karst a little west of north'); assert.equal(wrapDeg(350 - 10), -20); assert.equal(wrapDeg(10 - 350), 20);
   assert.equal(zoomElevation(ZOOM_MIN), ELEV_LOW); assert.equal(zoomElevation(ZOOM_MAX), ELEV_HIGH); assert.ok(zoomElevation(20) > ELEV_LOW && zoomElevation(20) < ELEV_HIGH);
 });
 
