@@ -183,6 +183,45 @@ export function reachable(from: string, to: string, by: 'root' | 'hop' = 'root')
   while (queue.length) { const id = queue.shift()!; if (id === to) return true; const next = by === 'root' ? rootsAt(id).map(r => other(r, id)) : hopTargets(NODES[id]).map(n => n.id); for (const n of next) if (!seen.has(n)) { seen.add(n); queue.push(n); } }
   return false;
 }
+/** The shortest way over every karst root from one node to another, by length (Dijkstra over a graph of hundreds); null when there is none. */
+export function shortestPath(from: string, to: string): Root[] | null {
+  const dist = new Map<string, number>([[from, 0]]), via = new Map<string, Root>(), open = [from], done = new Set<string>();
+  while (open.length) {
+    let bi = 0; for (let i = 1; i < open.length; i++) if (dist.get(open[i])! < dist.get(open[bi])!) bi = i;
+    const id = open.splice(bi, 1)[0]; if (done.has(id)) continue; done.add(id);
+    if (id === to) { const out: Root[] = []; let cur = to; while (cur !== from) { const r = via.get(cur)!; out.unshift(r); cur = other(r, cur); } return out; }
+    for (const r of rootsAt(id)) { const next = other(r, id), d = dist.get(id)! + r.length; if (d < (dist.get(next) ?? Infinity)) { dist.set(next, d); via.set(next, r); open.push(next); } }
+  }
+  return null;
+}
+/** Every node's distance from one over the karst's roots, for the portal's menu. */
+export function reachFrom(from: string): Map<string, number> {
+  const dist = new Map<string, number>([[from, 0]]), open = [from], done = new Set<string>();
+  while (open.length) {
+    let bi = 0; for (let i = 1; i < open.length; i++) if (dist.get(open[i])! < dist.get(open[bi])!) bi = i;
+    const id = open.splice(bi, 1)[0]; if (done.has(id)) continue; done.add(id);
+    for (const r of rootsAt(id)) { const next = other(r, id), d = dist.get(id)! + r.length; if (d < (dist.get(next) ?? Infinity)) { dist.set(next, d); open.push(next); } }
+  }
+  return dist;
+}
+/** A node's name, for the portal's menu: the karst's own plants have theirs; the sisters' by pillar and ledge. */
+export function nodeName(id: string): string {
+  if (id in PLANTS) return PLANTS[id].name;
+  const pine = /^pine([A-Z])$/.exec(id); if (pine) return `sister ${pine[1]}'s summit`;
+  const foot = /^([A-Z])foot$/.exec(id); if (foot) return `the foot of sister ${foot[1]}`;
+  const ledge = /^([A-Z])(\d+)$/.exec(id); if (ledge) return `sister ${ledge[1]}, ledge ${Number(ledge[2]) + 1}`;
+  return 'a floor tree';
+}
+/** The places the karst's roots reach from a node: one per zone above the floor, the nearest of its nodes (a sister's helix by its halfway ledge only), nearest first. */
+export function destinationsFrom(from: string): { id: string; name: string; length: number }[] {
+  const dist = reachFrom(from), best = new Map<string, { id: string; length: number }>();
+  for (const [id, length] of dist) {
+    const n = NODES[id]; if (n.zone === 'floor' || id === from) continue;
+    if (n.zone.startsWith('ledge')) { const pid = n.zone.slice(5, 6); if (id !== `${pid}${Math.floor(HELIX[pid as keyof typeof HELIX].count / 2)}`) continue; }
+    const b = best.get(n.zone); if (!b || length < b.length) best.set(n.zone, { id, length });
+  }
+  return [...best.values()].sort((a, b) => a.length - b.length).map(d => ({ ...d, name: NODES[d.id].zone.startsWith('ledge') ? `sister ${NODES[d.id].zone.slice(5, 6)}, halfway up` : nodeName(d.id) }));
+}
 /** Every simple route between two of the karst's own plants over its own roots (small graph). */
 export function routes(from: string, to: string, seen: string[] = []): string[][] {
   if (from === to) return [[to]];

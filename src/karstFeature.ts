@@ -5,7 +5,7 @@
 // carry her. The karst's own progress (visited, summits, trail) keeps its own save.
 import * as THREE from 'three';
 import { buildKarstFlow } from './karstFlowWorld';
-import { NODES, ZONES, CAVERN, stepRide, ridePoint, otherEnd, vec, makeZoneWorld, groundAt, nearestNode, chooseRoot, rootsAt, tread, parseProgress, serializeProgress, freshProgress, arrive, insideRock, trunkPoint, crownPoint, hopTargets, standNear, pillarById, PRESS_S, PRESS_RANGE, ENTER_RANGE, ARM_S, SETTLE_S, TRUNK_CLIMB, CROWN_SLIDE, HOP_S, FOREST_RADIUS as KARST_FLOOR, type Root, type Node, type Zone, type Screen } from './karstFlowModel';
+import { NODES, ZONES, CAVERN, shortestPath, destinationsFrom, stepRide, ridePoint, otherEnd, vec, makeZoneWorld, groundAt, nearestNode, chooseRoot, rootsAt, tread, parseProgress, serializeProgress, freshProgress, arrive, insideRock, trunkPoint, crownPoint, hopTargets, standNear, pillarById, PRESS_S, PRESS_RANGE, ENTER_RANGE, ARM_S, SETTLE_S, TRUNK_CLIMB, CROWN_SLIDE, HOP_S, FOREST_RADIUS as KARST_FLOOR, type Root, type Node, type Zone, type Screen } from './karstFlowModel';
 import type { Player, Collider } from './player';
 import type { TraversalWorld } from './mobility';
 import type { HuldaForm } from './huldaPresentation';
@@ -14,7 +14,7 @@ export type KarstMode = 'ground' | 'trunk' | 'crown' | 'hop' | 'sink' | 'mouth' 
 export interface KarstVisual { form: HuldaForm; position: THREE.Vector3; rotation: THREE.Quaternion; present: HuldaForm | 'ride' }
 export interface KarstAtmosphere { colour: THREE.Color; fog: number; lantern: number; inCavern: boolean; vision: number }
 const LEGACY_KEY = 'rootwake-karst-flow-v2';
-export function createKarstFeature(scene: THREE.Scene, player: Player, camera: THREE.PerspectiveCamera, origin: { x: number; z: number }, hooks: { orbit: (target: THREE.Vector3, back?: number, up?: number) => void; want: () => THREE.Vector3; ground: () => TraversalWorld; locked: TraversalWorld; height?: (x: number, z: number) => number; roots?: (n: Node, from: THREE.Vector3) => void }) {
+export function createKarstFeature(scene: THREE.Scene, player: Player, camera: THREE.PerspectiveCamera, origin: { x: number; z: number }, hooks: { orbit: (target: THREE.Vector3, back?: number, up?: number) => void; want: () => THREE.Vector3; ground: () => TraversalWorld; locked: TraversalWorld; height?: (x: number, z: number) => number; portal?: (n: Node) => boolean }) {
   const KEY = `rootwake-world-karst:${origin.x},${origin.z}:v1`;
   const offset = new THREE.Vector3(origin.x, 0, origin.z), group = new THREE.Group(); group.position.copy(offset); scene.add(group);
   const world = buildKarstFlow(group as unknown as THREE.Scene, { sharedGround: true });
@@ -28,6 +28,8 @@ export function createKarstFeature(scene: THREE.Scene, player: Player, camera: T
   let hop: { from: THREE.Vector3; to: THREE.Vector3; t: number; node: Node; az: number } | null = null, ride: { root: Root; from: string; s: number; speed: number } | null = null;
   let move: { from: THREE.Vector3; to: THREE.Vector3; t: number; seconds: number; then: () => void } | null = null;
   let choice: { root: Root; held: number } | null = null, lastRoot: Root | null = null, settle = 0, released = true, press = 0, trailDirty = false, trailClock = 0;
+  // A portal ride (R1, Noah): the roots to ride in turn to a chosen place, and whether she is on such a ride (she rises out at its end).
+  let queue: Root[] = [], travelling = false;
   const rideTangent = new THREE.Vector3(0, 0, -1), lantern = new THREE.PointLight('#e8d9a8', 0, 7, 1.5); camera.add(lantern);
   const skyColour = new THREE.Color('#aab8b3'), cavernColour = new THREE.Color('#061312'), rootColour = new THREE.Color('#2a1d0c'), colour = new THREE.Color();
   const screen: Screen = p => { const v = W(p).applyMatrix4(camera.matrixWorldInverse); if (v.z > -0.05) return null; v.applyMatrix4(camera.projectionMatrix); return { x: v.x * innerWidth / 2, y: v.y * innerHeight / 2 }; };
@@ -51,7 +53,7 @@ export function createKarstFeature(scene: THREE.Scene, player: Player, camera: T
   }
   function visit(n: Node): void { at = n; zone = ZONES[n.zone]; if (!progress.visited.includes(n.id)) progress.visited.push(n.id); progress.at = n.id; }
   function enterTrunk(n: Node): void { if (mode !== 'ground') return; lock(); visit(n); save(); const f = L(player.feet()); trunk = { h: 0.2, az: Math.atan2(f.z - n.at.z, f.x - n.at.x), downHeld: 0 }; mode = 'trunk'; }
-  function enterRoots(n: Node, fromLocal: THREE.Vector3): void { if (hooks.roots) { mode = 'ground'; hooks.roots(n, W(fromLocal)); return; } lock(); visit(n); save(); mode = 'sink'; lastRoot = null; released = false; trunk = null; move = { from: fromLocal.clone(), to: n.mouth.clone(), t: 0, seconds: 0.7, then: () => { mode = 'mouth'; settle = SETTLE_S; choice = null; } }; }
+  function enterRoots(n: Node, fromLocal: THREE.Vector3, viaPortal = false): void { if (viaPortal && hooks.portal && hooks.portal(n)) return; lock(); visit(n); save(); mode = 'sink'; lastRoot = null; released = false; trunk = null; move = { from: fromLocal.clone(), to: n.mouth.clone(), t: 0, seconds: 0.7, then: () => { mode = 'mouth'; settle = SETTLE_S; choice = null; } }; }
   /** Out: from a mouth she grows back onto the ground beside the tree; from a trunk or a crown she comes down to it. */
   function emerge(): boolean {
     if (mode !== 'mouth' && mode !== 'trunk' && mode !== 'crown') return false;
@@ -62,6 +64,15 @@ export function createKarstFeature(scene: THREE.Scene, player: Player, camera: T
   }
   /** A stick double tap on the ground near one of the karst's plants: straight into its roots. */
   function enterRootsNear(feet: THREE.Vector3): boolean { if (mode !== 'ground') return false; const f = L(feet), n = nearestNode(zone.id, f.x, f.z); if (n.distance < ENTER_RANGE) { enterRoots(n.node, f); return true; } return false; }
+  /** A portal ride: from a tree, straight down to its mouth and along the shortest way over the karst's roots to a node, then up and out beside it. False when the roots do not reach it. */
+  function travel(fromId: string, toId: string): boolean {
+    const n = NODES[fromId], path = shortestPath(fromId, toId); if (!path || mode !== 'ground') return false;
+    queue = path; travelling = true; lock(); visit(n); save(); lastRoot = null; released = false; trunk = null; mode = 'sink';
+    move = { from: L(player.feet()), to: n.mouth.clone(), t: 0, seconds: 0.7, then: () => { mode = 'mouth'; settle = SETTLE_S; choice = null; } };
+    return true;
+  }
+  /** A stick tap on a portal ride: she stops at the next mouth, where the stick chooses as ever. */
+  function stop(): void { queue = []; travelling = false; }
   function startRide(root: Root): void { ride = { root, from: at.id, s: 0, speed: 0 }; lastRoot = root; choice = null; mode = 'ride'; }
   function finishRide(): void { if (!ride) return; const n = NODES[otherEnd(ride.root, ride.from)]; at = n; zone = ZONES[n.zone]; arrive(progress, n.id); save(); ride = null; mode = 'mouth'; settle = SETTLE_S; released = false; choice = null; }
   /** On her feet inside the karst: pressing into a plant takes her in; walking leaves a trail. Returns true once she is no longer on the ground. */
@@ -70,7 +81,7 @@ export function createKarstFeature(scene: THREE.Scene, player: Player, camera: T
     if (player.motor.speed > 0.3) { tread(progress, zone.id, f.x, f.z, dt); trailDirty = true; }
     if (w.lengthSq() === 0 || player.motor.speed > 0.35) { press = 0; return false; }
     const n = nearestNode(zone.id, f.x, f.z), toward = vec(n.node.at.x - f.x, 0, n.node.at.z - f.z).normalize();
-    if (n.distance < PRESS_RANGE && toward.dot(w) > 0.6) { press += dt; if (press > PRESS_S) { press = 0; if (n.node.climb) enterTrunk(n.node); else enterRoots(n.node, f); return true; } return false; }
+    if (n.distance < PRESS_RANGE && toward.dot(w) > 0.6) { press += dt; if (press > PRESS_S) { press = 0; if (n.node.zone === 'floor' && hooks.portal) { enterRoots(n.node, f, true); return mode !== 'ground'; } if (n.node.climb) enterTrunk(n.node); else enterRoots(n.node, f); return true; } return false; }
     press = 0; return false;
   }
   /** The karst is drawn only while she is within KARST_DRAW_M of it: past that it is fog anyway, and its four hundred trees cost a phone frames. */
@@ -101,6 +112,8 @@ export function createKarstFeature(scene: THREE.Scene, player: Player, camera: T
       if (move.t === 1) { const then = move.then; move = null; then(); }
     } else if (mode === 'mouth') {
       if (settle > 0) turnToward(mouthYaw(at), dt, 5); place(at.mouth); hooks.orbit(W(at.mouth), 3.2, 1.3); camera.updateMatrixWorld(); settle = Math.max(0, settle - dt);
+      // A portal ride goes on by itself: the next root once she has settled, and out at the end.
+      if (settle <= 0 && queue.length) startRide(queue.shift()!); else if (settle <= 0 && travelling) { travelling = false; emerge(); }
       const root = settle > 0 || !stickHeld ? null : chooseRoot(at.id, { x: stick.x, y: -stick.y }, screen, released || rootsAt(at.id).length === 1 ? null : lastRoot);
       if (!root) choice = null; else if (choice && choice.root === root) { choice.held += dt; if (choice.held >= ARM_S) startRide(root); } else choice = { root, held: 0 };
     } else if (mode === 'ride' && ride) {
@@ -129,6 +142,6 @@ export function createKarstFeature(scene: THREE.Scene, player: Player, camera: T
   }
   player.cameraClear = p => !insideRock(L(p));
   world.setTrail(progress);
-  return { world, colliders, inside, owns, traversal, groundFrame, update, visual, atmosphere, emerge, enterRootsNear, standOn, save, get mode() { return mode; }, get zone() { return zone.id; }, get at() { return at.id; }, get progress() { return progress; }, get vision() { return vision; }, get underground() { return ['sink', 'mouth', 'ride', 'rise'].includes(mode); }, origin, local, toWorld: W };
+  return { world, colliders, inside, owns, traversal, groundFrame, update, visual, atmosphere, emerge, enterRootsNear, standOn, save, travel, stop, destinations: destinationsFrom, get travelling() { return travelling; }, get queued() { return queue.length; }, get mode() { return mode; }, get zone() { return zone.id; }, get at() { return at.id; }, get progress() { return progress; }, get vision() { return vision; }, get underground() { return ['sink', 'mouth', 'ride', 'rise'].includes(mode); }, origin, local, toWorld: W };
 }
 export type KarstFeature = ReturnType<typeof createKarstFeature>;
