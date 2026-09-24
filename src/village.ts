@@ -366,7 +366,8 @@ function frame(now: number) {
     wantUnder = mode === 'sink' ? k : 1 - k; place(p); orbitCamera(p, 3.2, 1.3);
     if (move.t === 1) { const then = move.then; move = null; then(); }
   }
-  under += (wantUnder - under) * Math.min(1, dt * 4);
+  // The ease settles exactly: the ground's alpha hash would stipple forever on a residual 0.01.
+  under += (wantUnder - under) * Math.min(1, dt * 4); if (Math.abs(under - wantUnder) < 0.01) under = wantUnder;
   fight(Math.min(0.25, wall) * speed, Math.min(0.25, wall)); stations(Math.min(0.25, wall)); presentHulda(dt); presentHobbits(dt); presentSpirits(dt); presentRaiders(dt);
   const light = daylightAt(village.tick), dusk = Math.max(0, 1 - Math.abs(light - 0.12) / 0.12);
   colour.copy(nightSky).lerp(daySky, Math.min(1, light * 1.6)).lerp(duskSky, dusk * 0.6); scene.background = colour; scene.fog = new THREE.FogExp2(colour, 0.011);
