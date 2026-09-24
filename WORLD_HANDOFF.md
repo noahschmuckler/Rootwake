@@ -4,7 +4,7 @@ Owner request (2026-09-24): implement the terrain/traversal audit, preserve prog
 
 ## Current checkpoint
 - Branch: `feat/seeded-world`, based on published village `23ffbfb` from `feat/village`.
-- Status: terrain/root integration and sphere proof implemented locally; model tests and build pass. GPU/browser verification is pending on GitHub Actions. No new gameplay published yet.
+- Status: terrain/root integration and sphere proof implemented, verified in GitHub Chromium (run 36059181155 on b095e33) and locally with the pre-installed Chromium; published as a preview beside the village, never over it: https://noahschmuckler.github.io/Rootwake/world/ (the village on the shared terrain and root network) and https://noahschmuckler.github.io/Rootwake/world/planet.html (the sphere streaming proof). The live village at /village/ is untouched.
 - Existing live study: https://noahschmuckler.github.io/Rootwake/village/
 - Do not mistake `main` for the village source. Publication is `.github/workflows/deploy-village.yml` from `feat/village` to `gh-pages/village/`.
 - Baseline: 19 village model tests pass. Browser suite teleports between areas and misses continuous grass crossings.
@@ -54,5 +54,13 @@ Browser: `node scripts/browser-village.mjs` (requires Playwright Chromium).
 - Deep-root steering/exit, alpha-hash appearance, and cross-chunk runtime behavior require phone judgement after browser verification.
 - World descriptor version is implemented for sphere generation; existing village seeds now agree but full save migration/deltas are pending.
 
+## Checkpoint (2026-09-24, later): verified and published as a preview
+- The Actions run on b095e33 passed every test and both browser suites. Locally (Chromium at `/opt/pw-browsers/chromium`, `CHROMIUM_PATH`) both suites pass too: `browser-village` all journeys, `browser-world` village and karst boundary crossings of 102–105 frames with a largest step of 0.19–0.22 m, a generated root (`world:1,1:east`) entered and left, the sphere circuit with a peak of about 305 resident tiles.
+- Two visual defects found in the screenshots and fixed:
+  - The ground's vision material was alpha hashed. At full depth that is a screen-door stipple (78% of pixels discarded), nothing like the glassy meadow judged good in M1.1, and after any sink the eased `under` never returned to exactly zero, so every ground tile kept a faint stipple for the rest of the session (the karst floor visibly speckled). `groundVision.ts` now uses plain transparency (the chunk tiles never overlap, so there are no sorting seams to avoid), stops depth writes while she is beneath the ground as before, and keeps the new local radius (full within 14 m of her, gone by 28 m; tuning); `village.ts` snaps the `under` ease to its target within 0.01.
+  - Two mid-line comments in `scripts/browser-village.mjs` had swallowed the statements after them (the karst-roots screenshot and its assert; the 600 ms wait before the forest-drain measurement). They are on their own lines now and the statements run.
+- `.github/workflows/verify-world.yml` now publishes after verification, the way `deploy-village.yml` does: `dist/village.html` to `gh-pages/world/index.html`, `dist/planet.html` to `world/planet.html`, assets and models beside them, `world/revision.json`, then the Pages source check and `scripts/verify-flow-pages.mjs` against `/Rootwake/world/`. Direct pushes to `gh-pages` are refused; publish only through the workflow.
+- Not judged yet, for the phone: the smooth local-radius vision; root travel on the karst floor now goes through the village's grass and root modes (a double tap on the floor enters the grass, an aligned karst root takes her, a deep conduit's exit carries her to the nearer mouth) rather than the karst's own sink; the generated roots between chunk hubs and trees; the sphere proof's pace buttons and settings.
+
 ## Next action
-Inspect the latest `Verify continuous seeded world` Actions run for `feat/seeded-world`, fix its failures, inspect screenshots, then commit/publish a tested preview. Continue stage 4 only after this checkpoint is verified. Update this file at each checkpoint.
+Play the preview at /world/ on the phone against /village/ and judge: the shared ground at the meadow's and the karst's edges, the vision through the ground, root travel on the karst floor, the generated roots, the sphere proof. Then either merge `feat/seeded-world` into `feat/village` (publishes to /village/) or record what to change. Continue stage 4 only after that judgement. Update this file at each checkpoint.
