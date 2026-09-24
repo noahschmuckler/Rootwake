@@ -10,14 +10,14 @@ import { createHuldaPresentation, HUMAN_CENTRE, type HuldaForm } from './huldaPr
 import { installMobilityControls } from './mobilityControls';
 import { buildVillage, HOBBIT_HEIGHT } from './villageWorld';
 import { HOBBITS, HOUSES, STORES, STATIONS, SITES, YIELD_OF, balance, stationAt, storeFull, collect, deliver, setTreeProvider, treesNear, stepRaiders, strike, thornBurst, rootBind, STRIKE_CD, THORN_CD, ROOT_CD, THORN_SAP, ROOT_SAP, DY_HP, vigorMax, sapMax, setLair, forestDepth, choosePerk, LAIR_HP, LAIR_HURT_RANGE, XP_DY, XP_LAIR, LEVEL_XP, LEVEL_CAP, raidsPaused, summonSpirit, spiritCost, COLLECT_S, DELIVER_S, PRAYER_CAP, HOUSE_RADIUS, PHASES, type SiteKind, type Store, TICKS_PER_SECOND, DAY_TICKS, TREES, TREE_ROOTS, GRASS_SPEED, ROOT_SPEED, TRUNK_CLIMB, CROWN_SLIDE, HOP_S, PRESS_S, PRESS_RANGE, ENTER_RANGE, freshVillage, parseVillage, serializeVillage, advance, clockOf, phaseAt, daylightAt, everyone, hobbitById, thought, crownHeight, trunkRadius, nearestTree, rootPoint, rootTangent, endTree, hopTargets, inWater, type Village, type Tree, type RootEdge } from './villageModel';
-/** Grass → root: a root within ROOT_CATCH m whose run agrees with hers by |cos| ≥ ROOT_CATCH_DOT takes her; the step is sampled every ROOT_CATCH_STEP m. Tuning. */
-const ROOT_CATCH = 0.7, ROOT_CATCH_DOT = 0.6, ROOT_CATCH_STEP = 0.25;
+// R1 (Noah): roots as a way, not a trap. No root takes her from the grass by itself: one stick tap takes the nearest root within ROOT_REACH m, one tap leaves it. A place tapped on the map plots a course through the roots; the entry tree glows, pressing into it (or a tap beside it) sinks her in, and the roots carry her at CARRY_SPEED until a tap or the end, where she rises out. Tuning.
+const ROOT_REACH = 2.6, CARRY_SPEED = 9;
 /** The longest gap between frames the village clock counts as watched time. Tuning. */
 const WALL_CAP = 2;
 import { MODEL_HEIGHT } from './huldaRig';
-import { createRootNetwork, soilAt as grassCan, type WorldRoot } from './worldRoots';
+import { createRootNetwork, soilAt as grassCan, type WorldRoot, type Course } from './worldRoots';
 import { rootNetworkWorld } from './rootNetworkWorld';
-import { NODES as ROOT_NODES, standNear, groundAt, ZONES as ROOT_ZONES, type Node as RootNode } from './karstFlowModel';
+import { NODES as ROOT_NODES, standNear, groundAt, nodeName, ZONES as ROOT_ZONES, type Node as RootNode } from './karstFlowModel';
 import { createTerrain } from './worldTerrain';
 import { createChunks } from './chunkWorld';
 import { createKarstFeature } from './karstFeature';
@@ -39,7 +39,7 @@ if (overworld.seed !== village.seed) overworld = freshOverworld(village.seed);
 const terrain = createTerrain(village.seed), relief = terrain.height;
 const world = buildVillage(scene, terrain);
 const network = createRootNetwork(terrain), networkScene = rootNetworkWorld(scene);
-const alignedRoot = network.aligned, nextRoot = network.next;
+const nextRoot = network.next;
 const chunks = createChunks(scene, village.seed, terrain); setTreeProvider((x, z, r) => chunks.treesNear(x, z, r));
 // The lair (M1b): placed by the seed (overworldModel), told to the model and set in the scene.
 const lairPlace = places(village.seed)[2]; setLair({ x: lairPlace.x, z: lairPlace.z, radius: lairPlace.radius }); world.setLairAt(lairPlace.x, lairPlace.z);
@@ -55,7 +55,7 @@ const groundWorld: TraversalWorld = {
 const lockedWorld: TraversalWorld = { surfacesAt: () => [], canOccupy: () => false };
 const player = new Player(renderer.domElement, scene, camera); scene.add(player.avatar); player.view = 'third'; player.traversalWorld = groundWorld;
 const presentation = createHuldaPresentation(scene, world.figure, world.mass);
-karst = createKarstFeature(scene, player, camera, KARST_AT, { orbit: (t, back, up) => orbitCamera(t, back, up), want: () => want(), ground: () => groundWorld, locked: lockedWorld, height: relief, roots: enterNetwork });
+karst = createKarstFeature(scene, player, camera, KARST_AT, { orbit: (t, back, up) => orbitCamera(t, back, up), want: () => want(), ground: () => groundWorld, locked: lockedWorld, height: relief, portal: openPortal });
 const hulda = presentation.hulda;
 // Hulda and the hobbits share the skeleton, so the Mixamo clips drive all nine (public/models/README.md).
 const query = new URLSearchParams(location.search), clipUrls = query.get('clips')?.split(',').filter(Boolean) ?? __HULDA_CLIPS__, base = (c: string) => import.meta.env.BASE_URL + c;
@@ -83,6 +83,10 @@ let hop: { from: THREE.Vector3; to: THREE.Vector3; t: number; tree: Tree; az: nu
 let grass: { x: number; z: number; heading: number } | null = null;
 let root: { root: RootEdge; s: number; forward: boolean; off: number; exit?: boolean } | null = null;
 let move: { from: THREE.Vector3; to: THREE.Vector3; t: number; seconds: number; then: () => void } | null = null;
+// The course (R1): the place she chose, the way there, which of its roots she rides, and whether the roots are carrying her now. A tap's single meaning waits out the double tap's window (pendingTap).
+let course: Course | null = null, courseTarget: { x: number; z: number } | null = null, courseAt = 0, carried = false, pendingTap = 0;
+let notice = { text: '', until: 0 };
+const say = (text: string, seconds = 2.5): void => { notice = { text, until: time + seconds * 1000 }; };
 function want(): THREE.Vector3 {
   const g = player.gesture; if (!g.held || Math.hypot(g.x, g.y) < 0.25) return new THREE.Vector3();
   const yaw = player.yaw, fx = -Math.sin(yaw), fz = -Math.cos(yaw), rx = Math.cos(yaw), rz = -Math.sin(yaw);
@@ -97,19 +101,49 @@ function standOn(x: number, z: number, yaw = player.yaw): void {
   const n = nearestTree(x, z); if (n.distance < 0.35) { const a = Math.atan2(z - n.tree.z, x - n.tree.x); x = n.tree.x + Math.cos(a) * (trunkRadius(n.tree) + 0.4); z = n.tree.z + Math.sin(a) * (trunkRadius(n.tree) + 0.4); }
   player.traversalWorld = groundWorld; player.motor.reset(new THREE.Vector3(x, relief(x, z), z)); place(new THREE.Vector3(x, relief(x, z), z)); player.yaw = yaw; player.canMove = true; mode = 'ground'; trunk = null; crown = null; hop = null; grass = null; root = null;
 }
-function enterNetwork(n: RootNode, from: THREE.Vector3): void {
-  const routes = network.atNode(n.id); if (!routes.length) return;
-  const w = want();
-  const chosen = network.next(network.nodeId(n.id), w) ?? { root: routes[0], forward: routes[0].a === network.nodeId(n.id) };
-  const r = chosen.root, forward = chosen.forward, s = forward ? 0 : r.length;
-  lock(); mode = 'sink'; grass = null;
-  move = { from: from.clone(), to: rootPoint(r, s), t: 0, seconds: 0.5, then: () => { root = { root:r, s, forward, off:0 }; mode = 'root'; } };
+/** A course to a place: from where she is (a tree near her is the way in), or, in a root already, from either of its ends, and then she is off at once. */
+function plotCourse(target: { x: number; z: number }): boolean {
+  courseTarget = target; carried = false;
+  if (mode === 'root' && root) { if (resumeCourse()) { drawMap(); return true; } }
+  const f = mode === 'grass' && grass ? grass : player.feet();
+  course = network.plan(f, target); courseAt = 0;
+  if (!course) { courseTarget = null; say('no way there through the roots'); drawMap(); return false; }
+  say(mode === 'grass' ? 'a way is plotted: tap by a root to take it' : 'a way is plotted: the tree to enter glows'); drawMap(); return true;
 }
+function clearCourse(): void { course = null; courseTarget = null; carried = false; drawMap(); }
+/** In a root with a place chosen: the course is plotted anew from the nearer end that has one, and the roots carry her toward it. */
+function resumeCourse(): boolean {
+  if (!root || !courseTarget) return false;
+  const r = root.root, ends = [{ id: r.a, along: root.s }, { id: r.b, along: r.length - root.s }].sort((p, q) => p.along - q.along);
+  for (const e of ends) { const c = network.planFrom(e.id, courseTarget); if (c) { course = c; courseAt = -1; root.forward = e.id === r.b; carried = true; return true; } }
+  return false;
+}
+/** From the ground at the entry tree: down into its first root, and away. */
+function startCourse(from: THREE.Vector3): void {
+  if (!course) return; const r = course.roots[0], forward = r.a === course.nodes[0], s = forward ? 0 : r.length;
+  lock(); mode = 'sink'; grass = null; trunk = null; courseAt = 0; carried = true;
+  move = { from: from.clone(), to: rootPoint(r, s), t: 0, seconds: 0.5, then: () => { root = { root: r, s, forward, off: 0 }; mode = 'root'; } };
+}
+/** The course's end: she rises out where it ends. */
+function arriveCourse(): void { course = null; courseTarget = null; carried = false; say('she is there'); emerge(); }
+// The portal (R1, Noah's C): a tree at the foot of the karst offers the places its roots reach; picked, the roots carry her there. If it is the entry of a plotted course, that comes first.
+const portalEl = el('portal'); let portalNode: RootNode | null = null, portalAt = { x: 0, z: 0 };
+function openPortal(n: RootNode): boolean {
+  if (course && course.entry === network.nodeId(n.id)) { startCourse(player.feet()); return true; }
+  if (!portalEl.hidden) return true;
+  const places = karst.destinations(n.id); if (!places.length) return false;
+  portalNode = n; const f = player.feet(); portalAt = { x: f.x, z: f.z };
+  portalEl.querySelector('.title')!.textContent = `${nodeName(n.id)}: its roots reach`;
+  portalEl.querySelector('.list')!.replaceChildren(...places.map(d => { const b = document.createElement('button'); b.dataset.to = d.id; b.textContent = d.name; const i = document.createElement('i'); i.textContent = `${Math.round(d.length)} m`; b.append(i); return b; }));
+  portalEl.hidden = false; player.cancelInput(); return true;
+}
+function closePortal(): void { portalEl.hidden = true; portalNode = null; }
+portalEl.addEventListener('click', e => { const b = (e.target as HTMLElement).closest('button'); if (!b) return; if (b.dataset.to && portalNode && mode === 'ground' && karst.travel(portalNode.id, b.dataset.to)) mode = 'karst'; closePortal(); });
 function enterTrunk(tree: Tree): void { lock(); trunk = { tree, h: 0.2, az: Math.atan2(player.feet().z - tree.z, player.feet().x - tree.x), downHeld: 0 }; mode = 'trunk'; }
 /** Into the grass: a bulge under the meadow from wherever she stands (or from a trunk's foot). */
 function enterGrass(from: THREE.Vector3): void { lock(); mode = 'sink'; trunk = null; move = { from: from.clone(), to: new THREE.Vector3(from.x, relief(from.x, from.z) - 0.1, from.z), t: 0, seconds: 0.5, then: () => { grass = { x: from.x, z: from.z, heading: player.yaw }; mode = 'grass'; } }; }
 /** Where she can stand on the ground: within the walkable world, not in water, a house or a trunk. */
-const standable = (x: number, z: number): boolean => grassCan(x, z) && groundWorld.canOccupy(new THREE.Vector3(x, relief(x, z), z), 0.26, 0.8);
+const standable = (x: number, z: number): boolean => grassCan(x, z) && !inWater(x, z) && groundWorld.canOccupy(new THREE.Vector3(x, relief(x, z), z), 0.26, 0.8);
 function emerge(): void {
   if (mode === 'root' && root && !(root.root as WorldRoot).surface) {
     // A deep conduit cannot emerge through stone: carry to the nearer safe mouth.
@@ -126,13 +160,26 @@ function emerge(): void {
 function pressInto(dt: number): void {
   const w = want(), feet = player.feet(); if (w.lengthSq() === 0 || player.motor.speed > 0.35 || village.stack) { press = 0; return; }
   const n = nearestTree(feet.x, feet.z), toTree = new THREE.Vector3(n.tree.x - feet.x, 0, n.tree.z - feet.z).normalize();
-  if (n.distance < PRESS_RANGE && toTree.dot(w) > 0.6) { press += dt; if (press > PRESS_S) { press = 0; enterTrunk(n.tree); } return; }
+  if (n.distance < PRESS_RANGE && toTree.dot(w) > 0.6) { press += dt; if (press > PRESS_S) { press = 0; if (course && course.entry === n.tree.id) startCourse(feet); else enterTrunk(n.tree); } return; }
   press = 0;
 }
 const walk = el('walk');
 walk.addEventListener('pointerdown', e => { stickDown = performance.now(); stickDownAt = { x: e.clientX, y: e.clientY }; }, true);
-walk.addEventListener('pointerup', e => { const now = performance.now(); if (now - stickDown < 230 && Math.hypot(e.clientX - stickDownAt.x, e.clientY - stickDownAt.y) < 10) { if (now - lastStickTap < 330) { lastStickTap = -Infinity; if (mode === 'ground') { const f = player.feet(); if (village.stack) wobble = 0.6; else if (karst.zone !== 'floor' && karst.inside(f.x, f.z)) { if (karst.enterRootsNear(f) && mode === 'ground') mode = 'karst'; } else if (grassCan(f.x, f.z)) enterGrass(f); } else if (mode === 'karst') karst.emerge(); else emerge(); } else lastStickTap = now; } }, true);
-void ENTER_RANGE;
+walk.addEventListener('pointerup', e => { const now = performance.now(); if (now - stickDown < 230 && Math.hypot(e.clientX - stickDownAt.x, e.clientY - stickDownAt.y) < 10) { if (now - lastStickTap < 330) { lastStickTap = -Infinity; pendingTap = 0; doubleTap(); } else { lastStickTap = now; pendingTap = now; } } }, true);
+/** Two taps: in under the ground, or out of any form. */
+function doubleTap(): void { if (mode === 'ground') { const f = player.feet(); if (village.stack) wobble = 0.6; else if (karst.zone !== 'floor' && karst.inside(f.x, f.z)) { if (karst.enterRootsNear(f) && mode === 'ground') mode = 'karst'; } else if (grassCan(f.x, f.z)) enterGrass(f); } else if (mode === 'karst') karst.emerge(); else emerge(); }
+/** One tap: in the grass the nearest root takes her (and the course, if one is plotted); in a root she is off it into the grass (a deep conduit carries her to a mouth first); at the entry tree, into the course; on a portal ride, off at the next mouth. */
+function singleTap(): void {
+  if (mode === 'grass' && grass) {
+    const hit = network.nearest(grass, ROOT_REACH); if (!hit) { say('no root within reach'); return; }
+    const t = rootTangent(hit.root, hit.s), forward = t.x * -Math.sin(grass.heading) + t.z * -Math.cos(grass.heading) >= 0;
+    root = { root: hit.root, s: hit.s, forward, off: 0 }; grass = null; mode = 'root'; if (courseTarget) resumeCourse();
+  } else if (mode === 'root' && root) {
+    carried = false; if (!(root.root as WorldRoot).surface) { emerge(); return; }
+    const p = rootPoint(root.root, root.s); if (grassCan(p.x, p.z)) { grass = { x: p.x, z: p.z, heading: player.yaw }; root = null; mode = 'grass'; }
+  } else if (mode === 'ground' && course) { const f = player.feet(), e = network.nodeAt(course.entry); if (e && Math.hypot(e.x - f.x, e.z - f.z) < ENTER_RANGE + 1) startCourse(f); }
+  else if (mode === 'karst') karst.stop();
+}
 // Each hobbit's shown position eases after the model's tick, so a tick's step reads as walking, not a jump.
 const shown = HOBBITS.map((h, i) => { const s = village.hobbits[i]; return { x: s.x, z: s.z, heading: s.heading, speed: 0, label: document.createElement('div'), bubble: document.createElement('div'), hunger: null as unknown as HTMLElement, name: h.name }; });
 { const t = Number(new URLSearchParams(location.search).get('tick')); if (Number.isFinite(t) && t > 0) setTick(t); }
@@ -174,6 +221,7 @@ function stations(dt: number): void {
   let say = '';
   if (st?.kind === 'gather' && st.keeps) { const kind = YIELD_OF[st.keeps]!; collectClock += dt; while (collectClock >= COLLECT_S) { collectClock -= COLLECT_S; if (!collect(village, st.keeps)) { collectClock = 0; break; } } if (storeFull(village, kind)) say = `${STORES[kind].name} are full`; else if (village.stack && village.stack.kind !== kind) say = `her hands are full of ${STORES[village.stack.kind].unit}`; }
   else if (st?.kind === 'deliver' && st.store) { deliverClock += dt; while (deliverClock >= DELIVER_S) { deliverClock -= DELIVER_S; if (!deliver(village, st.store)) { deliverClock = 0; break; } } if (village.stack && village.stack.kind !== st.store) say = `${STORES[st.store].name} take ${STORES[st.store].unit}, not ${STORES[village.stack.kind].unit}`; else if (village.stack && storeFull(village, st.store)) say = `${STORES[st.store].name} are full`; }
+  if (!say && notice.until > time) say = notice.text;
   tip.hidden = !say; if (say) tip.textContent = say;
   miracles.hidden = st?.kind !== 'shrine'; if (!miracles.hidden) { const cost = spiritCost(village); for (const b of miracles.querySelectorAll('button')) { b.disabled = village.prayer < cost; b.querySelector('i')!.textContent = String(cost); } }
   prayerEl.textContent = `prayer ${Math.floor(village.prayer)} / ${PRAYER_CAP}`; world.updatePrayer(village.prayer / PRAYER_CAP);
@@ -234,6 +282,15 @@ function presentRaiders(dt: number): void {
   { const L = village.lair; tmp.set(lairPlace.x, relief(lairPlace.x, lairPlace.z) + 7, lairPlace.z); const dist = tmp.distanceTo(camera.position); tmp.project(camera); const show = L.alive && tmp.z < 1 && dist < 60 && Math.abs(tmp.x) < 1.1; lairLabel.hidden = !show; if (show) { const x = (tmp.x + 1) * innerWidth / 2, y = (1 - tmp.y) * innerHeight / 2; lairLabel.style.transform = `translate(${x}px,${y}px) translate(-50%,-100%)`; lairLabel.style.opacity = '1'; lairHp.style.width = `${L.hp / LAIR_HP * 100}%`; lairHp.style.background = '#c060d0'; } }
   void dt;
 }
+// The way in (R1): while a course is plotted and she is not yet in its roots, a ring and a shaft of light stand at the entry tree, named.
+const wayIn = new THREE.Group(); const wayRing = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.06, 8, 40), new THREE.MeshBasicMaterial({ color: '#f0d060' })); wayRing.rotation.x = Math.PI / 2; wayRing.position.y = 0.08; const wayShaft = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.14, 7, 8, 1, true), new THREE.MeshBasicMaterial({ color: '#f0d060', transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide })); wayShaft.position.y = 3.5; wayIn.add(wayRing, wayShaft); wayIn.visible = false; scene.add(wayIn);
+const wayLabel = document.createElement('div'); wayLabel.className = 'name way'; wayLabel.textContent = 'the way in'; wayLabel.hidden = true; labels.append(wayLabel);
+function presentCourse(): void {
+  const e = course && mode !== 'root' && mode !== 'karst' ? network.nodeAt(course.entry) : null; wayIn.visible = !!e; wayLabel.hidden = !e; if (!e) return;
+  const y = relief(e.x, e.z); wayIn.position.set(e.x, y, e.z); const k = 1 + 0.12 * Math.sin(time * 0.004); wayRing.scale.set(k, k, 1);
+  tmp.set(e.x, y + 2.2, e.z); const dist = tmp.distanceTo(camera.position); tmp.project(camera); const show = tmp.z < 1 && dist < 80 && Math.abs(tmp.x) < 1.1; wayLabel.hidden = !show;
+  if (show) { const x = (tmp.x + 1) * innerWidth / 2, py = (1 - tmp.y) * innerHeight / 2; wayLabel.style.transform = `translate(${x}px,${py}px) translate(-50%,-100%)`; wayLabel.textContent = `the way in · ${Math.round(dist)} m`; }
+}
 const lairLabel = document.createElement('div'); lairLabel.className = 'name foe lair'; lairLabel.textContent = 'the mother of goats'; const lairMeter = document.createElement('i'); lairMeter.className = 'hunger'; const lairHp = document.createElement('b'); lairMeter.append(lairHp); lairLabel.append(lairMeter); lairLabel.hidden = true; labels.append(lairLabel);
 function presentHobbits(dt: number): void {
   camera.updateMatrixWorld();
@@ -271,9 +328,16 @@ for (const ev of ['lostpointercapture', 'pointerleave'] as const) canvasEl.addEv
 document.addEventListener('visibilitychange', () => { pinchPointers.clear(); pinchFrom = 0; });
 canvasEl.addEventListener('pointermove', e => { const p = pinchPointers.get(e.pointerId); if (!p) return; p.x = e.clientX; p.y = e.clientY; if (pinchPointers.size === 2 && pinchFrom > 0) { e.stopImmediatePropagation(); const ratio = pinchFrom / Math.max(1, pinchDistance()); zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, pinchZoom * ratio)); if (pinchZoom >= ZOOM_MAX - 0.01 && ratio > 1.15 && !mapOpen) { openMap(true); pinchFrom = 0; } } }, true);
 for (const ev of ['pointerup', 'pointercancel'] as const) canvasEl.addEventListener(ev, e => { pinchPointers.delete(e.pointerId); if (pinchPointers.size < 2) pinchFrom = 0; }, true);
-mapWrap.addEventListener('pointerdown', e => { pinchPointers.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (pinchPointers.size === 2) pinchFrom = pinchDistance(); else mapDrag = { id: e.pointerId, x: e.clientX, y: e.clientY }; });
+let mapTap: { id: number; x: number; y: number; t: number } | null = null;
+mapWrap.addEventListener('pointerdown', e => { pinchPointers.set(e.pointerId, { x: e.clientX, y: e.clientY }); if (pinchPointers.size === 2) { pinchFrom = pinchDistance(); mapTap = null; } else { mapDrag = { id: e.pointerId, x: e.clientX, y: e.clientY }; mapTap = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now() }; } });
 mapWrap.addEventListener('pointermove', e => { const p = pinchPointers.get(e.pointerId); if (p) { p.x = e.clientX; p.y = e.clientY; } if (pinchPointers.size === 2 && pinchFrom > 0) { if (pinchDistance() / pinchFrom > 1.2) { openMap(false); pinchFrom = 0; } return; } if (mapDrag && mapDrag.id === e.pointerId) { mapPan.x -= (e.clientX - mapDrag.x) / MAP_SCALE; mapPan.z -= (e.clientY - mapDrag.y) / MAP_SCALE; mapDrag = { id: e.pointerId, x: e.clientX, y: e.clientY }; drawMap(); } });
-for (const ev of ['pointerup', 'pointercancel'] as const) mapWrap.addEventListener(ev, e => { pinchPointers.delete(e.pointerId); if (pinchPointers.size < 2) pinchFrom = 0; if (mapDrag?.id === e.pointerId) mapDrag = null; });
+for (const ev of ['pointerup', 'pointercancel'] as const) mapWrap.addEventListener(ev, e => { pinchPointers.delete(e.pointerId); if (pinchPointers.size < 2) pinchFrom = 0; if (mapDrag?.id === e.pointerId) mapDrag = null; if (ev === 'pointerup' && mapTap?.id === e.pointerId && Math.hypot(e.clientX - mapTap.x, e.clientY - mapTap.y) < 8 && performance.now() - mapTap.t < 400 && (e.target as HTMLElement).tagName !== 'BUTTON') mapTapAt(e.clientX, e.clientY); mapTap = null; });
+/** A tap on the map: on the course's mark it is forgotten, anywhere else a course is plotted there. */
+function mapTapAt(clientX: number, clientY: number): void {
+  const x = mapPan.x + (clientX - innerWidth / 2) / MAP_SCALE, z = mapPan.z + (clientY - innerHeight / 2) / MAP_SCALE;
+  if (courseTarget && Math.hypot(courseTarget.x - x, courseTarget.z - z) * MAP_SCALE < 16) { clearCourse(); return; }
+  plotCourse({ x, z });
+}
 el('mapclose').addEventListener('click', () => openMap(false));
 /** The map: what she has explored (cells), the places she knows, her own mark, north up. */
 function drawMap(): void {
@@ -284,6 +348,8 @@ function drawMap(): void {
   for (const key of overworld.revealed) { const [cx, cz] = key.split(',').map(Number); const x = sx(cx * CELL), y = sz(cz * CELL); if (x > -cs && x < w + cs && y > -cs && y < h + cs) { const mx = (cx + 0.5) * CELL, mz = (cz + 0.5) * CELL; const b = Math.hypot(mx, mz) < 46 ? 'meadow' : biomeAt(mx, mz, overworld.seed); c.fillStyle = b === 'meadow' ? '#5b7a48' : b === 'wood' ? '#3e5a3a' : '#3a2a44'; c.fillRect(x, y, cs + 1, cs + 1); } }
   c.font = `${12 * devicePixelRatio}px system-ui`; c.textAlign = 'center';
   for (const p of knownPlaces(overworld)) { const x = sx(p.x), y = sz(p.z); c.strokeStyle = p.id === 'lair' ? '#c070c0' : '#f1edcf'; c.lineWidth = 2 * devicePixelRatio; c.beginPath(); if (p.id === 'village') c.arc(x, y, 7 * devicePixelRatio, 0, Math.PI * 2); else if (p.id === 'karst') { c.moveTo(x, y - 9 * devicePixelRatio); c.lineTo(x + 8 * devicePixelRatio, y + 7 * devicePixelRatio); c.lineTo(x - 8 * devicePixelRatio, y + 7 * devicePixelRatio); c.closePath(); } else { c.moveTo(x - 7 * devicePixelRatio, y - 7 * devicePixelRatio); c.lineTo(x + 7 * devicePixelRatio, y + 7 * devicePixelRatio); c.moveTo(x + 7 * devicePixelRatio, y - 7 * devicePixelRatio); c.lineTo(x - 7 * devicePixelRatio, y + 7 * devicePixelRatio); } c.stroke(); c.fillStyle = c.strokeStyle; c.fillText(p.name, x, y + 24 * devicePixelRatio); }
+  if (course) { c.strokeStyle = '#f0d060'; c.lineWidth = 2 * devicePixelRatio; c.beginPath(); for (const r of course.roots) for (let i = 0; i < r.samples.length; i++) { const p = r.samples[i]; if (i === 0) c.moveTo(sx(p.x), sz(p.z)); else c.lineTo(sx(p.x), sz(p.z)); } c.stroke(); const e = network.nodeAt(course.entry); if (e) { c.beginPath(); c.arc(sx(e.x), sz(e.z), 5 * devicePixelRatio, 0, Math.PI * 2); c.stroke(); } }
+  if (courseTarget) { const x = sx(courseTarget.x), y = sz(courseTarget.z), d = 7 * devicePixelRatio; c.strokeStyle = '#f0d060'; c.fillStyle = '#f0d060'; c.lineWidth = 2 * devicePixelRatio; c.beginPath(); c.moveTo(x, y - d); c.lineTo(x + d, y); c.lineTo(x, y + d); c.lineTo(x - d, y); c.closePath(); c.stroke(); c.textAlign = 'center'; c.fillText(course ? `the way · ${Math.round(course.length)} m` : 'no way', x, y + 22 * devicePixelRatio); }
   const f = player.feet(), x = sx(f.x), y = sz(f.z); c.fillStyle = '#d8f07a'; c.beginPath(); c.arc(x, y, 4 * devicePixelRatio, 0, Math.PI * 2); c.fill(); c.strokeStyle = '#d8f07a'; c.beginPath(); c.moveTo(x, y); c.lineTo(x - Math.sin(player.yaw) * 14 * devicePixelRatio, y - Math.cos(player.yaw) * 14 * devicePixelRatio); c.stroke();
   c.fillStyle = '#f1edcf'; c.textAlign = 'left'; c.fillText('N', 14 * devicePixelRatio, 26 * devicePixelRatio + (window.visualViewport?.offsetTop ?? 0)); c.fillRect(14 * devicePixelRatio, h - 30 * devicePixelRatio, 100 * s, 2 * devicePixelRatio); c.fillText('100 m', 14 * devicePixelRatio, h - 36 * devicePixelRatio);
 }
@@ -295,7 +361,8 @@ function drawCompass(): void {
   c.clearRect(0, 0, w, h); c.fillStyle = '#0b191866'; c.fillRect(0, 0, w, h);
   c.font = `${11 * dpr}px system-ui`; c.textAlign = 'center'; c.textBaseline = 'middle';
   for (let b = 0; b < 360; b += 15) { const x = xOf(b); if (x < 0 || x > w) continue; const major = b % 90 === 0; c.fillStyle = major ? '#f1edcf' : '#f1edcf88'; if (major) c.fillText(['N', 'E', 'S', 'W'][b / 90], x, h * 0.42); else c.fillRect(x - dpr / 2, h * 0.3, dpr, h * 0.25); }
-  for (const p of knownPlaces(overworld)) { const b = bearingOf(p.x - f.x, p.z - f.z), x = xOf(b); if (x < 4 * dpr || x > w - 4 * dpr) continue; const d = Math.hypot(p.x - f.x, p.z - f.z); c.fillStyle = p.id === 'lair' ? '#e0a0f0' : '#d8f07a'; c.beginPath(); c.moveTo(x, h * 0.62); c.lineTo(x - 4 * dpr, h * 0.78); c.lineTo(x + 4 * dpr, h * 0.78); c.closePath(); c.fill(); c.font = `${9 * dpr}px system-ui`; c.fillText(d < 1000 ? `${Math.round(d)} m` : `${(d / 1000).toFixed(1)} km`, x, h * 0.9); c.font = `${11 * dpr}px system-ui`; }
+  const marks: { x: number; z: number; colour: string }[] = knownPlaces(overworld).map(p => ({ x: p.x, z: p.z, colour: p.id === 'lair' ? '#e0a0f0' : '#d8f07a' })); if (courseTarget) marks.push({ ...courseTarget, colour: '#f0d060' });
+  for (const p of marks) { const b = bearingOf(p.x - f.x, p.z - f.z), x = xOf(b); if (x < 4 * dpr || x > w - 4 * dpr) continue; const d = Math.hypot(p.x - f.x, p.z - f.z); c.fillStyle = p.colour; c.beginPath(); c.moveTo(x, h * 0.62); c.lineTo(x - 4 * dpr, h * 0.78); c.lineTo(x + 4 * dpr, h * 0.78); c.closePath(); c.fill(); c.font = `${9 * dpr}px system-ui`; c.fillText(d < 1000 ? `${Math.round(d)} m` : `${(d / 1000).toFixed(1)} km`, x, h * 0.9); c.font = `${11 * dpr}px system-ui`; }
   c.fillStyle = '#f1edcf'; c.fillRect(w / 2 - dpr, 0, 2 * dpr, h * 0.22);
 }
 /** Overhead: past the shoulder the camera sits `zoom` m from her on the yaw, raised by the elevation, looking at her. */
@@ -305,6 +372,8 @@ function frame(now: number) {
   requestAnimationFrame(frame); const wall = Math.min(WALL_CAP, Math.max(0, (now - last) / 1000)), dt = Math.min(0.05, wall); last = now; if (document.hidden || intro.open) return; time += dt * 1000; simSeconds += dt;
   // The village lives only while watched: whole ticks from the real seconds that passed, none while hidden.
   tickBank += wall * TICKS_PER_SECOND * speed; const ticks = Math.floor(tickBank); if (ticks > 0) { advance(village, ticks); tickBank -= ticks; }
+  if (pendingTap && now - pendingTap > 330) { pendingTap = 0; singleTap(); }
+  if (!portalEl.hidden && (mode !== 'ground' || Math.hypot(player.feet().x - portalAt.x, player.feet().z - portalAt.z) > 1.5)) closePortal();
   chunks.update(player.feet().x, player.feet().z);
   if (network.update(player.feet().x, player.feet().z)) networkScene.update(network.dynamic);
   player.update(now, mode === 'ground' ? [...world.colliders, ...chunks.colliders(), ...karst.colliders] : [], undefined);
@@ -337,19 +406,20 @@ function frame(now: number) {
     // Free under the grass, faster than running; onto a tree root when she runs along one.
     wantUnder = 1; const w = want(), gr = grass;
     if (w.lengthSq() > 0) {
-      const ox = gr.x, oz = gr.z, nx = gr.x + w.x * GRASS_SPEED * dt, nz = gr.z + w.z * GRASS_SPEED * dt;
+      const nx = gr.x + w.x * GRASS_SPEED * dt, nz = gr.z + w.z * GRASS_SPEED * dt;
       if (grassCan(nx, nz)) { gr.x = nx; gr.z = nz; } else if (grassCan(nx, gr.z)) gr.x = nx; else if (grassCan(gr.x, nz)) gr.z = nz;
       gr.heading = Math.atan2(-w.x, -w.z);
-      // A root she runs along takes her: checked along the whole step (a slow frame must not carry her over one), any root within reach that agrees with her run.
-      const steps = Math.max(1, Math.ceil(Math.hypot(gr.x - ox, gr.z - oz) / ROOT_CATCH_STEP));
-      for (let i = 1; i <= steps && mode === 'grass'; i++) { const k = i / steps, hit = alignedRoot({ x: ox + (gr.x - ox) * k, z: oz + (gr.z - oz) * k }, w, ROOT_CATCH, ROOT_CATCH_DOT); if (hit) { root = { root: hit.root, s: hit.s, forward: hit.forward, off: 0 }; grass = null; mode = 'root'; } }
     }
     const p = new THREE.Vector3(gr.x, relief(gr.x, gr.z), gr.z); place(p); orbitCamera(p, 3.2, 1.3);
   } else if (mode === 'root' && root) {
     // Held to the root's path, faster still; back reverses; sideways for a moment drops her into the grass; at a tree the aligned root, or a stop.
     wantUnder = 1; const r = root, w = want();
-    if (r.exit) { const t = rootTangent(r.root, r.s); w.set(t.x, 0, t.z).multiplyScalar(r.forward ? 1 : -1).normalize(); if (w.lengthSq() < 0.01) w.set(0, 0, -1); }
-    if (w.lengthSq() > 0) {
+    if (carried && course) {
+      // The course drives: on along this root, at its end the next of the course's roots, at the last one's end she is there.
+      r.s += (r.forward ? 1 : -1) * CARRY_SPEED * dt;
+      if (r.s >= r.root.length || r.s <= 0) { r.s = Math.min(r.root.length, Math.max(0, r.s)); courseAt++; const nr = course.roots[courseAt]; if (nr) { r.root = nr; r.forward = nr.a === course.nodes[courseAt]; r.s = r.forward ? 0 : nr.length; } else arriveCourse(); }
+    } else if (r.exit) { const t = rootTangent(r.root, r.s); w.set(t.x, 0, t.z).multiplyScalar(r.forward ? 1 : -1).normalize(); if (w.lengthSq() < 0.01) w.set(0, 0, -1); }
+    if (!carried && w.lengthSq() > 0) {
       const tan = rootTangent(r.root, r.s); if (!r.forward) tan.negate(); const flat = new THREE.Vector3(tan.x, 0, tan.z).normalize(), dot = r.exit ? 1 : flat.lengthSq() < 0.01 ? -stickY() : flat.dot(w);
       if (Math.abs(dot) < 0.35) { r.off += dt; if (r.off > 0.25) { const p = rootPoint(r.root, r.s); if ((r.root as WorldRoot).surface && grassCan(p.x, p.z)) { grass = { x: p.x, z: p.z, heading: player.yaw }; root = null; mode = 'grass'; } } }
       else { r.off = 0; if (dot < 0) r.forward = !r.forward; else {
@@ -368,7 +438,7 @@ function frame(now: number) {
   }
   // The ease settles exactly: the ground's alpha hash would stipple forever on a residual 0.01.
   under += (wantUnder - under) * Math.min(1, dt * 4); if (Math.abs(under - wantUnder) < 0.01) under = wantUnder;
-  fight(Math.min(0.25, wall) * speed, Math.min(0.25, wall)); stations(Math.min(0.25, wall)); presentHulda(dt); presentHobbits(dt); presentSpirits(dt); presentRaiders(dt);
+  fight(Math.min(0.25, wall) * speed, Math.min(0.25, wall)); stations(Math.min(0.25, wall)); presentHulda(dt); presentHobbits(dt); presentSpirits(dt); presentRaiders(dt); presentCourse();
   const light = daylightAt(village.tick), dusk = Math.max(0, 1 - Math.abs(light - 0.12) / 0.12);
   colour.copy(nightSky).lerp(daySky, Math.min(1, light * 1.6)).lerp(duskSky, dusk * 0.6); scene.background = colour; scene.fog = new THREE.FogExp2(colour, 0.011);
   if (mode !== 'karst') karst.update(dt, time, { held: false, x: 0, y: 0 }, under); const atm = karst.atmosphere(); if (atm) { colour.copy(atm.colour); scene.background = colour; scene.fog = new THREE.FogExp2(colour, atm.fog); }
@@ -380,4 +450,4 @@ function frame(now: number) {
   overheadCamera(); drawCompass(); renderer.render(scene, camera);
 }
 player.applyCamera(camera); presentHulda(0); presentHobbits(0); world.updateLand(village); world.update(daylightAt(village.tick), 0); scene.background = daySky; renderer.render(scene, camera); intro.showModal(); requestAnimationFrame(frame);
-Object.assign(window, { __village: { hulda, presentation, scene, camera, renderer, player, network, terrain, canGrass: grassCan, rootNodes: ROOT_NODES, enterNetwork: (id: string) => enterNetwork(ROOT_NODES[id], player.feet()), emerge, figures: world.figures, hobbits: HOBBITS, houses: HOUSES, trees: TREES, roots: TREE_ROOTS.length, get mode() { return mode; }, get simSeconds() { return simSeconds; }, get under() { return under; }, get grass() { return grass ? { ...grass } : null; }, get root() { return root ? { root: root.root.id, s: root.s, length: root.root.length, forward: root.forward } : null; }, get trunk() { return trunk ? { tree: trunk.tree.id, h: trunk.h } : null; }, get crown() { return crown ? { tree: crown.tree.id, az: crown.az, armed: crown.armed } : null; }, get transitioning() { return mode === 'hop' || mode === 'sink' || mode === 'rise'; }, sinkAt: (x: number, z: number) => { standOn(x, z); enterGrass(new THREE.Vector3(x, relief(x, z), z)); }, standAt: (x: number, z: number, yaw: number) => standOn(x, z, yaw), thoughts: () => village.hobbits.map(s => thought(s, village.tick)), facing: () => world.figures.map((f, i) => { const s = village.hobbits[i], fwd = { x: -Math.sin(f.group.rotation.y), z: -Math.cos(f.group.rotation.y) }; return { moving: s.speed > 0 && s.path.length > 0, dot: s.path.length ? (fwd.x * (s.path[0].x - s.x) + fwd.z * (s.path[0].z - s.z)) / (Math.hypot(s.path[0].x - s.x, s.path[0].z - s.z) || 1) : 0 }; }), inWater, get village() { return JSON.parse(serializeVillage(village)); }, get tick() { return village.tick; }, get phase() { return phaseAt(village.tick); }, get clock() { return clockOf(village.tick); }, dayTicks: DAY_TICKS, count: (where: 'inside' | 'green' | 'out') => everyone(village, where), advance: (n: number) => { advance(village, n); for (let i = 0; i < HOBBITS.length; i++) { const s = village.hobbits[i]; shown[i].x = s.x; shown[i].z = s.z; shown[i].heading = s.heading; } save(); }, hobbit: (id: string) => ({ ...village.hobbits.find(s => s.id === id)!, keeps: hobbitById(id).keeps }), get stores() { return { ...village.stores }; }, get land() { return JSON.parse(JSON.stringify(village.land)); }, get fireWood() { return village.fireWood; }, get take() { return { ...village.lastTake }; }, get balance() { return balance(village); }, storeSpots: STORES, carrying: () => village.hobbits.map(s => s.carry), hungers: () => village.hobbits.map(s => s.hunger), armfuls: () => world.armfuls(), karstFeature: () => karst, karst: { get mode() { return karst.mode; }, get zone() { return karst.zone; }, get at() { return karst.at; }, origin: KARST_AT, inside: (x: number, z: number) => karst.inside(x, z), standOn: (zone: string, x: number, z: number, yaw: number) => { karst.standOn(zone, x, z, yaw); mode = 'ground'; }, nodes: NODES_HANDLE }, chunks: () => ({ loaded: chunks.count, trees: chunks.trees }), treesNear: (x: number, z: number, r: number) => treesNear(x, z, r).map(t => ({ ...t })), relief, compass: () => { const f = player.feet(); return { heading: bearingOf(-Math.sin(player.yaw), -Math.cos(player.yaw)), marks: knownPlaces(overworld).map(p => ({ id: p.id, bearing: bearingOf(p.x - f.x, p.z - f.z), distance: Math.hypot(p.x - f.x, p.z - f.z) })) }; }, pinchPointers: () => pinchPointers.size, get zoom() { return zoom; }, set zoom(x: number) { zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, x)); }, get mapOpen() { return mapOpen; }, openMap, get explored() { return overworld.revealed.size; }, isRevealed: (x: number, z: number) => isRevealed(overworld, x, z), places: () => places(overworld.seed), known: () => [...overworld.known], lair: () => ({ ...village.lair, at: lairPlace, paused: raidsPaused(village) }), forestDepth: (x: number, z: number) => forestDepth(x, z), choosePerk: (p: 'vigor' | 'strike' | 'sap') => choosePerk(village, p), set xp(n: number) { village.hero.xp = n; }, xpDy: XP_DY, xpLair: XP_LAIR, lairReach: LAIR_HURT_RANGE, raiders: () => village.raiders.map(r => ({ ...r })), get hero() { return { ...village.hero }; }, set vigor(x: number) { village.hero.vigor = x; }, attack, cooldowns: cooldown, get slain() { return village.slain; }, get eaten() { return village.eaten; }, stations: STATIONS, sites: SITES, setStore: (k: Store, n: number) => { village.stores[k] = n; }, get prayer() { return village.prayer; }, set prayer(x: number) { village.prayer = x; }, get stack() { return village.stack ? { ...village.stack } : null; }, get spirits() { return village.spirits.map(s => ({ ...s })); }, summon: (k: SiteKind) => summonSpirit(village, k), spiritCost: () => spiritCost(village), praying: () => village.hobbits.filter(s => s.activity === 'praying').map(s => s.id), setTick, jumpTo, get speed() { return speed; }, set speed(x: number) { speed = x; }, reset: () => { village = freshVillage(village.seed); for (let i = 0; i < HOBBITS.length; i++) { const s = village.hobbits[i]; shown[i].x = s.x; shown[i].z = s.z; shown[i].heading = s.heading; } save(); }, get shown() { return shown.map(s => ({ x: s.x, z: s.z, speed: s.speed, label: !s.label.hidden, bubble: !s.bubble.hidden })); }, get character() { const g = hulda.gait; return { status: clipStatus, error: clipError, clips: clipUrls, bones: hulda.bones.size, body: 'hulda', roles: g?.roles ?? null, weights: g ? Object.fromEntries(Object.entries(g.actions).map(([r, a]) => [r, a.getEffectiveWeight()])) : null, hobbitWeights: world.figures.map(f => f.gait ? Object.fromEntries(Object.entries(f.gait.actions).map(([r, a]) => [r, a.getEffectiveWeight()])) : null) }; } } });
+Object.assign(window, { __village: { hulda, presentation, scene, camera, renderer, player, network, terrain, canGrass: grassCan, rootNodes: ROOT_NODES, emerge, plotCourse, clearCourse, tapStick: () => singleTap(), get course() { return course ? { entry: course.entry, goal: course.goal, nodes: [...course.nodes], roots: course.roots.map(r => r.id), length: course.length, at: courseAt, target: courseTarget } : null; }, get carried() { return carried; }, wayIn: () => (wayIn.visible ? { x: wayIn.position.x, z: wayIn.position.z } : null), portal: { open: (id: string) => openPortal(ROOT_NODES[id]), get isOpen() { return !portalEl.hidden; }, places: () => [...portalEl.querySelectorAll<HTMLButtonElement>('button[data-to]')].map(b => b.dataset.to!), pick: (to: string) => { (portalEl.querySelector(`button[data-to="${to}"]`) as HTMLButtonElement | null)?.click(); } }, figures: world.figures, hobbits: HOBBITS, houses: HOUSES, trees: TREES, roots: TREE_ROOTS.length, get mode() { return mode; }, get simSeconds() { return simSeconds; }, get under() { return under; }, get grass() { return grass ? { ...grass } : null; }, get root() { return root ? { root: root.root.id, s: root.s, length: root.root.length, forward: root.forward } : null; }, get trunk() { return trunk ? { tree: trunk.tree.id, h: trunk.h } : null; }, get crown() { return crown ? { tree: crown.tree.id, az: crown.az, armed: crown.armed } : null; }, get transitioning() { return mode === 'hop' || mode === 'sink' || mode === 'rise'; }, sinkAt: (x: number, z: number) => { standOn(x, z); enterGrass(new THREE.Vector3(x, relief(x, z), z)); }, standAt: (x: number, z: number, yaw: number) => standOn(x, z, yaw), thoughts: () => village.hobbits.map(s => thought(s, village.tick)), facing: () => world.figures.map((f, i) => { const s = village.hobbits[i], fwd = { x: -Math.sin(f.group.rotation.y), z: -Math.cos(f.group.rotation.y) }; return { moving: s.speed > 0 && s.path.length > 0, dot: s.path.length ? (fwd.x * (s.path[0].x - s.x) + fwd.z * (s.path[0].z - s.z)) / (Math.hypot(s.path[0].x - s.x, s.path[0].z - s.z) || 1) : 0 }; }), inWater, get village() { return JSON.parse(serializeVillage(village)); }, get tick() { return village.tick; }, get phase() { return phaseAt(village.tick); }, get clock() { return clockOf(village.tick); }, dayTicks: DAY_TICKS, count: (where: 'inside' | 'green' | 'out') => everyone(village, where), advance: (n: number) => { advance(village, n); for (let i = 0; i < HOBBITS.length; i++) { const s = village.hobbits[i]; shown[i].x = s.x; shown[i].z = s.z; shown[i].heading = s.heading; } save(); }, hobbit: (id: string) => ({ ...village.hobbits.find(s => s.id === id)!, keeps: hobbitById(id).keeps }), get stores() { return { ...village.stores }; }, get land() { return JSON.parse(JSON.stringify(village.land)); }, get fireWood() { return village.fireWood; }, get take() { return { ...village.lastTake }; }, get balance() { return balance(village); }, storeSpots: STORES, carrying: () => village.hobbits.map(s => s.carry), hungers: () => village.hobbits.map(s => s.hunger), armfuls: () => world.armfuls(), karstFeature: () => karst, karst: { get mode() { return karst.mode; }, get zone() { return karst.zone; }, get at() { return karst.at; }, get travelling() { return karst.travelling; }, get queued() { return karst.queued; }, origin: KARST_AT, inside: (x: number, z: number) => karst.inside(x, z), standOn: (zone: string, x: number, z: number, yaw: number) => { karst.standOn(zone, x, z, yaw); mode = 'ground'; }, nodes: NODES_HANDLE }, chunks: () => ({ loaded: chunks.count, trees: chunks.trees }), treesNear: (x: number, z: number, r: number) => treesNear(x, z, r).map(t => ({ ...t })), relief, compass: () => { const f = player.feet(); return { heading: bearingOf(-Math.sin(player.yaw), -Math.cos(player.yaw)), marks: knownPlaces(overworld).map(p => ({ id: p.id, bearing: bearingOf(p.x - f.x, p.z - f.z), distance: Math.hypot(p.x - f.x, p.z - f.z) })) }; }, pinchPointers: () => pinchPointers.size, get zoom() { return zoom; }, set zoom(x: number) { zoom = Math.min(ZOOM_MAX, Math.max(ZOOM_MIN, x)); }, get mapOpen() { return mapOpen; }, openMap, get explored() { return overworld.revealed.size; }, isRevealed: (x: number, z: number) => isRevealed(overworld, x, z), places: () => places(overworld.seed), known: () => [...overworld.known], lair: () => ({ ...village.lair, at: lairPlace, paused: raidsPaused(village) }), forestDepth: (x: number, z: number) => forestDepth(x, z), choosePerk: (p: 'vigor' | 'strike' | 'sap') => choosePerk(village, p), set xp(n: number) { village.hero.xp = n; }, xpDy: XP_DY, xpLair: XP_LAIR, lairReach: LAIR_HURT_RANGE, raiders: () => village.raiders.map(r => ({ ...r })), get hero() { return { ...village.hero }; }, set vigor(x: number) { village.hero.vigor = x; }, attack, cooldowns: cooldown, get slain() { return village.slain; }, get eaten() { return village.eaten; }, stations: STATIONS, sites: SITES, setStore: (k: Store, n: number) => { village.stores[k] = n; }, get prayer() { return village.prayer; }, set prayer(x: number) { village.prayer = x; }, get stack() { return village.stack ? { ...village.stack } : null; }, get spirits() { return village.spirits.map(s => ({ ...s })); }, summon: (k: SiteKind) => summonSpirit(village, k), spiritCost: () => spiritCost(village), praying: () => village.hobbits.filter(s => s.activity === 'praying').map(s => s.id), setTick, jumpTo, get speed() { return speed; }, set speed(x: number) { speed = x; }, reset: () => { village = freshVillage(village.seed); for (let i = 0; i < HOBBITS.length; i++) { const s = village.hobbits[i]; shown[i].x = s.x; shown[i].z = s.z; shown[i].heading = s.heading; } save(); }, get shown() { return shown.map(s => ({ x: s.x, z: s.z, speed: s.speed, label: !s.label.hidden, bubble: !s.bubble.hidden })); }, get character() { const g = hulda.gait; return { status: clipStatus, error: clipError, clips: clipUrls, bones: hulda.bones.size, body: 'hulda', roles: g?.roles ?? null, weights: g ? Object.fromEntries(Object.entries(g.actions).map(([r, a]) => [r, a.getEffectiveWeight()])) : null, hobbitWeights: world.figures.map(f => f.gait ? Object.fromEntries(Object.entries(f.gait.actions).map(([r, a]) => [r, a.getEffectiveWeight()])) : null) }; } } });
