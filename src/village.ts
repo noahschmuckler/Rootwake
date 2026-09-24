@@ -99,6 +99,7 @@ function lock(): void { player.traversalWorld = lockedWorld; player.motor.veloci
 function place(p: THREE.Vector3): void { player.motor.feet.copy(p); player.position.x = p.x; player.position.z = p.z; }
 function standOn(x: number, z: number, yaw = player.yaw): void {
   const n = nearestTree(x, z); if (n.distance < 0.35) { const a = Math.atan2(z - n.tree.z, x - n.tree.x); x = n.tree.x + Math.cos(a) * (trunkRadius(n.tree) + 0.4); z = n.tree.z + Math.sin(a) * (trunkRadius(n.tree) + 0.4); }
+  if (!karst.inside(x, z)) karst.leave();
   player.traversalWorld = groundWorld; player.motor.reset(new THREE.Vector3(x, relief(x, z), z)); place(new THREE.Vector3(x, relief(x, z), z)); player.yaw = yaw; player.canMove = true; mode = 'ground'; trunk = null; crown = null; hop = null; grass = null; root = null;
 }
 /** A course to a place: from where she is (a tree near her is the way in), or, in a root already, from either of its ends, and then she is off at once. */

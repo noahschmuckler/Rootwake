@@ -14,6 +14,7 @@ const stick=(page,id)=>({down:async(dx,dy)=>{await page.locator('#walk').dispatc
 const v=(page,expr)=>page.evaluate(expr);
 const waitMode=(page,m,timeout=20000)=>page.waitForFunction(m=>window.__village.mode===m,m,{timeout});
 // The four events go in one go: the tap's thresholds are wall-clock, and a slow frame between them (the karst's scene under the software renderer) would otherwise undo the tap.
+async function singleTapStick(page){await page.evaluate(()=>{const w=document.getElementById('walk');for(const type of ['pointerdown','pointerup'])w.dispatchEvent(new PointerEvent(type,{pointerId:23,clientX:315,clientY:710,pointerType:'touch',bubbles:true}));});await page.waitForTimeout(450);}
 async function doubleTapStick(page){await page.evaluate(()=>{const w=document.getElementById('walk');for(const id of [21,22]){for(const type of ['pointerdown','pointerup'])w.dispatchEvent(new PointerEvent(type,{pointerId:id,clientX:315,clientY:710,pointerType:'touch',bubbles:true}));}});await page.waitForTimeout(150);}
 const touch=(id,x,y)=>({pointerId:id,clientX:x,clientY:y,pointerType:'touch',isPrimary:true,bubbles:true});
 async function press(page,x,y,holdMs=120){const canvas=page.locator('canvas').first();await canvas.dispatchEvent('pointerdown',touch(7,x,y));await page.waitForTimeout(holdMs);await canvas.dispatchEvent('pointerup',touch(7,x,y));}
@@ -79,6 +80,13 @@ try{
  // The karst's scene is heavy for the software renderer: its sink and rise take many slow frames.
  await doubleTapStick(page);await page.waitForFunction(()=>window.__village.mode==='grass',null,{timeout:30000});assert.ok((await v(page,()=>window.__village.karst.at)).length>0,'at a root mouth of the karst');await page.screenshot({path:out+'/09b-karst-roots.png'});
  await doubleTapStick(page);await page.waitForFunction(()=>window.__village.mode==='ground',null,{timeout:30000});assert.equal(await v(page,()=>window.__village.karst.mode),'ground','out again');
+ // The portal (R1, Noah's C): a tree at the foot of the karst offers the places its roots reach; picked, the roots carry her up by themselves and she rises out there.
+ await v(page,()=>{const k=window.__village,o=k.karst.origin,n=k.karst.nodes.floorOak;k.standAt(o.x+n.at.x+1.6,o.z+n.at.z,0);});await page.waitForTimeout(300);
+ assert.ok(await v(page,()=>window.__village.portal.open('floorOak')),'the foot oak is a portal');assert.ok(await page.locator('#portal').isVisible(),'its places are offered');
+ const offered=await v(page,()=>window.__village.portal.places());assert.ok(offered.includes('cavernFern')&&offered.includes('pine')&&offered.includes('southShrub'),`the cavern, the summit and the south ledge (${offered})`);
+ await v(page,()=>window.__village.portal.pick('southShrub'));await page.waitForFunction(()=>window.__village.mode==='karst'&&window.__village.karst.travelling,null,{timeout:5000});
+ await page.waitForFunction(()=>window.__village.karst.mode==='ride',null,{timeout:30000});await page.screenshot({path:out+'/09c-portal-ride.png'});
+ await page.waitForFunction(()=>window.__village.mode==='ground'&&window.__village.karst.zone==='south',null,{timeout:180000});await page.screenshot({path:out+'/09d-portal-arrived.png'});
  await v(page,()=>{window.__village.standAt(0,-16,Math.PI);});await page.waitForTimeout(300);assert.ok(!(await v(page,()=>{const f=window.__village.player.feet();return window.__village.karst.inside(f.x,f.z);})),'back in the meadow, the karst has no say');
  // The dark forest and the lair (M1b): in the forest her vigor drains; near the lair the mother of goats wakes with her hp over her, a strike lands on her, and a slain Dark Young counts toward a level whose choice is offered.
  // The forest drains at the clock's pace, so the clock runs.
@@ -90,7 +98,7 @@ try{
  await v(page,()=>{window.__village.setTick(890);window.__village.speed=30;});await page.waitForFunction(()=>window.__village.raiders()[0]&&window.__village.raiders()[0].state==='eating',null,{timeout:30000});await v(page,()=>{window.__village.speed=0;const k=window.__village,r=k.raiders()[0];k.standAt(r.x-1.3,r.z,Math.atan2(-(r.x-(r.x-1.3)),0));});
  // Strike as the cooldown clears (it runs down a frame at a time, so a fixed beat misses on the runner's slow frames) until it is dead.
  for(let i=0;i<20;i++){await page.waitForFunction(()=>window.__village.cooldowns.strike===0,null,{timeout:5000});await page.locator('#strike').dispatchEvent('pointerdown',{pointerId:60+i,clientX:340,clientY:600,pointerType:'touch',bubbles:true});await page.waitForTimeout(80);if(await v(page,()=>{const r=window.__village.raiders()[0];return !r||r.state==='dead';}))break;}
- await page.waitForSelector('#perks:not([hidden])',{timeout:8000});assert.equal(await v(page,()=>window.__village.hero.level),2,'the kill made level two');await page.screenshot({path:out+'/10c-level.png'});await page.click('#perks [data-perk="strike"]');await page.waitForTimeout(200);assert.equal(await v(page,()=>window.__village.hero.perks.strike),1,'the choice taken');assert.ok(await page.locator('#perks').isHidden(),'and the panel gone');
+ await page.waitForSelector('#perks:not([hidden])',{timeout:8000});assert.equal(await v(page,()=>window.__village.hero.level),2,'the kill made level two');await page.screenshot({path:out+'/10c-level.png'});await page.click('#perks [data-perk="strike"]');await page.waitForTimeout(200);assert.equal(await v(page,()=>window.__village.hero.perks.strike),1,'the choice taken');await page.waitForFunction(()=>document.getElementById('perks').hidden,null,{timeout:5000});// the panel goes on the next frame, which is slow near the lair on the software renderer
  await v(page,()=>{window.__village.reset();window.__village.speed=1;});await page.waitForTimeout(300);
  // The compass: a strip at the top that turns with her; the karst's mark a little west of north; a ghost finger never haunts the pinch count.
  assert.ok(await page.locator('#compass').isVisible(),'the compass strip');const cmp=await v(page,()=>{const k=window.__village;k.player.yaw=0;return k.compass();});assert.ok(Math.abs(cmp.heading)<1,`facing north at yaw 0 (${cmp.heading.toFixed(0)})`);const kmark=cmp.marks.find(m=>m.id==='karst');assert.ok(kmark&&kmark.bearing>330&&kmark.distance>300,`the karst marked to the north (${JSON.stringify(kmark)})`);
@@ -109,7 +117,10 @@ try{
  assert.equal(await v(page,()=>window.__village.count('inside')),0,'all out by morning');assert.equal(await v(page,()=>window.__village.figures.filter(f=>f.group.visible).length),8,'eight figures shown');
  await page.screenshot({path:out+'/02-morning.png'});
  const walked=await v(page,()=>new Promise(res=>{let best=0,n=0;const tick=()=>{const c=window.__village;for(let i=0;i<8;i++){const w=c.character.hobbitWeights[i];if(w&&c.shown[i].speed>.3)best=Math.max(best,w.walk+w.run);}if(++n<240&&best<.5)requestAnimationFrame(tick);else res(best);};tick();}));assert.ok(walked>.5,`a walking hobbit plays the walk clip (${walked.toFixed(2)})`);
- const labels=await v(page,()=>window.__village.shown.filter(s=>s.label).length);assert.ok(labels>=1,`${labels} names in view`);
+ // Beside one of them, facing it (they walk on while the frames above are waited out, so where they are is not assumed): its name is in view.
+ await v(page,()=>{const k=window.__village,h=k.shown[0];k.player.teleport(h.x+2,h.z+2,Math.atan2(-(h.x-(h.x+2)),-(h.z-(h.z+2))));});
+ const named=await page.waitForFunction(()=>window.__village.shown.some(s=>s.label),null,{timeout:5000}).then(()=>true,()=>false);
+ assert.ok(named,`a name in view: ${JSON.stringify(await v(page,()=>{const k=window.__village,c=k.camera.position;return {mode:k.mode,zoom:k.zoom,map:k.mapOpen,feet:k.player.feet(),cam:[c.x,c.y,c.z],h:k.shown[0],faint:k.hero.faint};}))}`);
  // They face the way they walk, and think out loud: what they are doing, or where they are going.
  const facing=await v(page,()=>new Promise(res=>{let forward=0,samples=0,n=0;const tick=()=>{for(const f of window.__village.facing())if(f.moving){samples++;if(f.dot>0.5)forward++;}if(++n<240)requestAnimationFrame(tick);else res({forward,samples});};tick();}));assert.ok(facing.samples>20&&facing.forward/facing.samples>0.8,`walkers face forward (${facing.forward} of ${facing.samples} walking frames)`);
  const thoughts=await v(page,()=>window.__village.thoughts());assert.ok(thoughts.some(t=>t==='gathering berries'||t.startsWith('carrying berries'))&&thoughts.some(t=>t==='milking the goats'||t.startsWith('carrying milk')),JSON.stringify(thoughts));assert.ok(thoughts.every(t=>t.length>0),'everyone out has a thought');
@@ -128,11 +139,13 @@ try{
  const g0=await v(page,()=>({g:window.__village.grass,t:window.__village.simSeconds}));await s.down(0,-38);await page.waitForTimeout(1000);const g1=await v(page,()=>({g:window.__village.grass,t:window.__village.simSeconds}));await s.up();
  if(g1.g){const d=Math.hypot(g1.g.x-g0.g.x,g1.g.z-g0.g.z),speed=d/Math.max(1e-3,g1.t-g0.t);assert.ok(speed>3.2,`the grass carries her at ${speed.toFixed(1)} m/s (faster than running)`);}
  await page.screenshot({path:out+'/02b-grass.png'});
- // A copse root runs between the first two copse trees that are joined (every tree joins its nearest three): under the grass a step off its line, she runs along it and it takes her.
+ // A copse root runs between the first two copse trees that are joined (every tree joins its nearest three): under the grass a step off its line, one stick tap takes her onto it (R1: no root takes her by itself). Running along it first proves that.
  const lane=await v(page,()=>{const k=window.__village,c=k.trees.slice(0,6),a=c[0];const b=c.slice(1).sort((p,q)=>Math.hypot(p.x-a.x,p.z-a.z)-Math.hypot(q.x-a.x,q.z-a.z))[0];const dx=b.x-a.x,dz=b.z-a.z,l=Math.hypot(dx,dz);return {x:a.x+dx/l*1.4-dz/l*0.3,z:a.z+dz/l*1.4+dx/l*0.3,yaw:Math.atan2(-dx/l,-dz/l)};});
  await page.evaluate(({x,z,yaw})=>{window.__village.sinkAt(x,z);window.__village.player.yaw=yaw;},lane);await waitMode(page,'grass',5000);
- let onRoot=false;for(let i=0;i<3&&!onRoot;i++){await s.down(0,-38);await page.waitForTimeout(500);onRoot=(await v(page,()=>window.__village.mode))==='root';await s.up();}
- assert.ok(onRoot,'running along a copse root takes her onto it');
+ await s.down(0,-38);await page.waitForTimeout(500);assert.equal(await v(page,()=>window.__village.mode),'grass','running along a root no longer takes her');await s.up();
+ await singleTapStick(page);await waitMode(page,'root',5000);
+ // And one tap is off it again, into the grass; then back on for the ride.
+ await singleTapStick(page);await waitMode(page,'grass',5000);await singleTapStick(page);await waitMode(page,'root',5000);
  // Along the root: the camera turns to its heading, so pushing forward follows it; she is carried faster than she walks, or reaches its end or a junction.
  await page.waitForTimeout(400);const r0=await v(page,()=>({root:window.__village.root,t:window.__village.simSeconds}));await s.down(0,-38);await page.waitForTimeout(1200);const r1=await v(page,()=>({root:window.__village.root,mode:window.__village.mode,t:window.__village.simSeconds}));await s.up();
  const carried=r1.mode!=='root'||r1.root.root!==r0.root.root||Math.abs(r1.root.s-r0.root.s)/(r1.t-r0.t)>2.5||Math.abs(r1.root.s-r0.root.s)>2||r1.root.s>r1.root.length-0.1||r1.root.s<0.1;assert.ok(carried,`the root carries her (${JSON.stringify({r0,r1})})`);

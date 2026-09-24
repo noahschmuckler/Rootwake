@@ -37,8 +37,10 @@ export function createKarstFeature(scene: THREE.Scene, player: Player, camera: T
   const local = (x: number, z: number): { x: number; z: number } => ({ x: x - origin.x, z: z - origin.z });
   /** Inside the karst's region (its forest floor and everything above it). */
   const inside = (x: number, z: number): boolean => { const l = local(x, z); return Math.hypot(l.x, l.z) <= KARST_FLOOR + 4; };
-  /** Whether the karst is her ground here: on its floor, or up on one of its zones. */
-  const owns = (x: number, z: number): boolean => zone.id !== 'floor' || Math.hypot(x - origin.x, z - origin.z) <= KARST_FLOOR;
+  /** Whether the karst is her ground here: on its floor, or up on one of its zones; never outside its region (a ledge's height must not follow her into the meadow). */
+  const owns = (x: number, z: number): boolean => (zone.id !== 'floor' ? inside(x, z) : Math.hypot(x - origin.x, z - origin.z) <= KARST_FLOOR);
+  /** She stands outside the karst: its zone is the floor again, whatever ledge it was. */
+  function leave(): void { zone = ZONES.floor; if (mode !== 'ground') { mode = 'ground'; trunk = null; crown = null; hop = null; ride = null; move = null; choice = null; queue = []; travelling = false; } }
   const traversal = (): TraversalWorld => zone.id !== 'floor' || !hooks.height ? zoneWorlds[zone.id] : {
     surfacesAt: (x, z) => zoneWorlds.floor.surfacesAt(x, z).length ? [hooks.height!(x, z)] : [],
     canOccupy: (p, r, h) => p.y >= hooks.height!(p.x, p.z) - 0.03 && zoneWorlds.floor.canOccupy(new THREE.Vector3(p.x, groundAt(ZONES.floor, p.x - origin.x, p.z - origin.z), p.z), r, h),
@@ -142,6 +144,6 @@ export function createKarstFeature(scene: THREE.Scene, player: Player, camera: T
   }
   player.cameraClear = p => !insideRock(L(p));
   world.setTrail(progress);
-  return { world, colliders, inside, owns, traversal, groundFrame, update, visual, atmosphere, emerge, enterRootsNear, standOn, save, travel, stop, destinations: destinationsFrom, get travelling() { return travelling; }, get queued() { return queue.length; }, get mode() { return mode; }, get zone() { return zone.id; }, get at() { return at.id; }, get progress() { return progress; }, get vision() { return vision; }, get underground() { return ['sink', 'mouth', 'ride', 'rise'].includes(mode); }, origin, local, toWorld: W };
+  return { world, colliders, inside, owns, traversal, groundFrame, update, visual, atmosphere, emerge, enterRootsNear, standOn, leave, save, travel, stop, destinations: destinationsFrom, get travelling() { return travelling; }, get queued() { return queue.length; }, get mode() { return mode; }, get zone() { return zone.id; }, get at() { return at.id; }, get progress() { return progress; }, get vision() { return vision; }, get underground() { return ['sink', 'mouth', 'ride', 'rise'].includes(mode); }, origin, local, toWorld: W };
 }
 export type KarstFeature = ReturnType<typeof createKarstFeature>;

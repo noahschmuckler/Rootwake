@@ -27,13 +27,26 @@ try{
   assert.ok(samples.at(-1).under>.95);await page.screenshot({path:`${out}/${which}-grass.png`});
   await page.evaluate(()=>window.__village.emerge());await page.waitForFunction(()=>window.__village.mode==='ground',null,{timeout:30000});report[which]={frames:samples.length,maxStep};
  }
- // Enter a generated root using the real grass capture rule, then leave it with the shared exit.
+ // Enter a generated root with the stick's single tap (R1: no root takes her by itself), leave it with a tap, then out.
+ const singleTap=async()=>{await page.evaluate(()=>{const w=document.getElementById('walk');for(const type of ['pointerdown','pointerup'])w.dispatchEvent(new PointerEvent(type,{pointerId:23,clientX:315,clientY:710,pointerType:'touch',bubbles:true}));});await page.waitForTimeout(450);};
  const rootRoute=await page.evaluate(()=>{const k=window.__village;k.network.update(220,220);const r=k.network.dynamic.find(r=>r.id.endsWith(':east'));const p=r.curve.getPointAt(.5),t=r.curve.getTangentAt(.5);k.sinkAt(p.x,p.z);k.player.yaw=Math.atan2(-t.x,-t.z);return r.id;});
  await page.waitForFunction(()=>window.__village.mode==='grass',null,{timeout:30000});
- await page.evaluate(()=>{const w=document.getElementById('walk');w.dispatchEvent(new PointerEvent('pointerdown',{pointerId:82,clientX:315,clientY:710,pointerType:'touch',bubbles:true}));w.dispatchEvent(new PointerEvent('pointermove',{pointerId:82,clientX:315,clientY:662,pointerType:'touch',bubbles:true}));});
- await page.waitForFunction(()=>window.__village.mode==='root',null,{timeout:30000});assert.equal(await page.evaluate(()=>window.__village.root.root),rootRoute);
+ await singleTap();await page.waitForFunction(()=>window.__village.mode==='root',null,{timeout:30000});assert.equal(await page.evaluate(()=>window.__village.root.root),rootRoute);
+ await singleTap();await page.waitForFunction(()=>window.__village.mode==='grass',null,{timeout:30000});
  await page.evaluate(()=>{window.__village.player.cancelInput();window.__village.emerge();});await page.waitForFunction(()=>window.__village.mode==='ground',null,{timeout:30000});
  report.generatedRoot=rootRoute;
+ // A course (R1): a place tapped on the map plots a way through the roots and the entry tree glows; a tap beside it sinks her in, the roots carry her to the place, and she rises out there.
+ await page.evaluate(()=>{const k=window.__village;k.standAt(0,-16,Math.PI);k.openMap(true);});
+ const target={x:40,z:-120},pt=await page.evaluate(t=>{const f=window.__village.player.feet();return {x:innerWidth/2+(t.x-f.x)*0.6,y:innerHeight/2+(t.z-f.z)*0.6};},target);
+ for(const type of ['pointerdown','pointerup'])await page.locator('#mapwrap').dispatchEvent(type,{pointerId:91,clientX:pt.x,clientY:pt.y,pointerType:'touch',bubbles:true});
+ const course=await page.evaluate(()=>window.__village.course);assert.ok(course&&course.roots.length>0,'a tap on the map plots a course');assert.ok(Math.hypot(course.target.x-target.x,course.target.z-target.z)<2,'to the place tapped');
+ await page.screenshot({path:out+'/course-map.png'});await page.evaluate(()=>window.__village.openMap(false));
+ const entry=await page.evaluate(()=>window.__village.wayIn());assert.ok(entry,'the entry tree glows');
+ await page.evaluate(()=>{const k=window.__village,e=k.wayIn();k.standAt(e.x+5,e.z+5,Math.atan2(-(e.x-(e.x+5)),-(e.z-(e.z+5))));k.player.pitch=0.25;});await page.waitForTimeout(500);await page.screenshot({path:out+'/course-entry.png'});assert.ok(await page.locator('#labels .way').isVisible(),'the way in is named');
+ await page.evaluate(()=>{const k=window.__village,e=k.wayIn();k.standAt(e.x+1.2,e.z+1.2,Math.atan2(-(e.x-(e.x+1.2)),-(e.z-(e.z+1.2))));});await page.waitForTimeout(300);
+ await singleTap();await page.waitForFunction(()=>window.__village.mode==='root'&&window.__village.carried,null,{timeout:8000});await page.waitForTimeout(600);await page.screenshot({path:out+'/course-carried.png'});
+ await page.waitForFunction(()=>window.__village.mode==='ground'&&!window.__village.course,null,{timeout:180000});
+ const there=await page.evaluate(t=>{const f=window.__village.player.feet();return Math.hypot(f.x-t.x,f.z-t.z);},target);assert.ok(there<100,`she rises out near the place (${there.toFixed(0)} m off)`);report.course={roots:course.roots.length,length:course.length,off:there};
  await page.goto('http://127.0.0.1:4188'+BASE+'planet.html');await page.waitForFunction(()=>window.__planet?.stats.pending===0&&window.__planet.stats.visible>6,null,{timeout:120000});
  const start=await page.evaluate(()=>window.__planet.pose);await page.click('#overview');await page.screenshot({path:out+'/planet-overview.png'});
  let peak=0;for(let i=0;i<24;i++){await page.evaluate(()=>{const k=window.__planet;k.step(2*Math.PI*k.world.radius/24);});await page.waitForTimeout(150);await page.waitForFunction(()=>window.__planet.stats.pending===0,null,{timeout:60000});const stats=await page.evaluate(()=>window.__planet.stats);peak=Math.max(peak,stats.resident);assert.ok(stats.resident<900);}
