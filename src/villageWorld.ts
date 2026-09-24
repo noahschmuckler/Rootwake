@@ -175,6 +175,15 @@ export function buildVillage(scene: THREE.Scene) {
   function flashSlash(x: number, y: number, z: number, yaw: number): void { slash.position.set(x, y + 0.5, z); slash.rotation.z = -yaw - Math.PI / 2; slashT = 0.18; slash.visible = true; }
   function flashBurst(x: number, y: number, z: number): void { burst.position.set(x, y + 0.15, z); burstT = 0.4; burst.visible = true; }
   function updateStrokes(dt: number): void { if (slashT > 0) { slashT -= dt; slashMat.opacity = Math.max(0, slashT / 0.18); slash.visible = slashT > 0; } if (burstT > 0) { burstT -= dt; const k = 1 - burstT / 0.4; burst.scale.setScalar(0.5 + k * 3.0); burstMat.opacity = 0.8 * (1 - k); burst.visible = burstT > 0; } }
+  // The lair's manifestation (M1b): a local mother of goats at the dark forest's centre, a great dark mass with many horns that writhe, eyes with their own light; it does not walk. Placed by setLairAt; animated and shown alive or gone by setLair.
+  const lairGroup = new THREE.Group(); lairGroup.visible = false; scene.add(lairGroup); const lairHide = hideMat.clone(), lairHorns: THREE.Group[] = [];
+  { const body = new THREE.Mesh(new THREE.SphereGeometry(2.6, 12, 10), lairHide); body.scale.set(1.4, 1.0, 1.2); body.position.y = 2.4; lairGroup.add(body);
+    const fr = mulberry32(666); for (let i = 0; i < 14; i++) { const g = new THREE.Group(); const a = fr() * Math.PI * 2, r = 1.2 + fr() * 1.6; g.position.set(Math.cos(a) * r, 3.4 + fr() * 1.2, Math.sin(a) * r); const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(Math.cos(a) * 0.6, 1.2, Math.sin(a) * 0.6), new THREE.Vector3(Math.cos(a) * 1.6, 2.2, Math.sin(a) * 1.6), new THREE.Vector3(Math.cos(a) * 2.0, 3.4, Math.sin(a) * 2.0)]); g.add(new THREE.Mesh(taperedTube(curve, 14, 6, t => 0.22 * (1 - t * 0.85), 0), hornMat)); lairGroup.add(g); lairHorns.push(g); }
+    for (let i = 0; i < 6; i++) { const eye = new THREE.Mesh(new THREE.SphereGeometry(0.16, 6, 5), eyeMat); const a = -0.6 + i * 0.25; eye.position.set(Math.cos(a) * 3.5, 2.2 + (i % 2) * 0.5, Math.sin(a) * 3.5); lairGroup.add(eye); }
+    for (let i = 0; i < 8; i++) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.16, 2.4, 6), lairHide); const a = i / 8 * Math.PI * 2; leg.position.set(Math.cos(a) * 2.6, 1.2, Math.sin(a) * 2.6); leg.rotation.z = Math.cos(a) * 0.35; leg.rotation.x = -Math.sin(a) * 0.35; lairGroup.add(leg); } }
+  const lairLight = new THREE.PointLight('#b040c0', 0, 30, 1.4); lairLight.position.y = 4; lairGroup.add(lairLight);
+  function setLairAt(x: number, z: number): void { lairGroup.position.set(x, relief(x, z), z); }
+  function setLair(alive: boolean, hurt: number, t: number, hpShare: number): void { lairGroup.visible = alive; if (!alive) return; for (let i = 0; i < lairHorns.length; i++) { const h = lairHorns[i]; h.rotation.z = Math.sin(t * 0.0013 + i * 1.3) * 0.35; h.rotation.x = Math.cos(t * 0.0011 + i * 2.1) * 0.35; } lairHide.emissive.set(hurt > 0 ? '#b03030' : '#000000'); lairLight.intensity = 3 + Math.sin(t * 0.003) * 1.5 + (1 - hpShare) * 4; }
   const mass = new THREE.Group(); mass.visible = false; scene.add(mass);
   { const mr = mulberry32(78); const tufts: Standee[] = []; for (let i = 0; i < 14; i++) { const a = mr() * 6.28, r = mr() * 0.42, k = 0.28 + mr() * 0.22; tufts.push({ position: new THREE.Vector3(Math.cos(a) * r, 0.3 - r * 0.35, Math.sin(a) * r), yaw: mr() * Math.PI, width: k, height: k * 1.2 }); } mass.add(new THREE.Mesh(standees(tufts), spriteMaterial('grass', '#b6d47a', { emissive: '#3a5a20', emissiveIntensity: 0.25 }))); }
   const crownPoint = (t: Tree, az: number): THREE.Vector3 => new THREE.Vector3(t.x + Math.cos(az) * 1.1 * t.size, relief(t.x, t.z) + crownHeight(t) + 0.15, t.z + Math.sin(az) * 1.1 * t.size);
@@ -203,6 +212,6 @@ export function buildVillage(scene: THREE.Scene) {
   let fireWood = 0;
   /** Which armful each figure shows, for checks. */
   const armfuls = (): (Store | null)[] => carried.map(c => STORE_LIST.find(k => c[k].visible) ?? null);
-  return { colliders, figures, figure, mass, update, updateLand, updatePrayer, armfuls, setRaider, hideRaider, flashSlash, flashBurst, updateStrokes, setStation, get activeStation() { return activeStation; }, setStack, stack, spiritFigure, spiritFigures, stream, crownPoint, trunkPoint };
+  return { colliders, figures, figure, mass, update, updateLand, updatePrayer, armfuls, setRaider, hideRaider, flashSlash, flashBurst, updateStrokes, setLairAt, setLair, setStation, get activeStation() { return activeStation; }, setStack, stack, spiritFigure, spiritFigures, stream, crownPoint, trunkPoint };
 }
 export type VillageWorld = ReturnType<typeof buildVillage>;

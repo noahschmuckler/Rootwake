@@ -203,3 +203,20 @@ test('the land beyond the meadow: noise in range and seeded, no hills on the isl
   const far = chunkTrees(4, 4, 1); setTreeProvider((x, z, r) => far.filter(t => Math.hypot(t.x - x, t.z - z) <= r)); const t0 = far[0]; assert.equal(nearest(t0.x + 0.5, t0.z).tree.id, t0.id, 'the nearest tree can be a chunk tree'); assert.ok(treesNear(t0.x, t0.z, 3).some(t => t.id === t0.id)); const h = hops(t0); assert.ok(h.every(o => o.id !== t0.id)); setTreeProvider(() => []);
   assert.equal(nearest(t0.x, t0.z).tree.id < 100000, true, 'without the provider, the village\'s trees again');
 });
+
+import { setLair, forestDepth, gainXp, choosePerk, levelFor, vigorMax, sapMax, strikeDamage, raidsPaused, LEVEL_XP, LEVEL_CAP, XP_DY, XP_LAIR, PERK_VIGOR, PERK_STRIKE, PERK_SAP, FOREST_DRAIN, LAIR_HP, LAIR_WAKE, LAIR_SPAWN_S, LAIR_SWEEP, LAIR_SWEEP_S, LAIR_PEACE_DAYS, LAIR_HURT_RANGE, STRIKE_DMG as SD } from '../src/villageModel';
+test('levelling: kills count, a level at each threshold up to five, a choice each level between vigor, strike and sap that grows her; the dark forest drains her by depth; the lair wakes near her, broods Dark Young, sweeps, and slain is gone with the raids for five days, then grows again', () => {
+  assert.equal(levelFor(0), 1); assert.equal(levelFor(LEVEL_XP[1]), 2); assert.equal(levelFor(999), LEVEL_CAP);
+  const v = freshV(1); gainXp(v, XP_DY); assert.equal(v.hero.level, 1); gainXp(v, XP_DY); assert.equal(v.hero.level, 2); assert.equal(v.hero.choices, 1, 'a choice owed');
+  assert.equal(choosePerk(v, 'strike'), true); assert.equal(strikeDamage(v.hero), SD + PERK_STRIKE); assert.equal(choosePerk(v, 'strike'), false, 'no second choice'); gainXp(v, 3); assert.equal(v.hero.level, 3); choosePerk(v, 'vigor'); assert.equal(vigorMax(v.hero), 100 + PERK_VIGOR); gainXp(v, XP_LAIR); assert.equal(v.hero.level, LEVEL_CAP); assert.equal(v.hero.choices, 2); choosePerk(v, 'sap'); assert.equal(sapMax(v.hero), 100 + PERK_SAP);
+  const back = par(ser(v)); assert.deepEqual(back.hero.perks, v.hero.perks); assert.equal(back.hero.level, v.hero.level); assert.equal(back.hero.choices, 1);
+  // The forest and the lair, placed for the test.
+  setLair(null); assert.equal(forestDepth(0, 0), 0, 'no lair, no forest'); setLair({ x: 300, z: 300, radius: 75 }); assert.equal(forestDepth(300, 300), 1); assert.ok(forestDepth(340, 300) > 0 && forestDepth(340, 300) < 1); assert.equal(forestDepth(400, 300), 0);
+  const w = freshV(1); const v0 = w.hero.vigor; stepRaiders(w, 2, { x: 300, z: 300 }); assert.ok(Math.abs(v0 - w.hero.vigor - FOREST_DRAIN * 2) < 1e-6, 'drained at the centre'); stepRaiders(w, 2, { x: 0, z: 0 }); assert.ok(w.hero.vigor <= v0 - FOREST_DRAIN * 2 + 1e-6, 'and not yet refilled (no calm)');
+  assert.equal(w.lair.woke, false); const near = { x: 300 + LAIR_WAKE - 2, z: 300 }; stepRaiders(w, 0.1, near); assert.ok(w.lair.woke, 'it wakes near her'); const n0 = w.raiders.length; stepRaiders(w, LAIR_SPAWN_S + 0.1, near); assert.equal(w.raiders.length, n0 + 1, 'a Dark Young born'); assert.equal(w.raiders[w.raiders.length - 1].state, 'hunting');
+  const close = { x: 302, z: 300 }; const vb = w.hero.vigor; for (let i = 0; i < 4; i++) stepRaiders(w, LAIR_SWEEP_S / 2, close); assert.ok(w.hero.vigor <= vb - LAIR_SWEEP + 1e-6, 'swept within reach');
+  const u = freshV(1); u.hero.vigor = 1000; const hp0 = u.lair.hp; assert.equal(strike(u, { x: 300 + LAIR_HURT_RANGE - 1, z: 300 }, 1, 0), null, 'nothing else to strike'); assert.equal(u.lair.hp, hp0 - SD, 'the strike lands on the lair'); assert.ok(thornBurst(u, { x: 300, z: 300 }) >= 1); assert.equal(u.lair.hp, hp0 - SD - THORN_DMG);
+  u.lair.hp = SD; strike(u, { x: 300, z: 300 }, 1, 0); assert.equal(u.lair.alive, false, 'slain'); assert.equal(u.hero.xp, XP_LAIR); assert.ok(raidsPaused(u), 'the raids stop'); step(u, RAID_TICK + 2); assert.equal(u.raiders.length, 0, 'no raid that night');
+  step(u, DT * LAIR_PEACE_DAYS); stepRaiders(u, 0.1, null); assert.ok(u.lair.alive && u.lair.hp === LAIR_HP, 'grown again after the peace'); assert.ok(!raidsPaused(u));
+  const again = par(ser(u)); assert.equal(again.lair.alive, u.lair.alive); setLair(null);
+});
