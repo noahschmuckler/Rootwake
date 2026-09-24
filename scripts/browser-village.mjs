@@ -54,7 +54,7 @@ try{
  await page.locator('#strike').dispatchEvent('pointerdown',{pointerId:31,clientX:340,clientY:600,pointerType:'touch',bubbles:true});await page.waitForTimeout(150);assert.ok((await v(page,()=>window.__village.raiders()[0].hp))<30,'the strike lands');
  await page.locator('#thorn').dispatchEvent('pointerdown',{pointerId:32,clientX:340,clientY:540,pointerType:'touch',bubbles:true});await page.waitForTimeout(150);const afterThorn=await v(page,()=>({hp:window.__village.raiders()[0].hp,sap:window.__village.hero.sap}));assert.ok(afterThorn.hp<30-5&&afterThorn.sap<100,`the burst lands and spends sap (${JSON.stringify(afterThorn)})`);
  await page.locator('#root').dispatchEvent('pointerdown',{pointerId:33,clientX:340,clientY:480,pointerType:'touch',bubbles:true});await page.waitForTimeout(150);assert.ok((await v(page,()=>window.__village.raiders()[0].rooted))>0,'the bind holds it');
- assert.ok(await page.locator('#labels .name.foe').first().isVisible(),'its name and hp over its head');
+ assert.ok(await page.locator('#labels .name.foe:not(.lair)').first().isVisible(),'its name and hp over its head');
  for(let i=0;i<8;i++){await page.locator('#strike').dispatchEvent('pointerdown',{pointerId:34+i,clientX:340,clientY:600,pointerType:'touch',bubbles:true});await page.waitForTimeout(520);}
  assert.equal(await v(page,()=>window.__village.slain),1,'struck down');await page.screenshot({path:out+'/06b-slain.png'});
  await v(page,()=>{window.__village.reset();window.__village.speed=1;});await page.waitForTimeout(300);
