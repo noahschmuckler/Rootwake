@@ -9,22 +9,19 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { HOUSES, HOBBITS, SITES, STORES, STORE_LIST, STATIONS, STACK_CAP, OVERFILL, HOUSE_RADIUS, MEADOW_RADIUS, GREEN, TREES, TREE_ROOTS, STREAM_Z, BERRY_CAP, BRANCH_CAP, MILK_PER_DAY, CROP_STRIPS, WOOD_PER_NIGHT, crownHeight, trunkRadius, type Hobbit, type Tree, type Village, type Store } from './villageModel';
 import { mulberry32 } from './colors';
-import { hills } from './chunkModel';
+import { createTerrain, type Terrain } from './worldTerrain';
 import type { Collider } from './player';
 import { spriteMaterial, standees, crownStandees, type Standee } from './sprites';
 import { treeParts, taperedTube } from './flora';
 import { createHulda } from './huldaCharacter';
 
 /** The ground's height: the meadow's gentle relief, and beyond the island the chunks' hills (zero within the village). */
-export const relief = (x: number, z: number): number => 0.05 * Math.sin(x * 0.5) * Math.cos(z * 0.45) + hills(x, z);
+export const relief = createTerrain(1).height;
 export const HOBBIT_HEIGHT = 0.46;
-export function buildVillage(scene: THREE.Scene) {
+export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrain(1)) {
+  const relief = terrain.height;
   const rand = mulberry32(220926);
-  // The meadow thins to glass while she is in the roots beneath it, so the tree roots' fast lanes show.
-  const earth = new THREE.MeshStandardMaterial({ color: '#57734a', roughness: 1, transparent: true, opacity: 1, side: THREE.DoubleSide });
-  const ground = new THREE.CircleGeometry(MEADOW_RADIUS + 40, 72); ground.rotateX(-Math.PI / 2);
-  { const pos = ground.attributes.position as THREE.BufferAttribute; for (let i = 0; i < pos.count; i++) pos.setY(i, relief(pos.getX(i), pos.getZ(i))); ground.computeVertexNormals(); }
-  scene.add(new THREE.Mesh(ground, earth));
+  // The chunk surface owns the meadow ground; no second translucent disc.
   // The green: a worn circle, and paths trodden from it to each door and out through each gap.
   const worn = new THREE.MeshStandardMaterial({ color: '#8a7a56', roughness: 1, transparent: true, opacity: 0.85, depthWrite: false });
   const green = new THREE.Mesh(new THREE.CircleGeometry(5.2, 40), worn); green.rotation.x = -Math.PI / 2; green.position.set(GREEN.x, 0.04, GREEN.z); scene.add(green);
@@ -190,7 +187,7 @@ export function buildVillage(scene: THREE.Scene) {
   const trunkPoint = (t: Tree, h: number, az: number): THREE.Vector3 => new THREE.Vector3(t.x + Math.cos(az) * (trunkRadius(t) + 0.12), relief(t.x, t.z) + h, t.z + Math.sin(az) * (trunkRadius(t) + 0.12));
   /** daylight 0..1 sets the fire and the windows: lit as the sun goes; under 0..1 thins the meadow for the roots beneath. */
   function update(daylight: number, t: number, under = 0): void {
-    earth.opacity = 1 - under * 0.6; earth.depthWrite = under < 0.5; laneMat.emissiveIntensity = 0.05 + under * 0.5;
+    laneMat.emissiveIntensity = 0.05 + under * 0.5;
     const night = 1 - Math.min(1, daylight * 2.5);
     // The fire is as big as the wood on it: full from Odo's armful at dusk, dying by dawn; nothing laid, embers only.
     const fuel = Math.min(1, fireWood / WOOD_PER_NIGHT), size = 0.25 + 0.75 * fuel;

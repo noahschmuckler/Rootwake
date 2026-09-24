@@ -19,7 +19,7 @@ function lathe(radiusAt: (y: number) => number, height: number, rings: number, s
   for (let i = 0; i < pos.count; i++) { const y = pos.getY(i); if (y < 0.2 || y > height - 0.2) continue; const r = Math.hypot(pos.getX(i), pos.getZ(i)); if (r < 0.01) continue; const k = 1 + (rand() - 0.5) * jitter; pos.setXYZ(i, pos.getX(i) * k, y + (rand() - 0.5) * 0.3, pos.getZ(i) * k); }
   geo.computeVertexNormals(); return geo;
 }
-export function buildKarstFlow(scene: THREE.Scene) {
+export function buildKarstFlow(scene: THREE.Scene, options: { sharedGround?: boolean } = {}) {
   const rand = mulberry32(310926);
   // Two-sided: while she rides through the rock the camera is inside it, and glassy walls should still be there.
   const limestone = new THREE.MeshStandardMaterial({ color: '#b9b3a2', roughness: 0.95, flatShading: true, transparent: true, opacity: 1, side: THREE.DoubleSide });
@@ -60,8 +60,8 @@ export function buildKarstFlow(scene: THREE.Scene) {
   const earth = new THREE.MeshStandardMaterial({ color: '#4f6a45', roughness: 1, side: THREE.DoubleSide, transparent: true, opacity: 1 });
   const floorGeo = new THREE.CircleGeometry(FOREST_RADIUS + 30, 64); floorGeo.rotateX(-Math.PI / 2);
   { const pos = floorGeo.attributes.position as THREE.BufferAttribute; for (let i = 0; i < pos.count; i++) pos.setY(i, relief(pos.getX(i), pos.getZ(i))); floorGeo.computeVertexNormals(); }
-  scene.add(new THREE.Mesh(floorGeo, earth));
-  const bedrock = new THREE.Mesh(new THREE.CircleGeometry(FOREST_RADIUS + 30, 48), new THREE.MeshBasicMaterial({ color: '#0d1513', side: THREE.DoubleSide })); bedrock.rotation.x = -Math.PI / 2; bedrock.position.y = -4; scene.add(bedrock);
+  if (!options.sharedGround) scene.add(new THREE.Mesh(floorGeo, earth)); else floorGeo.dispose();
+  const bedrock = new THREE.Mesh(new THREE.CircleGeometry(FOREST_RADIUS + 30, 48), new THREE.MeshBasicMaterial({ color: '#0d1513', side: THREE.DoubleSide })); bedrock.rotation.x = -Math.PI / 2; bedrock.position.y = -4; if (!options.sharedGround) scene.add(bedrock); else { bedrock.geometry.dispose(); (bedrock.material as THREE.Material).dispose(); }
   // Every tree from the model's nodes: wood merged into one mesh, crowns merged per leaf material.
   const bark = new THREE.MeshStandardMaterial({ color: '#6d5f48', roughness: 1 });
   const wood: THREE.BufferGeometry[] = [], cards: Record<Node['leaf'], Standee[]> = { leaf: [], maple: [], oak: [], needle: [], frond: [] };

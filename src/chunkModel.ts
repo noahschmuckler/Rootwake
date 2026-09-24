@@ -18,7 +18,7 @@ export function noise(x: number, z: number, wavelength: number, seed: number): n
   return (a * (1 - tx) + b * tx) * (1 - tz) + (c * (1 - tx) + d * tx) * tz;
 }
 /** How much the land beyond the meadow shows here: 0 inside the island, 1 beyond its fade. */
-export const beyond = (x: number, z: number): number => { const r = Math.hypot(x, z), rk = Math.hypot(x - KARST_AT.x, z - KARST_AT.z); return Math.min(1, Math.max(0, (r - MEADOW_ISLAND) / ISLAND_FADE), Math.max(0, (rk - KARST_ISLAND) / KARST_FADE)); };
+export const beyond = (x: number, z: number): number => { const r = Math.hypot(x, z), rk = Math.hypot(x - KARST_AT.x, z - KARST_AT.z); const t = Math.min(1, Math.max(0, (r - MEADOW_ISLAND) / ISLAND_FADE), Math.max(0, (rk - KARST_ISLAND) / KARST_FADE)); return t * t * t * (t * (t * 6 - 15) + 10); };
 /** The hills: two octaves, up to HILL_M high, fading in past the meadow. Tuning. */
 export const HILL_M = 7;
 export function hills(x: number, z: number, seed = 1): number { const k = beyond(x, z); if (k <= 0) return 0; return k * HILL_M * (noise(x, z, 140, seed) * 0.7 + noise(x, z, 46, seed + 7) * 0.3 - 0.45); }
@@ -31,7 +31,7 @@ export const chunkKey = (cx: number, cz: number): string => `${cx},${cz}`;
 export const chunkOf = (x: number, z: number): { cx: number; cz: number } => ({ cx: Math.floor(x / CHUNK), cz: Math.floor(z / CHUNK) });
 /** A chunk's trees, from its own seed: by biome's density, none on the island or in the karst's clearing, spaced. Ids are unique per chunk so a chunk tree is never confused with the village's. */
 export function chunkTrees(cx: number, cz: number, seed = 1): Tree[] {
-  const rand = mulberry32((seed * 92821 + cx * 7919 + cz * 104729 + 1) >>> 0), out: Tree[] = [], base = 100000 + ((cx & 1023) * 1024 + (cz & 1023)) * 64;
+  const rand = mulberry32((seed * 92821 + cx * 7919 + cz * 104729 + 1) >>> 0), out: Tree[] = [], a = cx >= 0 ? cx * 2 : -cx * 2 - 1, b = cz >= 0 ? cz * 2 : -cz * 2 - 1, base = 100000 + ((a + b) * (a + b + 1) / 2 + b) * 64;
   for (let i = 0; i < 40 && out.length < 16; i++) {
     const x = (cx + rand()) * CHUNK, z = (cz + rand()) * CHUNK; if (beyond(x, z) < 0.35 || Math.hypot(x - KARST_AT.x, z - KARST_AT.z) < KARST_CLEARING) continue;
     const b = biomeAt(x, z, seed), keep = b === 'meadow' ? 0.12 : b === 'wood' ? 0.8 : 0.9; if (rand() > keep) continue;

@@ -4,7 +4,7 @@ Owner request (2026-09-24): implement the terrain/traversal audit, preserve prog
 
 ## Current checkpoint
 - Branch: `feat/seeded-world`, based on published village `23ffbfb` from `feat/village`.
-- Status: implementation started; no new gameplay published yet.
+- Status: terrain/root integration and sphere proof implemented locally; model tests and build pass. GPU/browser verification is pending on GitHub Actions. No new gameplay published yet.
 - Existing live study: https://noahschmuckler.github.io/Rootwake/village/
 - Do not mistake `main` for the village source. Publication is `.github/workflows/deploy-village.yml` from `feat/village` to `gh-pages/village/`.
 - Baseline: 19 village model tests pass. Browser suite teleports between areas and misses continuous grass crossings.
@@ -38,5 +38,21 @@ Owner request (2026-09-24): implement the terrain/traversal audit, preserve prog
 `npm ci`; `node scripts/test-village.mjs`; `node scripts/test-karst-flow.mjs`; `npm run test:mobility`; `npm run build -- --base=/Rootwake/village/`.
 Browser: `node scripts/browser-village.mjs` (requires Playwright Chromium).
 
+## Implementation checkpoint (2026-09-24)
+- `worldTerrain.ts`: one seeded sampler, 2 m triangles shared with collision, authored karst relief and smooth patch falloff, globally sampled normals.
+- `groundVision.ts`: bounded view through soil using alpha hashing/depth writing, avoiding transparent tile sorting. Village and integrated karst no longer draw duplicate floor discs. Standalone karst keeps its floor.
+- `worldRoots.ts`, `rootNetworkWorld.ts`: chunk-owned procedural roots, coordinate-stable hubs, authored sockets, unified shallow/deep traversal data, bounded root geometry. Village entry/steering uses this graph. Grass excludes rock; double-tap in shallow soil behaves alike everywhere; deep exits return through a mouth.
+- `planetModel.ts`, `planetWorld.ts`, `planet.ts`, `planet.html`: separate spherical scale proof, seed/radius controls, eight fixed symmetric placeholder sites, shared thumbstick, transported tangent frame, full circuit, budgeted quadtree LOD with atomic coverage swap and skirts.
+- `tests/world.test.ts`: 8 tests (seed/mesh, boundaries, rock, graph identity/sockets, IDs, sphere faces/poles, anchors, circuit, bounded LOD); all pass. Village 19, karst-flow 7, mobility and character tests also pass; production build passes.
+- `scripts/browser-world.mjs`: new continuous grass boundary crossings, generated-root capture/emergence, sphere circuit and resident geometry checks. Existing browser-village updated for consistent karst grass entry.
+- Local Playwright browser downloads returned empty/corrupt archives for both runtime and pinned 1.58.2. Do not report local browser pass. `.github/workflows/verify-world.yml` runs both browser suites in GitHub Chromium and saves screenshots/results.
+
+## Remaining work / limitations
+- Browser/GPU verification and visual QA are the immediate gate; resolve failures before publishing or merging.
+- Sphere is an explicit separate proof. Complete village life, authored multi-level karst routes, root graph and saves have NOT yet migrated onto sphere-local frames. Stage 4 remains.
+- Far village simulation tiers, worker generation, feature unloading/reloading and fully namespaced world saves remain. The flat village still builds the authored karst upfront; the sphere uses lightweight placeholders.
+- Deep-root steering/exit, alpha-hash appearance, and cross-chunk runtime behavior require phone judgement after browser verification.
+- World descriptor version is implemented for sphere generation; existing village seeds now agree but full save migration/deltas are pending.
+
 ## Next action
-Implement stage 1. Update this section at every committed checkpoint; list incomplete work honestly.
+Inspect the latest `Verify continuous seeded world` Actions run for `feat/seeded-world`, fix its failures, inspect screenshots, then commit/publish a tested preview. Continue stage 4 only after this checkpoint is verified. Update this file at each checkpoint.

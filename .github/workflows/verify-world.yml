@@ -1,0 +1,44 @@
+name: Verify continuous seeded world
+on:
+  push:
+    branches: [feat/seeded-world]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: rootwake-seeded-world
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/test-world.mjs
+      - run: node scripts/test-village.mjs
+      - run: node scripts/test-karst-flow.mjs
+      - run: npm run test:mobility
+      - run: npm run test:character
+      - run: npm run build -- --base=/Rootwake/world/
+      - run: npm install --no-save --package-lock=false playwright@1.58.2
+      - run: npx playwright install --with-deps chromium
+      - run: node scripts/browser-village.mjs
+        env:
+          STUDY_BASE: /Rootwake/world/
+      - run: node scripts/browser-world.mjs
+        env:
+          STUDY_BASE: /Rootwake/world/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: seeded-world-results
+          path: artifacts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: seeded-world-build
+          path: dist
