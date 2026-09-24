@@ -112,7 +112,7 @@ try{
  assert.ok(armful,'someone carries an armful in the morning');assert.equal(armful.shown,armful.carry.kind,`the ${armful.carry.kind} shows in ${armful.who}'s hand at ${armful.tick}`);
  await v(page,()=>{window.__village.advance(220-window.__village.tick);window.__village.player.teleport(0,-5,Math.PI);});await page.waitForTimeout(600);
  const stores=await v(page,()=>({stores:window.__village.stores,caps:Object.fromEntries(Object.entries(window.__village.storeSpots).map(([k,s])=>[k,s.cap]))}));for(const k of Object.keys(stores.stores))assert.ok(stores.stores[k]>=0&&stores.stores[k]<=stores.caps[k],`${k} within its cap`);
- assert.equal(await page.locator('#labels .name .hunger b').count(),8,'a hunger bar under every name');
+ assert.equal(await page.locator('#labels .name:not(.foe) .hunger b').count(),8,'a hunger bar under every name');
  await v(page,()=>{const k=window.__village,s=k.storeSpots.berries;k.player.teleport(s.x*0.35,s.z*0.35,Math.atan2(-(s.x-s.x*0.35),-(s.z-s.z*0.35)));k.player.pitch=.12;});await page.waitForTimeout(600);await page.screenshot({path:out+'/02d-stores.png'});
  const land=await v(page,()=>window.__village.land);assert.ok(land.berries<=35&&land.crops.length===5,'the land is in the model');
  // Her ways: double tap the ground and she is a bulge under the grass, faster than running; run along a tree root and it takes her, faster still and held to it; double tap out.
