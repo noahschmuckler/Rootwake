@@ -529,6 +529,5 @@ export function nearestTree(x: number, z: number): { tree: Tree; distance: numbe
   return best;
 }
 export const hopTargets = (t: Tree): Tree[] => treesNear(t.x, t.z, HOP_REACH).filter(o => o !== t && o.id !== t.id && Math.hypot(o.x - t.x, o.z - t.z) <= HOP_REACH && Math.abs(crownHeight(o) - crownHeight(t)) <= HOP_RISE);
-/** Where the grass takes her: the meadow, not the houses, not the water. */
-/** Where the grass takes her: anywhere on the land (the chunks are unbounded), not the water, not the houses. */
-export const grassCan = (x: number, z: number): boolean => !inWater(x, z) && !HOUSES.some(h => Math.hypot(x - h.x, z - h.z) < HOUSE_RADIUS + 0.2);
+/** Where the grass (and a root) can run: anywhere under the land (the chunks are unbounded), the stream's bed included (she wades it on foot, and under the soil the water is not in her way: Noah found the old refusal an invisible wall), not under the houses. */
+export const grassCan = (x: number, z: number): boolean => !HOUSES.some(h => Math.hypot(x - h.x, z - h.z) < HOUSE_RADIUS + 0.2);

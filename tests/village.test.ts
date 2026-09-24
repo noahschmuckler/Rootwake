@@ -51,7 +51,7 @@ test('her ways: grass everywhere she can walk, faster than running; tree roots j
   const r = TREE_ROOTS[0], from = TREES[r.a], to = TREES[r.b], want = { x: to.x - from.x, z: to.z - from.z }; const l = Math.hypot(want.x, want.z); want.x /= l; want.z /= l;
   const next = nextRoot(r.a, want); assert.ok(next && next.root.id === r.id && next.forward, 'the aligned root is taken'); assert.equal(endTree(r, true), r.b); assert.ok(Math.abs(rootTangent(r, 1).length() - 1) < 1e-6);
   const n = nearestRoot({ x: (from.x + to.x) / 2, z: (from.z + to.z) / 2 }); assert.ok(n.distance < 1.2); assert.ok(rootPoint(n.root, n.s).y < 0);
-  assert.ok(grassCan(5, -14)); assert.equal(grassCan(0, STREAM_Z(0)), false, 'not under the water'); assert.ok(inWater(3, STREAM_Z(3))); assert.equal(grassCan(9 * Math.cos(0.3), 9 * Math.sin(0.3)), false, 'not under a house'); assert.ok(grassCan(MEADOW_RADIUS + 41, 0), 'the land goes on past the wood (the chunks)'); assert.equal(inWater(200, STREAM_Z(200)), false, 'the stream ends past the village');
+  assert.ok(grassCan(5, -14)); assert.ok(grassCan(0, STREAM_Z(0)), 'under the water too (R1: the stream bed is no wall under the soil)'); assert.ok(inWater(3, STREAM_Z(3))); assert.equal(grassCan(9 * Math.cos(0.3), 9 * Math.sin(0.3)), false, 'not under a house'); assert.ok(grassCan(MEADOW_RADIUS + 41, 0), 'the land goes on past the wood (the chunks)'); assert.equal(inWater(200, STREAM_Z(200)), false, 'the stream ends past the village');
   for (const t of TREES) assert.ok(!inWater(t.x, t.z), 'no tree in the stream');
   assert.ok(hopTargets(copse[0]).length >= 1, 'the copse has crowns to leap to'); assert.equal(nearestTree(copse[2].x + 0.5, copse[2].z).tree.id, copse[2].id);
 });

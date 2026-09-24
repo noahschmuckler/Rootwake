@@ -66,3 +66,29 @@ test('sphere streaming selection covers faces with disjoint tiles and grows by L
  for(let f=0;f<6;f++){const area=ts.filter(t=>t.face===f).reduce((s,t)=>s+1/4**t.level,0);assert.ok(Math.abs(area-1)<1e-12);}
  }
 });
+
+// R1: roots as a way. A course is planned through the surface roots between a tree near her and a node near the place, across chunks she has never loaded; the karst's own roots have shortest paths and portal destinations.
+import { GOAL_REACH } from '../src/worldRoots';
+import { shortestPath, destinationsFrom, nodeName, NODES } from '../src/karstFlowModel';
+import { places } from '../src/overworldModel';
+test('a course runs from a tree by the village to the karst and back, joined root to root, surface roots only, the same twice', () => {
+  const g = createRootNetwork(createTerrain(1));
+  for (const [from, to] of [[{ x: 0, z: -16 }, KARST_AT], [{ x: KARST_AT.x + 20, z: KARST_AT.z + 30 }, { x: 0, z: 0 }], [{ x: 0, z: -16 }, places(1)[2]]] as const) {
+    const c = g.plan(from, to)!; assert.ok(c, `a course from ${from.x},${from.z}`);
+    assert.equal(c.roots.length, c.nodes.length - 1); assert.equal(c.entry, c.nodes[0]); assert.equal(c.goal, c.nodes[c.nodes.length - 1]);
+    for (let i = 0; i < c.roots.length; i++) { const r = c.roots[i]; assert.ok(r.surface); assert.ok((r.a === c.nodes[i] && r.b === c.nodes[i + 1]) || (r.b === c.nodes[i] && r.a === c.nodes[i + 1]), `root ${i} joins its nodes`); }
+    const e = g.nodeAt(c.entry)!, gl = g.nodeAt(c.goal)!; assert.notEqual(e.kind, 'hub', 'the way in is a tree'); assert.ok(Math.hypot(gl.x - to.x, gl.z - to.z) <= GOAL_REACH, 'it ends near the place');
+    assert.deepEqual(g.plan(from, to)!.roots.map(r => r.id), c.roots.map(r => r.id), 'the same course again');
+    assert.ok(c.length < Math.hypot(to.x - e.x, to.z - e.z) * 1.6 + 120, `not the long way round (${c.length.toFixed(0)} m)`);
+  }
+});
+test('the karst roots have a shortest way from the foot to the summit, and a foot tree offers the places above', () => {
+  const up = shortestPath('floorOak', 'pine')!; assert.ok(up && up.length >= 2);
+  let at = 'floorOak'; for (const r of up) { assert.ok(r.a === at || r.b === at); at = r.a === at ? r.b : r.a; } assert.equal(at, 'pine');
+  const sister = shortestPath('Bfoot', 'pineB')!; assert.ok(sister, 'up sister B');
+  const places = destinationsFrom('floorOak'); const ids = places.map(p => p.id);
+  assert.ok(ids.includes('cavernFern') && ids.includes('pine') && ids.includes('southShrub'), ids.join(','));
+  assert.ok(!ids.some(id => NODES[id].zone === 'floor'), 'no floor places'); assert.ok(places.every((p, i) => i === 0 || p.length >= places[i - 1].length), 'nearest first');
+  const anyFloor = Object.values(NODES).find(n => n.zone === 'floor' && n.id.startsWith('t'))!; assert.ok(destinationsFrom(anyFloor.id).length > 0, 'every floor tree is a portal');
+  assert.equal(nodeName('pine'), 'the summit pine'); assert.equal(nodeName('pineB'), "sister B's summit"); assert.equal(nodeName('B3'), 'sister B, ledge 4');
+});
