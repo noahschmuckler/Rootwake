@@ -1,3 +1,5 @@
+> **Active world integration:** see [WORLD_HANDOFF.md](WORLD_HANDOFF.md) for the implementation plan, checkpoint, tests, and continuation instructions.
+
 # The Village: continuation guide
 
 ## Latest status

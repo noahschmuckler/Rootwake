@@ -1,3 +1,5 @@
+> **Active world integration:** see [WORLD_HANDOFF.md](WORLD_HANDOFF.md) for the implementation plan, checkpoint, tests, and continuation instructions.
+
 # Rootwake
 
 A 3D prototype exploring a "confinement → open vista" cosmology, spun out of
