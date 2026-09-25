@@ -185,6 +185,30 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
     else f.group.rotation.z = 0;
   }
   function hideRaider(id: number): void { const f = raiderFigures.get(id); if (f) f.group.visible = false; }
+  // D3: the snatcher, a small octopoid, low and dark with two dim eyes and six arms that ripple as it runs; an infant is a pale bundle in its arms, lying on the land, or in hers.
+  const snatchMat = new THREE.MeshStandardMaterial({ color: '#1a1420', emissive: '#2a0a30', emissiveIntensity: 0.4, roughness: 0.35 }), snatchEye = new THREE.MeshBasicMaterial({ color: '#c08aff' }), bundleMat = new THREE.MeshStandardMaterial({ color: '#efe6cc', emissive: '#3a3020', emissiveIntensity: 0.25, roughness: 0.9 });
+  const makeBundle = (): THREE.Mesh => { const b = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), bundleMat); b.scale.set(1.5, 0.8, 0.9); return b; };
+  const snatchFigures = new Map<number, { group: THREE.Group; arms: THREE.Group[]; bundle: THREE.Mesh }>();
+  function snatchFigure(id: number) {
+    let f = snatchFigures.get(id); if (f) return f;
+    const group = new THREE.Group(), body = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), snatchMat); body.scale.set(1.3, 0.65, 1.1); body.position.y = 0.16; group.add(body);
+    for (const zz of [-0.07, 0.07]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 5), snatchEye); e.position.set(0.22, 0.22, zz); group.add(e); }
+    const arms: THREE.Group[] = []; for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2 + 0.5, g = new THREE.Group(); g.position.set(Math.cos(a) * 0.12, 0.08, Math.sin(a) * 0.12); g.rotation.y = -a; const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0.18, -0.05, 0.03), new THREE.Vector3(0.36, -0.07, -0.03), new THREE.Vector3(0.5, -0.06, 0.02)]); g.add(new THREE.Mesh(taperedTube(curve, 10, 5, t => 0.035 * (1 - t * 0.85), 0), snatchMat)); group.add(g); arms.push(g); }
+    const bundle = makeBundle(); bundle.position.set(-0.05, 0.3, 0); bundle.visible = false; group.add(bundle);
+    scene.add(group); f = { group, arms, bundle }; snatchFigures.set(id, f); return f;
+  }
+  function setSnatcher(id: number, x: number, z: number, heading: number, t: number, carrying: boolean): void {
+    const f = snatchFigure(id); f.group.visible = true; f.group.position.set(x, relief(x, z), z); f.group.rotation.y = -heading; f.bundle.visible = carrying;
+    for (let i = 0; i < f.arms.length; i++) f.arms[i].rotation.z = Math.sin(t * 0.03 + i * 1.3) * 0.35;
+  }
+  function hideSnatchersBut(ids: Set<number>): void { for (const [id, f] of snatchFigures) if (!ids.has(id)) f.group.visible = false; }
+  const lying: THREE.Mesh[] = [], inArms = makeBundle(); inArms.visible = false; scene.add(inArms);
+  /** The infants lying on the land, and the one in her arms (null when none). */
+  function setInfants(out: { x: number; z: number }[], arms: THREE.Vector3 | null): void {
+    while (lying.length < out.length) { const b = makeBundle(); scene.add(b); lying.push(b); }
+    lying.forEach((b, i) => { const d = out[i]; b.visible = !!d; if (d) b.position.set(d.x, relief(d.x, d.z) + 0.1, d.z); });
+    inArms.visible = !!arms; if (arms) inArms.position.copy(arms);
+  }
   // Her strokes: a slash of thorns before her, a burst ring round her, both short-lived (flashSlash, flashBurst).
   const slashMat = new THREE.MeshBasicMaterial({ color: '#d8f07a', transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false }), burstMat = new THREE.MeshBasicMaterial({ color: '#b9e58a', transparent: true, opacity: 0.8, side: THREE.DoubleSide, depthWrite: false });
   const slash = new THREE.Mesh(new THREE.RingGeometry(0.6, 1.9, 24, 1, -0.9, 1.8), slashMat); slash.rotation.x = -Math.PI / 2; slash.visible = false; scene.add(slash);
@@ -234,6 +258,6 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   let fireWood = 0;
   /** Which armful each figure shows, for checks. */
   const armfuls = (): (Store | null)[] => livingNow.map(s => { const c = carriedMap.get(figureFor(s))!; return STORE_LIST.find(k => c[k].visible) ?? null; });
-  return { colliders, get figures() { return livingNow.map(figureFor); }, figureFor, setFigureClips, figure, mass, update, updateLand, updatePrayer, armfuls, setRaider, hideRaider, flashSlash, flashBurst, updateStrokes, setLairAt, setLair, setStation, get activeStation() { return activeStation; }, setStack, stack, spiritFigure, spiritFigures, stream, crownPoint, trunkPoint };
+  return { setSnatcher, hideSnatchersBut, setInfants, colliders, get figures() { return livingNow.map(figureFor); }, figureFor, setFigureClips, figure, mass, update, updateLand, updatePrayer, armfuls, setRaider, hideRaider, flashSlash, flashBurst, updateStrokes, setLairAt, setLair, setStation, get activeStation() { return activeStation; }, setStack, stack, spiritFigure, spiritFigures, stream, crownPoint, trunkPoint };
 }
 export type VillageWorld = ReturnType<typeof buildVillage>;
