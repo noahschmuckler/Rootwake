@@ -1,0 +1,1 @@
+import"./mobilityControls-COnO_O61.js";import{e as t,C as e}from"./underworld-DWYN8TaG.js";import"./projectiles-CYzM9OUJ.js";import"./colors-nGcwXMQe.js";import"./board3d-AZjXSDQv.js";t({world:(r,o)=>new e(r,o),greblins:!0});
