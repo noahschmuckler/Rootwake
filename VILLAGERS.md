@@ -277,6 +277,79 @@ judged on the phone:
 - **Deferred, on purpose:** chunk roots; more than one village and its own manifestation; chunk
   edits and their save; the alignment and appeasement above; any balance.
 
+## The dark loop (Noah's brief, 2026-09-25; input and passes recorded, build to be decided)
+Shub farms the villagers. A small octopoid snatcher, stealthy and very fast, comes out of the
+lair at night and steals an infant from the village; brought to Shub, the infant becomes a Dark
+Young. The Dark Young eat the village's stores by night and devour its resource sites: a
+devoured site changes its look to a corrupted one and can no longer be collected, and it
+regenerates only if no Dark Young devours it again for a day. Where they have eaten they leave
+their own "food"; the villagers avoid it while any proper food remains, but as the sites are
+devoured it becomes the only food. Hunger has consequences (agreed: weaken, then die); enough
+proper food gives a modest, slow rate of births; the Dark Young's food gives a rapid rate. More
+infants, more snatchers, more Dark Young. In their hunger the Dark Young spoil the trees round
+the lair, whose roots then refuse root travel, a blight that spreads outward from Shub. A Dark
+Young Hulda defeats does not die: it retreats overland, flat and fast, unsettlingly like an
+octopus, at least as fast as root travel, back to Shub, where it regenerates. Rooted in place
+and kept from Shub until daybreak, it melts in the sun and leaves the villager infant behind,
+which she can carry home.
+
+### Input (the builder's, for Noah to weigh)
+- **It is one feedback loop, and that is its strength.** Infants → snatchers → Dark Young →
+  devoured sites and dark food → more infants. Every system already built feeds it: the meals
+  and the hunger bars, the stores and the sites, the night raids, the strike and the root bind,
+  the lair, the root travel. The loop makes the raids a farm, not a nuisance, and gives Hulda's
+  fights a stake beyond hp: an infant in each Dark Young.
+- **Counterplay must be legible or the spiral reads as scripted doom.** Four handles, all hers:
+  watch the houses at night (the snatcher's tell); fight the raiders before they reach the sites;
+  root a Dark Young and hold it for the sun; carry the infant home. The numbers must let a
+  vigilant player hold a small village at equilibrium (one snatcher a night at most early on,
+  a site that takes two nights to devour), with the spiral only for the neglected. The dev
+  clock exists for exactly this tuning.
+- **The root bind as it stands (four seconds) cannot hold a Dark Young to dawn.** Three ways,
+  the first recommended: (a) *the hold*: rooting is a stance; while she stays within a few metres
+  the bind persists and drains sap slowly, and the other Dark Young may bite her meanwhile, so
+  holding one is a choice with a cost, and the last hour before dawn is when fights matter most;
+  (b) re-binds and a chase, her root travel as fast as its retreat, the bind longer per level;
+  (c) the retreat begins only at first light, so any bind near dawn holds.
+- **The retreat is the new beat.** At zero hp the Dark Young flattens and runs for the lair at
+  the root-travel pace (9 m/s), overland, ignoring her; a bind stops it where it is. It heals
+  at the lair over a day. So a Dark Young is never lost to Shub by fighting alone; only the sun
+  takes it. Her slain count (levelling) becomes her melted count.
+- **Dark food and the villagers.** A store of its own on the green, left where the raiders ate;
+  refused while any other store has food; eaten when nothing else has; a meal of it counts as a
+  rich meal for births. Visible: the store's look, the thought bubbles ("nothing but their
+  leavings"), the birth rate on the houses.
+- **The blight and the roots.** A blighted tree is one within the blight's reach of the lair,
+  which grows with the count of Dark Young alive and shrinks as they melt; blighted trees are
+  black, their roots not attached (the planner routes round them, no course ends there, a tap
+  finds no root within reach). A blighted tree heals a day after the reach recedes past it, as
+  a site does. Later, a miracle may cleanse.
+- **The snatcher on a phone.** Stealth as smallness and dark, not invisibility: a low dark
+  shape that moves only in the dark, named only within a few metres, its tell the goats bleating
+  and a hobbit's bubble ("something at the door"). A strike or a bind makes it drop the infant.
+- **Infants as a stage, not a sprite.** A hobbit is born into a house with room, stays inside
+  as an infant for some days (the snatcher's target), then goes out small and grows; the model's
+  eight becomes a population with a cap by houses. Deaths and births change the village the
+  player sees.
+
+### The passes (D for dark; each small and judged on the phone; D1 first, the rest in order)
+- **D1. Hunger and births.** A hobbit who misses meals weakens, slows, stops gathering, and after
+  enough missed meals dies (the house empties, the name goes, the others mourn a day). A village
+  supplied through every meal for some days, with a house that has room, gets a birth: an infant
+  in the house, then a child at the sites. Population instead of eight. The dark food store,
+  refused while anything else remains, eaten when nothing else does, a rich meal for births.
+- **D2. The spoiled land and the retreat.** Raiders devour the sites they eat from (corrupted
+  look, uncollectible, regenerating after a day unspoiled) and leave dark food where they ate.
+  At zero hp a Dark Young retreats flat and fast to the lair and heals there; the root bind
+  becomes the hold (or the chosen alternative); a Dark Young held at sunrise melts.
+- **D3. The snatchers.** The octopoid at night when there are infants: its approach, its tell,
+  the theft, the run; struck or bound it drops the infant; she carries the infant home (the
+  stack's rule: no forms while loaded); at the lair the infant becomes a Dark Young after a
+  gestation; a melted Dark Young leaves its infant.
+- **D4. The blight.** The trees round the lair blighted by the count of Dark Young, their roots
+  refused by root travel, the blight spreading and receding, healing a day behind it.
+- Then balance, with the dev clock, until a vigilant player can hold a small village.
+
 ## Open questions (Noah's to decide, flagged here rather than picked silently)
 - When the thought bubble should speak: on every change of activity, or only on the ones that matter (noon, home, a meeting)?
 - The wider world (M1), four choices before building (the builder's recommendation first in each):
@@ -285,4 +358,5 @@ judged on the phone:
   3. *The lair's distance.* Scope: how far the dark forest's centre is from the village, which sets the length of a delve, how far the raids come from, and how much of the forest shows on the map before she has been. Under the grass she crosses about 230 m a minute. Options: (a) 400 m with the forest 150 m across: a minute's run to the edge, a minute inside under the drain; (b) 250 m, the forest visible from the meadow's edge; (c) 700 m, a real journey.
   4. *What a level gives.* Scope: the first progression: what counts toward a level and what each grants, with a cap of five for now. Options for what counts: (a) kills only (a Dark Young one, the manifestation ten), simple and legible; (b) kills and prayer spent; (c) kills and nights the stores came through whole. Options for the grant: (a) unlocks then bumps: she starts with the strike, level two gives the thorn burst, three the root bind, four and five a little vigor and strike; (b) a flat bump each level (vigor and strike); (c) a choice each level between vigor, strike and sap.
   Also: M1a (the pinch, the map, the land, the karst crossing) and M1b (the forest, the lair, the level) as two halves, each judged on the phone.
+- The dark loop (D): how a bind holds a Dark Young to dawn (the hold, re-binds and a chase, or a retreat only at first light: the hold recommended); whether the blight recedes on its own as the Dark Young melt, or only by a miracle; the birth rates (slow on proper food, fast on dark food) and the snatchers per night, to tune on the clock; whether a snatcher can be seen at all before its tell.
 - Worship loop (W1): one drop-off ring or a ring per store; the gathering rate that puts the village at the edge; whether her collecting costs sap; whether match-3 has any place in miracles (recommended: no, for now).
