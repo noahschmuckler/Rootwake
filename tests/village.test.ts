@@ -341,3 +341,17 @@ test('D3.1: an infant kept at the lair can be taken back by delving (inside the 
     v.lair.hp = 1; strike(v, { x: 300, z: 0 }, 1, 0); assert.equal(v.lair.alive, false); assert.equal(v.brood.length, 0); assert.equal(v.dropped.length, 1, 'the rest lie free'); assert.ok(v.events.some(e => e.text.includes('lie free')));
   } finally { setLair(null); }
 });
+
+// D4: the blight.
+import { blightTarget, isBlighted, BLIGHT_BASE, BLIGHT_PER_DY, BLIGHT_STEP } from '../src/villageModel';
+test('D4: no Dark Young bred, no blight; each bred one widens its reach; each dawn it spreads by at most a step toward it, and draws back as they melt; saved', () => {
+  setLair({ x: 300, z: 0, radius: 75 });
+  try {
+    const v = freshV(1); step(v, 2 * DT + 1); assert.equal(v.blight, 0, 'none bred, none');
+    const w = freshR(1, 3); assert.equal(blightTarget(w), BLIGHT_BASE + 3 * BLIGHT_PER_DY); step(w, 1); assert.equal(w.blight, BLIGHT_STEP, 'a step a dawn');
+    step(w, 6 * DT); assert.equal(w.blight, blightTarget(w), 'up to its reach'); assert.ok(isBlighted(w, 300 + w.blight - 1, 0) && !isBlighted(w, 300 + w.blight + 1, 0)); assert.ok(w.events.some(e => e.banner && e.text.startsWith('The blight spreads')));
+    const full = w.blight; w.bred = []; step(w, DT); assert.equal(w.blight, full - BLIGHT_STEP, 'a step back a dawn once none are bred');
+    const before = w.blight; step(w, DT); assert.ok(w.blight < before || w.blight === 0, 'draws back as they are gone'); step(w, 10 * DT); assert.equal(w.blight, 0, 'gone');
+    const back = par(ser(w)); assert.equal(back.blight, w.blight);
+  } finally { setLair(null); }
+});

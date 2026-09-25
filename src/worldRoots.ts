@@ -39,6 +39,9 @@ export function createRootNetwork(terrain: Terrain) {
   for (const t of TREES) { const c = chunkOf(t.x, t.z); where.set(t.id, { id: t.id, x: t.x, z: t.z, kind: 'village', ...c }); }
   for (const [id, n] of endpoints) { const x = n.mouth.x + offset.x, z = n.mouth.z + offset.z; where.set(id, { id, x, z, kind: 'karst', ...chunkOf(x, z) }); }
   const memo = new Map<string, WorldRoot[]>(), loaded = new Map<string, WorldRoot[]>();
+  // D4: where the blight lies, roots refuse root travel: a root is closed when either end or its middle is in it.
+  let blocked: (x: number, z: number) => boolean = () => false;
+  const isClosed = (r: WorldRoot): boolean => { const a = r.samples[0], b = r.samples[r.samples.length - 1], m = r.samples[r.samples.length >> 1]; return blocked(a.x, a.z) || blocked(b.x, b.z) || blocked(m.x, m.z); };
   let all = [...authored];
   const junctions = new Map<number, WorldRoot[]>();
   function reindex() { all = [...authored, ...[...loaded.values()].flat()]; junctions.clear(); for (const r of all) for (const id of [r.a, r.b]) { const list = junctions.get(id) ?? []; list.push(r); junctions.set(id, list); } }
@@ -101,7 +104,7 @@ export function createRootNetwork(terrain: Terrain) {
   function nodesNear(x: number, z: number, reach: number, hubs: boolean): WorldNode[] {
     for (const c of chunksAround(x, z, Math.ceil(reach / CHUNK))) chunkRoots(c.cx, c.cz);
     const out: WorldNode[] = [];
-    for (const n of where.values()) { if (Math.hypot(n.x - x, n.z - z) > reach || (n.kind === 'hub' && !hubs)) continue; if (n.kind === 'karst' && endpoints.get(n.id)!.zone !== 'floor') continue; if (rootsTouching(n.id).some(r => r.surface)) out.push(n); }
+    for (const n of where.values()) { if (Math.hypot(n.x - x, n.z - z) > reach || (n.kind === 'hub' && !hubs)) continue; if (n.kind === 'karst' && endpoints.get(n.id)!.zone !== 'floor') continue; if (blocked(n.x, n.z)) continue; if (rootsTouching(n.id).some(r => r.surface && !isClosed(r))) out.push(n); }
     return out.sort((a, b) => Math.hypot(a.x - x, a.z - z) - Math.hypot(b.x - x, b.z - z));
   }
   /** The shortest way through the surface roots from one node to another (A* by root length, opening at most PLAN_BUDGET nodes); null when there is none. */
@@ -114,7 +117,7 @@ export function createRootNetwork(terrain: Terrain) {
       let bi = 0; for (let i = 1; i < open.length; i++) if (open[i].f < open[bi].f) bi = i;
       const { id } = open.splice(bi, 1)[0]; if (closed.has(id)) continue; closed.add(id); opened++;
       if (id === to) { const nodes = [to], roots: WorldRoot[] = []; let cur = to; while (cur !== from) { const v = via.get(cur)!; roots.unshift(v.root); cur = v.from; nodes.unshift(cur); } return { entry: from, goal: to, nodes, roots, length: g.get(to)! }; }
-      for (const r of rootsTouching(id)) { if (!r.surface) continue; const next = otherEnd(r, id), cost = g.get(id)! + r.length; if (cost < (g.get(next) ?? Infinity)) { g.set(next, cost); via.set(next, { root: r, from: id }); open.push({ id: next, f: cost + h(next) }); } }
+      for (const r of rootsTouching(id)) { if (!r.surface || isClosed(r)) continue; const next = otherEnd(r, id), cost = g.get(id)! + r.length; if (cost < (g.get(next) ?? Infinity)) { g.set(next, cost); via.set(next, { root: r, from: id }); open.push({ id: next, f: cost + h(next) }); } }
     }
     return null;
   }
@@ -153,7 +156,7 @@ export function createRootNetwork(terrain: Terrain) {
   function nearest(p: { x: number; z: number }, within: number): { root: WorldRoot; s: number; distance: number } | null {
     let best: { root: WorldRoot; s: number; distance: number } | null = null;
     for (const r of all) {
-      if (!r.surface || p.x < r.bounds[0] - within || p.x > r.bounds[2] + within || p.z < r.bounds[1] - within || p.z > r.bounds[3] + within) continue;
+      if (!r.surface || isClosed(r) || p.x < r.bounds[0] - within || p.x > r.bounds[2] + within || p.z < r.bounds[1] - within || p.z > r.bounds[3] + within) continue;
       for (let i = 0; i < r.samples.length; i++) { const d = Math.hypot(p.x - r.samples[i].x, p.z - r.samples[i].z); if (d < within && (!best || d < best.distance)) best = { root: r, s: i / (r.samples.length - 1) * r.length, distance: d }; }
     }
     return best;
@@ -165,6 +168,6 @@ export function createRootNetwork(terrain: Terrain) {
     return best;
   }
   reindex();
-  return { update, aligned, nearest, next, generated, chunkRoots, rootsTouching, nodeAt, nodesNear, attached, plan, planFrom, route, get roots(){return all;}, get dynamic(){return [...loaded.values()].flat();}, node(id:number){return endpoints.get(id);}, nodeId(id:string){return nodeIds.get(id)!;}, atNode(id:string){return junctions.get(nodeIds.get(id)!) ?? [];}, zone(id:number){const n=endpoints.get(id); return n?ZONES[n.zone]:null;} };
+  return { setBlocked(f: (x: number, z: number) => boolean) { blocked = f; }, closed: isClosed, update, aligned, nearest, next, generated, chunkRoots, rootsTouching, nodeAt, nodesNear, attached, plan, planFrom, route, get roots(){return all;}, get dynamic(){return [...loaded.values()].flat();}, node(id:number){return endpoints.get(id);}, nodeId(id:string){return nodeIds.get(id)!;}, atNode(id:string){return junctions.get(nodeIds.get(id)!) ?? [];}, zone(id:number){const n=endpoints.get(id); return n?ZONES[n.zone]:null;} };
 }
 export type RootNetwork = ReturnType<typeof createRootNetwork>;

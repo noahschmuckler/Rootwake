@@ -92,3 +92,12 @@ test('the karst roots have a shortest way from the foot to the summit, and a foo
   const anyFloor = Object.values(NODES).find(n => n.zone === 'floor' && n.id.startsWith('t'))!; assert.ok(destinationsFrom(anyFloor.id).length > 0, 'every floor tree is a portal');
   assert.equal(nodeName('pine'), 'the summit pine'); assert.equal(nodeName('pineB'), "sister B's summit"); assert.equal(nodeName('B3'), 'sister B, ledge 4');
 });
+test('D4: blighted roots refuse root travel: no course ends in the blight, none crosses it, and a tap finds no root there', () => {
+  const g = createRootNetwork(createTerrain(1)), lair = places(1)[2], R = 150;
+  const free = g.plan({ x: 0, z: -16 }, lair); assert.ok(free, 'a way to the lair before the blight');
+  g.setBlocked((x, z) => Math.hypot(x - lair.x, z - lair.z) <= R);
+  assert.equal(g.plan({ x: 0, z: -16 }, lair), null, 'no course ends in the blight');
+  const edge = { x: lair.x - (lair.x / Math.hypot(lair.x, lair.z)) * (R + 60), z: lair.z - (lair.z / Math.hypot(lair.x, lair.z)) * (R + 60) }, c = g.plan({ x: 0, z: -16 }, edge);
+  assert.ok(c, 'a way to its edge'); for (const r of c!.roots) for (const p of [r.samples[0], r.samples[r.samples.length >> 1], r.samples[r.samples.length - 1]]) assert.ok(Math.hypot(p.x - lair.x, p.z - lair.z) > R, 'none crosses it');
+  g.update(lair.x, lair.z); assert.equal(g.nearest({ x: lair.x + 20, z: lair.z }, 6), null, 'a tap in the blight finds no root');
+});
