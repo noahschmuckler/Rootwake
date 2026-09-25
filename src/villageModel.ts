@@ -127,7 +127,7 @@ export type Errand = 'deliver' | 'meal' | 'firewood' | null;
 export type Job = 'gather' | 'pray';
 export interface HobbitState { id: string; x: number; z: number; heading: number; activity: Activity; want: Want; job: Job; path: Vec2[]; speed: number; inside: boolean; bubble: string; bubbleUntil: number; wanderAt: number; faceAt: number; hunger: number; carry: Carry | null; errand: Errand; gatherAt: number; eatUntil: number; jobAt: number; meals: number; ate: number; home: number; stage: Stage; born: number; missed: number }
 /** What happened in the village, for the entry to tell: a birth, a death, a child going out. */
-export interface VillageEvent { tick: number; text: string }
+export interface VillageEvent { tick: number; text: string; banner?: boolean }
 /** A forest spirit: summoned for one place's job, it gathers and carries there tirelessly by day, and stands at its place by night. No needs, no home. */
 export interface Spirit { id: number; keeps: SiteKind; x: number; z: number; heading: number; path: Vec2[]; speed: number; carry: Carry | null; errand: 'deliver' | null; gatherAt: number; wanderAt: number }
 // The Dark Young (the first enemy): oversized goats with writhing tentacle horns and six legs, the get of the
@@ -143,7 +143,7 @@ export interface InfantRef { id: string; home: number; born: number }
 export type SnatcherState = 'coming' | 'taking' | 'fleeing';
 export interface Snatcher { id: number; x: number; z: number; heading: number; state: SnatcherState; targetId: string | null; clock: number; infant: InfantRef | null; told: boolean }
 /** Her fighting stat (vigor: bitten down, never to death; at nothing she fades and wakes at the stone, weakened) and her sap (spent by the specials, refilling slowly for now; match-3 is reserved for building it later). */
-export interface Hero { vigor: number; sap: number; faint: number; calm: number; xp: number; level: number; choices: number; perks: { vigor: number; strike: number; sap: number } }
+export interface Hero { vigor: number; sap: number; faint: number; calm: number; xp: number; level: number; choices: number; perks: { vigor: number; strike: number; sap: number }; holding: number }
 /** The lair's manifestation: a local mother of goats at the dark forest's centre, awake while she is near, with its own hp; slain, it is gone for LAIR_PEACE_DAYS and the raids with it, then grows again. */
 export interface Lair { hp: number; alive: boolean; slainDay: number; spawnClock: number; sweepClock: number; hurt: number; woke: boolean }
 export interface Village { seed: number; tick: number; hobbits: HobbitState[]; stores: Record<Store, number>; land: Land; fireWood: number; take: Take; lastTake: Take; prayer: number; prayed: number; spirits: Spirit[]; stack: Carry | null; raiders: Raider[]; hero: Hero; raidDay: number; slain: number; eaten: number; lair: Lair; dead: { id: string; tick: number }[]; wellFedDays: number; dayMissed: boolean; mourningUntil: number; events: VillageEvent[]; darkMealsToday: number; melted: number; snatchers: Snatcher[]; snatchDay: number; brood: { infant: InfantRef; due: number }[]; bred: InfantRef[]; dropped: { infant: InfantRef; x: number; z: number }[]; carried: InfantRef | null; taken: number; returned: number }
@@ -157,7 +157,7 @@ export const living = (v: Village, home: number): HobbitState[] => v.hobbits.fil
 /** The first morning: the stores hold some food and a night's wood already (the village has lived here a while), the bushes are full, a few branches lie, the strips are at different stages so that one ripens every day or so. */
 export function freshVillage(seed = 1): Village {
   return {
-    seed, tick: 0, stores: { berries: 3, milk: 2, grain: 6, wood: 8, water: 5, dark: 0 }, land: { berries: BERRY_CAP, branches: 6, milk: MILK_PER_DAY, crops: Array.from({ length: CROP_STRIPS }, (_, i) => (i + 0.5) / CROP_STRIPS), spoiled: { thicket: 0, copse: 0, field: 0, pen: 0 } }, fireWood: 0, take: freshTake(), lastTake: freshTake(), prayer: 0, prayed: 0, spirits: [], stack: null, raiders: [], hero: { vigor: VIGOR_MAX, sap: SAP_MAX, faint: 0, calm: 0, xp: 0, level: 1, choices: 0, perks: { vigor: 0, strike: 0, sap: 0 } }, raidDay: -1, slain: 0, eaten: 0, lair: { hp: LAIR_HP, alive: true, slainDay: -99, spawnClock: 0, sweepClock: 0, hurt: 0, woke: false }, dead: [], wellFedDays: 0, dayMissed: false, mourningUntil: 0, events: [], darkMealsToday: 0, melted: 0, snatchers: [], snatchDay: -1, brood: [], bred: [], dropped: [], carried: null, taken: 0, returned: 0,
+    seed, tick: 0, stores: { berries: 3, milk: 2, grain: 6, wood: 8, water: 5, dark: 0 }, land: { berries: BERRY_CAP, branches: 6, milk: MILK_PER_DAY, crops: Array.from({ length: CROP_STRIPS }, (_, i) => (i + 0.5) / CROP_STRIPS), spoiled: { thicket: 0, copse: 0, field: 0, pen: 0 } }, fireWood: 0, take: freshTake(), lastTake: freshTake(), prayer: 0, prayed: 0, spirits: [], stack: null, raiders: [], hero: { vigor: VIGOR_MAX, sap: SAP_MAX, faint: 0, calm: 0, xp: 0, level: 1, choices: 0, perks: { vigor: 0, strike: 0, sap: 0 }, holding: -1 }, raidDay: -1, slain: 0, eaten: 0, lair: { hp: LAIR_HP, alive: true, slainDay: -99, spawnClock: 0, sweepClock: 0, hurt: 0, woke: false }, dead: [], wellFedDays: 0, dayMissed: false, mourningUntil: 0, events: [], darkMealsToday: 0, melted: 0, snatchers: [], snatchDay: -1, brood: [], bred: [], dropped: [], carried: null, taken: 0, returned: 0,
     hobbits: HOBBITS.map(h => { const d = houseOf(h).door; return { id: h.id, x: d.x, z: d.z, heading: houseOf(h).facing, activity: 'sleeping', want: 'home', job: 'gather', path: [], speed: 0, inside: true, bubble: '', bubbleUntil: 0, wanderAt: 0, faceAt: 0, hunger: 0.3, carry: null, errand: null, gatherAt: 0, eatUntil: 0, jobAt: 0, meals: 0, ate: -1, home: h.home, stage: 'grown', born: -(INFANT_DAYS + CHILD_DAYS) * DAY_TICKS, missed: 0 }; }),
   };
 }
@@ -276,6 +276,8 @@ function eat(v: Village, s: HobbitState, drink: boolean, say: (t: string) => voi
 export const RAID_TICK = 870, RAID_END = 1380, RAID_FROM = WALK_RADIUS - 12, DY_PACE = 0.9, DY_EAT_S = 6, DY_FILL = 6, DY_HP = 30;
 /** D2, the spoiled land and the retreat. Fed at a store, a Dark Young goes on to a yielding place and devours it for DY_DEVOUR_S: the place is spoiled for SPOIL_TICKS (a day, again with each devouring), its stock gone, and it grows nothing while spoiled; every unit eaten and every place devoured leaves DARK_PER_UNIT / DARK_PER_SITE of their leavings on the heap. A meal of leavings counts as DARK_FED_DAYS days toward a birth. At no hp a Dark Young does not die: it retreats overland, flat and fast (DY_FLEE, root-travel pace), to the lair, home within LAIR_HOME of it, and is gone; at RAID_END the rest leave the same way. Rooted, it is held while she stands within HOLD_RANGE, for HOLD_SAP a second (the bind does not run down); held for HOLD_MELT_S it withers and melts (the roots draw it down), and any held at daybreak melts in the sun; a melted one counts as slain (the level). Tuning. */
 /** D3, the snatchers. At SNATCH_TICK (after the raid sets out) SNATCHERS_PER_NIGHT come out of the lair while the village has an infant in a house or lying out; they run at SNATCH_PACE (root-travel pace), a house door takes SNATCH_ENTER_S, an infant lying out a moment; within TELL_RANGE of the green the goats bleat (told). Back at the lair an infant becomes a Dark Young after GESTATION_TICKS; the night's raid is Shub's own (raidSize by day) and every Dark Young bred of an infant, up to DY_MAX. Struck, burst or bound, a snatcher drops what it carries and runs. She picks up an infant within PICK_RANGE and it is home at its door within HOME_RANGE; a melted Dark Young leaves its infant where it melted. Tuning. */
+/** Infants kept at the lair lie BROOD_RING m from its heart, inside the mother's reach: taking one back is a delve. Tuning. */
+export const BROOD_RING = 3.2;
 export const SNATCH_TICK = 900, SNATCHERS_PER_NIGHT = 1, SNATCH_PACE = 9, SNATCH_ENTER_S = 4, TELL_RANGE = 25, GESTATION_TICKS = DAY_TICKS, DY_MAX = 8, PICK_RANGE = 1.4, HOME_RANGE = 2.4;
 export const DY_DEVOUR_S = 10, SPOIL_TICKS = DAY_TICKS, DARK_PER_UNIT = 1, DARK_PER_SITE = 3, DARK_FED_DAYS = 3, DY_FLEE = 9, LAIR_HOME = 10, HOLD_RANGE = 3.5, HOLD_SAP = 3, HOLD_MELT_S = 60, MELT_S = 6;
 export const raidSize = (day: number): number => Math.min(3, 1 + Math.floor(day / 2));
@@ -298,20 +300,21 @@ export let lairAt: { x: number; z: number; radius: number } | null = null;
 export const setLair = (at: { x: number; z: number; radius: number } | null): void => { lairAt = at; };
 export const forestDepth = (x: number, z: number): number => { if (!lairAt) return 0; const d = Math.hypot(x - lairAt.x, z - lairAt.z); return d >= lairAt.radius ? 0 : 1 - d / lairAt.radius; };
 export const raidsPaused = (v: Village): boolean => !v.lair.alive && dayOf(v.tick) < v.lair.slainDay + LAIR_PEACE_DAYS;
-function hurtLair(v: Village, dmg: number): void { const l = v.lair; if (!l.alive) return; l.hp = Math.max(0, l.hp - dmg); l.hurt = 0.3; if (l.hp === 0) { l.alive = false; l.slainDay = dayOf(v.tick); l.woke = false; gainXp(v, XP_LAIR); for (const r of v.raiders) if (r.state !== 'dead') { r.state = 'leaving'; r.aggro = 0; } } }
+function hurtLair(v: Village, dmg: number): void { const l = v.lair; if (!l.alive) return; l.hp = Math.max(0, l.hp - dmg); l.hurt = 0.3; if (l.hp === 0) { l.alive = false; l.slainDay = dayOf(v.tick); l.woke = false; gainXp(v, XP_LAIR); v.brood.forEach((b, i) => { const p = broodSpot(i)!; v.dropped.push({ infant: b.infant, x: p.x, z: p.z }); }); if (v.brood.length) event(v, 'The mother of goats is gone: the infants she held lie free', true); v.brood = []; for (const r of v.raiders) if (r.state !== 'dead') { r.state = 'leaving'; r.aggro = 0; } } }
 /** The lair by real seconds while she is near: waking, brooding Dark Young, sweeping. Regrows once the peace is over. */
 function stepLair(v: Village, dt: number, her: Vec2 | null): void {
   const l = v.lair; l.hurt = Math.max(0, l.hurt - dt); if (!lairAt) return;
   if (!l.alive) { if (dayOf(v.tick) >= l.slainDay + LAIR_PEACE_DAYS) { l.alive = true; l.hp = LAIR_HP; } return; }
   if (!her) { l.woke = false; return; } const d = Math.hypot(her.x - lairAt.x, her.z - lairAt.z); l.woke = d <= LAIR_WAKE; if (!l.woke) return;
   l.spawnClock += dt; const brood = v.raiders.filter(r => r.state !== 'dead' && Math.hypot(r.x - lairAt!.x, r.z - lairAt!.z) < LAIR_WAKE + 10).length;
-  if (l.spawnClock >= LAIR_SPAWN_S && brood < LAIR_BROOD) { l.spawnClock = 0; const a = Math.atan2(her.z - lairAt.z, her.x - lairAt.x) + (brood - 1) * 0.9, id = v.raiders.reduce((m, r) => Math.max(m, r.id), -1) + 1; v.raiders.push({ id, x: lairAt.x + Math.cos(a) * 5, z: lairAt.z + Math.sin(a) * 5, heading: a, hp: DY_HP, state: 'hunting', target: null, ate: 0, eatClock: 0, aggro: DY_AGGRO_S * 4, rooted: 0, biteClock: 0, hurt: 0, gone: 0, site: null, devourClock: 0, held: 0, infant: null }); }
+  const free = atHome(v)[0]; if (l.spawnClock >= LAIR_SPAWN_S && brood < LAIR_BROOD && free) { l.spawnClock = 0; const a = Math.atan2(her.z - lairAt.z, her.x - lairAt.x) + (brood - 1) * 0.9, id = v.raiders.reduce((m, r) => Math.max(m, r.id), -1) + 1; v.raiders.push({ id, x: lairAt.x + Math.cos(a) * 5, z: lairAt.z + Math.sin(a) * 5, heading: a, hp: DY_HP, state: 'hunting', target: null, ate: 0, eatClock: 0, aggro: DY_AGGRO_S * 4, rooted: 0, biteClock: 0, hurt: 0, gone: 0, site: null, devourClock: 0, held: 0, infant: free }); }
   l.sweepClock += dt; if (l.sweepClock >= LAIR_SWEEP_S) { l.sweepClock = 0; if (d <= LAIR_REACH && v.hero.faint === 0) { v.hero.vigor = Math.max(0, v.hero.vigor - LAIR_SWEEP); v.hero.calm = 0; if (v.hero.vigor === 0) v.hero.faint = FAINT_S; } }
 }
 /** The fullest store but the trough, by share of cap, with a unit in it: what a Dark Young goes for. */
 export function fullestStore(v: Village): Store | null { let best: Store | null = null; for (const k of STORE_LIST) if (k !== 'water' && k !== 'dark' && v.stores[k] >= 1 && (best === null || v.stores[k] / STORES[k].cap > v.stores[best] / STORES[best].cap)) best = k; return best; }
 export function spawnRaid(v: Village, rand: () => number): void {
-  const bred = v.bred.slice(0, DY_MAX), n = Math.min(DY_MAX, raidSize(dayOf(v.tick)) + bred.length), a0 = rand() * Math.PI * 2;
+  // Noah: a Dark Young cannot exist without an infant inside it, so the raid is every Dark Young bred of a stolen infant and at the lair tonight, and nothing else.
+  const bred = atHome(v).slice(0, DY_MAX), n = bred.length, a0 = rand() * Math.PI * 2; if (!n) { v.raidDay = dayOf(v.tick); return; }
   for (let i = 0; i < n; i++) { const a = a0 + (i - (n - 1) / 2) * 0.35 + (rand() - 0.5) * 0.2, id = v.raiders.reduce((m, r) => Math.max(m, r.id), -1) + 1; let x = Math.cos(a) * RAID_FROM, z = Math.sin(a) * RAID_FROM; if (inWater(x, z)) { x = Math.cos(a + 1.2) * RAID_FROM; z = Math.sin(a + 1.2) * RAID_FROM; } v.raiders.push({ id, x, z, heading: Math.atan2(-z, -x), hp: DY_HP, state: 'coming', target: null, ate: 0, eatClock: 0, aggro: 0, rooted: 0, biteClock: 0, hurt: 0, gone: 0, site: null, devourClock: 0, held: 0, infant: bred[i] ?? null }); }
   v.raidDay = dayOf(v.tick);
 }
@@ -327,8 +330,10 @@ export function stepRaiders(v: Village, dt: number, her: Vec2 | null): void {
     r.hurt = Math.max(0, r.hurt - dt); if (r.state === 'dead' || r.state === 'melting') { r.gone += dt; continue; }
     if (r.rooted > 0) {
       // The hold (D2): while she stands by a rooted one the bind does not run down, for sap; held long enough, a retreating one withers and melts.
-      const held = her && h.faint === 0 && h.sap > 0 && Math.hypot(her.x - r.x, her.z - r.z) <= HOLD_RANGE;
-      if (held) { h.sap = Math.max(0, h.sap - HOLD_SAP * dt); r.rooted = Math.max(r.rooted, ROOT_S / 2); r.held += dt; if (r.state === 'retreating' && r.held >= HOLD_MELT_S) { melt(v, r); continue; } }
+      // One hold at a time (Noah asked what limits it): only the one she bound last, while she stands by it and has sap; the others' binds run down.
+      const held = r.id === h.holding && her && h.faint === 0 && h.sap > 0 && Math.hypot(her.x - r.x, her.z - r.z) <= HOLD_RANGE;
+      if (r.id === h.holding && !held) { h.holding = -1; event(v, h.sap <= 0 ? 'Her sap is spent: the Dark Young tears free of the roots' : 'She has stepped away: the roots let go', true); }
+      if (held) { h.sap = Math.max(0, h.sap - HOLD_SAP * dt); if (h.sap <= 0) { h.holding = -1; event(v, 'Her sap is spent: the Dark Young tears free of the roots', true); r.rooted = Math.min(r.rooted, 0.5); continue; } r.rooted = Math.max(r.rooted, ROOT_S / 2); r.held += dt; if (r.state === 'retreating' && r.held >= HOLD_MELT_S) { melt(v, r); continue; } }
       else r.rooted = Math.max(0, r.rooted - dt);
       r.aggro = Math.max(0, r.aggro - dt); continue;
     }
@@ -373,9 +378,10 @@ export function spoil(v: Village, site: YieldSite): void {
 }
 /** A held Dark Young withers and melts: it is gone for good, and counts as slain. */
 function melt(v: Village, r: Raider): void {
+  if (v.hero.holding === r.id) v.hero.holding = -1;
   r.state = 'melting'; r.gone = 0; r.rooted = 0; r.aggro = 0; v.slain += 1; v.melted += 1; gainXp(v, XP_DY);
   // D3: one bred of an infant leaves the infant where it melted.
-  if (r.infant) { const ref = r.infant; v.bred = v.bred.filter(b => b.id !== ref.id); v.dropped.push({ infant: ref, x: r.x, z: r.z }); r.infant = null; event(v, `a Dark Young melts, and ${hobbitById(ref.id).name} lies where it was`); }
+  if (r.infant) { const ref = r.infant; v.bred = v.bred.filter(b => b.id !== ref.id); v.dropped.push({ infant: ref, x: r.x, z: r.z }); r.infant = null; event(v, `A Dark Young melts, and ${hobbitById(ref.id).name} lies where it was`, true); }
   else event(v, 'a Dark Young melts away');
 }
 // D3, the snatchers and the infants.
@@ -385,6 +391,8 @@ export const takenIds = (v: Village): string[] => [...v.snatchers.filter(n => n.
 /** A hobbit's state for an infant in its house (born, or brought home). */
 function infantState(v: Village, ref: InfantRef): HobbitState { const house = HOUSES[ref.home], d = house.door; return { id: ref.id, x: d.x, z: d.z, heading: house.facing, activity: 'sleeping', want: 'home', job: 'gather', path: [], speed: 0, inside: true, bubble: '', bubbleUntil: 0, wanderAt: 0, faceAt: 0, hunger: 0, carry: null, errand: null, gatherAt: 0, eatUntil: 0, jobAt: 0, meals: 0, ate: mealSlot(v.tick), home: ref.home, stage: 'infant', born: ref.born, missed: 0 }; }
 const tellParents = (v: Village, home: number, text: string): void => { for (const o of living(v, home)) if (o.stage !== 'infant') { o.bubble = text; o.bubbleUntil = v.tick + BUBBLE_TICKS * 4; } };
+/** The bred Dark Young not abroad: at the lair. */
+export const atHome = (v: Village): InfantRef[] => v.bred.filter(b => !v.raiders.some(r => r.infant?.id === b.id && r.state !== 'melting'));
 const lairPoint = (from: Vec2): Vec2 => (lairAt ? { x: lairAt.x, z: lairAt.z } : (() => { const a = Math.atan2(from.z, from.x) || 0; return { x: Math.cos(a) * RAID_FROM * 3, z: Math.sin(a) * RAID_FROM * 3 }; })());
 /** Nightfall: the snatchers set out, if there is an infant to take. */
 function spawnSnatchers(v: Village): void {
@@ -406,12 +414,12 @@ function stepSnatchers(v: Village, dt: number): void {
   for (const n of v.snatchers) {
     if (n.state === 'fleeing') { const home = lairPoint(n); if (towards(n, home, SNATCH_PACE * dt) < LAIR_HOME) { if (n.infant) v.brood.push({ infant: n.infant, due: v.tick + GESTATION_TICKS }); n.infant = null; n.clock = -1; } continue; }
     let t = snatchTarget(v, n); if (!t) { n.targetId = pickTarget(v, n); n.state = 'coming'; t = snatchTarget(v, n); if (!t) { n.state = 'fleeing'; continue; } }
-    if (!n.told && Math.hypot(n.x - GREEN.x, n.z - GREEN.z) < TELL_RANGE) { n.told = true; event(v, 'the goats are bleating in the dark'); }
+    if (!n.told && Math.hypot(n.x - GREEN.x, n.z - GREEN.z) < TELL_RANGE) { n.told = true; event(v, 'The goats are bleating: something small is coming for the infants', true); }
     if (n.state === 'coming') { if (towards(n, t.at, SNATCH_PACE * dt) < 0.4) { n.state = 'taking'; n.clock = 0; } continue; }
     n.clock += dt; if (n.clock < (t.lying ? 0.5 : SNATCH_ENTER_S)) continue;
     let ref: InfantRef;
-    if (t.lying) { const i = v.dropped.findIndex(d => d.infant.id === n.targetId); ref = v.dropped.splice(i, 1)[0].infant; event(v, `${infantName(ref)} is taken again`); }
-    else { const s = v.hobbits.find(h => h.id === n.targetId)!; v.hobbits.splice(v.hobbits.indexOf(s), 1); ref = { id: s.id, home: s.home, born: s.born }; v.taken += 1; event(v, `${infantName(ref)} is taken in the night`); tellParents(v, ref.home, `${infantName(ref)} is gone`); v.mourningUntil = v.tick + MOURN_TICKS; }
+    if (t.lying) { const i = v.dropped.findIndex(d => d.infant.id === n.targetId); ref = v.dropped.splice(i, 1)[0].infant; event(v, `${infantName(ref)} is taken again`, true); }
+    else { const s = v.hobbits.find(h => h.id === n.targetId)!; v.hobbits.splice(v.hobbits.indexOf(s), 1); ref = { id: s.id, home: s.home, born: s.born }; v.taken += 1; event(v, `${infantName(ref)} is taken in the night`, true); tellParents(v, ref.home, `${infantName(ref)} is gone`); v.mourningUntil = v.tick + MOURN_TICKS; }
     n.infant = ref; n.state = 'fleeing';
   }
   v.snatchers = v.snatchers.filter(n => n.clock >= 0);
@@ -422,11 +430,14 @@ function scare(v: Village, her: Vec2, range: number): number {
   return k;
 }
 /** Her arms: an infant lying within PICK_RANGE is taken up (her hands empty); carried to within HOME_RANGE of its door, it is home. */
+/** Where the infants kept at the lair lie, held in the mother's roots round her heart. */
+export const broodSpot = (i: number): Vec2 | null => (lairAt ? { x: lairAt.x + Math.cos(i * 2.4 + 0.5) * BROOD_RING, z: lairAt.z + Math.sin(i * 2.4 + 0.5) * BROOD_RING } : null);
 export function carryInfant(v: Village, her: Vec2): 'picked' | 'home' | null {
+  if (!v.carried && !v.stack) { const i = v.brood.findIndex((_, k) => { const p = broodSpot(k); return !!p && Math.hypot(p.x - her.x, p.z - her.z) <= PICK_RANGE; }); if (i >= 0) { v.carried = v.brood.splice(i, 1)[0].infant; event(v, `She takes ${infantName(v.carried)} back from the mother`, true); return 'picked'; } }
   if (!v.carried) { if (v.stack) return null; const i = v.dropped.findIndex(d => Math.hypot(d.x - her.x, d.z - her.z) <= PICK_RANGE); if (i < 0) return null; v.carried = v.dropped.splice(i, 1)[0].infant; return 'picked'; }
   const ref = v.carried, door = HOUSES[ref.home].door; if (Math.hypot(door.x - her.x, door.z - her.z) > HOME_RANGE) return null;
   const home = living(v, ref.home).length < ROOM_PER_HOUSE ? ref.home : houseWithRoom(v)?.id ?? ref.home;
-  v.hobbits.push(infantState(v, { ...ref, home })); v.carried = null; v.returned += 1; event(v, `${infantName(ref)} is home`); tellParents(v, home, `${infantName(ref)} is home`); return 'home';
+  v.hobbits.push(infantState(v, { ...ref, home })); v.carried = null; v.returned += 1; event(v, `${infantName(ref)} is home`, true); tellParents(v, home, `${infantName(ref)} is home`); return 'home';
 }
 /** She falls with an infant in her arms: it lies where she fell. */
 export function dropCarried(v: Village, x: number, z: number): void { if (v.carried) { v.dropped.push({ infant: v.carried, x, z }); v.carried = null; } }
@@ -446,7 +457,7 @@ export function strike(v: Village, her: Vec2, fx: number, fz: number): Raider | 
 /** Her thorn burst: everything within THORN_RANGE, for THORN_SAP. Returns how many were hurt, or -1 without the sap. */
 export function thornBurst(v: Village, her: Vec2): number { if (v.hero.sap < THORN_SAP) return -1; v.hero.sap -= THORN_SAP; let n = scare(v, her, THORN_RANGE + 0.6); for (const r of alive(v)) if (Math.hypot(r.x - her.x, r.z - her.z) <= THORN_RANGE + 0.6) { hurt(v, r, THORN_DMG); n++; } if (lairAt && v.lair.alive && Math.hypot(her.x - lairAt.x, her.z - lairAt.z) <= LAIR_HURT_RANGE) { hurtLair(v, THORN_DMG); n++; } return n; }
 /** Her root bind: the nearest within ROOT_RANGE held for ROOT_S, for ROOT_SAP. Returns it, null when none, or undefined without the sap. */
-export function rootBind(v: Village, her: Vec2): Raider | null | undefined { if (v.hero.sap < ROOT_SAP) return undefined; if (scare(v, her, ROOT_RANGE + 0.6)) v.hero.sap -= ROOT_SAP; let best: Raider | null = null, bd = Infinity; for (const r of bindable(v)) { const d = Math.hypot(r.x - her.x, r.z - her.z); if (d <= ROOT_RANGE + 0.6 && d < bd) { best = r; bd = d; } } if (!best) return null; v.hero.sap -= ROOT_SAP; best.rooted = ROOT_S; best.aggro = Math.max(best.aggro, DY_AGGRO_S); return best; }
+export function rootBind(v: Village, her: Vec2): Raider | null | undefined { if (v.hero.sap < ROOT_SAP) return undefined; if (scare(v, her, ROOT_RANGE + 0.6)) v.hero.sap -= ROOT_SAP; let best: Raider | null = null, bd = Infinity; for (const r of bindable(v)) { const d = Math.hypot(r.x - her.x, r.z - her.z); if (d <= ROOT_RANGE + 0.6 && d < bd) { best = r; bd = d; } } if (!best) return null; v.hero.sap -= ROOT_SAP; v.hero.holding = best.id; best.rooted = ROOT_S; best.aggro = Math.max(best.aggro, DY_AGGRO_S); return best; }
 /** Advance the village by whole ticks. Deterministic: the only randomness is the seeded stream, drawn in a fixed order. */
 export function advance(v: Village, ticks: number): void {
   for (let n = 0; n < ticks; n++) {
@@ -461,7 +472,7 @@ export function advance(v: Village, ticks: number): void {
     if (t === RAID_TICK && v.raidDay < dayOf(v.tick) && !raidsPaused(v)) spawnRaid(v, rand);
     if (t === SNATCH_TICK && v.snatchDay < dayOf(v.tick) && !raidsPaused(v)) spawnSnatchers(v);
     // At the lair an infant becomes a Dark Young.
-    for (let i = v.brood.length - 1; i >= 0; i--) if (v.brood[i].due <= v.tick) { const ref = v.brood.splice(i, 1)[0].infant; v.bred.push(ref); event(v, `a Dark Young is born of ${hobbitById(ref.id).name}`); }
+    for (let i = v.brood.length - 1; i >= 0; i--) if (v.brood[i].due <= v.tick) { const ref = v.brood.splice(i, 1)[0].infant; v.bred.push(ref); event(v, `A Dark Young is born of ${hobbitById(ref.id).name}`, true); }
     let praying = 0, nell = false;
     for (const s of v.hobbits) {
       const h = hobbitById(s.id), house = homeOf(s), kind = YIELD_OF[h.keeps] ?? null;
@@ -559,7 +570,7 @@ export function advance(v: Village, ticks: number): void {
   }
 }
 /** Something to tell: kept to the last EVENTS_KEPT. */
-function event(v: Village, text: string): void { v.events.push({ tick: v.tick, text }); if (v.events.length > EVENTS_KEPT) v.events.shift(); }
+function event(v: Village, text: string, banner = false): void { v.events.push({ tick: v.tick, text, ...(banner ? { banner } : {}) }); if (v.events.length > EVENTS_KEPT) v.events.shift(); }
 /** A death: the house empties of them, the name is gone from the living, what they carried is lost, the others mourn a day. */
 function die(v: Village, s: HobbitState): void {
   v.hobbits.splice(v.hobbits.indexOf(s), 1); v.dead.push({ id: s.id, tick: v.tick }); v.mourningUntil = v.tick + MOURN_TICKS; const name = hobbitById(s.id).name;
@@ -620,7 +631,7 @@ export function parseVillage(raw: string | null): Village {
     for (const which of ['take', 'lastTake'] as const) if (p[which] && typeof p[which] === 'object') for (const k of STORE_LIST) v[which][k] = num(p[which][k], 0, 1e4, 0);
     const carryOf = (c: unknown): Carry | null => { const k = c as Carry; return k && STORE_LIST.includes(k.kind) && Number.isFinite(k.n) && k.n > 0 ? { kind: k.kind, n: Math.min(STACK_CAP, Math.floor(k.n)) } : null; };
     v.stack = carryOf(p.stack);
-    if (p.hero && typeof p.hero === 'object') { const pk = p.hero.perks && typeof p.hero.perks === 'object' ? p.hero.perks : {}; v.hero.perks = { vigor: Math.floor(num(pk.vigor, 0, LEVEL_CAP, 0)), strike: Math.floor(num(pk.strike, 0, LEVEL_CAP, 0)), sap: Math.floor(num(pk.sap, 0, LEVEL_CAP, 0)) }; v.hero.xp = num(p.hero.xp, 0, 1e6, 0); v.hero.level = Math.min(LEVEL_CAP, Math.max(1, Math.floor(num(p.hero.level, 1, LEVEL_CAP, 1)))); v.hero.choices = Math.floor(num(p.hero.choices, 0, LEVEL_CAP, 0)); v.hero.vigor = num(p.hero.vigor, 0, vigorMax(v.hero), vigorMax(v.hero)); v.hero.sap = num(p.hero.sap, 0, sapMax(v.hero), sapMax(v.hero)); v.hero.faint = num(p.hero.faint, 0, FAINT_S, 0); v.hero.calm = num(p.hero.calm, 0, 1e6, 0); }
+    if (p.hero && typeof p.hero === 'object') { const pk = p.hero.perks && typeof p.hero.perks === 'object' ? p.hero.perks : {}; v.hero.perks = { vigor: Math.floor(num(pk.vigor, 0, LEVEL_CAP, 0)), strike: Math.floor(num(pk.strike, 0, LEVEL_CAP, 0)), sap: Math.floor(num(pk.sap, 0, LEVEL_CAP, 0)) }; v.hero.xp = num(p.hero.xp, 0, 1e6, 0); v.hero.level = Math.min(LEVEL_CAP, Math.max(1, Math.floor(num(p.hero.level, 1, LEVEL_CAP, 1)))); v.hero.choices = Math.floor(num(p.hero.choices, 0, LEVEL_CAP, 0)); v.hero.vigor = num(p.hero.vigor, 0, vigorMax(v.hero), vigorMax(v.hero)); v.hero.sap = num(p.hero.sap, 0, sapMax(v.hero), sapMax(v.hero)); v.hero.faint = num(p.hero.faint, 0, FAINT_S, 0); v.hero.holding = Math.floor(num(p.hero.holding, -1, 1e6, -1)); v.hero.calm = num(p.hero.calm, 0, 1e6, 0); }
     if (p.lair && typeof p.lair === 'object') { v.lair.hp = num(p.lair.hp, 0, LAIR_HP, LAIR_HP); v.lair.alive = p.lair.alive !== false; v.lair.slainDay = num(p.lair.slainDay, -99, 1e6, -99); }
     // D3: the infants out of their houses and the snatchers abroad.
     function refOf(x: unknown): InfantRef | null { const r = x as InfantRef; return r && typeof r.id === 'string' && NEWCOMERS.some(n => n.id === r.id) ? { id: r.id, home: Math.floor(num(r.home, 0, HOUSES.length - 1, 0)), born: num(r.born, -1e9, 1e9, 0) } : null; }
@@ -652,11 +663,11 @@ export function parseVillage(raw: string | null): Village {
     }
     if (!v.hobbits.length) return freshVillage();
     v.wellFedDays = Math.floor(num(p.wellFedDays, 0, 1e6, 0)); v.dayMissed = p.dayMissed === true; v.mourningUntil = num(p.mourningUntil, 0, 1e9, 0);
-    if (Array.isArray(p.events)) v.events = p.events.slice(-EVENTS_KEPT).filter((e: unknown) => e && typeof (e as VillageEvent).text === 'string').map((e: VillageEvent) => ({ tick: num(e.tick, 0, 1e9, 0), text: e.text.slice(0, 60) }));
+    if (Array.isArray(p.events)) v.events = p.events.slice(-EVENTS_KEPT).filter((e: unknown) => e && typeof (e as VillageEvent).text === 'string').map((e: VillageEvent) => ({ tick: num(e.tick, 0, 1e9, 0), text: e.text.slice(0, 90), ...(e.banner === true ? { banner: true } : {}) }));
     return v;
   } catch { return freshVillage(); }
 }
-export const serializeVillage = (v: Village): string => JSON.stringify({ seed: v.seed, tick: v.tick, taken: v.taken, returned: v.returned, snatchDay: v.snatchDay, carried: v.carried, bred: v.bred, brood: v.brood, dropped: v.dropped, snatchers: v.snatchers, melted: v.melted, darkMealsToday: v.darkMealsToday, dead: v.dead, wellFedDays: v.wellFedDays, dayMissed: v.dayMissed, mourningUntil: v.mourningUntil, events: v.events, stores: v.stores, land: { ...v.land, berries: Math.round(v.land.berries * 100) / 100, crops: v.land.crops.map(c => Math.round(c * 1000) / 1000) }, fireWood: Math.round(v.fireWood * 100) / 100, take: v.take, lastTake: v.lastTake, prayer: Math.round(v.prayer * 1000) / 1000, prayed: Math.round(v.prayed * 1000) / 1000, stack: v.stack, hero: { vigor: Math.round(v.hero.vigor * 10) / 10, sap: Math.round(v.hero.sap * 10) / 10, faint: Math.round(v.hero.faint * 100) / 100, calm: Math.round(v.hero.calm * 100) / 100, xp: v.hero.xp, level: v.hero.level, choices: v.hero.choices, perks: v.hero.perks }, lair: { hp: Math.round(v.lair.hp * 10) / 10, alive: v.lair.alive, slainDay: v.lair.slainDay }, raidDay: v.raidDay, slain: v.slain, eaten: v.eaten, raiders: v.raiders.map(r => ({ ...r, x: Math.round(r.x * 100) / 100, z: Math.round(r.z * 100) / 100, heading: Math.round(r.heading * 1000) / 1000, hp: Math.round(r.hp * 10) / 10, aggro: Math.round(r.aggro * 100) / 100, rooted: Math.round(r.rooted * 100) / 100, gone: Math.round(r.gone * 100) / 100 })), spirits: v.spirits.map(s => ({ ...s, x: Math.round(s.x * 100) / 100, z: Math.round(s.z * 100) / 100, heading: Math.round(s.heading * 1000) / 1000 })), hobbits: v.hobbits.map(s => ({ ...s, x: Math.round(s.x * 100) / 100, z: Math.round(s.z * 100) / 100, heading: Math.round(s.heading * 1000) / 1000, hunger: Math.round(s.hunger * 1000) / 1000 })) });
+export const serializeVillage = (v: Village): string => JSON.stringify({ seed: v.seed, tick: v.tick, taken: v.taken, returned: v.returned, snatchDay: v.snatchDay, carried: v.carried, bred: v.bred, brood: v.brood, dropped: v.dropped, snatchers: v.snatchers, melted: v.melted, darkMealsToday: v.darkMealsToday, dead: v.dead, wellFedDays: v.wellFedDays, dayMissed: v.dayMissed, mourningUntil: v.mourningUntil, events: v.events, stores: v.stores, land: { ...v.land, berries: Math.round(v.land.berries * 100) / 100, crops: v.land.crops.map(c => Math.round(c * 1000) / 1000) }, fireWood: Math.round(v.fireWood * 100) / 100, take: v.take, lastTake: v.lastTake, prayer: Math.round(v.prayer * 1000) / 1000, prayed: Math.round(v.prayed * 1000) / 1000, stack: v.stack, hero: { vigor: Math.round(v.hero.vigor * 10) / 10, sap: Math.round(v.hero.sap * 10) / 10, faint: Math.round(v.hero.faint * 100) / 100, calm: Math.round(v.hero.calm * 100) / 100, xp: v.hero.xp, level: v.hero.level, choices: v.hero.choices, perks: v.hero.perks, holding: v.hero.holding }, lair: { hp: Math.round(v.lair.hp * 10) / 10, alive: v.lair.alive, slainDay: v.lair.slainDay }, raidDay: v.raidDay, slain: v.slain, eaten: v.eaten, raiders: v.raiders.map(r => ({ ...r, x: Math.round(r.x * 100) / 100, z: Math.round(r.z * 100) / 100, heading: Math.round(r.heading * 1000) / 1000, hp: Math.round(r.hp * 10) / 10, aggro: Math.round(r.aggro * 100) / 100, rooted: Math.round(r.rooted * 100) / 100, gone: Math.round(r.gone * 100) / 100 })), spirits: v.spirits.map(s => ({ ...s, x: Math.round(s.x * 100) / 100, z: Math.round(s.z * 100) / 100, heading: Math.round(s.heading * 1000) / 1000 })), hobbits: v.hobbits.map(s => ({ ...s, x: Math.round(s.x * 100) / 100, z: Math.round(s.z * 100) / 100, heading: Math.round(s.heading * 1000) / 1000, hunger: Math.round(s.hunger * 1000) / 1000 })) });
 
 // Hulda's ways through the meadow. Grass roots are everywhere she can walk: a free medium, faster than
 // running, shown as a bulge under the grass. Tree roots join the trees of the copse and the wood: fixed

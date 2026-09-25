@@ -151,28 +151,30 @@ test('left alone the village holds: eight days on, three meals each every day, t
 });
 
 import { stepRaiders, strike, thornBurst, rootBind, raidSize, fullestStore, RAID_TICK, RAID_END, DY_HP, DY_FILL, STRIKE_DMG, THORN_DMG, THORN_SAP, ROOT_SAP, ROOT_S, DY_BITE, VIGOR_MAX, SAP_MAX, FAINT_VIGOR, TICKS_PER_SECOND as TPS, storeSpot as spotOf, STORES as ST } from '../src/villageModel';
+/** A village whose Dark Young exist (Noah: none without an infant inside): n infants stolen and bred at the lair. */
+const freshR = (seed: number, n: number) => { const v = freshV(seed); for (let i = 0; i < n; i++) v.bred.push({ id: NEWCOMERS[NEWCOMERS.length - 1 - i].id, home: 0, born: 0 }); return v; };
 test('the Dark Young come after nightfall while the village sleeps, go to the fullest store, eat their fill and leave before dawn; more of them as the days go on; a jump over a night leaves none behind', () => {
-  const v = freshV(1); step(v, RAID_TICK + 1); assert.equal(v.raiders.length, raidSize(0), 'the first night brings one'); assert.ok(v.hobbits.every(s => s.inside), 'everyone asleep');
+  const v = freshR(1, 1); step(v, RAID_TICK + 1); assert.equal(v.raiders.length, raidSize(0), 'the first night brings one'); assert.ok(v.hobbits.every(s => s.inside), 'everyone asleep');
   const r = v.raiders[0]; assert.ok(Math.hypot(r.x, r.z) > 60, 'from the wood\'s edge'); assert.equal(r.state, 'coming');
   const s0 = { ...v.stores }; let arrived = -1; for (let t = RAID_TICK + 1; t < DT; t++) { step(v, 1); stepRaiders(v, 1 / TPS, null); if (arrived < 0 && v.raiders[0]?.state === 'eating') arrived = t; }
   assert.ok(arrived > 0 && arrived < RAID_TICK + 200, `it reaches a store within the evening (${arrived})`); assert.equal(v.eaten, DY_FILL, 'it eats its fill'); assert.ok(STORE_LIST.some(k => v.stores[k] < s0[k]), 'from the stores'); assert.equal(v.stores.water, s0.water, 'never the trough');
   assert.equal(v.raiders.length, 0, 'gone by dawn'); assert.equal(fullestStore(freshV(1)), 'wood', 'the woodpile is the fullest by share on the first morning');
   assert.equal(raidSize(0), 1); assert.equal(raidSize(2), 2); assert.equal(raidSize(9), 3, 'never more than three');
-  const w = freshV(1); step(w, 3 * DT + RAID_TICK + 1); assert.equal(w.raiders.length, raidSize(3), 'nights jumped over leave nothing behind');
+  const w = freshR(1, 2); step(w, 3 * DT + RAID_TICK + 1); assert.equal(w.raiders.length, raidSize(3), 'nights jumped over leave nothing behind');
   const late = freshV(1); step(late, RAID_END + 5); stepRaiders(late, 1, null); assert.ok(late.raiders.every(r => r.state === 'leaving'), 'at the end of the night they all leave');
 });
 test('fighting: a cheap strike ahead of her, a thorn burst round her and a root bind that holds one, the specials on sap; struck, a Dark Young hunts and bites her vigor; at none she faints and wakes weakened, never dead', () => {
-  const v = freshV(1); step(v, 3 * DT + RAID_TICK + 1); for (let i = 0; i < 400 && !v.raiders.some(r => r.state === 'eating'); i++) stepRaiders(v, 0.25, null); assert.ok(v.raiders.length >= 2 && v.raiders.some(r => r.state === 'eating'), `two on the fourth night, one at a store (${v.raiders.map(r => r.state)})`);
+  const v = freshR(1, 2); step(v, 3 * DT + RAID_TICK + 1); for (let i = 0; i < 400 && !v.raiders.some(r => r.state === 'eating'); i++) stepRaiders(v, 0.25, null); assert.ok(v.raiders.length >= 2 && v.raiders.some(r => r.state === 'eating'), `two on the fourth night, one at a store (${v.raiders.map(r => r.state)})`);
   v.raiders.sort((a, b) => (a.state === 'eating' ? -1 : 0) - (b.state === 'eating' ? -1 : 0)); const r0 = v.raiders[0], her = spotOf(ST[r0.target!]); const face = () => { const d = Math.hypot(r0.x - her.x, r0.z - her.z); return { fx: (r0.x - her.x) / d, fz: (r0.z - her.z) / d }; };
   const away = strike(v, { x: her.x + 20, z: her.z + 20 }, 1, 0); assert.equal(away, null, 'out of reach strikes nothing');
   const hit = strike(v, her, face().fx, face().fz); assert.equal(hit, r0, 'the nearest ahead is struck'); assert.equal(r0.hp, DY_HP - STRIKE_DMG); assert.equal(r0.state, 'eating'); stepRaiders(v, 0.1, her); assert.equal(r0.state, 'hunting', 'and it turns on her');
   let bites = 0, vig = v.hero.vigor; for (let i = 0; i < 40 && r0.state !== 'retreating'; i++) { stepRaiders(v, 0.45, her); if (v.hero.vigor < vig) { bites++; vig = v.hero.vigor; } const f = face(); strike(v, her, f.fx, f.fz); }
   assert.equal(r0.state, 'retreating', 'six strikes beat it, and it retreats (D2: it does not die)'); assert.equal(r0.hp, 0); assert.ok(bites >= 1 && v.hero.vigor < VIGOR_MAX, `it bit her on the way (${bites})`); assert.equal(v.slain, 0, 'nothing slain by strikes alone'); assert.equal(strike(v, { x: r0.x, z: r0.z }, 1, 0), null, 'a strike cannot reach the beaten');
-  const b = freshV(1); step(b, 3 * DT + RAID_TICK + 1); for (let i = 0; i < 100; i++) stepRaiders(b, 0.25, null); const other = b.raiders[0], hp0 = other.hp, sap0 = b.hero.sap, hurtN = thornBurst(b, { x: other.x, z: other.z }); assert.ok(hurtN >= 1, 'the burst hurts all round her'); assert.equal(b.hero.sap, sap0 - THORN_SAP); assert.equal(other.hp, hp0 - THORN_DMG, 'the burst\'s damage');
+  const b = freshR(1, 1); step(b, 3 * DT + RAID_TICK + 1); for (let i = 0; i < 100; i++) stepRaiders(b, 0.25, null); const other = b.raiders[0], hp0 = other.hp, sap0 = b.hero.sap, hurtN = thornBurst(b, { x: other.x, z: other.z }); assert.ok(hurtN >= 1, 'the burst hurts all round her'); assert.equal(b.hero.sap, sap0 - THORN_SAP); assert.equal(other.hp, hp0 - THORN_DMG, 'the burst\'s damage');
   const bound = rootBind(b, { x: other.x + 2, z: other.z }); assert.equal(bound, other); assert.equal(other.rooted, ROOT_S); assert.equal(b.hero.sap, sap0 - THORN_SAP - ROOT_SAP); const px = other.x; stepRaiders(b, 1, { x: other.x + 2, z: other.z }); assert.equal(other.x, px, 'rooted, it cannot move');
   b.hero.sap = 0; assert.equal(thornBurst(b, her), -1, 'no sap, no burst'); assert.equal(rootBind(b, her), undefined, 'no sap, no bind'); stepRaiders(b, 5, null); assert.ok(b.hero.sap > 0, 'sap refills');
   // Bitten down: faint, then up again at FAINT_VIGOR; the dead fade.
-  const u = freshV(1); step(u, RAID_TICK + 1); for (let i = 0; i < 400; i++) stepRaiders(u, 0.25, null); const foe = u.raiders[0], at = { x: foe.x, z: foe.z }; strike(u, at, 1, 0); u.hero.vigor = DY_BITE; for (let i = 0; i < 20 && u.hero.faint === 0; i++) stepRaiders(u, 0.5, at);
+  const u = freshR(1, 1); step(u, RAID_TICK + 1); for (let i = 0; i < 400; i++) stepRaiders(u, 0.25, null); const foe = u.raiders[0], at = { x: foe.x, z: foe.z }; strike(u, at, 1, 0); u.hero.vigor = DY_BITE; for (let i = 0; i < 20 && u.hero.faint === 0; i++) stepRaiders(u, 0.5, at);
   assert.ok(u.hero.faint > 0 && u.hero.vigor === 0, 'bitten to nothing she faints'); for (let i = 0; i < 10; i++) stepRaiders(u, 0.5, null); assert.equal(u.hero.faint, 0); assert.ok(u.hero.vigor >= FAINT_VIGOR && u.hero.vigor < FAINT_VIGOR + 8, `and wakes weakened, never dead (${u.hero.vigor})`);
   for (let i = 0; i < 40; i++) stepRaiders(v, 1, null); assert.ok(!v.raiders.some(r => r.state === 'retreating'), 'the beaten are gone, home to their mother'); assert.equal(v.slain, 0);
   const back = par(ser(v)); assert.equal(back.raiders.length, v.raiders.length); assert.equal(back.hero.vigor, Math.round(v.hero.vigor * 10) / 10, 'her vigor and the raid survive a save'); assert.ok(SAP_MAX > THORN_SAP + ROOT_SAP);
@@ -215,7 +217,7 @@ test('levelling: kills count, a level at each threshold up to five, a choice eac
   const back = par(ser(v)); assert.deepEqual(back.hero.perks, v.hero.perks); assert.equal(back.hero.level, v.hero.level); assert.equal(back.hero.choices, 1);
   // The forest and the lair, placed for the test.
   setLair(null); assert.equal(forestDepth(0, 0), 0, 'no lair, no forest'); setLair({ x: 300, z: 300, radius: 75 }); assert.equal(forestDepth(300, 300), 1); assert.ok(forestDepth(340, 300) > 0 && forestDepth(340, 300) < 1); assert.equal(forestDepth(400, 300), 0);
-  const w = freshV(1); const v0 = w.hero.vigor; stepRaiders(w, 2, { x: 300, z: 300 }); assert.ok(Math.abs(v0 - w.hero.vigor - FOREST_DRAIN * 2) < 1e-6, 'drained at the centre'); stepRaiders(w, 2, { x: 0, z: 0 }); assert.ok(w.hero.vigor <= v0 - FOREST_DRAIN * 2 + 1e-6, 'and not yet refilled (no calm)');
+  const w = freshR(1, 3); const v0 = w.hero.vigor; stepRaiders(w, 2, { x: 300, z: 300 }); assert.ok(Math.abs(v0 - w.hero.vigor - FOREST_DRAIN * 2) < 1e-6, 'drained at the centre'); stepRaiders(w, 2, { x: 0, z: 0 }); assert.ok(w.hero.vigor <= v0 - FOREST_DRAIN * 2 + 1e-6, 'and not yet refilled (no calm)');
   assert.equal(w.lair.woke, false); const near = { x: 300 + LAIR_WAKE - 2, z: 300 }; stepRaiders(w, 0.1, near); assert.ok(w.lair.woke, 'it wakes near her'); const n0 = w.raiders.length; stepRaiders(w, LAIR_SPAWN_S + 0.1, near); assert.equal(w.raiders.length, n0 + 1, 'a Dark Young born'); assert.equal(w.raiders[w.raiders.length - 1].state, 'hunting');
   const close = { x: 302, z: 300 }; const vb = w.hero.vigor; for (let i = 0; i < 4; i++) stepRaiders(w, LAIR_SWEEP_S / 2, close); assert.ok(w.hero.vigor <= vb - LAIR_SWEEP + 1e-6, 'swept within reach');
   const u = freshV(1); u.hero.vigor = 1000; const hp0 = u.lair.hp; assert.equal(strike(u, { x: 300 + LAIR_HURT_RANGE - 1, z: 300 }, 1, 0), null, 'nothing else to strike'); assert.equal(u.lair.hp, hp0 - SD, 'the strike lands on the lair'); assert.ok(thornBurst(u, { x: 300, z: 300 }) >= 1); assert.equal(u.lair.hp, hp0 - SD - THORN_DMG);
@@ -250,7 +252,7 @@ test('D1: fed through every meal for days, a child is born into a house with roo
 
 // D2: the spoiled land and the retreat.
 test('D2: fed, a Dark Young devours a place: spoiled for a day, nothing to take, nothing grows, the leavings on the heap; clean again a day on', () => {
-  const v = freshV(2); step(v, RAID_TICK + 1); v.stores.berries = 2; v.stores.milk = 0; v.stores.grain = 0;
+  const v = freshR(2, 2); step(v, RAID_TICK + 1); v.stores.berries = 2; v.stores.milk = 0; v.stores.grain = 0;
   let devoured: string | null = null; for (let i = 0; i < 1200 && !devoured; i++) { stepRaiders(v, 0.25, null); for (const k of YIELD_SITES) if (isSpoiled(v, k)) devoured = k; }
   assert.ok(devoured, `a place devoured (${v.raiders.map(r => r.state)})`); const site = devoured as 'thicket'; assert.ok(v.stores.dark >= DARK_PER_SITE, `their leavings on the heap (${v.stores.dark})`); assert.ok(v.events.some(e => e.text.endsWith('is spoiled')));
   const kind = ({ thicket: 'berries', copse: 'wood', field: 'grain', pen: 'milk' } as const)[site]; assert.equal(landStock(v, kind), 0, 'nothing to take'); assert.equal(collect(v, site), false, 'her collecting refused');
@@ -268,15 +270,15 @@ test('D2: the leavings are eaten only when nothing else is left, and breed; the 
 test('D2: beaten it retreats flat and fast for the lair; rooted with her beside it, it is held for sap, withers at HOLD_MELT_S and melts, counted as slain; at daybreak a held one melts in the sun', () => {
   setLair({ x: 300, z: 0, radius: 75 });
   try {
-    const v = freshV(1); step(v, RAID_TICK + 1); for (let i = 0; i < 400; i++) stepRaiders(v, 0.25, null); const r = v.raiders[0]; r.hp = STRIKE_DMG; const her = { x: r.x - 1, z: r.z }; strike(v, her, 1, 0); assert.equal(r.state, 'retreating');
+    const v = freshR(1, 1); step(v, RAID_TICK + 1); for (let i = 0; i < 400; i++) stepRaiders(v, 0.25, null); const r = v.raiders[0]; r.hp = STRIKE_DMG; const her = { x: r.x - 1, z: r.z }; strike(v, her, 1, 0); assert.equal(r.state, 'retreating');
     const d0 = Math.hypot(r.x - 300, r.z); stepRaiders(v, 1, her); const d1 = Math.hypot(r.x - 300, r.z); assert.ok(d0 - d1 > DY_FLEE * 0.9, `it runs for the lair at DY_FLEE (${(d0 - d1).toFixed(1)} m in a second)`);
     const by = { x: r.x - 1, z: r.z }; v.hero.sap = 100; assert.equal(rootBind(v, by), r, 'the roots can hold the beaten'); const sap0 = v.hero.sap, x0 = r.x;
     stepRaiders(v, ROOT_S * 2, by); assert.ok(r.rooted > 0 && r.x === x0, 'held past the bind\'s time while she stands by it'); assert.ok(v.hero.sap < sap0, 'for sap');
     let t = 0; while (r.state === 'retreating' && t < HOLD_MELT_S + 5) { stepRaiders(v, 0.5, by); t += 0.5; } assert.equal(r.state, 'melting', 'held long enough it melts'); assert.equal(v.slain, 1); assert.equal(v.melted, 1); assert.equal(v.hero.xp, 1); assert.ok(v.events.some(e => e.text.includes('melts')));
     for (let i = 0; i < 20; i++) stepRaiders(v, 1, null); assert.ok(!v.raiders.includes(r), 'and is gone');
-    const w = freshV(1); step(w, RAID_TICK + 1); for (let i = 0; i < 400; i++) stepRaiders(w, 0.25, null); const q = w.raiders[0]; q.hp = 1; strike(w, { x: q.x - 1, z: q.z }, 1, 0); rootBind(w, { x: q.x - 1, z: q.z }); stepRaiders(w, 1, { x: q.x - 1, z: q.z }); assert.ok(q.rooted > 0);
+    const w = freshR(1, 1); step(w, RAID_TICK + 1); for (let i = 0; i < 400; i++) stepRaiders(w, 0.25, null); const q = w.raiders[0]; q.hp = 1; strike(w, { x: q.x - 1, z: q.z }, 1, 0); rootBind(w, { x: q.x - 1, z: q.z }); stepRaiders(w, 1, { x: q.x - 1, z: q.z }); assert.ok(q.rooted > 0);
     step(w, DT - (w.tick % DT) + 1); assert.equal(w.slain, 1, 'held at daybreak, it melts in the sun'); assert.ok(w.raiders.every(x => x.state === 'melting'));
-    const u = freshV(1); step(u, RAID_TICK + 1); for (let i = 0; i < 400; i++) stepRaiders(u, 0.25, null); const z = u.raiders[0]; z.hp = 1; strike(u, { x: z.x - 1, z: z.z }, 1, 0); rootBind(u, { x: z.x - 1, z: z.z }); stepRaiders(u, ROOT_S + 1, null); assert.equal(z.rooted, 0, 'away from her the bind runs down'); assert.equal(z.state, 'retreating');
+    const u = freshR(1, 1); step(u, RAID_TICK + 1); for (let i = 0; i < 400; i++) stepRaiders(u, 0.25, null); const z = u.raiders[0]; z.hp = 1; strike(u, { x: z.x - 1, z: z.z }, 1, 0); rootBind(u, { x: z.x - 1, z: z.z }); stepRaiders(u, ROOT_S + 1, null); assert.equal(z.rooted, 0, 'away from her the bind runs down'); assert.equal(z.state, 'retreating');
     void HOLD_RANGE; void HOLD_SAP;
   } finally { setLair(null); }
 });
@@ -289,11 +291,11 @@ test('D3: no infant, no snatcher; with one, a snatcher comes out of the lair, ta
     const none = freshV(4); step(none, SNATCH_TICK + 2); assert.equal(none.snatchers.length, 0, 'no infant, no snatcher');
     const v = freshV(4); assert.ok(bear(v)); const baby = v.hobbits.find(s => s.stage === 'infant')!; step(v, SNATCH_TICK + 2); assert.equal(v.snatchers.length, 1, 'one snatcher when there is an infant');
     const n = v.snatchers[0]; assert.ok(Math.hypot(n.x - 300, n.z) < 5, 'out of the lair');
-    let told = false; for (let i = 0; i < 400 && !n.infant; i++) { stepRaiders(v, 0.25, null); told ||= v.events.some(e => e.text.includes('goats are bleating')); }
+    let told = false; for (let i = 0; i < 400 && !n.infant; i++) { stepRaiders(v, 0.25, null); told ||= v.events.some(e => e.banner && e.text.includes('goats are bleating')); }
     assert.equal(n.infant?.id, baby.id, 'it has the infant'); assert.ok(told, 'the goats told of it'); assert.ok(!v.hobbits.some(s => s.id === baby.id), 'gone from its house'); assert.ok(!v.dead.some(d => d.id === baby.id), 'not dead'); assert.equal(v.taken, 1); assert.ok(v.events.some(e => e.text.endsWith('is taken in the night')));
     assert.ok(takenIds(v).includes(baby.id) && nextNewcomer(v)?.id !== baby.id, 'its name is not born again while it is out');
     for (let i = 0; i < 400 && v.snatchers.length; i++) stepRaiders(v, 0.25, null); assert.equal(v.brood.length, 1, 'kept at the lair'); assert.ok(SNATCH_PACE >= 9);
-    step(v, GESTATION_TICKS + 1); assert.equal(v.bred.length, 1, 'a Dark Young is born of it'); assert.ok(v.events.some(e => e.text.startsWith('a Dark Young is born of')));
+    step(v, GESTATION_TICKS + 1); assert.equal(v.bred.length, 1, 'a Dark Young is born of it'); assert.ok(v.events.some(e => e.text.toLowerCase().startsWith('a dark young is born of')));
     const raid0 = v.raiders.length; step(v, (DT - (v.tick % DT)) + RAID_TICK + 1); const withIt = v.raiders.filter(r => r.infant?.id === baby.id); assert.equal(withIt.length, 1, `it raids with the rest (${raid0} → ${v.raiders.length})`);
     const back = par(ser(v)); assert.equal(ser(back), ser(v), 'the brood and the bred survive a save');
   } finally { setLair(null); }
@@ -311,5 +313,31 @@ test('D3: struck, a snatcher drops the infant and runs; she carries it home to i
     step(w, RAID_TICK + 1); const r = w.raiders.find(x => x.infant)!; assert.ok(r, 'the bred one raids'); r.hp = 1; strike(w, { x: r.x - 1, z: r.z }, 1, 0); rootBind(w, { x: r.x - 1, z: r.z }); w.hero.sap = 100;
     for (let t = 0; t < 70 && r.state !== 'melting'; t += 0.5) stepRaiders(w, 0.5, { x: r.x - 1, z: r.z });
     assert.equal(r.state, 'melting'); assert.equal(w.bred.length, 0); assert.equal(w.dropped[0]?.infant.id, b2.id, 'its infant lies where it melted');
+  } finally { setLair(null); }
+});
+
+// D3.1 (Noah's notes): no Dark Young without a stolen infant; one hold at a time; the lair delved.
+import { atHome, broodSpot, BROOD_RING, LAIR_REACH as REACH } from '../src/villageModel';
+test('D3.1: no infant stolen, no raid and no brood at the lair; every Dark Young carries an infant', () => {
+  setLair({ x: 300, z: 0, radius: 75 });
+  try {
+    const v = freshV(1); step(v, 5 * DT + RAID_TICK + 1); for (let i = 0; i < 40; i++) stepRaiders(v, 0.25, { x: 300 + 5, z: 0 }); assert.equal(v.raiders.length, 0, 'no Dark Young at all');
+    const w = freshR(1, 2); step(w, RAID_TICK + 1); assert.equal(w.raiders.length, 2); assert.ok(w.raiders.every(r => r.infant), 'each carries its infant'); assert.equal(atHome(w).length, 0, 'none left at home');
+    const u = freshR(1, 1); u.hero.vigor = 1e4; for (let i = 0; i < 200; i++) stepRaiders(u, 0.25, { x: 305, z: 0 }); assert.equal(u.raiders.length, 1, 'the lair wakes only what it has bred'); assert.ok(u.raiders[0].infant);
+  } finally { setLair(null); }
+});
+test('D3.1: one hold at a time: binding another lets the first go; sap spent, the hold breaks and it tears free (told)', () => {
+  const v = freshR(1, 2); step(v, RAID_TICK + 1); const [a, b] = v.raiders; a.x = 0; a.z = 0; b.x = 2; b.z = 0; a.state = b.state = 'retreating'; a.hp = b.hp = 0;
+  const her = { x: 1, z: 0 }; v.hero.sap = 100; rootBind(v, { x: -0.5, z: 0 }); assert.equal(v.hero.holding, a.id); rootBind(v, { x: 2.5, z: 0 }); assert.equal(v.hero.holding, b.id, 'the second bind takes the hold');
+  stepRaiders(v, ROOT_S + 1, her); assert.ok(b.rooted > 0, 'the held one stays'); assert.equal(a.rooted, 0, 'the other ran down and is free');
+  v.hero.sap = 1; stepRaiders(v, 1, her); stepRaiders(v, 0.1, her); assert.equal(v.hero.holding, -1, 'sap spent, the hold breaks'); assert.ok(v.events.some(e => e.banner && e.text.includes('tears free')));
+});
+test('D3.1: an infant kept at the lair can be taken back by delving (inside the mother\'s reach), or lies free when she falls', () => {
+  setLair({ x: 300, z: 0, radius: 75 });
+  try {
+    const v = freshV(1); v.brood.push({ infant: { id: NEWCOMERS[3].id, home: 1, born: 0 }, due: 1e9 }, { infant: { id: NEWCOMERS[4].id, home: 2, born: 0 }, due: 1e9 });
+    const p = broodSpot(0)!; assert.ok(Math.abs(Math.hypot(p.x - 300, p.z) - BROOD_RING) < 1e-9 && BROOD_RING < REACH, 'within the mother\'s reach');
+    assert.equal(carryInfant(v, { x: p.x + 0.3, z: p.z }), 'picked'); assert.equal(v.carried?.id, NEWCOMERS[3].id); assert.equal(v.brood.length, 1); assert.ok(v.events.some(e => e.banner && e.text.includes('back from the mother')));
+    v.lair.hp = 1; strike(v, { x: 300, z: 0 }, 1, 0); assert.equal(v.lair.alive, false); assert.equal(v.brood.length, 0); assert.equal(v.dropped.length, 1, 'the rest lie free'); assert.ok(v.events.some(e => e.text.includes('lie free')));
   } finally { setLair(null); }
 });
