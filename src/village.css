@@ -21,3 +21,4 @@
 
 #portal{position:fixed;z-index:8;left:14px;bottom:calc(env(safe-area-inset-bottom,0px) + 128px);display:flex;flex-direction:column;gap:5px;background:#0b1918cc;padding:8px;border-radius:12px;width:min(240px,62vw);max-height:50vh;overflow:auto}#portal .title{font:12px/1.2 Georgia,serif;color:#e8dcff;text-align:center;margin-bottom:2px}#portal .list{display:flex;flex-direction:column;gap:5px}#portal button{min-height:0;height:34px;padding:0 10px;font:13px/1 system-ui;color:#f1edcf;background:#2f4a30;border:0;border-radius:8px;display:flex;justify-content:space-between;align-items:center;text-align:left}#portal button i{font-style:normal;color:#d8f07a;font-size:11px}#portal button[data-stay]{background:#3a3a30}#portal[hidden]{display:none}
 #labels .name.way{color:#f0d060;font-size:12px}
+#timectl button.wide{grid-column:1 / -1;background:#4a2f2f}

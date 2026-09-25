@@ -19,7 +19,7 @@ async function doubleTapStick(page){await page.evaluate(()=>{const w=document.ge
 const touch=(id,x,y)=>({pointerId:id,clientX:x,clientY:y,pointerType:'touch',isPrimary:true,bubbles:true});
 async function press(page,x,y,holdMs=120){const canvas=page.locator('canvas').first();await canvas.dispatchEvent('pointerdown',touch(7,x,y));await page.waitForTimeout(holdMs);await canvas.dispatchEvent('pointerup',touch(7,x,y));}
 try{
- const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});const errors=[];page.on('pageerror',e=>errors.push(String(e)));page.on('response',r=>{if(r.status()>=400)errors.push(r.status()+' '+r.url());});
+ const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});page.on('dialog',d=>d.accept());const errors=[];page.on('pageerror',e=>errors.push(String(e)));page.on('response',r=>{if(r.status()>=400)errors.push(r.status()+' '+r.url());});
  await page.goto('http://127.0.0.1:4187'+BASE);await page.click('#begin');await page.waitForFunction(()=>window.__village&&window.__village.character.status!=='loading',null,{timeout:120000});
  const character=await v(page,()=>window.__village.character);assert.equal(character.status,'ready',character.error);assert.deepEqual(character.roles,{idle:'idle',walk:'walking',run:'running'});assert.equal(character.hobbitWeights.filter(Boolean).length,8,'the eight hobbits have the clips too');
  assert.equal(await v(page,()=>window.__village.player.view),'third','Third person');assert.equal(await page.locator('#hint, #story, #actions button:visible').count(),0,'no hints');
@@ -122,7 +122,9 @@ try{
  await page.click('#timectl [data-to="noon"]');assert.equal(await v(page,()=>window.__village.tick%1440),330,'to noon');assert.ok((await v(page,()=>window.__village.count('green')))>=0);
  await page.click('#timectl [data-to="dawn"]');assert.equal(await v(page,()=>window.__village.tick),1440,'to the next dawn (a day on)');
  await page.click('#timectl [data-jump="-60"]');assert.equal(await v(page,()=>window.__village.tick),1380,'an hour back, replayed');
- await page.click('#timectl [data-speed="30"]');await page.waitForTimeout(1200);const fast=await v(page,()=>window.__village.tick);assert.ok(fast>=1380+20,`thirty times: ${fast-1380} ticks in a second`);await page.click('#timectl [data-speed="1"]');await page.click('#clock');
+ await page.click('#timectl [data-speed="30"]');await page.waitForTimeout(1200);const fast=await v(page,()=>window.__village.tick);assert.ok(fast>=1380+20,`thirty times: ${fast-1380} ticks in a second`);await page.click('#timectl [data-speed="1"]');
+ // Dev (Noah): the village started over from the panel, its people, stores and spirits back to the first dawn; the panel closes.
+ await v(page,()=>{window.__village.prayer=60;window.__village.summon('thicket');});await page.click('#timectl [data-reset]');await page.waitForTimeout(200);const fresh=await v(page,()=>({tick:window.__village.tick,spirits:window.__village.spirits.length,population:window.__village.population}));assert.deepEqual(fresh,{tick:0,spirits:0,population:8},`started over (${JSON.stringify(fresh)})`);assert.ok(await page.locator('#timectl').isHidden(),'the panel closes');await page.click('#clock');await page.click('#clock');
  await v(page,()=>window.__village.setTick(0));
  // Morning: they are out at their places, walking with the walk clip, names over their heads when near.
  await v(page,()=>{window.__village.advance(200-window.__village.tick);window.__village.player.teleport(0,-5,Math.PI);window.__village.player.pitch=.05;});await page.waitForTimeout(1500);
