@@ -31,17 +31,21 @@ jobs:
       - run: node scripts/test-flow.mjs
       - run: node scripts/test-karst-flow.mjs
       - run: node scripts/test-village.mjs
+      - run: node scripts/test-world.mjs
       - run: npm run build -- --base=/Rootwake/village/
       - run: npm install --no-save --package-lock=false playwright@1.58.2
       - run: npx playwright install --with-deps chromium
       - run: node scripts/browser-village.mjs
         env:
           STUDY_BASE: /Rootwake/village/
+      - run: node scripts/browser-world.mjs
+        env:
+          STUDY_BASE: /Rootwake/village/
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: village-browser-results
-          path: artifacts/village
+          path: artifacts
       - name: Publish the study to its own folder, leaving every other demo untouched
         run: |
           set -euo pipefail
@@ -50,6 +54,7 @@ jobs:
           git worktree add "$study_checkout" origin/gh-pages
           mkdir -p "$study_checkout/village/assets"
           cp dist/village.html "$study_checkout/village/index.html"
+          cp dist/planet.html "$study_checkout/village/planet.html"
           cp dist/assets/* "$study_checkout/village/assets/"
           rm -rf "$study_checkout/village/models"
           cp -r dist/models "$study_checkout/village/models"
