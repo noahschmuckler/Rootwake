@@ -280,3 +280,36 @@ test('D2: beaten it retreats flat and fast for the lair; rooted with her beside 
     void HOLD_RANGE; void HOLD_SAP;
   } finally { setLair(null); }
 });
+
+// D3: the snatchers.
+import { bear, carryInfant, takenIds, nextNewcomer, SNATCH_TICK, GESTATION_TICKS, SNATCH_PACE } from '../src/villageModel';
+test('D3: no infant, no snatcher; with one, a snatcher comes out of the lair, takes it from its house (mourned, not dead), and runs back; at the lair it becomes a Dark Young that raids the next night', () => {
+  setLair({ x: 300, z: 0, radius: 75 });
+  try {
+    const none = freshV(4); step(none, SNATCH_TICK + 2); assert.equal(none.snatchers.length, 0, 'no infant, no snatcher');
+    const v = freshV(4); assert.ok(bear(v)); const baby = v.hobbits.find(s => s.stage === 'infant')!; step(v, SNATCH_TICK + 2); assert.equal(v.snatchers.length, 1, 'one snatcher when there is an infant');
+    const n = v.snatchers[0]; assert.ok(Math.hypot(n.x - 300, n.z) < 5, 'out of the lair');
+    let told = false; for (let i = 0; i < 400 && !n.infant; i++) { stepRaiders(v, 0.25, null); told ||= v.events.some(e => e.text.includes('goats are bleating')); }
+    assert.equal(n.infant?.id, baby.id, 'it has the infant'); assert.ok(told, 'the goats told of it'); assert.ok(!v.hobbits.some(s => s.id === baby.id), 'gone from its house'); assert.ok(!v.dead.some(d => d.id === baby.id), 'not dead'); assert.equal(v.taken, 1); assert.ok(v.events.some(e => e.text.endsWith('is taken in the night')));
+    assert.ok(takenIds(v).includes(baby.id) && nextNewcomer(v)?.id !== baby.id, 'its name is not born again while it is out');
+    for (let i = 0; i < 400 && v.snatchers.length; i++) stepRaiders(v, 0.25, null); assert.equal(v.brood.length, 1, 'kept at the lair'); assert.ok(SNATCH_PACE >= 9);
+    step(v, GESTATION_TICKS + 1); assert.equal(v.bred.length, 1, 'a Dark Young is born of it'); assert.ok(v.events.some(e => e.text.startsWith('a Dark Young is born of')));
+    const raid0 = v.raiders.length; step(v, (DT - (v.tick % DT)) + RAID_TICK + 1); const withIt = v.raiders.filter(r => r.infant?.id === baby.id); assert.equal(withIt.length, 1, `it raids with the rest (${raid0} → ${v.raiders.length})`);
+    const back = par(ser(v)); assert.equal(ser(back), ser(v), 'the brood and the bred survive a save');
+  } finally { setLair(null); }
+});
+test('D3: struck, a snatcher drops the infant and runs; she carries it home to its door; a melted Dark Young leaves its infant', () => {
+  setLair({ x: 300, z: 0, radius: 75 });
+  try {
+    const v = freshV(4); bear(v); const baby = v.hobbits.find(s => s.stage === 'infant')!; step(v, SNATCH_TICK + 2); const n = v.snatchers[0];
+    for (let i = 0; i < 400 && !n.infant; i++) stepRaiders(v, 0.25, null); stepRaiders(v, 0.5, null);
+    strike(v, { x: n.x - 1, z: n.z }, 1, 0); assert.equal(n.infant, null, 'it drops the infant'); assert.equal(n.state, 'fleeing'); assert.equal(v.dropped.length, 1);
+    const at = v.dropped[0]; assert.equal(carryInfant(v, { x: at.x + 5, z: at.z }), null, 'out of reach'); assert.equal(carryInfant(v, { x: at.x + 0.5, z: at.z }), 'picked'); assert.equal(v.carried?.id, baby.id);
+    assert.equal(collect(v, 'thicket'), false, 'her hands are full'); const door = HOUSES[baby.home].door; assert.equal(carryInfant(v, { x: door.x + 1, z: door.z }), 'home');
+    assert.ok(v.hobbits.some(s => s.id === baby.id && s.stage === 'infant' && s.inside), 'home in its house'); assert.equal(v.returned, 1); assert.equal(v.carried, null);
+    const w = freshV(4); bear(w); const b2 = w.hobbits.find(s => s.stage === 'infant')!; w.hobbits.splice(w.hobbits.indexOf(b2), 1); w.bred.push({ id: b2.id, home: b2.home, born: b2.born });
+    step(w, RAID_TICK + 1); const r = w.raiders.find(x => x.infant)!; assert.ok(r, 'the bred one raids'); r.hp = 1; strike(w, { x: r.x - 1, z: r.z }, 1, 0); rootBind(w, { x: r.x - 1, z: r.z }); w.hero.sap = 100;
+    for (let t = 0; t < 70 && r.state !== 'melting'; t += 0.5) stepRaiders(w, 0.5, { x: r.x - 1, z: r.z });
+    assert.equal(r.state, 'melting'); assert.equal(w.bred.length, 0); assert.equal(w.dropped[0]?.infant.id, b2.id, 'its infant lies where it melted');
+  } finally { setLair(null); }
+});
