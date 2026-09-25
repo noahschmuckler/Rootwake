@@ -7,7 +7,7 @@
 // fire by the wood laid on it (updateLand).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { HOUSES, HOBBITS, SITES, STORES, STORE_LIST, STATIONS, STACK_CAP, OVERFILL, HOUSE_RADIUS, MEADOW_RADIUS, GREEN, TREES, TREE_ROOTS, STREAM_Z, BERRY_CAP, BRANCH_CAP, MILK_PER_DAY, CROP_STRIPS, WOOD_PER_NIGHT, crownHeight, trunkRadius, type Hobbit, type Tree, type Village, type Store } from './villageModel';
+import { HOUSES, SITES, STORES, STORE_LIST, STATIONS, STACK_CAP, OVERFILL, HOUSE_RADIUS, MEADOW_RADIUS, GREEN, TREES, TREE_ROOTS, STREAM_Z, BERRY_CAP, BRANCH_CAP, MILK_PER_DAY, CROP_STRIPS, WOOD_PER_NIGHT, crownHeight, trunkRadius, hobbitById, type HobbitState, type Tree, type Village, type Store } from './villageModel';
 import { mulberry32 } from './colors';
 import { createTerrain, type Terrain } from './worldTerrain';
 import type { Collider } from './player';
@@ -119,16 +119,29 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   const grassMat = spriteMaterial('grass', '#9fc06a'), grass: Standee[] = [];
   for (let i = 0; i < 900; i++) { const a = rand() * 6.28, r = Math.sqrt(rand()) * (MEADOW_RADIUS + 2), x = Math.cos(a) * r, z = Math.sin(a) * r; if (Math.hypot(x, z) < 5.5 || HOUSES.some(h => Math.hypot(x - h.x, z - h.z) < HOUSE_RADIUS + 0.4)) continue; const k = 0.22 + rand() * 0.3; grass.push({ position: new THREE.Vector3(x, relief(x, z), z), yaw: rand() * Math.PI, width: k, height: k * (0.8 + rand() * 0.5) }); }
   scene.add(new THREE.Mesh(standees(grass), grassMat));
-  // The hobbits: Hulda's skeleton at half her height, in cloth, each with their own colours.
-  const figures = HOBBITS.map((h: Hobbit) => { const f = createHulda({ name: h.name, height: HOBBIT_HEIGHT, skin: '#e0c4a0', cloth: h.colour, clothLight: h.colour, hair: h.hair, feet: '#5a4a3a', locks: false, leaves: false, skirt: true }); scene.add(f.group); return f; });
+  // The hobbits (D1: a population, not eight): Hulda's skeleton at half her height, in cloth, each with their own colours, made when first seen (a birth) and by stage (a child is CHILD_SCALE of grown); a dead one's figure is taken away. The clips are kept for the figures made later.
+  type Figure = ReturnType<typeof createHulda> & { height: number };
+  const CHILD_SCALE = 0.7;
+  const figureMap = new Map<string, Figure>(); let figureClips: Parameters<Figure['setClips']>[0] | null = null, livingNow: HobbitState[] = [];
+  const figureKey = (s: HobbitState): string => `${s.id}:${s.stage === 'child' ? 'child' : 'grown'}`;
+  const makeFigure = (s: HobbitState): Figure => {
+    const h = hobbitById(s.id), height = HOBBIT_HEIGHT * (s.stage === 'child' ? CHILD_SCALE : 1);
+    const f = Object.assign(createHulda({ name: h.name, height, skin: '#e0c4a0', cloth: h.colour, clothLight: h.colour, hair: h.hair, feet: '#5a4a3a', locks: false, leaves: false, skirt: true }), { height }); scene.add(f.group); if (figureClips) f.setClips(figureClips);
+    carriedMap.set(f, makeCarried(f)); return f;
+  };
+  /** The figure for a hobbit as they are now; figures of other stages or of the dead are hidden. */
+  function figureFor(s: HobbitState): Figure { const key = figureKey(s); let f = figureMap.get(key); if (!f) { f = makeFigure(s); figureMap.set(key, f); } return f; }
+  function setFigureClips(clips: Parameters<Figure['setClips']>[0]): void { figureClips = clips; for (const f of figureMap.values()) f.setClips(clips); }
+  function pruneFigures(v: Village): void { const keep = new Set(v.hobbits.map(figureKey)); for (const [key, f] of figureMap) if (!keep.has(key)) f.group.visible = false; livingNow = v.hobbits; }
   // An armful in the right hand: a basket, a bucket, a bundle of sticks, a sack or a pail, one of them shown while the model says the hobbit carries. The skeleton is in centimetres, so the things are sized in centimetres in the hand's space.
-  const carried = figures.map(f => { const hand = f.bones.get('mixamorigRightHand')!, anchor = new THREE.Group(); anchor.position.set(0, 9, 2); hand.add(anchor); const items: Record<Store, THREE.Object3D> = {
+  const carriedMap = new Map<Figure, Record<Store, THREE.Object3D>>();
+  const makeCarried = (f: Figure): Record<Store, THREE.Object3D> => { const hand = f.bones.get('mixamorigRightHand')!, anchor = new THREE.Group(); anchor.position.set(0, 9, 2); hand.add(anchor); const items: Record<Store, THREE.Object3D> = {
     berries: (() => { const g = new THREE.Group(); const cup = new THREE.Mesh(new THREE.CylinderGeometry(8, 6, 8, 8, 1, true), basketMat); cup.material = basketMat.clone(); (cup.material as THREE.MeshStandardMaterial).side = THREE.DoubleSide; g.add(cup); const fill = new THREE.Mesh(new THREE.CircleGeometry(7.5, 8), berryMat); fill.rotation.x = -Math.PI / 2; fill.position.y = 3.6; g.add(fill); return g; })(),
     water: (() => { const g = new THREE.Group(); const b = new THREE.Mesh(new THREE.CylinderGeometry(6, 5, 10, 8, 1, true), pailMat); b.material = pailMat.clone(); (b.material as THREE.MeshStandardMaterial).side = THREE.DoubleSide; g.add(b); const w = new THREE.Mesh(new THREE.CircleGeometry(5.5, 8), water); w.rotation.x = -Math.PI / 2; w.position.y = 4; g.add(w); return g; })(),
     wood: (() => { const g = new THREE.Group(); for (let i = 0; i < 3; i++) { const st = new THREE.Mesh(new THREE.CylinderGeometry(1.6, 2, 40, 5), stickMat); st.rotation.z = Math.PI / 2 + 0.25; st.position.set(0, i * 3.2, (i - 1) * 3); g.add(st); } return g; })(),
     grain: (() => { const sack = new THREE.Mesh(new THREE.SphereGeometry(9, 7, 6), sackMat); sack.scale.set(1, 1.2, 1); return sack; })(),
     milk: (() => { const g = new THREE.Group(); const b = new THREE.Mesh(new THREE.CylinderGeometry(6, 5, 10, 8, 1, true), pailMat); b.material = pailMat.clone(); (b.material as THREE.MeshStandardMaterial).side = THREE.DoubleSide; g.add(b); const m = new THREE.Mesh(new THREE.CircleGeometry(5.5, 8), milkMat); m.rotation.x = -Math.PI / 2; m.position.y = 4; g.add(m); return g; })(),
-  }; for (const k of STORE_LIST) { items[k].visible = false; anchor.add(items[k]); } return items; });
+  }; for (const k of STORE_LIST) { items[k].visible = false; anchor.add(items[k]); } return items; };
   // Her other shapes: the figure of leaves at a crown, and the bulge of grass she is under the meadow.
   const figureMat = spriteMaterial('leaf', '#b9e58a', { emissive: '#4a7a2a', emissiveIntensity: 0.35 });
   const figure = new THREE.Group(); figure.visible = false; scene.add(figure);
@@ -200,7 +213,7 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
     for (let i = 0; i < penPails.length; i++) penPails[i].visible = i < v.land.milk;
     for (let i = 0; i < strips.length; i++) { const c = v.land.crops[i]; strips[i].scale.y = 0.08 + 0.92 * c; strips[i].visible = c > 0.02; stalkMats[i].color.set(c >= 1 ? '#d9b44a' : c > 0.7 ? '#b9a852' : '#7fa64a'); }
     for (const k of STORE_LIST) { const n = Math.floor(v.stores[k]); storeItems[k].forEach((o, i) => { o.visible = i < n; }); }
-    for (let i = 0; i < HOBBITS.length; i++) { const c = v.hobbits[i].carry; for (const k of STORE_LIST) carried[i][k].visible = !!c && c.kind === k; }
+    pruneFigures(v); for (const s of v.hobbits) { const c = s.carry, items = carriedMap.get(figureFor(s))!; for (const k of STORE_LIST) items[k].visible = !!c && c.kind === k; }
     fireWood = v.fireWood;
     for (let i = 0; i < v.spirits.length; i++) { const f = spiritFigure(i), load = f.getObjectByName('load'); if (load) load.visible = !!v.spirits[i].carry; }
   }
@@ -208,7 +221,7 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   function updatePrayer(share: number): void { stoneMat.emissiveIntensity = share * 0.9; stoneLight.intensity = share * 6; }
   let fireWood = 0;
   /** Which armful each figure shows, for checks. */
-  const armfuls = (): (Store | null)[] => carried.map(c => STORE_LIST.find(k => c[k].visible) ?? null);
-  return { colliders, figures, figure, mass, update, updateLand, updatePrayer, armfuls, setRaider, hideRaider, flashSlash, flashBurst, updateStrokes, setLairAt, setLair, setStation, get activeStation() { return activeStation; }, setStack, stack, spiritFigure, spiritFigures, stream, crownPoint, trunkPoint };
+  const armfuls = (): (Store | null)[] => livingNow.map(s => { const c = carriedMap.get(figureFor(s))!; return STORE_LIST.find(k => c[k].visible) ?? null; });
+  return { colliders, get figures() { return livingNow.map(figureFor); }, figureFor, setFigureClips, figure, mass, update, updateLand, updatePrayer, armfuls, setRaider, hideRaider, flashSlash, flashBurst, updateStrokes, setLairAt, setLair, setStation, get activeStation() { return activeStation; }, setStack, stack, spiritFigure, spiritFigures, stream, crownPoint, trunkPoint };
 }
 export type VillageWorld = ReturnType<typeof buildVillage>;
