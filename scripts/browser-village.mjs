@@ -176,6 +176,14 @@ try{
  await page.screenshot({path:out+'/05-night.png'});
  // A second dawn: out again.
  await v(page,()=>{window.__village.advance(window.__village.dayTicks+200-window.__village.tick);});await page.waitForTimeout(1500);assert.equal(await v(page,()=>window.__village.clock.day),2);assert.equal(await v(page,()=>window.__village.count('inside')),0,'day two, all out again');
+ // D1: the village lives and dies. Fed through every meal for days, a child is born into a house with room (told, and the house says so); starved, someone weakens, keeps to the stone, and dies, mourned by the rest; the names change.
+ const grown=await v(page,()=>{const k=window.__village,feed=()=>{for(const [s,n] of [['berries',8],['milk',8],['grain',12],['water',10],['wood',12]])k.setStore(s,n);};const n0=k.population;for(let i=0;i<k.dayTicks*4/100&&k.population===n0;i++){feed();k.advance(100);}return {before:n0,after:k.population,events:k.events.map(e=>e.text)};});
+ assert.ok(grown.after>grown.before,`fed, a child is born (${JSON.stringify(grown)})`);assert.ok(grown.events.some(e=>e.includes('is born in house')),'the birth is told');
+ await page.waitForTimeout(400);assert.ok(await page.locator('#tip').isVisible(),'the birth is told on screen');await page.screenshot({path:out+'/05b-born.png'});
+ const lost=await v(page,()=>{const k=window.__village,starve=()=>{for(const s of ['berries','milk','grain'])k.setStore(s,0);for(const l of ['berries','branches','milk'])k.setLand(l,0);};const n0=k.population;for(let i=0;i<k.dayTicks*3/50&&k.population===n0;i++){starve();k.advance(50);}return {before:n0,after:k.population,dead:k.dead.length,events:k.events.map(e=>e.text),mourning:k.thoughts().filter(t=>t.startsWith('mourning')).length,figures:k.figures.length};});
+ assert.ok(lost.after<lost.before&&lost.dead>=1,`starved, someone dies (${JSON.stringify(lost)})`);assert.equal(lost.figures,lost.after,'the dead have no figure');assert.ok(lost.events.some(e=>e.endsWith('has died of hunger')),'the death is told');
+ await page.waitForTimeout(400);await page.screenshot({path:out+'/05c-mourning.png'});assert.equal(await page.locator('#labels .name:not(.foe):not(.lair):not(.way)').count(),lost.after,'a name for each of the living');
+ await v(page,()=>{const k=window.__village;k.reset();});await page.waitForTimeout(300);
  // Reload keeps the village's day; nothing passed while the page was away.
  const before=await v(page,()=>window.__village.tick);await page.reload();await page.click('#begin');await page.waitForFunction(()=>window.__village);await page.waitForTimeout(500);const after=await v(page,()=>window.__village.tick);assert.ok(after>=before&&after-before<10,`kept its day (${before} → ${after})`);
  for(const[name,size]of[['small',{width:375,height:667}],['landscape',{width:844,height:390}],['desktop',{width:1280,height:900}]]){await page.setViewportSize(size);await page.waitForTimeout(600);await page.screenshot({path:out+'/'+name+'.png'});}
