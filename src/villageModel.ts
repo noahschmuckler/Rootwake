@@ -90,13 +90,37 @@ export const HOBBITS: Hobbit[] = [
   { id: 'odo', name: 'Odo', home: 4, keeps: 'fire', rises: 45, pace: 0.75, colour: '#7a7a6a', hair: '#d8d0c0' },
   { id: 'nell', name: 'Nell', home: 5, keeps: 'shrine', rises: 10, pace: 0.95, colour: '#5a6a7a', hair: '#3a2a2a' },
 ];
+// D1 (the dark loop's first pass): the village lives and dies. Newcomers are born into houses with room from this pool, in order; a hobbit is an infant indoors for INFANT_DAYS, then a child out with the others (smaller, slower) for CHILD_DAYS, then grown. Meals missed in a row weaken (WEAK_PACE off the pace per missed meal, never below WEAK_FLOOR), send them to the stone instead of their place at REST_MEALS, and kill at DEATH_MEALS; the village mourns a death for MOURN_TICKS. A village in which nobody went without for BIRTH_DAYS whole days, with a house that has room (ROOM_PER_HOUSE), has a birth. Tuning.
+export const INFANT_DAYS = 2, CHILD_DAYS = 3, CHILD_PACE = 0.85, ROOM_PER_HOUSE = 4, BIRTH_DAYS = 3, WEAK_PACE = 0.15, WEAK_FLOOR = 0.4, REST_MEALS = 4, DEATH_MEALS = 6, MOURN_TICKS = DAY_TICKS, EVENTS_KEPT = 8;
+export const NEWCOMERS: Hobbit[] = [
+  { id: 'fen', name: 'Fen', home: -1, keeps: 'thicket', rises: 12, pace: 1.05, colour: '#6a7a4a', hair: '#4a2a1c' },
+  { id: 'rue', name: 'Rue', home: -1, keeps: 'stream', rises: 6, pace: 1.2, colour: '#8a6a6a', hair: '#2a1a1a' },
+  { id: 'dill', name: 'Dill', home: -1, keeps: 'copse', rises: 18, pace: 1.1, colour: '#5a6a5a', hair: '#8a5a2a' },
+  { id: 'poppy', name: 'Poppy', home: -1, keeps: 'field', rises: 10, pace: 1.0, colour: '#a06a5a', hair: '#c8a03a' },
+  { id: 'tam', name: 'Tam', home: -1, keeps: 'pen', rises: 24, pace: 0.95, colour: '#7a6a4a', hair: '#3a2a2a' },
+  { id: 'ivy', name: 'Ivy', home: -1, keeps: 'thicket', rises: 16, pace: 1.05, colour: '#5a7a6a', hair: '#1c1c1c' },
+  { id: 'cob', name: 'Cob', home: -1, keeps: 'copse', rises: 4, pace: 1.15, colour: '#8a7a5a', hair: '#6a4a2a' },
+  { id: 'mab', name: 'Mab', home: -1, keeps: 'field', rises: 22, pace: 1.0, colour: '#6a5a7a', hair: '#4a3a3a' },
+  { id: 'rook', name: 'Rook', home: -1, keeps: 'stream', rises: 8, pace: 1.25, colour: '#4a5a6a', hair: '#1a1a2a' },
+  { id: 'sorrel', name: 'Sorrel', home: -1, keeps: 'pen', rises: 28, pace: 0.9, colour: '#9a7a4a', hair: '#8a4a2a' },
+  { id: 'lark', name: 'Lark', home: -1, keeps: 'thicket', rises: 2, pace: 1.3, colour: '#7a8a5a', hair: '#d8c080' },
+  { id: 'moss', name: 'Moss', home: -1, keeps: 'copse', rises: 20, pace: 1.0, colour: '#4a6a4a', hair: '#3a2a1c' },
+  { id: 'tilly', name: 'Tilly', home: -1, keeps: 'field', rises: 14, pace: 1.05, colour: '#a08a6a', hair: '#7a3a2a' },
+  { id: 'brock', name: 'Brock', home: -1, keeps: 'stream', rises: 26, pace: 0.95, colour: '#6a6a6a', hair: '#2a2a2a' },
+  { id: 'wisp', name: 'Wisp', home: -1, keeps: 'pen', rises: 6, pace: 1.1, colour: '#8a8a9a', hair: '#e0d8c0' },
+  { id: 'nettle', name: 'Nettle', home: -1, keeps: 'thicket', rises: 30, pace: 1.0, colour: '#5a6a3a', hair: '#4a3a2a' },
+];
+export const ALL_HOBBITS: Hobbit[] = [...HOBBITS, ...NEWCOMERS];
+export type Stage = 'infant' | 'child' | 'grown';
 export type Activity = 'sleeping' | 'walking' | 'working' | 'talking' | 'returning' | 'carrying' | 'eating' | 'praying';
 export type Want = 'home' | 'place' | 'green';
 /** An errand breaks the rhythm's walk: to a store with an armful ('deliver'), to the fire for a meal on the way out at dawn and on the way home at dusk ('meal'), to the woodpile and back to the fire ('firewood'). */
 export type Errand = 'deliver' | 'meal' | 'firewood' | null;
 /** What a gatherer is doing with the working day: gathering at their place, or praying at the stone because the stores already hold enough for the next meal. */
 export type Job = 'gather' | 'pray';
-export interface HobbitState { id: string; x: number; z: number; heading: number; activity: Activity; want: Want; job: Job; path: Vec2[]; speed: number; inside: boolean; bubble: string; bubbleUntil: number; wanderAt: number; faceAt: number; hunger: number; carry: Carry | null; errand: Errand; gatherAt: number; eatUntil: number; jobAt: number; meals: number; ate: number }
+export interface HobbitState { id: string; x: number; z: number; heading: number; activity: Activity; want: Want; job: Job; path: Vec2[]; speed: number; inside: boolean; bubble: string; bubbleUntil: number; wanderAt: number; faceAt: number; hunger: number; carry: Carry | null; errand: Errand; gatherAt: number; eatUntil: number; jobAt: number; meals: number; ate: number; home: number; stage: Stage; born: number; missed: number }
+/** What happened in the village, for the entry to tell: a birth, a death, a child going out. */
+export interface VillageEvent { tick: number; text: string }
 /** A forest spirit: summoned for one place's job, it gathers and carries there tirelessly by day, and stands at its place by night. No needs, no home. */
 export interface Spirit { id: number; keeps: SiteKind; x: number; z: number; heading: number; path: Vec2[]; speed: number; carry: Carry | null; errand: 'deliver' | null; gatherAt: number; wanderAt: number }
 // The Dark Young (the first enemy): oversized goats with writhing tentacle horns and six legs, the get of the
@@ -110,14 +134,19 @@ export interface Raider { id: number; x: number; z: number; heading: number; hp:
 export interface Hero { vigor: number; sap: number; faint: number; calm: number; xp: number; level: number; choices: number; perks: { vigor: number; strike: number; sap: number } }
 /** The lair's manifestation: a local mother of goats at the dark forest's centre, awake while she is near, with its own hp; slain, it is gone for LAIR_PEACE_DAYS and the raids with it, then grows again. */
 export interface Lair { hp: number; alive: boolean; slainDay: number; spawnClock: number; sweepClock: number; hurt: number; woke: boolean }
-export interface Village { seed: number; tick: number; hobbits: HobbitState[]; stores: Record<Store, number>; land: Land; fireWood: number; take: Take; lastTake: Take; prayer: number; prayed: number; spirits: Spirit[]; stack: Carry | null; raiders: Raider[]; hero: Hero; raidDay: number; slain: number; eaten: number; lair: Lair }
-export const hobbitById = (id: string): Hobbit => HOBBITS.find(h => h.id === id)!;
+export interface Village { seed: number; tick: number; hobbits: HobbitState[]; stores: Record<Store, number>; land: Land; fireWood: number; take: Take; lastTake: Take; prayer: number; prayed: number; spirits: Spirit[]; stack: Carry | null; raiders: Raider[]; hero: Hero; raidDay: number; slain: number; eaten: number; lair: Lair; dead: { id: string; tick: number }[]; wellFedDays: number; dayMissed: boolean; mourningUntil: number; events: VillageEvent[] }
+export const hobbitById = (id: string): Hobbit => ALL_HOBBITS.find(h => h.id === id)!;
 export const houseOf = (h: Hobbit): House => HOUSES[h.home];
+/** The house a hobbit lives in now (a newcomer's is the one it was born into). */
+export const homeOf = (s: HobbitState): House => HOUSES[s.home];
+/** How fast a hobbit walks now: a child slower, and each meal missed in a row slower still, down to WEAK_FLOOR. */
+export const paceOf = (s: HobbitState): number => hobbitById(s.id).pace * (s.stage === 'child' ? CHILD_PACE : 1) * Math.max(WEAK_FLOOR, 1 - WEAK_PACE * s.missed);
+export const living = (v: Village, home: number): HobbitState[] => v.hobbits.filter(s => s.home === home);
 /** The first morning: the stores hold some food and a night's wood already (the village has lived here a while), the bushes are full, a few branches lie, the strips are at different stages so that one ripens every day or so. */
 export function freshVillage(seed = 1): Village {
   return {
-    seed, tick: 0, stores: { berries: 3, milk: 2, grain: 6, wood: 8, water: 5 }, land: { berries: BERRY_CAP, branches: 6, milk: MILK_PER_DAY, crops: Array.from({ length: CROP_STRIPS }, (_, i) => (i + 0.5) / CROP_STRIPS) }, fireWood: 0, take: freshTake(), lastTake: freshTake(), prayer: 0, prayed: 0, spirits: [], stack: null, raiders: [], hero: { vigor: VIGOR_MAX, sap: SAP_MAX, faint: 0, calm: 0, xp: 0, level: 1, choices: 0, perks: { vigor: 0, strike: 0, sap: 0 } }, raidDay: -1, slain: 0, eaten: 0, lair: { hp: LAIR_HP, alive: true, slainDay: -99, spawnClock: 0, sweepClock: 0, hurt: 0, woke: false },
-    hobbits: HOBBITS.map(h => { const d = houseOf(h).door; return { id: h.id, x: d.x, z: d.z, heading: houseOf(h).facing, activity: 'sleeping', want: 'home', job: 'gather', path: [], speed: 0, inside: true, bubble: '', bubbleUntil: 0, wanderAt: 0, faceAt: 0, hunger: 0.3, carry: null, errand: null, gatherAt: 0, eatUntil: 0, jobAt: 0, meals: 0, ate: -1 }; }),
+    seed, tick: 0, stores: { berries: 3, milk: 2, grain: 6, wood: 8, water: 5 }, land: { berries: BERRY_CAP, branches: 6, milk: MILK_PER_DAY, crops: Array.from({ length: CROP_STRIPS }, (_, i) => (i + 0.5) / CROP_STRIPS) }, fireWood: 0, take: freshTake(), lastTake: freshTake(), prayer: 0, prayed: 0, spirits: [], stack: null, raiders: [], hero: { vigor: VIGOR_MAX, sap: SAP_MAX, faint: 0, calm: 0, xp: 0, level: 1, choices: 0, perks: { vigor: 0, strike: 0, sap: 0 } }, raidDay: -1, slain: 0, eaten: 0, lair: { hp: LAIR_HP, alive: true, slainDay: -99, spawnClock: 0, sweepClock: 0, hurt: 0, woke: false }, dead: [], wellFedDays: 0, dayMissed: false, mourningUntil: 0, events: [],
+    hobbits: HOBBITS.map(h => { const d = houseOf(h).door; return { id: h.id, x: d.x, z: d.z, heading: houseOf(h).facing, activity: 'sleeping', want: 'home', job: 'gather', path: [], speed: 0, inside: true, bubble: '', bubbleUntil: 0, wanderAt: 0, faceAt: 0, hunger: 0.3, carry: null, errand: null, gatherAt: 0, eatUntil: 0, jobAt: 0, meals: 0, ate: -1, home: h.home, stage: 'grown', born: -(INFANT_DAYS + CHILD_DAYS) * DAY_TICKS, missed: 0 }; }),
   };
 }
 /** Where the day's rhythm wants a hobbit to be: home, their place, or the green. */
@@ -179,7 +208,7 @@ export function landStock(v: Village, kind: Store): number {
 /** The take against the regrowth, for the last whole day: under 1 the land is gaining, over 1 it is being stripped. Berries, wood and milk are what regrows; grain and water are not counted (the field is the village's own, the stream endless). */
 export function balance(v: Village): number { const take = v.lastTake.berries + v.lastTake.wood + v.lastTake.milk, regrow = BERRY_REGROW + BRANCHES_PER_DAY + MILK_PER_DAY; return take / regrow; }
 /** Food in the stores and on its way, against the next meal: the village eats one unit each per meal. */
-export const population = (v: Village): number => v.hobbits.length;
+export const population = (v: Village): number => v.hobbits.filter(s => s.stage !== 'infant').length;
 export const foodInHand = (v: Village): number => FOODS.reduce((n, f) => n + v.stores[f] + inFlight(v, f), 0);
 /** Enough for the next meal? Food for everyone for the next NEXT_MEAL_MARGIN meals (two: nothing is gathered in the night, so supper must leave breakfast); water for everyone (drunk at noon); wood for two nights. A gatherer whose store is supplied prays instead of gathering. Tuning. */
 export const NEXT_MEAL_MARGIN = 2.0;
@@ -225,7 +254,7 @@ export function deliver(v: Village, store: Store): boolean {
 }
 /** One meal: a unit of the fullest food, and at noon a drink; hunger falls; nothing to eat leaves them hungry. */
 function eat(v: Village, s: HobbitState, drink: boolean, say: (t: string) => void): void {
-  s.ate = mealSlot(v.tick); const f = fullestFood(v); if (f) { v.stores[f] -= 1; if (drink && v.stores.water >= 1) v.stores.water -= 1; s.hunger = 0; s.meals++; s.eatUntil = v.tick + EAT_TICKS; s.activity = 'eating'; say(`eating ${STORES[f].unit}`); } else say('nothing to eat');
+  s.ate = mealSlot(v.tick); const f = fullestFood(v); if (f) { v.stores[f] -= 1; if (drink && v.stores.water >= 1) v.stores.water -= 1; s.hunger = 0; s.meals++; s.missed = 0; s.eatUntil = v.tick + EAT_TICKS; s.activity = 'eating'; say(`eating ${STORES[f].unit}`); } else { s.missed++; v.dayMissed = true; say('nothing to eat'); }
 }
 /** The raid: at RAID_TICK (a while after night falls) raidSize(day) Dark Young appear at the wood's edge (RAID_FROM m out), each walks at DY_PACE to the fullest store but the trough, eats one unit every DY_EAT_S seconds until it has had DY_FILL, then leaves; at RAID_END (before dawn) all leave, and one at the wood's edge is gone. Tuning. */
 export const RAID_TICK = 870, RAID_END = 1380, RAID_FROM = WALK_RADIUS - 12, DY_PACE = 0.9, DY_EAT_S = 6, DY_FILL = 6, DY_HP = 30;
@@ -309,7 +338,7 @@ export function advance(v: Village, ticks: number): void {
   for (let n = 0; n < ticks; n++) {
     const rand = mulberry32((v.seed * 7919 + v.tick * 131) >>> 0), t = v.tick % DAY_TICKS, phase = phaseAt(v.tick);
     // The land by the day: at dawn the branches drop and the goats have their milk; the bushes and the strips grow every minute; the fire burns down through the night.
-    if (t === 0) { v.land.branches = Math.min(BRANCH_CAP, v.land.branches + BRANCHES_PER_DAY); v.land.milk = MILK_PER_DAY; v.lastTake = v.take; v.take = freshTake(); v.raiders = []; }
+    if (t === 0) { v.land.branches = Math.min(BRANCH_CAP, v.land.branches + BRANCHES_PER_DAY); v.land.milk = MILK_PER_DAY; v.lastTake = v.take; v.take = freshTake(); v.raiders = []; newDay(v); }
     v.land.berries = Math.min(BERRY_CAP, v.land.berries + BERRY_REGROW / DAY_TICKS);
     for (let i = 0; i < v.land.crops.length; i++) v.land.crops[i] = Math.min(1, v.land.crops[i] + 1 / (CROP_DAYS * DAY_TICKS));
     if (phase === 'night' && v.fireWood > 0) v.fireWood = Math.max(0, v.fireWood - WOOD_PER_NIGHT / (DAY_TICKS - PHASES[5][1]));
@@ -317,7 +346,11 @@ export function advance(v: Village, ticks: number): void {
     if (t === RAID_TICK && v.raidDay < dayOf(v.tick) && !raidsPaused(v)) spawnRaid(v, rand);
     let praying = 0, nell = false;
     for (const s of v.hobbits) {
-      const h = hobbitById(s.id), house = houseOf(h), want = wants(h, v.tick), kind = YIELD_OF[h.keeps] ?? null;
+      const h = hobbitById(s.id), house = homeOf(s), kind = YIELD_OF[h.keeps] ?? null;
+      // An infant stays in the house and eats from its parents' share, unseen; it costs nothing yet and gathers nothing.
+      if (s.stage === 'infant') { s.inside = true; s.activity = 'sleeping'; s.speed = 0; s.hunger = 0; continue; }
+      // Starving, they keep to the stone instead of their place (and still come to the fire for meals).
+      const want = wants(h, v.tick);
       const say = (text: string): void => { s.bubble = text; s.bubbleUntil = v.tick + BUBBLE_TICKS; };
       const site = want === 'home' ? null : want === 'green' ? SITES.fire : s.job === 'pray' && kind ? SITES.shrine : SITES[h.keeps];
       const goal = (): Vec2 => (site ? spotAt(site, rand) : house.door);
@@ -335,12 +368,13 @@ export function advance(v: Village, ticks: number): void {
       // Odo keeps the fire: a little before dusk he fetches the night's wood from the pile and lays it.
       if (h.keeps === 'fire' && t === FIRE_WOOD_TICK && !s.inside && !s.errand && v.stores.wood >= 1) { s.errand = 'firewood'; s.path = route(s, storeSpot(STORES.wood)); s.activity = 'walking'; }
       if (s.inside) { s.activity = 'sleeping'; s.speed = 0; continue; }
+      if (s.missed >= REST_MEALS && want === 'place' && s.job === 'gather' && !s.carry && !s.errand) { s.job = 'pray'; s.path = route(s, spotAt(SITES.shrine, rand, 0.7)); s.activity = 'walking'; say('too weak to work'); }
       if (s.eatUntil > v.tick) { s.activity = 'eating'; s.speed = 0; s.heading = Math.atan2(SITES.fire.z - s.z, SITES.fire.x - s.x); continue; }
       if (s.eatUntil === v.tick && s.errand === 'meal') { s.errand = null; s.path = route(s, goal()); s.activity = want === 'home' ? 'returning' : 'walking'; }
       if (s.path.length) {
-        const step = s.path[0], d = dist(s, step), move = Math.min(d, h.pace * PACE_TICK);
+        const pace = paceOf(s), step = s.path[0], d = dist(s, step), move = Math.min(d, pace * PACE_TICK);
         if (d > 1e-6) { s.heading = Math.atan2(step.z - s.z, step.x - s.x); s.x += (step.x - s.x) / d * move; s.z += (step.z - s.z) / d * move; }
-        s.speed = h.pace;
+        s.speed = pace;
         if (d <= move + 1e-6) {
           s.path.shift();
           if (s.path.length === 0) {
@@ -370,7 +404,7 @@ export function advance(v: Village, ticks: number): void {
       } else if (s.job === 'pray' && kind || h.keeps === 'shrine') {
         // Praying at the stone: faced to it, still; the stone's keeper always; a gatherer while the stores hold enough for the next meal.
         s.activity = 'praying'; s.heading = Math.atan2(SITES.shrine.z - s.z, SITES.shrine.x - s.x); praying++; if (h.keeps === 'shrine') nell = true;
-        if (kind && v.tick >= s.jobAt) { s.jobAt = v.tick + JOB_EVERY; if (!supplied(v, kind) && landStock(v, kind) >= 1) { s.job = 'gather'; s.gatherAt = v.tick + GATHER_TICKS; s.path = route(s, spotAt(SITES[h.keeps], rand)); s.activity = 'walking'; say(''); continue; } }
+        if (kind && v.tick >= s.jobAt) { s.jobAt = v.tick + JOB_EVERY; if (!supplied(v, kind) && landStock(v, kind) >= 1 && s.missed < REST_MEALS) { s.job = 'gather'; s.gatherAt = v.tick + GATHER_TICKS; s.path = route(s, spotAt(SITES[h.keeps], rand)); s.activity = 'walking'; say(''); continue; } }
       } else {
         s.activity = 'working'; if (site && v.tick >= s.faceAt) { s.heading = Math.atan2(site.z - s.z, site.x - s.x) + (rand() - 0.5) * 2.4; s.faceAt = v.tick + FACE_EVERY + Math.floor(rand() * FACE_EVERY); }
         // Gathering: a unit every GATHER_TICKS while the land has one and the store has room for it; an armful, or the last of what there is, goes to the store. Enough for the next meal already, and they go to the stone instead.
@@ -384,6 +418,7 @@ export function advance(v: Village, ticks: number): void {
       if (site && v.tick >= s.wanderAt && s.activity !== 'praying') { s.path = [spotAt(site, rand, 0.65)]; s.activity = 'walking'; s.wanderAt = v.tick + WANDER_EVERY + Math.floor(rand() * WANDER_EVERY); }
     }
     v.prayer = Math.min(PRAYER_CAP, v.prayer + PRAYER_PER_TICK * praying * (nell ? 2 : 1)); v.prayed += PRAYER_PER_TICK * praying * (nell ? 2 : 1);
+    for (const s of v.hobbits) if (s.missed >= DEATH_MEALS) { die(v, s); break; }
     // The spirits: by day the gather-and-carry loop at their place, without meals, prayer or rest; by night they stand at their place.
     for (const sp of v.spirits) {
       const kind = YIELD_OF[sp.keeps]!, site = SITES[sp.keeps], night = phase === 'night';
@@ -405,12 +440,37 @@ export function advance(v: Village, ticks: number): void {
     v.tick++;
   }
 }
+/** Something to tell: kept to the last EVENTS_KEPT. */
+function event(v: Village, text: string): void { v.events.push({ tick: v.tick, text }); if (v.events.length > EVENTS_KEPT) v.events.shift(); }
+/** A death: the house empties of them, the name is gone from the living, what they carried is lost, the others mourn a day. */
+function die(v: Village, s: HobbitState): void {
+  v.hobbits.splice(v.hobbits.indexOf(s), 1); v.dead.push({ id: s.id, tick: v.tick }); v.mourningUntil = v.tick + MOURN_TICKS; const name = hobbitById(s.id).name;
+  event(v, `${name} has died of hunger`); for (const o of v.hobbits) if (o.stage !== 'infant') { o.bubble = `mourning ${name}`; o.bubbleUntil = v.tick + BUBBLE_TICKS * 4; }
+}
+/** The house a child would be born into: one with room, the fullest first (parents), then by id. */
+export const houseWithRoom = (v: Village): House | null => [...HOUSES].filter(h => living(v, h.id).length < ROOM_PER_HOUSE).sort((a, b) => living(v, b.id).length - living(v, a.id).length || a.id - b.id)[0] ?? null;
+/** The next newcomer to be born: the pool in order, the dead not born again. */
+export const nextNewcomer = (v: Village): Hobbit | null => NEWCOMERS.find(n => !v.hobbits.some(s => s.id === n.id) && !v.dead.some(d => d.id === n.id)) ?? null;
+/** Dawn: a whole day without anyone going without counts toward a birth; the stages move on; a birth when it is due and there is room. */
+function newDay(v: Village): void {
+  v.wellFedDays = v.dayMissed ? 0 : v.wellFedDays + 1; v.dayMissed = false;
+  for (const s of v.hobbits) {
+    const age = (v.tick - s.born) / DAY_TICKS, name = hobbitById(s.id).name;
+    if (s.stage === 'infant' && age >= INFANT_DAYS) { s.stage = 'child'; event(v, `${name} goes out with the others`); }
+    else if (s.stage === 'child' && age >= INFANT_DAYS + CHILD_DAYS) { s.stage = 'grown'; event(v, `${name} is grown`); }
+  }
+  if (v.wellFedDays >= BIRTH_DAYS) {
+    const house = houseWithRoom(v), tpl = nextNewcomer(v);
+    if (house && tpl) { v.wellFedDays = 0; v.hobbits.push({ id: tpl.id, x: house.door.x, z: house.door.z, heading: house.facing, activity: 'sleeping', want: 'home', job: 'gather', path: [], speed: 0, inside: true, bubble: '', bubbleUntil: 0, wanderAt: 0, faceAt: 0, hunger: 0, carry: null, errand: null, gatherAt: 0, eatUntil: 0, jobAt: 0, meals: 0, ate: mealSlot(v.tick), home: house.id, stage: 'infant', born: v.tick, missed: 0 }); event(v, `${tpl.name} is born in house ${house.id + 1}`); for (const o of living(v, house.id)) if (o.id !== tpl.id) { o.bubble = `a child, ${tpl.name}`; o.bubbleUntil = v.tick + BUBBLE_TICKS * 4; } }
+  }
+}
 /** What a hobbit is thinking, always: the chatter while it lasts, else what they carry, where they are going or what they are doing; hunger when it is bad. */
 export function thought(s: HobbitState, tick: number): string {
   if (s.inside) return '';
   if (s.bubble && tick < s.bubbleUntil) return s.bubble;
   const h = hobbitById(s.id);
   if (s.activity === 'eating') return 'eating';
+  if (s.missed >= REST_MEALS) return 'starving';
   if (s.hunger > 0.85) return 'hungry';
   if (s.errand === 'deliver' && s.carry) return `carrying ${STORES[s.carry.kind].unit} to ${STORES[s.carry.kind].name}`;
   if (s.errand === 'meal') return s.want === 'home' ? 'supper first' : 'breakfast first';
@@ -428,7 +488,7 @@ export const inHouse = (p: Vec2): House | null => HOUSES.find(h => dist(p, h) < 
 const ACTIVITIES: Activity[] = ['sleeping', 'walking', 'working', 'talking', 'returning', 'carrying', 'eating', 'praying'];
 export function parseVillage(raw: string | null): Village {
   try {
-    const p = JSON.parse(raw ?? 'null'); if (!p || typeof p !== 'object' || !Array.isArray(p.hobbits) || p.hobbits.length !== HOBBITS.length) return freshVillage();
+    const p = JSON.parse(raw ?? 'null'); if (!p || typeof p !== 'object' || !Array.isArray(p.hobbits) || p.hobbits.length < 1 || p.hobbits.length > ALL_HOBBITS.length) return freshVillage();
     const v = freshVillage(Number.isFinite(p.seed) ? p.seed : 1); v.tick = Number.isInteger(p.tick) && p.tick >= 0 ? p.tick : 0;
     const num = (x: unknown, lo: number, hi: number, d: number): number => (typeof x === 'number' && Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : d);
     if (p.stores && typeof p.stores === 'object') for (const k of STORE_LIST) v.stores[k] = num(p.stores[k], 0, STORES[k].cap + OVERFILL, v.stores[k]);
@@ -443,8 +503,15 @@ export function parseVillage(raw: string | null): Village {
     if (Array.isArray(p.raiders)) for (const q of p.raiders.slice(0, 12)) { if (!q || typeof q !== 'object') continue; const st: RaiderState = ['coming', 'eating', 'hunting', 'leaving', 'dead'].includes(q.state) ? q.state : 'coming'; v.raiders.push({ id: num(q.id, 0, 1e6, v.raiders.length), x: num(q.x, -200, 200, 0), z: num(q.z, -200, 200, 0), heading: num(q.heading, -10, 10, 0), hp: num(q.hp, 0, DY_HP, DY_HP), state: st, target: STORE_LIST.includes(q.target) ? q.target : null, ate: num(q.ate, 0, 99, 0), eatClock: 0, aggro: num(q.aggro, 0, DY_AGGRO_S, 0), rooted: num(q.rooted, 0, ROOT_S, 0), biteClock: 0, hurt: 0, gone: num(q.gone, 0, DY_CORPSE_S, 0) }); }
     const pathOf = (x: unknown): Vec2[] => (Array.isArray(x) ? x.filter((q: unknown) => q && Number.isFinite((q as Vec2).x) && Number.isFinite((q as Vec2).z)).map((q: Vec2) => ({ x: q.x, z: q.z })).slice(0, 4) : []);
     if (Array.isArray(p.spirits)) for (const q of p.spirits.slice(0, 12)) { if (!q || !(q.keeps in YIELD_OF)) continue; const site = SITES[q.keeps as SiteKind]; v.spirits.push({ id: v.spirits.length, keeps: q.keeps, x: num(q.x, -200, 200, site.x), z: num(q.z, -200, 200, site.z), heading: num(q.heading, -10, 10, 0), path: pathOf(q.path), speed: 0, carry: carryOf(q.carry), errand: q.errand === 'deliver' && carryOf(q.carry) ? 'deliver' : null, gatherAt: num(q.gatherAt, 0, 1e9, v.tick), wanderAt: num(q.wanderAt, 0, 1e9, v.tick) }); }
-    for (let i = 0; i < HOBBITS.length; i++) {
-      const s = p.hobbits[i], t = v.hobbits[i]; if (!s || s.id !== t.id) return freshVillage();
+    // The living, by id: founders and newcomers alike (an old save's eight are founders in their houses, grown).
+    const fresh = v.hobbits; v.hobbits = []; const seen = new Set<string>();
+    if (Array.isArray(p.dead)) for (const d of p.dead.slice(0, ALL_HOBBITS.length)) if (d && typeof d.id === 'string' && ALL_HOBBITS.some(h => h.id === d.id) && !seen.has(d.id)) { seen.add(d.id); v.dead.push({ id: d.id, tick: num(d.tick, 0, 1e9, 0) }); }
+    for (const s of p.hobbits) {
+      if (!s || typeof s.id !== 'string' || seen.has(s.id)) continue; const h = ALL_HOBBITS.find(h => h.id === s.id); if (!h) continue; seen.add(s.id);
+      const base = fresh.find(f => f.id === s.id), home = Math.floor(num(s.home, 0, HOUSES.length - 1, h.home >= 0 ? h.home : 0)), d = HOUSES[home].door;
+      const t: HobbitState = base ?? { id: h.id, x: d.x, z: d.z, heading: HOUSES[home].facing, activity: 'sleeping', want: 'home', job: 'gather', path: [], speed: 0, inside: true, bubble: '', bubbleUntil: 0, wanderAt: 0, faceAt: 0, hunger: 0, carry: null, errand: null, gatherAt: 0, eatUntil: 0, jobAt: 0, meals: 0, ate: -1, home, stage: 'grown', born: 0, missed: 0 };
+      t.home = home; t.stage = ['infant', 'child', 'grown'].includes(s.stage) ? s.stage : 'grown'; t.born = num(s.born, -1e9, 1e9, t.born); t.missed = Math.floor(num(s.missed, 0, DEATH_MEALS, 0));
+      v.hobbits.push(t);
       for (const k of ['x', 'z', 'heading', 'speed', 'bubbleUntil', 'wanderAt', 'faceAt', 'gatherAt', 'eatUntil', 'jobAt', 'meals'] as const) if (Number.isFinite(s[k])) (t as unknown as Record<string, number>)[k] = s[k];
       if (Number.isFinite(s.ate)) t.ate = s.ate;
       t.hunger = num(s.hunger, 0, 1, t.hunger);
@@ -453,10 +520,13 @@ export function parseVillage(raw: string | null): Village {
       t.carry = carryOf(s.carry); if (t.errand === 'deliver' && !t.carry) t.errand = null;
       t.path = pathOf(s.path); t.bubble = typeof s.bubble === 'string' ? s.bubble.slice(0, 40) : '';
     }
+    if (!v.hobbits.length) return freshVillage();
+    v.wellFedDays = Math.floor(num(p.wellFedDays, 0, 1e6, 0)); v.dayMissed = p.dayMissed === true; v.mourningUntil = num(p.mourningUntil, 0, 1e9, 0);
+    if (Array.isArray(p.events)) v.events = p.events.slice(-EVENTS_KEPT).filter((e: unknown) => e && typeof (e as VillageEvent).text === 'string').map((e: VillageEvent) => ({ tick: num(e.tick, 0, 1e9, 0), text: e.text.slice(0, 60) }));
     return v;
   } catch { return freshVillage(); }
 }
-export const serializeVillage = (v: Village): string => JSON.stringify({ seed: v.seed, tick: v.tick, stores: v.stores, land: { ...v.land, berries: Math.round(v.land.berries * 100) / 100, crops: v.land.crops.map(c => Math.round(c * 1000) / 1000) }, fireWood: Math.round(v.fireWood * 100) / 100, take: v.take, lastTake: v.lastTake, prayer: Math.round(v.prayer * 1000) / 1000, prayed: Math.round(v.prayed * 1000) / 1000, stack: v.stack, hero: { vigor: Math.round(v.hero.vigor * 10) / 10, sap: Math.round(v.hero.sap * 10) / 10, faint: Math.round(v.hero.faint * 100) / 100, calm: Math.round(v.hero.calm * 100) / 100, xp: v.hero.xp, level: v.hero.level, choices: v.hero.choices, perks: v.hero.perks }, lair: { hp: Math.round(v.lair.hp * 10) / 10, alive: v.lair.alive, slainDay: v.lair.slainDay }, raidDay: v.raidDay, slain: v.slain, eaten: v.eaten, raiders: v.raiders.map(r => ({ ...r, x: Math.round(r.x * 100) / 100, z: Math.round(r.z * 100) / 100, heading: Math.round(r.heading * 1000) / 1000, hp: Math.round(r.hp * 10) / 10, aggro: Math.round(r.aggro * 100) / 100, rooted: Math.round(r.rooted * 100) / 100, gone: Math.round(r.gone * 100) / 100 })), spirits: v.spirits.map(s => ({ ...s, x: Math.round(s.x * 100) / 100, z: Math.round(s.z * 100) / 100, heading: Math.round(s.heading * 1000) / 1000 })), hobbits: v.hobbits.map(s => ({ ...s, x: Math.round(s.x * 100) / 100, z: Math.round(s.z * 100) / 100, heading: Math.round(s.heading * 1000) / 1000, hunger: Math.round(s.hunger * 1000) / 1000 })) });
+export const serializeVillage = (v: Village): string => JSON.stringify({ seed: v.seed, tick: v.tick, dead: v.dead, wellFedDays: v.wellFedDays, dayMissed: v.dayMissed, mourningUntil: v.mourningUntil, events: v.events, stores: v.stores, land: { ...v.land, berries: Math.round(v.land.berries * 100) / 100, crops: v.land.crops.map(c => Math.round(c * 1000) / 1000) }, fireWood: Math.round(v.fireWood * 100) / 100, take: v.take, lastTake: v.lastTake, prayer: Math.round(v.prayer * 1000) / 1000, prayed: Math.round(v.prayed * 1000) / 1000, stack: v.stack, hero: { vigor: Math.round(v.hero.vigor * 10) / 10, sap: Math.round(v.hero.sap * 10) / 10, faint: Math.round(v.hero.faint * 100) / 100, calm: Math.round(v.hero.calm * 100) / 100, xp: v.hero.xp, level: v.hero.level, choices: v.hero.choices, perks: v.hero.perks }, lair: { hp: Math.round(v.lair.hp * 10) / 10, alive: v.lair.alive, slainDay: v.lair.slainDay }, raidDay: v.raidDay, slain: v.slain, eaten: v.eaten, raiders: v.raiders.map(r => ({ ...r, x: Math.round(r.x * 100) / 100, z: Math.round(r.z * 100) / 100, heading: Math.round(r.heading * 1000) / 1000, hp: Math.round(r.hp * 10) / 10, aggro: Math.round(r.aggro * 100) / 100, rooted: Math.round(r.rooted * 100) / 100, gone: Math.round(r.gone * 100) / 100 })), spirits: v.spirits.map(s => ({ ...s, x: Math.round(s.x * 100) / 100, z: Math.round(s.z * 100) / 100, heading: Math.round(s.heading * 1000) / 1000 })), hobbits: v.hobbits.map(s => ({ ...s, x: Math.round(s.x * 100) / 100, z: Math.round(s.z * 100) / 100, heading: Math.round(s.heading * 1000) / 1000, hunger: Math.round(s.hunger * 1000) / 1000 })) });
 
 // Hulda's ways through the meadow. Grass roots are everywhere she can walk: a free medium, faster than
 // running, shown as a bulge under the grass. Tree roots join the trees of the copse and the wood: fixed
