@@ -9,6 +9,15 @@ Source branch: feat/village (from feat/karst-flow, so it carries the rigged Huld
 
 Read `VILLAGERS.md` first: the brief, the principles, the pass order and Noah's decisions. This file is V0 as built.
 
+## D4: the blight (2026-09-25, the dark loop's fourth pass)
+The question: does the corruption spreading from Shub make the loop's cost visible on the land, and close off her fastest way to it?
+- **The reach** (`villageModel.ts`): `blightTarget` is BLIGHT_BASE (50) m round the lair plus BLIGHT_PER_DY (30) for every Dark Young bred of an infant, up to BLIGHT_MAX (360); none bred, none. Each dawn `v.blight` moves toward it by at most BLIGHT_STEP (30) m, spreading or drawing back, so a tree heals a day behind the blight; told as a banner ("The blight spreads: 110 m round the mother, her roots closed to Hulda", "draws back", "is gone"). Saved.
+- **The roots** (`worldRoots.ts`): `setBlocked(pred)`; a surface root is closed (`closed`) when either end or its middle is in the blight. The planner never routes through a closed root and no course ends in the blight (a place inside it has "no way there through the roots"); a tap in the grass finds no root there ("the roots here are blighted"). Closed roots are not drawn.
+- **The land** (`chunkWorld.ts`): `setBlight(pred)` rebuilds the loaded chunks when the blight moves: trees inside are black with sparse withered leaves, the ground under them stained. The village's own trees and the karst are far enough that the blight does not reach them yet (they are not blighted even if it does; recorded).
+- **The map** draws the blight round the lair once she knows it; **the panel** shows its reach.
+- Dev handle: `blight` (get/set), `isBlighted(x, z)`.
+- **For the phone**: whether the reach per Dark Young and the daily step feel right; whether the blight should also drain her (it is inside the dark forest's drain already near the lair); whether a miracle should cleanse it (VILLAGERS.md's open question).
+
 ## D3.1: Noah's notes on D3 (2026-09-25)
 - **One snatcher a night is enough** (kept).
 - **A banner, not only the bleat.** Events can be banners (`VillageEvent.banner`): a band across the top for BANNER_S (6) seconds, for the snatcher's approach ("The goats are bleating: something small is coming for the infants"), a theft, a Dark Young born of an infant, one melting and leaving its infant, an infant taken back at the lair or home, the hold breaking, the mother falling and freeing what she held. The rest stay tips.

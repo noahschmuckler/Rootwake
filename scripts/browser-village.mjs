@@ -103,6 +103,13 @@ try{
  await page.waitForFunction(()=>window.__village.karst.mode==='ride',null,{timeout:30000});await page.screenshot({path:out+'/09c-portal-ride.png'});
  await page.waitForFunction(()=>window.__village.mode==='ground'&&window.__village.karst.zone==='south',null,{timeout:180000});await page.screenshot({path:out+'/09d-portal-arrived.png'});
  await v(page,()=>{window.__village.standAt(0,-16,Math.PI);});await page.waitForTimeout(300);assert.ok(!(await v(page,()=>{const f=window.__village.player.feet();return window.__village.karst.inside(f.x,f.z);})),'back in the meadow, the karst has no say');
+ // D4: the blight round the mother: black trees, stained ground, and roots that refuse her.
+ const lairP=await v(page,()=>window.__village.lair().at);
+ await page.evaluate(({x,z})=>{const k=window.__village;k.speed=0;k.blight=120;k.standAt(x+100,z,Math.PI/2);k.player.pitch=0.1;},lairP);await page.waitForFunction(()=>window.__village.treesNear(window.__village.player.feet().x,window.__village.player.feet().z,40).length>0,null,{timeout:20000}).catch(()=>{});await page.waitForTimeout(800);
+ assert.ok(await page.evaluate(({x,z})=>window.__village.isBlighted(x+100,z),lairP),'she stands in the blight');await page.screenshot({path:out+'/10a-blight.png'});
+ await page.evaluate(({x,z})=>{window.__village.sinkAt(x+100,z);},lairP);await waitMode(page,'grass',10000);await v(page,()=>window.__village.tapStick());
+ const refused=await page.waitForFunction(()=>/blighted/.test(document.getElementById('tip').textContent),null,{timeout:8000}).then(()=>true,()=>false);assert.ok(refused,'a tap in the blight: the roots here are blighted');assert.equal(await v(page,()=>window.__village.mode),'grass','no root takes her');
+ await v(page,()=>{const k=window.__village;k.emerge();});await waitMode(page,'ground',10000);await v(page,()=>{window.__village.blight=0;});
  // The dark forest and the lair (M1b): in the forest her vigor drains; near the lair the mother of goats wakes with her hp over her, a strike lands on her, and a slain Dark Young counts toward a level whose choice is offered.
  // The forest drains at the clock's pace, so the clock runs.
  const lairAt=await v(page,()=>window.__village.lair().at);await page.evaluate(({x,z})=>{const k=window.__village;k.speed=1;k.standAt(x+50,z,Math.atan2(-(x-(x+50)),-(z-z)));},lairAt);await page.waitForTimeout(600);

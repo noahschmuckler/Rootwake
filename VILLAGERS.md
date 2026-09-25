@@ -347,7 +347,7 @@ which she can carry home.
   stack's rule: no forms while loaded); at the lair the infant becomes a Dark Young after a
   gestation; a melted Dark Young leaves its infant.
 - **D4. The blight.** The trees round the lair blighted by the count of Dark Young, their roots
-  refused by root travel, the blight spreading and receding, healing a day behind it.
+  refused by root travel, the blight spreading and receding, healing a day behind it. (Built 2026-09-25; see VILLAGE_HANDOFF.md.)
 - Then balance, with the dev clock, until a vigilant player can hold a small village.
 
 ## Open questions (Noah's to decide, flagged here rather than picked silently)
