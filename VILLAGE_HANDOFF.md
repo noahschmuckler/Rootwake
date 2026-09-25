@@ -9,6 +9,14 @@ Source branch: feat/village (from feat/karst-flow, so it carries the rigged Huld
 
 Read `VILLAGERS.md` first: the brief, the principles, the pass order and Noah's decisions. This file is V0 as built.
 
+## D3.1: Noah's notes on D3 (2026-09-25)
+- **One snatcher a night is enough** (kept).
+- **A banner, not only the bleat.** Events can be banners (`VillageEvent.banner`): a band across the top for BANNER_S (6) seconds, for the snatcher's approach ("The goats are bleating: something small is coming for the infants"), a theft, a Dark Young born of an infant, one melting and leaving its infant, an infant taken back at the lair or home, the hold breaking, the mother falling and freeing what she held. The rest stay tips.
+- **No Dark Young without an infant inside it.** The raid is every Dark Young bred of a stolen infant and at the lair that night (`atHome`), nothing else; Shub's own brood by day (`raidSize`) no longer raids, and the lair's defenders are bred ones too. So a village that has never lost an infant is never raided, and the loop starts with the first theft. Every Dark Young carries its infant, and every melt leaves one.
+- **Delving the lair.** An infant kept at the lair (the day before it becomes a Dark Young) lies in the mother's roots BROOD_RING (3.2) m from her heart, inside her sweep: she can walk in and take it up, told. When the mother falls, every infant she held lies free.
+- **The hold, made clear.** One hold at a time: the root bind holds the one she bound last (`hero.holding`), while she stands within HOLD_RANGE and has sap; the bind on any other runs down in four seconds and it runs. The hold costs HOLD_SAP a second (net one a second against the regen); when the sap reaches zero the hold breaks at once (it used to refill a sliver and never break) and the Dark Young tears free, told. Binding another moves the hold to it. The tip: "holding it · 42 s to melt · sap 63".
+- Journeys breed Dark Young with the handle `breed(n)` where they need them.
+
 ## D3: the snatchers (2026-09-25, the dark loop's third pass; Noah: go, with the recommendations)
 The question: when Shub's supply is the village's own infants, is watching the houses at night worth her while?
 - **The snatcher** (`villageModel.ts`): at SNATCH_TICK, while the village has an infant in a house or lying out, SNATCHERS_PER_NIGHT (one, recommended) come out of the lair. It runs at SNATCH_PACE (root-travel pace) to the nearest infant (one lying out first), takes SNATCH_ENTER_S at a house door, and runs back. Within TELL_RANGE of the green the goats bleat (told). Stealth as smallness and dark: a low dark octopoid with two dim eyes and six rippling arms, named ("something small", "something small, with Fen") only within six metres.
