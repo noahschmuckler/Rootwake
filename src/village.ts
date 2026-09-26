@@ -304,7 +304,8 @@ function stations(dt: number): void {
   if (mode === 'ground') { const r = carryInfant(village, l); if (r) save(); }
   if (!say && village.carried) say = `carrying ${hobbitById(village.carried.id).name} home to house ${village.carried.home + 1}`;
   if (!say && notice.until > time) say = notice.text;
-  tip.hidden = !say; if (say) tip.textContent = say;
+  // On the board the tip stays off: it sat over the gems (Noah); what the board earns is said on the meditation panel.
+  tip.hidden = !say || mode === 'meditate'; if (say) tip.textContent = say;
   if (!miracles.hidden) { const cost = spiritCost(village); for (const b of miracles.querySelectorAll('button')) { const q = b.dataset.quicken as YieldSite | undefined; if (q) { b.disabled = village.prayer < QUICKEN_COST || !quickenable(village, q); b.querySelector('i')!.textContent = String(QUICKEN_COST); } else if (b.dataset.hut) { b.disabled = village.prayer < HUT_PRAYER || !!village.site || 6 + village.huts >= HOUSE_CAP; b.querySelector('i')!.textContent = String(HUT_PRAYER); b.childNodes[0].textContent = village.site ? 'A hut is going up ' : 6 + village.huts >= HOUSE_CAP ? 'No room for more huts ' : 'A new hut '; } else { b.disabled = village.prayer < cost; b.querySelector('i')!.textContent = String(cost); } } }
   prayerEl.textContent = `prayer ${Math.floor(village.prayer)} / ${PRAYER_CAP}`; world.updatePrayer(village.prayer / PRAYER_CAP);
   wobble = Math.max(0, wobble - dt);
@@ -437,8 +438,10 @@ const deepWorld = createDeepWorld(scene), board = new Board(6, 6, 260926), board
 const deepBtn = el<HTMLButtonElement>('deepBtn'), diveBtn = el<HTMLButtonElement>('diveBtn'), clarityEl = el('clarity'), meditateEl = el('meditate'), meditateSub = meditateEl.querySelector('.sub') as HTMLElement, deepEl = el('deep'), deepCanvas = el<HTMLCanvasElement>('deepCanvas'), deepCtx = deepCanvas.getContext('2d')!, deepList = el('deepList');
 /** Where she can meditate: in the pool's ring on the summit, before a shrined village's stone (within SHRINE_R), or at a root convergence (within CONV_R). Tuning. */
 const SHRINE_R = 2.8, CONV_R = 3.5, DIVE_S = 5;
+/** The board on the phone: scaled to BOARD_FIT of its fit and lifted to BOARD_LIFT (camera space) so its bottom rows clear the stick and the fight button and its top the meditation panel. Tuning. */
+const BOARD_FIT = 0.82, BOARD_LIFT = 0.05;
 type Still = { kind: 'pool' } | { kind: 'shrine'; c: Ctx } | { kind: 'convergence'; place: DeepPlace };
-let session: { kind: 'meditate' | 'deepen'; points: number; at: THREE.Vector3 } | null = null, deepMove: { curve: THREE.Curve<THREE.Vector3>; t: number; seconds: number; then: () => void } | null = null, deepTo: DeepPlace | null = null;
+let session: { kind: 'meditate' | 'deepen'; points: number; at: THREE.Vector3; gained?: number } | null = null, deepMove: { curve: THREE.Curve<THREE.Vector3>; t: number; seconds: number; then: () => void } | null = null, deepTo: DeepPlace | null = null;
 const shrinedCount = (): number => ctxs.filter(c => isShrined(c.v)).length;
 /** The deep roots' ends on the surface: the pool; every shrined village's stone; and a root convergence (the root network's hub nearest it) for every place she knows. */
 function deepPlaces(): DeepPlace[] {
@@ -461,9 +464,9 @@ function startSession(kind: 'meditate' | 'deepen'): boolean {
   session = { kind, points: 0, at }; mode = 'meditate'; player.cancelInput(); player.enabled = false; boardView.bind(board); boardView.show(time); meditateEl.hidden = false; refreshMeditate(); return true;
 }
 function endSession(): void { if (mode !== 'meditate' || boardView.isBusy) return; boardView.hide(); boardView.unbind(); player.enabled = true; player.cancelInput(); mode = 'ground'; session = null; meditateEl.hidden = true; saveDeep(); }
-function refreshMeditate(): void { if (!session) return; meditateSub.textContent = session.kind === 'deepen' ? `the puzzle: ${session.points} / ${DEEPEN_POINTS} gems, then the node deepens for ${DEEPEN_COST} clarity` : deep.clarity >= CLARITY_CAP ? 'clarity is full' : `tap neighbouring gems: each run is clarity · ${DIVE_COST} to dive, ${RETURN_COST} to return`; }
+function refreshMeditate(): void { if (!session) return; meditateSub.textContent = session.kind === 'deepen' ? `the puzzle: ${session.points} / ${DEEPEN_POINTS} gems, then the node deepens for ${DEEPEN_COST} clarity` : deep.clarity >= CLARITY_CAP ? 'clarity is full' : `${session.gained ? `+${session.gained} clarity · ` : ''}tap neighbouring gems: each run is clarity · ${DIVE_COST} to dive, ${RETURN_COST} to return`; }
 player.onTap = (x, y) => { if (mode !== 'meditate') return; ray.setFromCamera(new THREE.Vector2(x / innerWidth * 2 - 1, -y / innerHeight * 2 + 1), camera); boardView.tap(ray); };
-boardView.onRun = run => { if (!session) return; if (session.kind === 'meditate') { const g = gather(deep, run.cells.length); if (g > 0) say(`+${g} clarity`, 2); } else { session.points += run.cells.length; if (session.points >= DEEPEN_POINTS && deepen(deep, shrinedCount())) { bannerEl.textContent = `The node deepens: the deep roots reach ${deepReach(deep)} m`; bannerEl.hidden = false; bannerUntil = time + BANNER_S * 1000; session.points = 0; } } refreshMeditate(); saveDeep(); };
+boardView.onRun = run => { if (!session) return; if (session.kind === 'meditate') { const g = gather(deep, run.cells.length); session.gained = (session.gained ?? 0) + g; } else { session.points += run.cells.length; if (session.points >= DEEPEN_POINTS && deepen(deep, shrinedCount())) { bannerEl.textContent = `The node deepens: the deep roots reach ${deepReach(deep)} m`; bannerEl.hidden = false; bannerUntil = time + BANNER_S * 1000; session.points = 0; } } refreshMeditate(); saveDeep(); };
 el('meditateDone').addEventListener('click', endSession);
 /** Down the taproot from the pool (DIVE_S seconds), or back down a deep root from a shrine or a convergence, to the node. */
 function startDive(): boolean {
@@ -707,7 +710,7 @@ function frame(now: number) {
   // Dev: the camera's turn rate about her while she is carried, per second of the carried clock (`sim`), for the journey to hold under CARRY_TURN_MAX.
   { const f = player.feet(), yaw = Math.atan2(camera.position.x - f.x, camera.position.z - f.z), carried = mode === 'root' || (mode === 'karst' && karst.mode === 'ride'); if (carried && camTurn.carried) camTurn.max = Math.max(camTurn.max, Math.abs(Math.atan2(Math.sin(yaw - camTurn.yaw), Math.cos(yaw - camTurn.yaw))) / Math.max(sim, 1e-3)); camTurn.yaw = yaw; camTurn.carried = carried; }
   if (!inDeep(mode)) overheadCamera();
-  fight(Math.min(0.25, wall) * speed, Math.min(0.25, wall)); stations(Math.min(0.25, wall)); presentHulda(dt); for (const c of ctxs) if (c.near) { presentHobbits(c, dt, wall); presentSpirits(c, dt, wall); presentRaiders(c, dt); presentIncidents(c); presentHouses(c); } presentCourse(); villageInfo(dt); deepButtons(); tellShrines(); boardView.update(time); deepWorld.update(time);
+  fight(Math.min(0.25, wall) * speed, Math.min(0.25, wall)); stations(Math.min(0.25, wall)); presentHulda(dt); for (const c of ctxs) if (c.near) { presentHobbits(c, dt, wall); presentSpirits(c, dt, wall); presentRaiders(c, dt); presentIncidents(c); presentHouses(c); } presentCourse(); villageInfo(dt); deepButtons(); tellShrines(); boardView.update(time); if (mode === 'meditate') { boardView.group.scale.multiplyScalar(BOARD_FIT); boardView.group.position.y = BOARD_LIFT; } deepWorld.update(time);
   const light = daylightAt(village.tick), dusk = Math.max(0, 1 - Math.abs(light - 0.12) / 0.12);
   // From a height the view opens: the fog thins to VISTA_FOG of the ground's and the far plane reaches out, over VISTA_ALT m above the ground beneath her (the summit had the meadow's fog and a 220 m far plane, and no view: Noah's playtest). Tuning.
   const vista = (() => { const f = player.feet(), t = Math.max(0, Math.min(1, (f.y - relief(f.x, f.z) - VISTA_ALT[0]) / (VISTA_ALT[1] - VISTA_ALT[0]))); return t * t * (3 - 2 * t); })(), fogScale = 1 - vista * (1 - VISTA_FOG), far = FAR_GROUND + vista * (FAR_VISTA - FAR_GROUND);
