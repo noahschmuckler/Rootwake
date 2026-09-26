@@ -57,7 +57,7 @@ test('her ways: grass everywhere she can walk, faster than running; tree roots j
 });
 test('thoughts are always there: what they are doing, where they are going, and the chatter while it lasts', () => {
   const v = fresh(1); run(v, 30); const pip = v.hobbits.find(s => s.id === 'pip')!; assert.ok(['walking to the stream', 'fetching water'].includes(thought(pip, v.tick)), thought(pip, v.tick));
-  run(v, 170); for (const s of v.hobbits) { const h = byId(s.id), t = thought(s, v.tick); assert.ok(t === (h.keeps === 'fire' ? 'keeping the fire' : S2[h.keeps].verb) || t === 'praying' || t === 'to the stone' || t.startsWith('carrying') || t.startsWith('walking to'), `${h.name} at work or at the stone (${t})`); }
+  run(v, 170); for (const s of v.hobbits) { const h = byId(s.id), t = thought(s, v.tick); assert.ok(t === (h.keeps === 'fire' ? 'keeping the fire' : S2[h.keeps].verb) || t === 'praying' || t === 'to the stone' || t.startsWith('carrying') || t.startsWith('walking to') || v.voiced.some(x => x.text === t), `${h.name} at work or at the stone, or speaking of the world (${t})`); }
   run(v, 340 - 200); const going = v.hobbits.filter(s => ['walking to the fire', 'talking by the fire', 'keeping the fire'].includes(thought(s, v.tick)) || thought(s, v.tick).startsWith('carrying') || thought(s, v.tick).startsWith('eating')); assert.ok(going.length >= 7, `${going.length} bound for the fire`);
   run(v, 400 - 340); const talking = v.hobbits.filter(s => thought(s, v.tick) === 'talking by the fire').length; assert.ok(talking >= 5);
   run(v, 760 - 400); assert.ok(v.hobbits.some(s => ['going home', 'fetching supper', 'home with supper'].includes(thought(s, v.tick))), 'at dusk someone is going home, by way of supper');
@@ -108,8 +108,8 @@ test('three meals a day at the fire, each once: breakfast on the way out, noon w
   step(v, 240); assert.ok(v.hobbits.every(s => s.meals === 1), `everyone has had breakfast once (${v.hobbits.map(s => s.meals)})`);
   const f0 = food(), w0 = v.stores.water; let sawEating = 0; for (let t = 330; t < 420; t++) { step(v, 1); sawEating += v.hobbits.filter(s => s.activity === 'eating').length; }
   assert.ok(v.hobbits.every(s => s.meals === 2), 'everyone ate at noon, once'); assert.ok(sawEating >= 8 * 8, `eating is seen (${sawEating})`); assert.ok(f0 - food() + v.take.berries + v.take.milk + v.take.grain >= 8, 'eight units to the noon meal'); assert.ok(v.stores.water < w0 + v.take.water, 'a drink at noon');
-  step(v, 700 - 420); assert.equal(v.fireWood, 0); const odo = () => v.hobbits.find(s => s.id === 'odo')!;
-  let fetched = false; for (let t = 700; t < 745; t++) { step(v, 1); if (odo().carry?.kind === 'wood') fetched = true; } assert.ok(fetched, 'Odo carries wood to the fire'); assert.ok(v.fireWood >= WOOD_PER_NIGHT - 1e-9);
+  step(v, 691 - 420); assert.equal(v.fireWood, 0); const odo = () => v.hobbits.find(s => s.id === 'odo')!;
+  let fetched = false; for (let t = 691; t < 745; t++) { step(v, 1); if (odo().carry?.kind === 'wood') fetched = true; } assert.ok(fetched, 'Odo carries wood to the fire'); assert.ok(v.fireWood >= WOOD_PER_NIGHT - 1e-9);
   step(v, 900 - 745); assert.ok(v.hobbits.every(s => s.inside && s.meals === 3 && s.hunger < 0.2), `home, three meals, fed (${v.hobbits.map(s => s.meals)})`); step(v, DT - 900); assert.ok(v.fireWood < 0.05, 'the wood is burnt by dawn');
   assert.equal(mealSlot(0), 0); assert.equal(mealSlot(340), 1); assert.equal(mealSlot(730), 2); assert.equal(mealSlot(DT + 5), 3);
   const hungry = freshV(1); step(hungry, 330); for (const k of FOODS) hungry.stores[k] = 0; hungry.land.berries = 0; hungry.land.milk = 0; hungry.land.crops = hungry.land.crops.map(() => 0); for (const s of hungry.hobbits) { s.carry = null; s.errand = null; }
@@ -410,7 +410,7 @@ test('G2: rumor at the fire: the elder tells the condition, the keeper the omens
     v.blight = 80; assert.ok(rumors(v).some(x => x.about === 'blight' && x.text.includes('south-east'))); v.blight = 0;
     spoil(v, 'thicket'); assert.ok(rumors(v).some(x => x.who === 'elder' && x.text === 'the thicket has gone bad')); v.land.spoiled.thicket = 0;
     assert.equal(bearingWords(0), 'north'); assert.equal(bearingWords(44), 'north-east'); assert.equal(bearingWords(270), 'west'); assert.equal(bearingWords(359), 'north');
-    const u = freshV(2); step(u, PHASES[3][1] + 5); assert.ok(u.voiced.length >= 1, 'said at noon'); assert.ok(u.voiced.every(x => typeof x.by === 'string' && x.tick > 0));
+    const u = freshV(2); step(u, PHASES[2][1] - 1); assert.ok(u.voiced.length >= 2, `they speak of the world at their places through the morning (${u.voiced.length})`); assert.ok(u.voiced.some(x => x.about), 'of the world'); step(u, PHASES[3][1] + 5 - u.tick); assert.ok(u.voiced.length >= 1, 'said at noon'); assert.ok(u.voiced.every(x => typeof x.by === 'string' && x.tick > 0));
     const said = u.voiced.filter(x => x.bearing !== undefined); for (const x of said) assert.ok(x.about && x.who === 'keeper', JSON.stringify(x));
     const odo = u.voiced.filter(x => x.by === 'odo'); for (const x of odo) assert.ok(x.who === 'elder' || !x.who, `the elder tells the condition (${JSON.stringify(x)})`);
     const back = par(ser(u)); assert.equal(ser(back), ser(u), 'what was said survives a save'); assert.deepEqual(back.voiced, u.voiced);

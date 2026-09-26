@@ -225,6 +225,8 @@ export const COLLECT_S = 0.4, DELIVER_S = 0.12;
 export const PACE_TICK = 1 / TICKS_PER_SECOND;
 /** At a place they take a step to a new spot every WANDER_EVERY to twice that ticks, and turn to face something else every FACE_EVERY to twice that. Tuning. */
 export const BUBBLE_TICKS = 8, WANDER_EVERY = 14, FACE_EVERY = 5;
+/** Talk of the world (G2, Noah: they were not talking about anything): at their places too, one in TALK_CHANCE every TALK_EVERY ticks, and a rumor stays up RUMOR_TICKS so it can be read. Tuning. */
+export const TALK_EVERY = 50, TALK_CHANCE = 0.35, RUMOR_TICKS = 24;
 export const dayOf = (tick: number): number => Math.floor(tick / DAY_TICKS);
 /** What is already on its way to a store in someone's arms (hobbits, spirits, hers), so two gatherers do not both fill the last of the room. */
 export const inFlight = (v: Village, kind: Store): number => v.hobbits.reduce((n, s) => n + (s.carry && s.carry.kind === kind ? s.carry.n : 0), 0) + v.spirits.reduce((n, s) => n + (s.carry && s.carry.kind === kind ? s.carry.n : 0), 0) + (v.stack && v.stack.kind === kind ? v.stack.n : 0);
@@ -702,7 +704,7 @@ export function advance(v: Village, ticks: number): void {
       if (want === 'green' || h.keeps === 'fire') {
         s.activity = 'talking'; s.heading = Math.atan2(SITES.fire.z - s.z, SITES.fire.x - s.x);
         if (want === 'green' && s.ate < mealSlot(v.tick)) { eat(v, s, true, say); continue; }
-        if (v.tick % 40 === 0 && rand() < 0.5) { const pool = rumors(v), mine = h.keeps === 'fire' ? pool.filter(r => r.who === 'elder') : h.keeps === 'shrine' ? pool.filter(r => r.who === 'keeper') : pool, from = mine.length ? mine : pool.filter(r => !r.who); if (from.length) { const r = from[Math.floor(rand() * from.length)]; say(r.text); voice(v, r, s.id); } }
+        if (v.tick % 40 === 0 && rand() < 0.5) { const pool = rumors(v), mine = h.keeps === 'fire' ? pool.filter(r => r.who === 'elder') : h.keeps === 'shrine' ? pool.filter(r => r.who === 'keeper') : pool, from = mine.length ? mine : pool.filter(r => !r.who); if (from.length) { const r = from[Math.floor(rand() * from.length)]; say(r.text); s.bubbleUntil = v.tick + RUMOR_TICKS; voice(v, r, s.id); } }
       } else if (s.job === 'pray' && kind || h.keeps === 'shrine') {
         // Praying at the stone: faced to it, still; the stone's keeper always; a gatherer while the stores hold enough for the next meal.
         s.activity = 'praying'; s.heading = Math.atan2(SITES.shrine.z - s.z, SITES.shrine.x - s.x); praying++; if (h.keeps === 'shrine') nell = true;
@@ -725,6 +727,8 @@ export function advance(v: Village, ticks: number): void {
           if (s.carry && (s.carry.n >= CARRY[kind] || stock < 1 || room < 1 || supplied(v, kind))) { s.errand = 'deliver'; s.path = route(s, storeSpot(STORES[kind])); s.activity = 'carrying'; continue; }
         }
       }
+      // At their places they speak of the world now and then: what the village needs, and where the wolves, the mother, the pillar are, so there is always a hint of somewhere to go.
+      if (want === 'place' && (s.activity === 'working' || s.activity === 'praying') && (v.tick + h.rises) % TALK_EVERY === 0 && rand() < TALK_CHANCE) { const pool = rumors(v).filter(r => r.about || r.who === 'elder'); if (pool.length) { const r = pool[Math.floor(rand() * pool.length)]; say(r.text); s.bubbleUntil = v.tick + RUMOR_TICKS; voice(v, r, s.id); } }
       if (site && v.tick >= s.wanderAt && s.activity !== 'praying') { s.path = [spotAt(site, rand, 0.65)]; s.activity = 'walking'; s.wanderAt = v.tick + WANDER_EVERY + Math.floor(rand() * WANDER_EVERY); }
     }
     if (v.tick % JOB_EVERY === 0) tellState(v);
@@ -827,7 +831,7 @@ export function parseVillage(raw: string | null): Village {
     v.wolfDay = Math.floor(num(p.wolfDay, -1, 1e6, -1)); v.bitten = Math.floor(num(p.bitten, 0, 1e4, 0)); v.lastBitten = Math.floor(num(p.lastBitten, 0, 1e4, 0));
     // G2: the streak, the night's eating, what was said, the state last told.
     v.fedStreak = Math.floor(num(p.fedStreak, 0, 1e6, 0)); v.raidEaten = Math.floor(num(p.raidEaten, 0, 1e6, 0)); v.lastRaidEaten = Math.floor(num(p.lastRaidEaten, 0, 1e6, 0)); v.told = ['thriving', 'steady', 'pressured', 'besieged', 'lost'].includes(p.told) ? p.told : 'steady';
-    if (Array.isArray(p.voiced)) v.voiced = p.voiced.filter((r: unknown) => r && typeof (r as Voiced).text === 'string').slice(-RUMORS_KEPT).map((r: Voiced) => ({ text: r.text, tick: num(r.tick, 0, 1e9, 0), by: typeof r.by === 'string' ? r.by : '', ...(typeof r.bearing === 'number' ? { bearing: num(r.bearing, 0, 360, 0) } : {}), ...(['lair', 'karst', 'blight'].includes(r.about as string) ? { about: r.about } : {}), ...(['elder', 'keeper'].includes(r.who as string) ? { who: r.who } : {}) }));
+    if (Array.isArray(p.voiced)) v.voiced = p.voiced.filter((r: unknown) => r && typeof (r as Voiced).text === 'string').slice(-RUMORS_KEPT).map((r: Voiced) => ({ text: r.text, tick: num(r.tick, 0, 1e9, 0), by: typeof r.by === 'string' ? r.by : '', ...(typeof r.bearing === 'number' ? { bearing: num(r.bearing, 0, 360, 0) } : {}), ...(typeof r.about === 'string' && r.about.length <= 40 ? { about: r.about } : {}), ...(['elder', 'keeper'].includes(r.who as string) ? { who: r.who } : {}) }));
     // G1: the huts built and the one going up.
     v.huts = Math.floor(num(p.huts, 0, HOUSE_CAP - 6, 0)); if (p.site && typeof p.site === 'object' && 6 + v.huts < HOUSE_CAP) v.site = { id: 6 + v.huts, wood: Math.floor(num(p.site.wood, 0, HUT_WOOD, 0)), water: Math.floor(num(p.site.water, 0, HUT_WATER, 0)), work: Math.floor(num(p.site.work, 0, HUT_WORK_TICKS, 0)), asked: p.site.asked === true };
     // D3: the infants out of their houses and the snatchers abroad.
