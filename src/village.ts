@@ -102,7 +102,7 @@ player.teleport(0, -16, Math.PI); player.pitch = 0.08; installMobilityControls(p
 let time = 0, last = performance.now(), tickBank = 0, saveClock = 0, simSeconds = 0;
 // Dev control of the clock (tap the clock): the day runs at `speed` times real time, and jumps forward advance the model; a jump back replays the village from its seed to that tick, which is the same state, since the village is deterministic and she does not touch it yet.
 let speed = 1;
-function syncShown(c: Ctx = ctx): void { for (const s of c.v.hobbits) { const v = shownFor(c, s); v.x = s.x; v.z = s.z; v.heading = s.heading; } }
+function syncShown(c: Ctx = ctx): void { if (!c.near) { hideShown(c); return; } for (const s of c.v.hobbits) { const v = shownFor(c, s); v.x = s.x; v.z = s.z; v.heading = s.heading; } }
 /** A village begun again, from its first dawn, in its place. */
 function freshCtx(c: Ctx): void { c.v = freshVillage(home.seed, c.folk, { x: c.ox, z: c.oz }); if (c === ctx) village = c.v; }
 function setTick(t: number): void { t = Math.max(0, Math.floor(t)); for (const c of ctxs) { if (t >= c.v.tick) advance(c.v, t - c.v.tick); else { freshCtx(c); advance(c.v, t); } } shareHero(); tickBank = 0; for (const c of ctxs) syncShown(c); save(); }
@@ -248,8 +248,8 @@ function shownFor(c: Ctx, s: HobbitState): Shown {
   v.label.className = 'name'; v.label.textContent = v.name; v.bubble.className = 'bubble'; const meter = document.createElement('i'); meter.className = 'hunger'; v.hunger = document.createElement('b'); meter.append(v.hunger); v.label.append(meter); labels.append(v.label, v.bubble); c.shownMap.set(s.id, v); return v;
 }
 function pruneShown(c: Ctx): void { const alive = new Set(c.v.hobbits.map(s => s.id)); for (const [id, v] of c.shownMap) if (!alive.has(id)) { v.label.remove(); v.bubble.remove(); c.shownMap.delete(id); } }
-/** A village out of presentation (far, or the map open): its names and bubbles hidden. */
-function hideShown(c: Ctx): void { for (const v of c.shownMap.values()) { v.label.hidden = true; v.bubble.hidden = true; } for (const [id, l] of c.raiderLabels) { l.label.remove(); c.raiderLabels.delete(id); c.world.hideRaider(id); } for (const e of c.smallLabels) e.hidden = true; }
+/** A village out of presentation (far): its labels leave the page (a far village has none; they are made again, at the model's places, when she comes near). */
+function hideShown(c: Ctx): void { for (const v of c.shownMap.values()) { v.label.remove(); v.bubble.remove(); } c.shownMap.clear(); for (const [id, l] of c.raiderLabels) { l.label.remove(); c.raiderLabels.delete(id); c.world.hideRaider(id); } for (const e of c.smallLabels) e.remove(); c.smallLabels.length = 0; }
 const shown = { get list(): Shown[] { return ctx.v.hobbits.map(s => shownFor(ctx, s)); } };
 { const t = Number(new URLSearchParams(location.search).get('tick')); if (Number.isFinite(t) && t > 0) setTick(t); }
 const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
