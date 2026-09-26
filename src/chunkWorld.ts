@@ -13,13 +13,14 @@ import { crownHeight, trunkRadius, type Tree } from './villageModel';
 import type { Collider } from './player';
 
 interface Chunk { key: string; group: THREE.Group; trees: Tree[]; colliders: Collider[]; geometries: THREE.BufferGeometry[] }
-export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain = createTerrain(seed)) {
+export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain = createTerrain(seed), dens: { x: number; z: number }[] = []) {
   const relief = terrain.height;
   const loaded = new Map<string, Chunk>();
   const bark = new THREE.MeshStandardMaterial({ color: '#6d5f48', roughness: 1 }), leaf = spriteMaterial('leaf', '#5f8657'), darkBark = new THREE.MeshStandardMaterial({ color: '#2a2230', roughness: 1 }), darkLeaf = spriteMaterial('leaf', '#2e2a3a', { emissive: '#1a0a20', emissiveIntensity: 0.25 }), collar = new THREE.MeshStandardMaterial({ color: '#8a6f4e', roughness: 0.95 });
   // D4: trees in the blight are black and withered, and the ground under them stained; rebuilt when the blight moves.
   const blightBark = new THREE.MeshStandardMaterial({ color: '#151018', roughness: 0.8 }), blightLeaf = spriteMaterial('leaf', '#2a1424', { emissive: '#3a0a30', emissiveIntensity: 0.35 });
   let blighted: (x: number, z: number) => boolean = () => false;
+  const denRock = new THREE.MeshStandardMaterial({ color: '#3b3630', roughness: 1, flatShading: true }), bone = new THREE.MeshStandardMaterial({ color: '#d9d2bf', roughness: 0.9 });
   const vision = groundVision(), ground = vision.material;
   const setUnder = (under: number, x = 0, z = 0) => vision.update(under, x, z);
   const colourOf = terrain.colour;
@@ -28,7 +29,14 @@ export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain 
     const geo = new THREE.PlaneGeometry(CHUNK, CHUNK, n, n); geo.rotateX(-Math.PI / 2); geo.translate((cx + 0.5) * CHUNK, 0, (cz + 0.5) * CHUNK);
     { const pos = geo.attributes.position as THREE.BufferAttribute, col: number[] = []; for (let i = 0; i < pos.count; i++) { const x = pos.getX(i), z = pos.getZ(i); pos.setY(i, terrain.vertex(x, z)); const c = colourOf(x, z); col.push(...(blighted(x, z) ? [c[0] * 0.35 + 0.05, c[1] * 0.2, c[2] * 0.35 + 0.06] as [number, number, number] : c)); } geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); const normals = geo.attributes.normal as THREE.BufferAttribute; for (let i = 0; i < pos.count; i++) normals.setXYZ(i, ...terrain.normal(pos.getX(i), pos.getZ(i))); }
     const surface = new THREE.Mesh(geo, ground); surface.name = "world-ground"; group.add(surface); geometries.push(geo);
-    const trees = chunkTrees(cx, cz, seed), rand = mulberry32((cx * 31 + cz * 17 + seed) >>> 0), colliders: Collider[] = [];
+    const here = dens.filter(d => Math.floor(d.x / CHUNK) === cx && Math.floor(d.z / CHUNK) === cz);
+    const trees = chunkTrees(cx, cz, seed).filter(t => !dens.some(d => Math.hypot(t.x - d.x, t.z - d.z) < 14)), rand = mulberry32((cx * 31 + cz * 17 + seed) >>> 0), colliders: Collider[] = [];
+    // G3: a den: a mound of dark rocks round a low mouth, bones about it. The rocks are colliders.
+    for (const d of here) { const y = relief(d.x, d.z), rocks: THREE.BufferGeometry[] = [], bones: THREE.BufferGeometry[] = [];
+      for (let i = 0; i < 7; i++) { const a = i / 7 * Math.PI * 2 + 0.4, r = 1.6 + (i % 2) * 0.5, g = new THREE.DodecahedronGeometry(0.55 + (i % 3) * 0.2, 0); g.translate(d.x + Math.cos(a) * r, y + 0.3, d.z + Math.sin(a) * r); rocks.push(g); colliders.push({ x: d.x + Math.cos(a) * r, z: d.z + Math.sin(a) * r, radius: 0.7, minY: y - 0.2, maxY: y + 1.2 }); }
+      { const g = new THREE.BoxGeometry(2.2, 0.5, 1.6).toNonIndexed(); g.translate(d.x, y + 0.95, d.z); rocks.push(g); const mouth = new THREE.BoxGeometry(1.0, 0.7, 1.2); mouth.translate(d.x, y + 0.35, d.z); const m = new THREE.Mesh(mouth, new THREE.MeshBasicMaterial({ color: '#08060a' })); group.add(m); }
+      for (let i = 0; i < 8; i++) { const g = new THREE.CylinderGeometry(0.03, 0.04, 0.5 + (i % 3) * 0.2, 4); g.rotateZ(Math.PI / 2); g.rotateY(i * 1.3); g.translate(d.x + Math.cos(i * 2.1) * (2.4 + (i % 2)), y + 0.05, d.z + Math.sin(i * 2.1) * (2.4 + (i % 2))); bones.push(g); }
+      const rm = new THREE.Mesh(mergeGeometries(rocks)!, denRock), bm = new THREE.Mesh(mergeGeometries(bones)!, bone); group.add(rm, bm); geometries.push(rm.geometry, bm.geometry); }
     const wood: THREE.BufferGeometry[] = [], cards: Standee[] = [], collars: THREE.BufferGeometry[] = [], dwood: THREE.BufferGeometry[] = [], dcards: Standee[] = [], bwood: THREE.BufferGeometry[] = [], bcards: Standee[] = [];
     for (const t of trees) { const dark = biomeAt(t.x, t.z, seed) === 'dark', blight = blighted(t.x, t.z), parts = treeParts(rand, t.x, relief(t.x, t.z), t.z, t.size); (blight ? bwood : dark ? dwood : wood).push(...parts.wood); (blight ? bcards : dark ? dcards : cards).push(...parts.cards.filter((_, i) => !blight || i % 3 === 0)); collars.push(...parts.roots); colliders.push({ x: t.x, z: t.z, radius: trunkRadius(t), minY: relief(t.x, t.z) - 0.2, maxY: relief(t.x, t.z) + crownHeight(t) }); }
     const add = (gs: THREE.BufferGeometry[], st: Standee[], b: THREE.Material, l: THREE.Material): void => { if (gs.length) { const g = mergeGeometries(gs)!; group.add(new THREE.Mesh(g, b)); geometries.push(g); } if (st.length) { const g = standees(st); group.add(new THREE.Mesh(g, l)); geometries.push(g); } };

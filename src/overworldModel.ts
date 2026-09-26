@@ -5,17 +5,41 @@
 // within EXPLORE_RADIUS of her, saved; and the places she knows.
 import { mulberry32 } from './colors';
 
-export interface Place { id: 'village' | 'karst' | 'lair'; name: string; x: number; z: number; radius: number }
+export type PlaceKind = 'village' | 'karst' | 'lair' | 'den';
+export interface Place { id: string; kind: PlaceKind; name: string; x: number; z: number; radius: number; tier?: number }
 /** The lair's distance and the dark forest's breadth (Noah: 400 m, 150 m across). The karst 330 m north. Tuning. */
 export const LAIR_DISTANCE = 400, FOREST_RADIUS = 75, KARST_AT = { x: -60, z: -330 };
-export function places(seed: number): Place[] {
+/** The karsts, for the danger field (G5 adds more). */
+export const KARSTS: { x: number; z: number }[] = [KARST_AT];
+/** G3 (EXPANSION.md): danger is placement, keyed to distance from the nearest karst: none within DANGER_SAFE m of one, full by DANGER_FAR. Tuning. */
+export const DANGER_SAFE = 250, DANGER_FAR = 1200;
+export function danger(x: number, z: number, karsts = KARSTS): number { let d = Infinity; for (const k of karsts) d = Math.min(d, Math.hypot(x - k.x, z - k.z)); const t = Math.max(0, Math.min(1, (d - DANGER_SAFE) / (DANGER_FAR - DANGER_SAFE))); return t * t * (3 - 2 * t); }
+/** Dens: the land in cells of DEN_CELL m, DEN_RANGE cells out from the village each way; a cell holds a den with DEN_CHANCE times its danger, of a tier by the danger (1 to 3; PACK_BASE + tier wolves), never within DEN_CLEAR of the village, the karst's clearing or the dark forest. A den's pack comes down on a village within DEN_REACH. Tuning. */
+export const DEN_CELL = 300, DEN_RANGE = 6, DEN_CHANCE = 0.35, DEN_CLEAR = 150, DEN_REACH = 500, DEN_RADIUS = 40, PACK_BASE = 2;
+export interface Den { id: string; x: number; z: number; tier: number; pack: number }
+const denCache = new Map<number, Den[]>();
+export function dens(seed: number): Den[] {
+  const cached = denCache.get(seed); if (cached) return cached;
+  const lair = basePlaces(seed).find(p => p.id === 'lair')!, out: Den[] = [];
+  for (let cx = -DEN_RANGE; cx <= DEN_RANGE; cx++) for (let cz = -DEN_RANGE; cz <= DEN_RANGE; cz++) {
+    const rand = mulberry32((seed * 9173 + (cx + 50) * 613 + (cz + 50) * 7919 + 100003) >>> 0);
+    const x = Math.round((cx + 0.5) * DEN_CELL + (rand() - 0.5) * 0.6 * DEN_CELL), z = Math.round((cz + 0.5) * DEN_CELL + (rand() - 0.5) * 0.6 * DEN_CELL), dg = danger(x, z), roll = rand();
+    if (roll >= dg * DEN_CHANCE) continue;
+    if (Math.hypot(x, z) < 44 + DEN_CLEAR || Math.hypot(x - KARST_AT.x, z - KARST_AT.z) < 100 + DEN_CLEAR || Math.hypot(x - lair.x, z - lair.z) < FOREST_RADIUS + DEN_CLEAR) continue;
+    const tier = 1 + Math.min(2, Math.floor(dg * 3)); out.push({ id: `den-${cx},${cz}`, x, z, tier, pack: PACK_BASE + tier });
+  }
+  denCache.set(seed, out); return out;
+}
+function basePlaces(seed: number): Place[] {
   const rand = mulberry32((seed * 3251 + 17) >>> 0); const a = 0.55 + rand() * 1.4; // south-east to south-west: away from the karst
   return [
-    { id: 'village', name: 'the village', x: 0, z: 0, radius: 44 },
-    { id: 'karst', name: 'the karst', x: KARST_AT.x, z: KARST_AT.z, radius: 60 },
-    { id: 'lair', name: 'the dark forest', x: Math.round(Math.cos(a) * LAIR_DISTANCE), z: Math.round(Math.sin(a) * LAIR_DISTANCE), radius: FOREST_RADIUS },
+    { id: 'village', kind: 'village', name: 'the village', x: 0, z: 0, radius: 44 },
+    { id: 'karst', kind: 'karst', name: 'the karst', x: KARST_AT.x, z: KARST_AT.z, radius: 60 },
+    { id: 'lair', kind: 'lair', name: 'the dark forest', x: Math.round(Math.cos(a) * LAIR_DISTANCE), z: Math.round(Math.sin(a) * LAIR_DISTANCE), radius: FOREST_RADIUS },
   ];
 }
+/** Every place: the village, the karst, the lair, and the dens. */
+export function places(seed: number): Place[] { return [...basePlaces(seed), ...dens(seed).map(d => ({ id: d.id, kind: 'den' as const, name: "a wolves' den", x: d.x, z: d.z, radius: DEN_RADIUS, tier: d.tier }))]; }
 /** Exploration: cells of CELL m, revealed within EXPLORE_RADIUS of where she stands. Tuning. */
 export const CELL = 24, EXPLORE_RADIUS = 70;
 /** G2: a hint is what the villagers said of a place she has not found: a bearing from the green and the words, drawn on the map as a fan HINT_REACH m long, HINT_SPREAD either side, until she finds the place. Tuning. */
@@ -39,7 +63,7 @@ export const isRevealed = (o: Overworld, x: number, z: number): boolean => { con
 export const knownPlaces = (o: Overworld): Place[] => places(o.seed).filter(p => o.known.has(p.id));
 export const serializeOverworld = (o: Overworld): string => JSON.stringify({ seed: o.seed, revealed: [...o.revealed], known: [...o.known], hints: o.hints });
 export function parseOverworld(raw: string | null): Overworld {
-  try { const p = JSON.parse(raw ?? 'null'); if (!p || typeof p !== 'object') return freshOverworld(); const o = freshOverworld(Number.isFinite(p.seed) ? p.seed : 1); if (Array.isArray(p.revealed)) for (const k of p.revealed) if (typeof k === 'string' && /^-?\d+,-?\d+$/.test(k)) o.revealed.add(k); if (Array.isArray(p.known)) for (const k of p.known) if (['village', 'karst', 'lair'].includes(k)) o.known.add(k); if (Array.isArray(p.hints)) for (const h of p.hints) if (h && typeof h.about === 'string' && typeof h.text === 'string' && Number.isFinite(h.bearing) && !o.known.has(h.about)) o.hints.push({ about: h.about, bearing: ((h.bearing % 360) + 360) % 360, text: h.text }); return o; } catch { return freshOverworld(); }
+  try { const p = JSON.parse(raw ?? 'null'); if (!p || typeof p !== 'object') return freshOverworld(); const o = freshOverworld(Number.isFinite(p.seed) ? p.seed : 1); if (Array.isArray(p.revealed)) for (const k of p.revealed) if (typeof k === 'string' && /^-?\d+,-?\d+$/.test(k)) o.revealed.add(k); if (Array.isArray(p.known)) for (const k of p.known) if (typeof k === 'string' && (['village', 'karst', 'lair'].includes(k) || /^den--?\d+,-?\d+$/.test(k))) o.known.add(k); if (Array.isArray(p.hints)) for (const h of p.hints) if (h && typeof h.about === 'string' && typeof h.text === 'string' && Number.isFinite(h.bearing) && !o.known.has(h.about)) o.hints.push({ about: h.about, bearing: ((h.bearing % 360) + 360) % 360, text: h.text }); return o; } catch { return freshOverworld(); }
 }
 /** The pinch: the camera pulls from ZOOM_MIN m at her shoulder to ZOOM_MAX m overhead, its elevation rising from ELEV_LOW to ELEV_HIGH with the distance; past the end, the map. Tuning. */
 export const ZOOM_MIN = 3, ZOOM_MAX = 40, ELEV_LOW = 0.38, ELEV_HIGH = 1.36;

@@ -210,7 +210,28 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
     if (dead > 0) { f.group.rotation.z = Math.min(1.4, dead * 3); f.group.position.y = relief(x, z) - Math.max(0, dead - 4) * 0.25; }
     else f.group.rotation.z = 0;
   }
-  function hideRaider(id: number): void { const f = raiderFigures.get(id); if (f) f.group.visible = false; }
+  // G3: a wolf, low and grey, four legs, a tail and ears, eyes that catch the light; struck it flashes; dead it lies on its side.
+  const wolfMat = new THREE.MeshStandardMaterial({ color: '#6a655c', emissive: '#000000', roughness: 0.95, flatShading: true }), wolfEye = new THREE.MeshBasicMaterial({ color: '#ffe070' });
+  const wolfFigures = new Map<number, { group: THREE.Group; legs: THREE.Mesh[]; tail: THREE.Mesh; coil: THREE.Mesh; hide: THREE.MeshStandardMaterial }>();
+  function wolfFigure(id: number) {
+    let f = wolfFigures.get(id); if (f) return f;
+    const group = new THREE.Group(), hide = wolfMat.clone(), legs: THREE.Mesh[] = [];
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.34, 9, 7), hide); body.scale.set(1.9, 0.8, 0.7); body.position.y = 0.58; group.add(body);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.19, 8, 6), hide); head.scale.set(1.3, 0.9, 0.85); head.position.set(0.72, 0.72, 0); group.add(head);
+    const snout = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.13, 0.15), hide); snout.position.set(0.98, 0.66, 0); group.add(snout);
+    for (const zz of [-0.09, 0.09]) { const ear = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.16, 5), hide); ear.position.set(0.62, 0.92, zz); group.add(ear); const eye = new THREE.Mesh(new THREE.SphereGeometry(0.03, 5, 4), wolfEye); eye.position.set(0.88, 0.76, zz); group.add(eye); }
+    for (let i = 0; i < 4; i++) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.035, 0.5, 5), hide); leg.position.set(-0.4 + Math.floor(i / 2) * 0.8, 0.26, (i % 2 ? 1 : -1) * 0.17); group.add(leg); legs.push(leg); }
+    const tail = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.02, 0.5, 5), hide); tail.position.set(-0.75, 0.62, 0); tail.rotation.z = 1.2; group.add(tail);
+    const coil = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.05, 6, 20), coilMat); coil.rotation.x = -Math.PI / 2; coil.position.y = 0.08; coil.visible = false; group.add(coil);
+    scene.add(group); f = { group, legs, tail, coil, hide }; wolfFigures.set(id, f); return f;
+  }
+  function setWolf(id: number, x: number, z: number, heading: number, t: number, moving: boolean, hurt: number, rooted: number, dead: number): void {
+    const f = wolfFigure(id); f.group.visible = true; f.group.position.set(x, relief(x, z), z); f.group.rotation.y = -heading;
+    for (let i = 0; i < f.legs.length; i++) f.legs[i].rotation.z = moving ? Math.sin(t * 0.014 + i * 1.6) * 0.5 : 0;
+    f.tail.rotation.x = Math.sin(t * 0.005 + id) * 0.25; f.hide.emissive.set(hurt > 0 ? '#b03030' : '#000000'); f.coil.visible = rooted > 0;
+    if (dead > 0) { f.group.rotation.z = Math.min(1.5, dead * 3); f.group.position.y = relief(x, z) - Math.max(0, dead - 4) * 0.2; } else f.group.rotation.z = 0;
+  }
+  function hideRaider(id: number): void { const f = raiderFigures.get(id); if (f) f.group.visible = false; const w = wolfFigures.get(id); if (w) w.group.visible = false; }
   // D3: the snatcher, a small octopoid, low and dark with two dim eyes and six arms that ripple as it runs; an infant is a pale bundle in its arms, lying on the land, or in hers.
   const snatchMat = new THREE.MeshStandardMaterial({ color: '#1a1420', emissive: '#2a0a30', emissiveIntensity: 0.4, roughness: 0.35 }), snatchEye = new THREE.MeshBasicMaterial({ color: '#c08aff' }), bundleMat = new THREE.MeshStandardMaterial({ color: '#efe6cc', emissive: '#3a3020', emissiveIntensity: 0.25, roughness: 0.9 });
   const makeBundle = (): THREE.Mesh => { const b = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), bundleMat); b.scale.set(1.5, 0.8, 0.9); return b; };
@@ -284,6 +305,6 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   let fireWood = 0;
   /** Which armful each figure shows, for checks. */
   const armfuls = (): (Store | null)[] => livingNow.map(s => { const c = carriedMap.get(figureFor(s))!; return STORE_LIST.find(k => c[k].visible) ?? null; });
-  return { setHouses, setSite, setSnatcher, hideSnatchersBut, setInfants, colliders, get figures() { return livingNow.map(figureFor); }, figureFor, setFigureClips, figure, mass, update, updateLand, updatePrayer, armfuls, setRaider, hideRaider, flashSlash, flashBurst, updateStrokes, setLairAt, setLair, setStation, get activeStation() { return activeStation; }, setStack, stack, spiritFigure, spiritFigures, stream, crownPoint, trunkPoint };
+  return { setWolf, setHouses, setSite, setSnatcher, hideSnatchersBut, setInfants, colliders, get figures() { return livingNow.map(figureFor); }, figureFor, setFigureClips, figure, mass, update, updateLand, updatePrayer, armfuls, setRaider, hideRaider, flashSlash, flashBurst, updateStrokes, setLairAt, setLair, setStation, get activeStation() { return activeStation; }, setStack, stack, spiritFigure, spiritFigures, stream, crownPoint, trunkPoint };
 }
 export type VillageWorld = ReturnType<typeof buildVillage>;

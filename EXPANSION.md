@@ -177,7 +177,11 @@ every study here has used.
   stone's keeper the omens, the rest draw from all of it.)
 - **G3. Other lairs and the danger gradient.** *Question: does danger-by-distance teach itself through
   exploration, and do peaceful villages feel like relief rather than emptiness?* Generalized lair
-  placement, the den and ruin templates, the deep-root entrance.
+  placement, the den and ruin templates, the deep-root entrance. (G3a built 2026-09-26; see
+  VILLAGE_HANDOFF.md: the field, the dens, the wolves. Decided in the building: Shub's lair keeps its
+  place regardless of the field for now, dens obey it; wolves hurt villagers but never kill them; wolves
+  first, boars later; the first village's ground is calm, and the keeper names the nearest den beyond
+  reach so there is a direction to walk. G3b, the ruins and the thorn hedge, follows.)
 - **G4. The karst re-framed.** *Question: does the spring's fisheye view feel like the launching-station
   beat, and is root travel still worth using for the places that aren't shrined?* The spring mode,
   the fisheye dashboard, shrine-teleport.
