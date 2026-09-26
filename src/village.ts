@@ -504,6 +504,9 @@ deepList.addEventListener('click', e => { const b = (e.target as HTMLElement).cl
 deepCanvas.addEventListener('pointerdown', e => { if (mode !== 'deep') return; const w = deepCanvas.width, h = deepCanvas.height, R = Math.min(w, h) * 0.46, dpr = devicePixelRatio, px = e.clientX * dpr, py = e.clientY * dpr; let best: DeepPlace | null = null, bd = 28 * dpr; for (const p of reachable(deep, KARST_AT, deepPlaces())) { const q = fisheye(deep, KARST_AT, p), d = Math.hypot(w / 2 + q.u * R - px, h / 2 + q.v * R - py); if (d < bd) { bd = d; best = p; } } if (best) launchTo(best.id); });
 deepBtn.addEventListener('click', () => { startSession(canDeepen(deep, shrinedCount()) && stillPlace()?.kind === 'pool' && deep.clarity >= CLARITY_CAP - 1 ? 'deepen' : 'meditate'); });
 diveBtn.addEventListener('click', () => { startDive(); });
+/** Told once when a village's lifetime prayer reaches the shrine's threshold. */
+const shrinedTold = new Set<string>(ctxs.filter(c => isShrined(c.v)).map(c => c.id));
+function tellShrines(): void { for (const c of ctxs) { const now = isShrined(c.v); if (now && !shrinedTold.has(c.id)) { shrinedTold.add(c.id); if (c === ctx || overworld.known.has(c.id)) { bannerEl.textContent = `${c.i ? c.name : 'The village'} is shrined to her: the deep roots reach its stone`; bannerEl.hidden = false; bannerUntil = time + BANNER_S * 1000; } } else if (!now) shrinedTold.delete(c.id); } }
 /** The buttons and the readout, each frame: what a still place offers. */
 function deepButtons(): void {
   const st = stillPlace(); const show = !!st || inDeep(mode);
@@ -611,6 +614,8 @@ function villageInfo(dt: number): void {
     `food <b>${food}</b>/${foodCap} · water ${Math.floor(st.water)} · wood ${Math.floor(st.wood)}${st.dark >= 1 ? ` · <i>leavings ${Math.floor(st.dark)}</i>` : ''}`,
     `land: berries ${Math.floor(l.berries)}/${BERRY_CAP} · branches ${l.branches}/${BRANCH_CAP} · milk ${l.milk}/${MILK_PER_DAY} · ripe strips ${ripe}/${CROP_STRIPS}${spoiled.length ? ` · <i>spoiled: ${spoiled.join(', ')}</i>` : ''}`,
     `${hungry ? `<i>${hungry} hungry</i> · ` : ''}${starving ? `<i>${starving} starving</i> · ` : ''}fed ${village.wellFedDays}/${BIRTH_DAYS} days to a birth · spirits ${village.spirits.length}`,
+    // G4 (Noah): the lifetime prayer given at the stone, which shrines the village at SHRINE_PRAYER, beside the pool she spends.
+    `prayer given <b>${Math.floor(village.prayed)}</b>${isShrined(village) ? ' · <b style="color:#e8dcff">shrined</b>' : ` / ${SHRINE_PRAYER} to a shrine`}`,
     `houses ${housesOf(village).length} · beds ${housesOf(village).length * BEDS}${village.site ? ` · <i>a hut rising: wood ${village.site.wood}/${HUT_WOOD} · water ${village.site.water}/${HUT_WATER} · built ${Math.round(village.site.work / HUT_WORK_TICKS * 100)}%</i>` : h.length > housesOf(village).length * BEDS ? ' · <i>crowded</i>' : ''}`,
     `last night the Dark Young ate ${village.lastRaidEaten} · melted ${village.melted}`,
     ...(village.blight > 0 ? [`<i>the blight: ${Math.round(village.blight)} m round the mother</i>`] : []),
@@ -702,7 +707,7 @@ function frame(now: number) {
   // Dev: the camera's turn rate about her while she is carried, per second of the carried clock (`sim`), for the journey to hold under CARRY_TURN_MAX.
   { const f = player.feet(), yaw = Math.atan2(camera.position.x - f.x, camera.position.z - f.z), carried = mode === 'root' || (mode === 'karst' && karst.mode === 'ride'); if (carried && camTurn.carried) camTurn.max = Math.max(camTurn.max, Math.abs(Math.atan2(Math.sin(yaw - camTurn.yaw), Math.cos(yaw - camTurn.yaw))) / Math.max(sim, 1e-3)); camTurn.yaw = yaw; camTurn.carried = carried; }
   if (!inDeep(mode)) overheadCamera();
-  fight(Math.min(0.25, wall) * speed, Math.min(0.25, wall)); stations(Math.min(0.25, wall)); presentHulda(dt); for (const c of ctxs) if (c.near) { presentHobbits(c, dt, wall); presentSpirits(c, dt, wall); presentRaiders(c, dt); presentIncidents(c); presentHouses(c); } presentCourse(); villageInfo(dt); deepButtons(); boardView.update(time); deepWorld.update(time);
+  fight(Math.min(0.25, wall) * speed, Math.min(0.25, wall)); stations(Math.min(0.25, wall)); presentHulda(dt); for (const c of ctxs) if (c.near) { presentHobbits(c, dt, wall); presentSpirits(c, dt, wall); presentRaiders(c, dt); presentIncidents(c); presentHouses(c); } presentCourse(); villageInfo(dt); deepButtons(); tellShrines(); boardView.update(time); deepWorld.update(time);
   const light = daylightAt(village.tick), dusk = Math.max(0, 1 - Math.abs(light - 0.12) / 0.12);
   // From a height the view opens: the fog thins to VISTA_FOG of the ground's and the far plane reaches out, over VISTA_ALT m above the ground beneath her (the summit had the meadow's fog and a 220 m far plane, and no view: Noah's playtest). Tuning.
   const vista = (() => { const f = player.feet(), t = Math.max(0, Math.min(1, (f.y - relief(f.x, f.z) - VISTA_ALT[0]) / (VISTA_ALT[1] - VISTA_ALT[0]))); return t * t * (3 - 2 * t); })(), fogScale = 1 - vista * (1 - VISTA_FOG), far = FAR_GROUND + vista * (FAR_VISTA - FAR_GROUND);
