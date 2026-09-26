@@ -443,6 +443,7 @@ test('G3a: a den in reach sends its pack down at dusk; villagers out of doors ru
     const out = v.hobbits.find(s => !s.inside && s.stage !== 'infant')!; assert.ok(out, 'someone still out at dusk'); const w0 = wolves(v)[0]; w0.x = out.x + 0.5; w0.z = out.z;
     stepRaiders(v, 0.25, null); step(v, 1); assert.equal(out.errand, 'flee', 'they run for the door'); assert.equal(thought(out, v.tick), 'wolves!');
     const missed0 = out.missed; let bit = false; for (let i = 0; i < 20 && !bit; i++) { w0.x = out.x + 0.3; w0.z = out.z; stepRaiders(v, 0.3, null); if (out.missed > missed0) bit = true; } assert.ok(bit, 'bitten'); assert.equal(out.missed, Math.min(DEATH_MEALS - 1, missed0 + WOLF_BITE_MEALS)); assert.ok(v.bitten >= 1); assert.ok(v.events.some(e => e.text.endsWith('is bitten by a wolf')));
+    { const inc = incidents(v); assert.ok(inc.some(i => i.text === 'wolves from the south-east' && wolves(v).some(w => w.id === i.foe) && Math.abs(Math.hypot(i.x, i.z) - RAID_FROM) < 1), `the pack's coming is an incident where it came in (${JSON.stringify(inc)})`); assert.equal(inc.filter(i => i.who === out.id).length, 1, 'one incident per victim, the latest bite'); const bite = inc.find(i => i.who === out.id)!; assert.ok(bite && bite.foe === w0.id && bite.text === `${byId(out.id).name} bitten by a wolf` && Math.hypot(bite.x - out.x, bite.z - out.z) < 3, `the bite is an incident on the victim (${JSON.stringify(bite)})`); assert.deepEqual(par(ser(v)).incidents, v.incidents, 'saved'); const w = par(ser(v)); w.tick += INCIDENT_TICKS + 1; assert.equal(incidents(w).length, 0, 'gone after INCIDENT_TICKS'); }
     for (let i = 0; i < 40 && !out.inside; i++) step(v, 1); assert.ok(out.inside, 'home and in'); assert.ok(out.missed < DEATH_MEALS, 'the bite never kills');
     // Her strike: a wolf dies; the pack slain, the den lies quiet.
     const slain0 = v.slain, xp0 = v.hero.xp; for (const w of wolves(v)) { let n = 0; while (w.state !== 'dead' && n++ < 20) strike(v, { x: w.x, z: w.z }, 1, 0); assert.equal(w.state, 'dead', 'a wolf dies'); }
@@ -458,7 +459,7 @@ test('G3a: a den in reach sends its pack down at dusk; villagers out of doors ru
 import { villageSites, SITE_NAMES, SITE_KARST, SITE_NEAR, SITE_FAR, SITE_LAIR, SITE_APART, VILLAGE_RADIUS, hintFrom } from '../src/overworldModel';
 import { beyond as beyondAt, islands } from '../src/chunkModel';
 import { createTerrain as terrainOf } from '../src/worldTerrain';
-import { folkOf, folkIndex, foundersOf, newcomersOf, isHome, setLayouts, setVillageSites, inWater as water, grassCan as grass, FOLK_NAMES, WOLF_TICK as WT } from '../src/villageModel';
+import { folkOf, folkIndex, foundersOf, newcomersOf, isHome, setLayouts, setVillageSites, inWater as water, grassCan as grass, FOLK_NAMES, WOLF_TICK as WT, incidents, INCIDENT_TICKS, RAID_FROM } from '../src/villageModel';
 test('G4: two more villages by the seed, on the karst\'s safe side, past the first village and the forest, apart from one another; dens keep clear of them; each an island in the land, flat and treeless, coloured like the meadow', () => {
   for (const seed of [1, 2, 3, 4, 5, 6]) {
     const sites = villageSites(seed), lair = places(seed).find(p => p.id === 'lair')!; assert.equal(sites.length, SITE_NAMES.length, `seed ${seed} places them all`);
