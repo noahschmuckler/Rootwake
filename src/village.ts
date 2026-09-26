@@ -249,7 +249,7 @@ function shownFor(c: Ctx, s: HobbitState): Shown {
 }
 function pruneShown(c: Ctx): void { const alive = new Set(c.v.hobbits.map(s => s.id)); for (const [id, v] of c.shownMap) if (!alive.has(id)) { v.label.remove(); v.bubble.remove(); c.shownMap.delete(id); } }
 /** A village out of presentation (far, or the map open): its names and bubbles hidden. */
-function hideShown(c: Ctx): void { for (const v of c.shownMap.values()) { v.label.hidden = true; v.bubble.hidden = true; } for (const l of c.raiderLabels.values()) l.label.hidden = true; for (const e of c.smallLabels) e.hidden = true; }
+function hideShown(c: Ctx): void { for (const v of c.shownMap.values()) { v.label.hidden = true; v.bubble.hidden = true; } for (const [id, l] of c.raiderLabels) { l.label.remove(); c.raiderLabels.delete(id); c.world.hideRaider(id); } for (const e of c.smallLabels) e.hidden = true; }
 const shown = { get list(): Shown[] { return ctx.v.hobbits.map(s => shownFor(ctx, s)); } };
 { const t = Number(new URLSearchParams(location.search).get('tick')); if (Number.isFinite(t) && t > 0) setTick(t); }
 const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
