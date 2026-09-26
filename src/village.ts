@@ -439,8 +439,8 @@ function villageInfo(dt: number): void {
 /** Overhead: past the shoulder the camera sits `zoom` m from her on the yaw, raised by the elevation, looking at her. */
 function overheadCamera(): void { if (zoom <= ZOOM_MIN + 0.05) return; const f = player.feet(), e = zoomElevation(zoom), t = new THREE.Vector3(f.x, f.y + 0.6, f.z); camera.position.set(t.x + Math.sin(player.yaw) * Math.cos(e) * zoom, t.y + Math.sin(e) * zoom, t.z + Math.cos(player.yaw) * Math.cos(e) * zoom); camera.lookAt(t); }
 function frame(now: number) {
-  // Two clocks: the animation step is capped (a hitch must not throw her), but the village's ticks come from the real seconds that passed while the page was watched, however slow the frames (only a stall of over WALL_CAP s is dropped).
-  requestAnimationFrame(frame); const wall = Math.min(WALL_CAP, Math.max(0, (now - last) / 1000)), dt = Math.min(0.05, wall); last = now; if (document.hidden || intro.open) return; time += dt * 1000; simSeconds += dt;
+  // Two clocks: the animation step is capped (a hitch must not throw her), but the village's ticks come from the real seconds that passed while the page was watched, however slow the frames (only a stall of over WALL_CAP s is dropped). Carried travel (roots, the karst's rides, sinking and rising) runs on `sim`, real seconds capped at a quarter second like the raiders' stepping, so a slow renderer does not stretch a ride.
+  requestAnimationFrame(frame); const wall = Math.min(WALL_CAP, Math.max(0, (now - last) / 1000)), dt = Math.min(0.05, wall), sim = Math.min(0.25, wall); last = now; if (document.hidden || intro.open) return; time += dt * 1000; simSeconds += dt;
   // The village lives only while watched: whole ticks from the real seconds that passed, none while hidden.
   tickBank += wall * TICKS_PER_SECOND * speed; const ticks = Math.floor(tickBank); if (ticks > 0) { advance(village, ticks); tickBank -= ticks; }
   if (pendingTap && now - pendingTap > 330) { pendingTap = 0; singleTap(); }
@@ -453,7 +453,7 @@ function frame(now: number) {
   const g = player.gesture, stickHeld = g.held && Math.hypot(g.x, g.y) >= 0.25;
   let wantUnder = 0;
   if (mode === 'ground') { player.applyCamera(camera); const f = player.feet(); if (karst.inside(f.x, f.z)) { if (!loaded() && karst.groundFrame(dt) && mode === 'ground') mode = 'karst'; } else pressInto(dt); }
-  else if (mode === 'karst') { wantUnder = karst.underground ? 1 : 0; karst.update(dt, time, { held: stickHeld, x: stickX(), y: stickY() }); if (mode === 'karst' && karst.mode === 'ground') mode = 'ground'; }
+  else if (mode === 'karst') { wantUnder = karst.underground ? 1 : 0; karst.update(sim, time, { held: stickHeld, x: stickX(), y: stickY() }); if (mode === 'karst' && karst.mode === 'ground') mode = 'ground'; }
   else if (mode === 'trunk' && trunk) {
     const t = trunk, top = crownHeight(t.tree), y = stickY();
     if (Math.abs(y) > 0.25) t.h += -y * TRUNK_CLIMB * dt; t.h = Math.min(top, Math.max(0, t.h));
@@ -496,17 +496,17 @@ function frame(now: number) {
       const tan = rootTangent(r.root, r.s); if (!r.forward) tan.negate(); const flat = new THREE.Vector3(tan.x, 0, tan.z).normalize(), dot = r.exit ? 1 : flat.lengthSq() < 0.01 ? -stickY() : flat.dot(w);
       if (Math.abs(dot) < 0.35) { r.off += dt; if (r.off > 0.25) { const p = rootPoint(r.root, r.s); if ((r.root as WorldRoot).surface && grassCan(p.x, p.z)) { grass = { x: p.x, z: p.z, heading: player.yaw }; root = null; mode = 'grass'; } } }
       else { r.off = 0; if (dot < 0) r.forward = !r.forward; else {
-        r.s += (r.forward ? 1 : -1) * ROOT_SPEED * dt;
+        r.s += (r.forward ? 1 : -1) * ROOT_SPEED * sim;
         if (r.s >= r.root.length || r.s <= 0) { const atEnd = r.s >= r.root.length; r.s = Math.min(r.root.length, Math.max(0, r.s)); const endpoint = endTree(r.root, atEnd);
           if (r.exit) { const n = network.node(endpoint); if (n) { const stand = standNear(n); root = null; mode = 'rise'; move = { from: rootPoint(r.root, r.s), to: new THREE.Vector3(stand.x + KARST_AT.x, groundAt(ROOT_ZONES[n.zone], stand.x, stand.z), stand.z + KARST_AT.z), t: 0, seconds: 0.7, then: () => { karst.standOn(n.zone, stand.x, stand.z, stand.yaw); mode = 'ground'; } }; } }
           else { const next = nextRoot(endpoint, w, r.root); if (next) { r.root = next.root; r.forward = next.forward; r.s = next.forward ? 0 : next.root.length; } }
  }
       } }
     } else r.off = 0;
-    if (mode === 'root') { const p = rootPoint(r.root, r.s); place(p); const t = rootTangent(r.root, r.s); if (!r.forward) t.negate(); followHeading(Math.atan2(-t.x, -t.z), dt); orbitCamera(p, 3.2, 1.3, carryEase(dt)); }
+    if (mode === 'root') { const p = rootPoint(r.root, r.s); place(p); const t = rootTangent(r.root, r.s); if (!r.forward) t.negate(); followHeading(Math.atan2(-t.x, -t.z), sim); orbitCamera(p, 3.2, 1.3, carryEase(sim)); }
   } else if ((mode === 'sink' || mode === 'rise') && move) {
-    move.t = Math.min(1, move.t + dt / move.seconds); const k = move.t * move.t * (3 - 2 * move.t); const p = move.from.clone().lerp(move.to, k);
-    wantUnder = mode === 'sink' ? k : 1 - k; place(p); orbitCamera(p, 3.2, 1.3, carryEase(dt));
+    move.t = Math.min(1, move.t + sim / move.seconds); const k = move.t * move.t * (3 - 2 * move.t); const p = move.from.clone().lerp(move.to, k);
+    wantUnder = mode === 'sink' ? k : 1 - k; place(p); orbitCamera(p, 3.2, 1.3, carryEase(sim));
     if (move.t === 1) { const then = move.then; move = null; then(); }
   }
   // The ease settles exactly: the ground's alpha hash would stipple forever on a residual 0.01.
@@ -521,7 +521,7 @@ function frame(now: number) {
   const vista = (() => { const f = player.feet(), t = Math.max(0, Math.min(1, (f.y - relief(f.x, f.z) - VISTA_ALT[0]) / (VISTA_ALT[1] - VISTA_ALT[0]))); return t * t * (3 - 2 * t); })(), fogScale = 1 - vista * (1 - VISTA_FOG), far = FAR_GROUND + vista * (FAR_VISTA - FAR_GROUND);
   if (Math.abs(camera.far - far) > 0.5) { camera.far = far; camera.updateProjectionMatrix(); }
   colour.copy(nightSky).lerp(daySky, Math.min(1, light * 1.6)).lerp(duskSky, dusk * 0.6); scene.background = colour; scene.fog = new THREE.FogExp2(colour, 0.011 * fogScale);
-  if (mode !== 'karst') karst.update(dt, time, { held: false, x: 0, y: 0 }, under); const atm = karst.atmosphere(); if (atm) { colour.copy(atm.colour); scene.background = colour; scene.fog = new THREE.FogExp2(colour, atm.inCavern ? atm.fog : atm.fog * fogScale); }
+  if (mode !== 'karst') karst.update(sim, time, { held: false, x: 0, y: 0 }, under); const atm = karst.atmosphere(); if (atm) { colour.copy(atm.colour); scene.background = colour; scene.fog = new THREE.FogExp2(colour, atm.inCavern ? atm.fog : atm.fog * fogScale); }
   { const f = player.feet(), depth = forestDepth(f.x, f.z); if (depth > 0) { colour.lerp(forestSky, 0.35 + depth * 0.6); scene.background = colour; scene.fog = new THREE.FogExp2(colour, (0.011 + depth * 0.03) * fogScale); hemi.intensity *= 1 - depth * 0.6; sun.intensity *= 1 - depth * 0.7; } }
   hemi.intensity = 0.5 + 1.9 * light; sun.intensity = 2.3 * light; world.updateLand(village); setHuts(village.huts); world.setHouses(village); world.setSite(village); world.update(light, time, under); chunks.setUnder(under, player.feet().x, player.feet().z); networkScene.vision(under);
   // What happened is told: the latest as a tip, and (Noah: the bleat was not warning enough) the ones that matter as a banner across the top.

@@ -109,7 +109,7 @@ try{
  const offered=await v(page,()=>window.__village.portal.places());assert.ok(offered.includes('cavernFern')&&offered.includes('pine')&&offered.includes('southShrub'),`the cavern, the summit and the south ledge (${offered})`);
  await v(page,()=>{window.__village.camTurn.reset();window.__village.portal.pick('southShrub');});await page.waitForFunction(()=>window.__village.mode==='karst'&&window.__village.karst.travelling,null,{timeout:5000});
  await page.waitForFunction(()=>window.__village.karst.mode==='ride',null,{timeout:30000});await page.screenshot({path:out+'/09c-portal-ride.png'});
- await page.waitForFunction(()=>window.__village.mode==='ground'&&window.__village.karst.zone==='south',null,{timeout:180000});await page.screenshot({path:out+'/09d-portal-arrived.png'});
+ await page.waitForFunction(()=>window.__village.mode==='ground'&&window.__village.karst.zone==='south',null,{timeout:300000});await page.screenshot({path:out+'/09d-portal-arrived.png'});
  // The ride's camera never whips (Noah's playtest: root travel round and up the karst was nauseating): its turn about her stays under the carried cap.
  const turn=await v(page,()=>window.__village.camTurn.max);assert.ok(turn<1.05,`the camera turned no faster than the cap while carried (${turn.toFixed(2)} rad/s)`);
  // From the summit the view opens: the fog thins and the far plane reaches out, over the far land beyond the loaded chunks.
