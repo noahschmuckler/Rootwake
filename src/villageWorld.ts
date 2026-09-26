@@ -7,7 +7,7 @@
 // fire by the wood laid on it (updateLand).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { HOUSES, SITES, STORES, STORE_LIST, STATIONS, STACK_CAP, OVERFILL, HOUSE_RADIUS, MEADOW_RADIUS, GREEN, TREES, TREE_ROOTS, STREAM_Z, BERRY_CAP, BRANCH_CAP, MILK_PER_DAY, CROP_STRIPS, WOOD_PER_NIGHT, crownHeight, trunkRadius, hobbitById, isSpoiled, YIELD_SITES, type YieldSite, type HobbitState, type Tree, type Village, type Store } from './villageModel';
+import { HOUSES, HOUSE_CAP, housePlace, siteHouse, SITE_RING_R, HUT_WOOD, HUT_WATER, HUT_WORK_TICKS, SITES, STORES, STORE_LIST, STATIONS, STACK_CAP, OVERFILL, HOUSE_RADIUS, MEADOW_RADIUS, GREEN, TREES, TREE_ROOTS, STREAM_Z, BERRY_CAP, BRANCH_CAP, MILK_PER_DAY, CROP_STRIPS, WOOD_PER_NIGHT, crownHeight, trunkRadius, hobbitById, isSpoiled, YIELD_SITES, type YieldSite, type HobbitState, type Tree, type Village, type Store, type House } from './villageModel';
 import { mulberry32 } from './colors';
 import { createTerrain, type Terrain } from './worldTerrain';
 import type { Collider } from './player';
@@ -39,13 +39,34 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   const wall = new THREE.MeshStandardMaterial({ color: '#c9b79a', roughness: 1, flatShading: true }), thatch = new THREE.MeshStandardMaterial({ color: '#8a7a3e', roughness: 1, flatShading: true }), doorMat = new THREE.MeshStandardMaterial({ color: '#3a2a1a', roughness: 0.9 });
   const windowMat = new THREE.MeshStandardMaterial({ color: '#f0d890', emissive: '#f0b050', emissiveIntensity: 0, roughness: 0.6 });
   const colliders: Collider[] = [];
-  for (const h of HOUSES) {
-    const g = new THREE.Group(); g.position.set(h.x, relief(h.x, h.z), h.z); g.rotation.y = -h.facing; scene.add(g);
+  const houseGroup = (h: House): THREE.Group => {
+    const g = new THREE.Group(); g.position.set(h.x, relief(h.x, h.z), h.z); g.rotation.y = -h.facing; g.name = `house-${h.id}`; scene.add(g);
     const w = new THREE.Mesh(new THREE.CylinderGeometry(HOUSE_RADIUS, HOUSE_RADIUS + 0.1, 0.95, 14), wall); w.position.y = 0.475; g.add(w);
     const r = new THREE.Mesh(new THREE.ConeGeometry(HOUSE_RADIUS + 0.5, 1.0, 14), thatch); r.position.y = 1.4; g.add(r);
     const d = new THREE.Mesh(new THREE.CircleGeometry(0.3, 18), doorMat); d.position.set(HOUSE_RADIUS + 0.02, 0.36, 0); d.rotation.y = Math.PI / 2; g.add(d);
     const win = new THREE.Mesh(new THREE.PlaneGeometry(0.24, 0.2), windowMat); win.position.set(HOUSE_RADIUS * Math.cos(1.1) + 0.02, 0.55, HOUSE_RADIUS * Math.sin(1.1)); win.rotation.y = Math.PI / 2 - 1.1; g.add(win);
-    colliders.push({ x: h.x, z: h.z, radius: HOUSE_RADIUS + 0.05, minY: -0.2, maxY: 2 });
+    return g;
+  };
+  for (const h of HOUSES) { houseGroup(h); colliders.push({ x: h.x, z: h.z, radius: HOUSE_RADIUS + 0.05, minY: -0.2, maxY: 2 }); }
+  const baseColliders = colliders.length;
+  // G1: the huts built since, on the second ring, each with a worn path to the green; shown as the model says how many stand (setHouses), hidden again when the village starts over.
+  const huts = new Map<number, THREE.Group>();
+  function setHouses(v: Village): void {
+    for (let id = 6; id < 6 + v.huts; id++) if (!huts.has(id)) { const h = housePlace(id), g = houseGroup(h); const pg = new THREE.PlaneGeometry(1.0, Math.hypot(h.door.x - GREEN.x, h.door.z - GREEN.z)); pg.rotateX(-Math.PI / 2); pg.rotateY(-Math.atan2(h.door.z - GREEN.z, h.door.x - GREEN.x) - Math.PI / 2); pg.translate((GREEN.x + h.door.x) / 2 - h.x, 0.035 - relief(h.x, h.z), (GREEN.z + h.door.z) / 2 - h.z); const path = new THREE.Mesh(pg, worn); path.rotation.y = h.facing; g.add(path); huts.set(id, g); }
+    colliders.length = baseColliders;
+    for (const [id, g] of huts) { g.visible = id < 6 + v.huts; if (g.visible) { const h = housePlace(id); colliders.push({ x: h.x, z: h.z, radius: HOUSE_RADIUS + 0.05, minY: -0.2, maxY: 2 }); } }
+  }
+  // G1: the stakes for a hut going up: four stakes, a wall that rises with the wood and water brought, the thatch with the work (setSite).
+  const stakeMat = new THREE.MeshStandardMaterial({ color: '#7a6448', roughness: 1 }), siteGroup = new THREE.Group(); siteGroup.visible = false; siteGroup.name = 'hut-site'; scene.add(siteGroup);
+  for (let i = 0; i < 4; i++) { const a = i / 4 * Math.PI * 2 + Math.PI / 4, st = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, 0.8, 5), stakeMat); st.position.set(Math.cos(a) * HOUSE_RADIUS, 0.4, Math.sin(a) * HOUSE_RADIUS); siteGroup.add(st); }
+  const siteWall = new THREE.Mesh(new THREE.CylinderGeometry(HOUSE_RADIUS, HOUSE_RADIUS + 0.1, 0.95, 14), wall); siteGroup.add(siteWall); const siteThatch = new THREE.Mesh(new THREE.ConeGeometry(HOUSE_RADIUS + 0.5, 1.0, 14), thatch); siteGroup.add(siteThatch);
+  function setSite(v: Village): void {
+    const h = siteHouse(v); siteGroup.visible = !!h && !!v.site; rings.site.visible = siteGroup.visible; if (!h || !v.site) return;
+    rings.site.position.set(h.door.x, relief(h.door.x, h.door.z) + 0.04, h.door.z);
+    siteGroup.position.set(h.x, relief(h.x, h.z), h.z); siteGroup.rotation.y = -h.facing;
+    const materials = (v.site.wood + v.site.water) / (HUT_WOOD + HUT_WATER), work = v.site.work / HUT_WORK_TICKS;
+    siteWall.visible = materials > 0.02; siteWall.scale.y = Math.max(0.02, materials); siteWall.position.y = 0.475 * siteWall.scale.y;
+    siteThatch.visible = work > 0.02; siteThatch.scale.setScalar(Math.max(0.02, work)); siteThatch.position.y = 0.95 + 0.45 * siteThatch.scale.y;
   }
   // The fire on the green: a ring of stones, embers, flames that show at night.
   const stone = new THREE.MeshStandardMaterial({ color: '#6f6a5f', roughness: 1, flatShading: true });
@@ -104,6 +125,7 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   const ringMats: Record<string, THREE.MeshBasicMaterial> = {}, rings: Record<string, THREE.Mesh> = {};
   // Each ring follows the meadow's relief vertex by vertex and is drawn last over the paths, so it neither sinks under the ground nor fights the road.
   for (const st of STATIONS) { const mat = new THREE.MeshBasicMaterial({ color: st.kind === 'gather' ? '#d8f07a' : st.kind === 'deliver' ? '#f0c060' : '#c8a8ff', transparent: true, opacity: 0.35, depthWrite: false, depthTest: false }); const geo = new THREE.RingGeometry(st.r - 0.1, st.r, 40); geo.rotateX(-Math.PI / 2); { const pos = geo.attributes.position as THREE.BufferAttribute; for (let i = 0; i < pos.count; i++) pos.setY(i, relief(st.x + pos.getX(i), st.z + pos.getZ(i)) + 0.04); } const ring = new THREE.Mesh(geo, mat); ring.renderOrder = 3; ring.position.set(st.x, 0, st.z); scene.add(ring); ringMats[st.id] = mat; rings[st.id] = ring; }
+  { const mat = new THREE.MeshBasicMaterial({ color: '#f0c060', transparent: true, opacity: 0.35, depthWrite: false, depthTest: false }); const geo = new THREE.RingGeometry(SITE_RING_R - 0.1, SITE_RING_R, 40); geo.rotateX(-Math.PI / 2); const ring = new THREE.Mesh(geo, mat); ring.renderOrder = 3; ring.visible = false; scene.add(ring); ringMats.site = mat; rings.site = ring; }
   let activeStation: string | null = null;
   function setStation(id: string | null, t: number): void { activeStation = id; for (const k in ringMats) { const on = k === id; ringMats[k].opacity = on ? 0.75 + Math.sin(t * 0.01) * 0.2 : 0.35; rings[k].scale.setScalar(on ? 1 + Math.sin(t * 0.008) * 0.03 : 1); } }
   // Her stack: what she carries from a place to a store, on her back, one slab a unit, coloured by kind (setStack).
@@ -121,8 +143,8 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   const lanes: THREE.BufferGeometry[] = [];
   for (const r of TREE_ROOTS) lanes.push(taperedTube(r.curve, Math.ceil(r.length * 2), 6, t => 0.15 * (0.55 + 0.45 * Math.abs(2 * t - 1)), 0.22));
   scene.add(new THREE.Mesh(mergeGeometries(lanes)!, laneMat));
-  const grassMat = spriteMaterial('grass', '#9fc06a'), grass: Standee[] = [];
-  for (let i = 0; i < 900; i++) { const a = rand() * 6.28, r = Math.sqrt(rand()) * (MEADOW_RADIUS + 2), x = Math.cos(a) * r, z = Math.sin(a) * r; if (Math.hypot(x, z) < 5.5 || HOUSES.some(h => Math.hypot(x - h.x, z - h.z) < HOUSE_RADIUS + 0.4)) continue; const k = 0.22 + rand() * 0.3; grass.push({ position: new THREE.Vector3(x, relief(x, z), z), yaw: rand() * Math.PI, width: k, height: k * (0.8 + rand() * 0.5) }); }
+  const grassMat = spriteMaterial('grass', '#9fc06a'), grass: Standee[] = [], housePlaces = Array.from({ length: HOUSE_CAP }, (_, i) => housePlace(i));
+  for (let i = 0; i < 900; i++) { const a = rand() * 6.28, r = Math.sqrt(rand()) * (MEADOW_RADIUS + 2), x = Math.cos(a) * r, z = Math.sin(a) * r; if (Math.hypot(x, z) < 5.5 || housePlaces.some(h => Math.hypot(x - h.x, z - h.z) < HOUSE_RADIUS + 0.4)) continue; const k = 0.22 + rand() * 0.3; grass.push({ position: new THREE.Vector3(x, relief(x, z), z), yaw: rand() * Math.PI, width: k, height: k * (0.8 + rand() * 0.5) }); }
   scene.add(new THREE.Mesh(standees(grass), grassMat));
   // The hobbits (D1: a population, not eight): Hulda's skeleton at half her height, in cloth, each with their own colours, made when first seen (a birth) and by stage (a child is CHILD_SCALE of grown); a dead one's figure is taken away. The clips are kept for the figures made later.
   type Figure = ReturnType<typeof createHulda> & { height: number };
@@ -258,6 +280,6 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   let fireWood = 0;
   /** Which armful each figure shows, for checks. */
   const armfuls = (): (Store | null)[] => livingNow.map(s => { const c = carriedMap.get(figureFor(s))!; return STORE_LIST.find(k => c[k].visible) ?? null; });
-  return { setSnatcher, hideSnatchersBut, setInfants, colliders, get figures() { return livingNow.map(figureFor); }, figureFor, setFigureClips, figure, mass, update, updateLand, updatePrayer, armfuls, setRaider, hideRaider, flashSlash, flashBurst, updateStrokes, setLairAt, setLair, setStation, get activeStation() { return activeStation; }, setStack, stack, spiritFigure, spiritFigures, stream, crownPoint, trunkPoint };
+  return { setHouses, setSite, setSnatcher, hideSnatchersBut, setInfants, colliders, get figures() { return livingNow.map(figureFor); }, figureFor, setFigureClips, figure, mass, update, updateLand, updatePrayer, armfuls, setRaider, hideRaider, flashSlash, flashBurst, updateStrokes, setLairAt, setLair, setStation, get activeStation() { return activeStation; }, setStack, stack, spiritFigure, spiritFigures, stream, crownPoint, trunkPoint };
 }
 export type VillageWorld = ReturnType<typeof buildVillage>;

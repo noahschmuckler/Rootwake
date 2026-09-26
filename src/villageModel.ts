@@ -29,10 +29,20 @@ export const GREEN = { x: 0, z: 0 }, HOUSE_RING = 9, HOUSE_RADIUS = 1.35, MEADOW
 /** How far out she can walk: the meadow and the wood round it (the wood's trees stand out to MEADOW_RADIUS + 36). */
 export const WALK_RADIUS = MEADOW_RADIUS + 40;
 export interface House { id: number; x: number; z: number; facing: number; door: Vec2 }
-export const HOUSES: House[] = Array.from({ length: 6 }, (_, i) => { const a = i / 6 * Math.PI * 2 + 0.3, x = Math.cos(a) * HOUSE_RING, z = Math.sin(a) * HOUSE_RING, facing = a + Math.PI; return { id: i, x, z, facing, door: { x: x + Math.cos(facing) * (HOUSE_RADIUS + 0.4), z: z + Math.sin(facing) * (HOUSE_RADIUS + 0.4) } }; });
+/** G1: the village can grow to HOUSE_CAP houses. The founders' six stand on the ring; huts built after them stand on a second ring HUT_RING out, HUT_SPREAD either side of a founder's house (clear of the paths through the gaps), doors to the green. Tuning. */
+export const HOUSE_CAP = 18, HUT_RING = 14, HUT_SPREAD = Math.PI / 9;
+const houseAt = (id: number, a: number, r: number): House => { const x = Math.cos(a) * r, z = Math.sin(a) * r, facing = a + Math.PI; return { id, x, z, facing, door: { x: x + Math.cos(facing) * (HOUSE_RADIUS + 0.4), z: z + Math.sin(facing) * (HOUSE_RADIUS + 0.4) } }; };
+/** Where house `id` stands (the founders' by id, a hut's by its order on the second ring). */
+export const housePlace = (id: number): House => { if (id < 6) return houseAt(id, id / 6 * Math.PI * 2 + 0.3, HOUSE_RING); const k = id - 6; return houseAt(id, (k % 6) / 6 * Math.PI * 2 + 0.3 + (k < 6 ? HUT_SPREAD : -HUT_SPREAD), HUT_RING); };
+export const HOUSES: House[] = Array.from({ length: 6 }, (_, i) => housePlace(i));
+/** The village's houses now: the founders' and the huts built since (`huts`). */
+export const housesOf = (v: { huts: number }): House[] => Array.from({ length: 6 + v.huts }, (_, i) => housePlace(i));
+let hutsPlaced = 0;
+/** The entry tells the model how many huts stand, for the lookups that have no village in hand (the grass, the wood's paths). */
+export const setHuts = (n: number): void => { hutsPlaced = n; };
 export type SiteKind = 'thicket' | 'stream' | 'copse' | 'field' | 'pen' | 'shrine' | 'fire';
 /** A site: where it is, how wide, its name in a thought ('the thicket'), and what one does there ('gathering berries'). */
-export interface Site { id: SiteKind; x: number; z: number; radius: number; name: string; verb: string }
+export interface Site { id: SiteKind | 'hut'; x: number; z: number; radius: number; name: string; verb: string }
 const gap = (i: number, r: number): Vec2 => { const a = (i + 0.5) / 6 * Math.PI * 2 + 0.3; return { x: Math.cos(a) * r, z: Math.sin(a) * r }; };
 export const SITES: Record<SiteKind, Site> = {
   fire: { id: 'fire', ...GREEN, radius: 2.4, name: 'the fire', verb: 'keeping the fire' },
@@ -122,9 +132,9 @@ export type Stage = 'infant' | 'child' | 'grown';
 export type Activity = 'sleeping' | 'walking' | 'working' | 'talking' | 'returning' | 'carrying' | 'eating' | 'praying';
 export type Want = 'home' | 'place' | 'green';
 /** An errand breaks the rhythm's walk: to a store with an armful ('deliver'), to the fire for a meal on the way out at dawn and on the way home at dusk ('meal'), to the woodpile and back to the fire ('firewood'). */
-export type Errand = 'deliver' | 'meal' | 'firewood' | null;
+export type Errand = 'deliver' | 'meal' | 'firewood' | 'fetch' | 'hut' | null;
 /** What a gatherer is doing with the working day: gathering at their place, or praying at the stone because the stores already hold enough for the next meal. */
-export type Job = 'gather' | 'pray';
+export type Job = 'gather' | 'pray' | 'build';
 export interface HobbitState { id: string; x: number; z: number; heading: number; activity: Activity; want: Want; job: Job; path: Vec2[]; speed: number; inside: boolean; bubble: string; bubbleUntil: number; wanderAt: number; faceAt: number; hunger: number; carry: Carry | null; errand: Errand; gatherAt: number; eatUntil: number; jobAt: number; meals: number; ate: number; home: number; stage: Stage; born: number; missed: number }
 /** What happened in the village, for the entry to tell: a birth, a death, a child going out. */
 export interface VillageEvent { tick: number; text: string; banner?: boolean }
@@ -146,18 +156,22 @@ export interface Snatcher { id: number; x: number; z: number; heading: number; s
 export interface Hero { vigor: number; sap: number; faint: number; calm: number; xp: number; level: number; choices: number; perks: { vigor: number; strike: number; sap: number }; holding: number }
 /** The lair's manifestation: a local mother of goats at the dark forest's centre, awake while she is near, with its own hp; slain, it is gone for LAIR_PEACE_DAYS and the raids with it, then grows again. */
 export interface Lair { hp: number; alive: boolean; slainDay: number; spawnClock: number; sweepClock: number; hurt: number; woke: boolean }
-export interface Village { seed: number; tick: number; hobbits: HobbitState[]; stores: Record<Store, number>; land: Land; fireWood: number; take: Take; lastTake: Take; prayer: number; prayed: number; spirits: Spirit[]; stack: Carry | null; raiders: Raider[]; hero: Hero; raidDay: number; slain: number; eaten: number; lair: Lair; dead: { id: string; tick: number }[]; wellFedDays: number; dayMissed: boolean; mourningUntil: number; events: VillageEvent[]; darkMealsToday: number; melted: number; blight: number; snatchers: Snatcher[]; snatchDay: number; brood: { infant: InfantRef; due: number }[]; bred: InfantRef[]; dropped: { infant: InfantRef; x: number; z: number }[]; carried: InfantRef | null; taken: number; returned: number }
+export interface Village { seed: number; tick: number; hobbits: HobbitState[]; stores: Record<Store, number>; land: Land; fireWood: number; take: Take; lastTake: Take; prayer: number; prayed: number; spirits: Spirit[]; stack: Carry | null; raiders: Raider[]; hero: Hero; raidDay: number; slain: number; eaten: number; lair: Lair; dead: { id: string; tick: number }[]; wellFedDays: number; dayMissed: boolean; mourningUntil: number; events: VillageEvent[]; darkMealsToday: number; melted: number; blight: number; snatchers: Snatcher[]; snatchDay: number; brood: { infant: InfantRef; due: number }[]; bred: InfantRef[]; dropped: { infant: InfantRef; x: number; z: number }[]; carried: InfantRef | null; taken: number; returned: number; huts: number; site: HutSite | null }
+/** G1: a hut going up. Its house id (the next on the second ring), the wood and water brought to it so far, the work done on it in ticks, and whether she asked for it. */
+export interface HutSite { id: number; wood: number; water: number; work: number; asked: boolean }
+/** G1, the village grows. A house has BEDS beds; more people than beds and the village is crowded: at dawn it sets the stakes for a hut by itself. A hut takes HUT_WOOD wood (only what the woodpile holds beyond the night's fire) and HUT_WATER water from the stores, fetched an armful at a time by the freed gatherers, and HUT_WORK_TICKS of building at the stakes; she can ask one of the stone for HUT_PRAYER at any time, and her stack of wood or water goes straight into it. At dawn a grown newcomer in a house past its beds moves out to a house with a bed free. A quickening at the stone (QUICKEN_COST) fills a place at once: the bushes, the branches, the milk, or ripens every strip. Tuning. */
+export const HUT_WOOD = 6, HUT_WATER = 4, HUT_WORK_TICKS = 240, BEDS = 2, HUT_PRAYER = 15, QUICKEN_COST = 10;
 export const hobbitById = (id: string): Hobbit => ALL_HOBBITS.find(h => h.id === id)!;
-export const houseOf = (h: Hobbit): House => HOUSES[h.home];
-/** The house a hobbit lives in now (a newcomer's is the one it was born into). */
-export const homeOf = (s: HobbitState): House => HOUSES[s.home];
+export const houseOf = (h: Hobbit): House => housePlace(h.home);
+/** The house a hobbit lives in now (a newcomer's is the one it was born into, until it is grown and moves out to a hut). */
+export const homeOf = (s: HobbitState): House => housePlace(s.home);
 /** How fast a hobbit walks now: a child slower, and each meal missed in a row slower still, down to WEAK_FLOOR. */
 export const paceOf = (s: HobbitState): number => hobbitById(s.id).pace * (s.stage === 'child' ? CHILD_PACE : 1) * Math.max(WEAK_FLOOR, 1 - WEAK_PACE * s.missed);
 export const living = (v: Village, home: number): HobbitState[] => v.hobbits.filter(s => s.home === home);
 /** The first morning: the stores hold some food and a night's wood already (the village has lived here a while), the bushes are full, a few branches lie, the strips are at different stages so that one ripens every day or so. */
 export function freshVillage(seed = 1): Village {
   return {
-    seed, tick: 0, stores: { berries: 3, milk: 2, grain: 6, wood: 8, water: 5, dark: 0 }, land: { berries: BERRY_CAP, branches: 6, milk: MILK_PER_DAY, crops: Array.from({ length: CROP_STRIPS }, (_, i) => (i + 0.5) / CROP_STRIPS), spoiled: { thicket: 0, copse: 0, field: 0, pen: 0 } }, fireWood: 0, take: freshTake(), lastTake: freshTake(), prayer: 0, prayed: 0, spirits: [], stack: null, raiders: [], hero: { vigor: VIGOR_MAX, sap: SAP_MAX, faint: 0, calm: 0, xp: 0, level: 1, choices: 0, perks: { vigor: 0, strike: 0, sap: 0 }, holding: -1 }, raidDay: -1, slain: 0, eaten: 0, lair: { hp: LAIR_HP, alive: true, slainDay: -99, spawnClock: 0, sweepClock: 0, hurt: 0, woke: false }, dead: [], wellFedDays: 0, dayMissed: false, mourningUntil: 0, events: [], darkMealsToday: 0, melted: 0, blight: 0, snatchers: [], snatchDay: -1, brood: [], bred: [], dropped: [], carried: null, taken: 0, returned: 0,
+    seed, tick: 0, stores: { berries: 3, milk: 2, grain: 6, wood: 8, water: 5, dark: 0 }, land: { berries: BERRY_CAP, branches: 6, milk: MILK_PER_DAY, crops: Array.from({ length: CROP_STRIPS }, (_, i) => (i + 0.5) / CROP_STRIPS), spoiled: { thicket: 0, copse: 0, field: 0, pen: 0 } }, fireWood: 0, take: freshTake(), lastTake: freshTake(), prayer: 0, prayed: 0, spirits: [], stack: null, raiders: [], hero: { vigor: VIGOR_MAX, sap: SAP_MAX, faint: 0, calm: 0, xp: 0, level: 1, choices: 0, perks: { vigor: 0, strike: 0, sap: 0 }, holding: -1 }, raidDay: -1, slain: 0, eaten: 0, lair: { hp: LAIR_HP, alive: true, slainDay: -99, spawnClock: 0, sweepClock: 0, hurt: 0, woke: false }, dead: [], wellFedDays: 0, dayMissed: false, mourningUntil: 0, events: [], darkMealsToday: 0, melted: 0, blight: 0, snatchers: [], snatchDay: -1, brood: [], bred: [], dropped: [], carried: null, taken: 0, returned: 0, huts: 0, site: null,
     hobbits: HOBBITS.map(h => { const d = houseOf(h).door; return { id: h.id, x: d.x, z: d.z, heading: houseOf(h).facing, activity: 'sleeping', want: 'home', job: 'gather', path: [], speed: 0, inside: true, bubble: '', bubbleUntil: 0, wanderAt: 0, faceAt: 0, hunger: 0.3, carry: null, errand: null, gatherAt: 0, eatUntil: 0, jobAt: 0, meals: 0, ate: -1, home: h.home, stage: 'grown', born: -(INFANT_DAYS + CHILD_DAYS) * DAY_TICKS, missed: 0 }; }),
   };
 }
@@ -187,8 +201,10 @@ function spotAt(site: Site, rand: () => number, ring = 0.55): Vec2 { const a = r
 /** Where one stands to hand over at a store: a step in from it, toward the fire. */
 export const storeSpot = (st: StoreSpot): Vec2 => { const a = Math.atan2(st.z, st.x); return { x: st.x - Math.cos(a) * 0.7, z: st.z - Math.sin(a) * 0.7 }; };
 /** Her stations (W1): a ring at each yielding place where standing collects into her stack, a ring at each store where standing delivers, and the ring before the stone where a miracle is asked. Radii: tuning. */
-export interface Station { id: string; kind: 'gather' | 'deliver' | 'shrine'; x: number; z: number; r: number; keeps?: SiteKind; store?: Store }
-export const STATION_R = 1.4, STORE_RING_R = 1.1, SHRINE_RING_R = 1.5;
+export interface Station { id: string; kind: 'gather' | 'deliver' | 'shrine' | 'site'; x: number; z: number; r: number; keeps?: SiteKind; store?: Store }
+export const STATION_R = 1.4, STORE_RING_R = 1.1, SHRINE_RING_R = 1.5, SITE_RING_R = 1.4;
+/** G1: the ring before the stakes, where her stack of wood or water goes into the hut. */
+export const siteStation = (v: Village, x: number, z: number): Station | null => { const h = siteHouse(v); return h && v.site && Math.hypot(x - h.door.x, z - h.door.z) <= SITE_RING_R ? { id: 'site', kind: 'site', x: h.door.x, z: h.door.z, r: SITE_RING_R } : null; };
 export const STATIONS: Station[] = (() => {
   const out: Station[] = [];
   const inward = (x: number, z: number, by: number): Vec2 => { const a = Math.atan2(z, x); return { x: x - Math.cos(a) * by, z: z - Math.sin(a) * by }; };
@@ -242,6 +258,46 @@ export function summonSpirit(v: Village, keeps: SiteKind): Spirit | null {
   const kind = YIELD_OF[keeps]; if (!kind || v.prayer < spiritCost(v)) return null;
   v.prayer -= spiritCost(v); const site = SITES[keeps], sp: Spirit = { id: v.spirits.length, keeps, x: site.x, z: site.z, heading: 0, path: [], speed: 0, carry: null, errand: null, gatherAt: v.tick, wanderAt: v.tick };
   v.spirits.push(sp); return sp;
+}
+// G1: quickening and the huts.
+/** A quickening at the stone fills a place at once, for QUICKEN_COST prayer: refused while the place is spoiled, already full, or the prayer is short. */
+export const quickenable = (v: Village, site: YieldSite): boolean => !isSpoiled(v, site) && (site === 'thicket' ? v.land.berries < BERRY_CAP - 0.5 : site === 'copse' ? v.land.branches < BRANCH_CAP : site === 'pen' ? v.land.milk < MILK_PER_DAY : v.land.crops.some(c => c < 1));
+export function quicken(v: Village, site: YieldSite): boolean {
+  if (v.prayer < QUICKEN_COST || !quickenable(v, site)) return false; v.prayer -= QUICKEN_COST;
+  if (site === 'thicket') { v.land.berries = BERRY_CAP; event(v, 'The thicket is quickened: the bushes hang full'); } else if (site === 'copse') { v.land.branches = BRANCH_CAP; event(v, 'The copse is quickened: branches lie thick under it'); } else if (site === 'pen') { v.land.milk = MILK_PER_DAY; event(v, 'The pen is quickened: the goats give again'); } else { v.land.crops = v.land.crops.map(() => 1); event(v, 'The field is quickened: every strip stands ripe'); }
+  return true;
+}
+/** The house a hut going up will be, and where the work stands (its door). */
+export const siteHouse = (v: Village): House | null => (v.site ? housePlace(v.site.id) : null);
+/** Stakes set for a hut, by the village or by her. Refused with a hut already going up or the village at HOUSE_CAP. */
+function startSite(v: Village, asked: boolean): boolean { if (v.site || 6 + v.huts >= HOUSE_CAP) return false; v.site = { id: 6 + v.huts, wood: 0, water: 0, work: 0, asked }; event(v, asked ? 'A hut is asked of the stone: the stakes are set' : `The village is crowded (${v.hobbits.length} to ${housesOf(v).length * BEDS} beds): the stakes are set for a new hut`, true); return true; }
+/** She asks a hut of the stone, for HUT_PRAYER. */
+export function askHut(v: Village): boolean { if (v.prayer < HUT_PRAYER || v.site || 6 + v.huts >= HOUSE_CAP) return false; if (!startSite(v, true)) return false; v.prayer -= HUT_PRAYER; return true; }
+/** More people than beds? */
+export const crowded = (v: Village): boolean => v.hobbits.length > housesOf(v).length * BEDS;
+/** The house with the most past its beds, or null. */
+export const crowdedHouse = (v: Village): House | null => housesOf(v).filter(h => living(v, h.id).length > BEDS).sort((a, b) => living(v, b.id).length - living(v, a.id).length || a.id - b.id)[0] ?? null;
+/** What the hut still needs of a kind. */
+export const siteNeeds = (v: Village, kind: 'wood' | 'water'): number => (v.site ? (kind === 'wood' ? HUT_WOOD - v.site.wood : HUT_WATER - v.site.water) : 0);
+/** What the hut wants of a freed hobbit now: a material to fetch that the store has (and nobody is already bringing), or work once the materials are in. Null when there is nothing for them to do. */
+/** What a store can spare for the hut: the woodpile keeps the night's fire back. */
+export const storeSpare = (v: Village, k: 'wood' | 'water'): number => Math.floor(v.stores[k] - (k === 'wood' ? WOOD_PER_NIGHT : 0));
+/** What is on its way to the hut in the builders' arms. */
+export const siteBringing = (v: Village, k: 'wood' | 'water'): number => v.hobbits.reduce((n, s) => n + (s.job === 'build' && s.carry?.kind === k ? s.carry.n : 0), 0);
+export function siteWants(v: Village): 'wood' | 'water' | 'work' | null {
+  if (!v.site) return null;
+  for (const k of ['wood', 'water'] as const) if (siteNeeds(v, k) - siteBringing(v, k) > 0 && storeSpare(v, k) >= 1) return k;
+  if (siteNeeds(v, 'wood') <= 0 && siteNeeds(v, 'water') <= 0 && v.site.work < HUT_WORK_TICKS) return 'work'; return null;
+}
+/** Her stack goes into the hut: one unit of wood or water the hut still needs. */
+export function deliverToSite(v: Village): boolean { if (!v.site || !v.stack || (v.stack.kind !== 'wood' && v.stack.kind !== 'water') || siteNeeds(v, v.stack.kind) < 1) return false; v.site[v.stack.kind] += 1; v.stack.n -= 1; if (v.stack.n <= 0) v.stack = null; return true; }
+/** The hut stands: a house more, the builders freed, told. */
+function finishHut(v: Village): void { if (!v.site) return; const id = v.site.id; v.huts++; v.site = null; event(v, `A new hut stands: house ${id + 1}`, true); for (const s of v.hobbits) if (s.job === 'build') { s.job = 'gather'; s.jobAt = v.tick; s.gatherAt = v.tick + GATHER_TICKS; } }
+/** Dawn: one grown newcomer in a crowded house moves out to the emptiest house, if it has room to spare. */
+function moveOut(v: Village): void {
+  const from = crowdedHouse(v); if (!from) return; const to = housesOf(v).filter(h => h.id !== from.id).sort((a, b) => living(v, a.id).length - living(v, b.id).length || a.id - b.id)[0]; if (!to || living(v, to.id).length >= BEDS) return;
+  const mover = living(v, from.id).filter(s => s.stage === 'grown' && NEWCOMERS.some(n => n.id === s.id)).sort((a, b) => b.born - a.born)[0]; if (!mover) return;
+  mover.home = to.id; event(v, `${hobbitById(mover.id).name} moves out to house ${to.id + 1}`);
 }
 /** Take one unit of a kind from the land into an armful, if the land has it and the store has room for it (what others carry counts). Returns what was taken. */
 function takeOne(v: Village, kind: Store, carry: Carry | null, room: number): Carry | null {
@@ -400,7 +456,7 @@ const infantName = (ref: InfantRef): string => hobbitById(ref.id).name;
 /** Every infant out of its house: carried off, at the lair, bred, lying out, in her arms. */
 export const takenIds = (v: Village): string[] => [...v.snatchers.filter(n => n.infant).map(n => n.infant!.id), ...v.brood.map(b => b.infant.id), ...v.bred.map(b => b.id), ...v.dropped.map(d => d.infant.id), ...(v.carried ? [v.carried.id] : [])];
 /** A hobbit's state for an infant in its house (born, or brought home). */
-function infantState(v: Village, ref: InfantRef): HobbitState { const house = HOUSES[ref.home], d = house.door; return { id: ref.id, x: d.x, z: d.z, heading: house.facing, activity: 'sleeping', want: 'home', job: 'gather', path: [], speed: 0, inside: true, bubble: '', bubbleUntil: 0, wanderAt: 0, faceAt: 0, hunger: 0, carry: null, errand: null, gatherAt: 0, eatUntil: 0, jobAt: 0, meals: 0, ate: mealSlot(v.tick), home: ref.home, stage: 'infant', born: ref.born, missed: 0 }; }
+function infantState(v: Village, ref: InfantRef): HobbitState { const house = housePlace(ref.home), d = house.door; return { id: ref.id, x: d.x, z: d.z, heading: house.facing, activity: 'sleeping', want: 'home', job: 'gather', path: [], speed: 0, inside: true, bubble: '', bubbleUntil: 0, wanderAt: 0, faceAt: 0, hunger: 0, carry: null, errand: null, gatherAt: 0, eatUntil: 0, jobAt: 0, meals: 0, ate: mealSlot(v.tick), home: ref.home, stage: 'infant', born: ref.born, missed: 0 }; }
 const tellParents = (v: Village, home: number, text: string): void => { for (const o of living(v, home)) if (o.stage !== 'infant') { o.bubble = text; o.bubbleUntil = v.tick + BUBBLE_TICKS * 4; } };
 /** The bred Dark Young not abroad: at the lair. */
 export const atHome = (v: Village): InfantRef[] => v.bred.filter(b => !v.raiders.some(r => r.infant?.id === b.id && r.state !== 'melting'));
@@ -413,11 +469,11 @@ function spawnSnatchers(v: Village): void {
 /** Where a snatcher's infant is: in a house (at its door) or lying out. */
 function snatchTarget(v: Village, n: Snatcher): { at: Vec2; lying: boolean } | null {
   const lie = v.dropped.find(d => d.infant.id === n.targetId); if (lie) return { at: lie, lying: true };
-  const s = v.hobbits.find(h => h.id === n.targetId && h.stage === 'infant'); return s ? { at: HOUSES[s.home].door, lying: false } : null;
+  const s = v.hobbits.find(h => h.id === n.targetId && h.stage === 'infant'); return s ? { at: housePlace(s.home).door, lying: false } : null;
 }
 function pickTarget(v: Village, n: Snatcher): string | null {
   const lying = [...v.dropped].sort((a, b) => Math.hypot(a.x - n.x, a.z - n.z) - Math.hypot(b.x - n.x, b.z - n.z))[0]; if (lying) return lying.infant.id;
-  const inf = v.hobbits.filter(s => s.stage === 'infant').sort((a, b) => Math.hypot(HOUSES[a.home].door.x - n.x, HOUSES[a.home].door.z - n.z) - Math.hypot(HOUSES[b.home].door.x - n.x, HOUSES[b.home].door.z - n.z))[0];
+  const inf = v.hobbits.filter(s => s.stage === 'infant').sort((a, b) => Math.hypot(housePlace(a.home).door.x - n.x, housePlace(a.home).door.z - n.z) - Math.hypot(housePlace(b.home).door.x - n.x, housePlace(b.home).door.z - n.z))[0];
   return inf ? inf.id : null;
 }
 /** The snatchers by real seconds: to the infant, in, and back to the lair; at the lair the infant is kept. */
@@ -446,7 +502,7 @@ export const broodSpot = (i: number): Vec2 | null => (lairAt ? { x: lairAt.x + M
 export function carryInfant(v: Village, her: Vec2): 'picked' | 'home' | null {
   if (!v.carried && !v.stack) { const i = v.brood.findIndex((_, k) => { const p = broodSpot(k); return !!p && Math.hypot(p.x - her.x, p.z - her.z) <= PICK_RANGE; }); if (i >= 0) { v.carried = v.brood.splice(i, 1)[0].infant; event(v, `She takes ${infantName(v.carried)} back from the mother`, true); return 'picked'; } }
   if (!v.carried) { if (v.stack) return null; const i = v.dropped.findIndex(d => Math.hypot(d.x - her.x, d.z - her.z) <= PICK_RANGE); if (i < 0) return null; v.carried = v.dropped.splice(i, 1)[0].infant; return 'picked'; }
-  const ref = v.carried, door = HOUSES[ref.home].door; if (Math.hypot(door.x - her.x, door.z - her.z) > HOME_RANGE) return null;
+  const ref = v.carried, door = housePlace(ref.home).door; if (Math.hypot(door.x - her.x, door.z - her.z) > HOME_RANGE) return null;
   const home = living(v, ref.home).length < ROOM_PER_HOUSE ? ref.home : houseWithRoom(v)?.id ?? ref.home;
   v.hobbits.push(infantState(v, { ...ref, home })); v.carried = null; v.returned += 1; event(v, `${infantName(ref)} is home`, true); tellParents(v, home, `${infantName(ref)} is home`); return 'home';
 }
@@ -485,14 +541,16 @@ export function advance(v: Village, ticks: number): void {
     // At the lair an infant becomes a Dark Young.
     for (let i = v.brood.length - 1; i >= 0; i--) if (v.brood[i].due <= v.tick) { const ref = v.brood.splice(i, 1)[0].infant; v.bred.push(ref); event(v, `A Dark Young is born of ${hobbitById(ref.id).name}`, true); }
     let praying = 0, nell = false;
+    const hut = siteHouse(v), hutSite: Site | null = hut ? { id: 'hut', x: hut.door.x, z: hut.door.z, radius: 0.9, name: 'the new hut', verb: 'building the new hut' } : null;
     for (const s of v.hobbits) {
       const h = hobbitById(s.id), house = homeOf(s), kind = YIELD_OF[h.keeps] ?? null;
+      if (s.job === 'build' && !hutSite) { s.job = 'gather'; s.gatherAt = v.tick + GATHER_TICKS; s.jobAt = v.tick; if (s.errand === 'fetch' || s.errand === 'hut') { s.errand = null; s.path = []; } }
       // An infant stays in the house and eats from its parents' share, unseen; it costs nothing yet and gathers nothing.
       if (s.stage === 'infant') { s.inside = true; s.activity = 'sleeping'; s.speed = 0; s.hunger = 0; continue; }
       // Starving, they keep to the stone instead of their place (and still come to the fire for meals).
       const want = wants(h, v.tick);
       const say = (text: string): void => { s.bubble = text; s.bubbleUntil = v.tick + BUBBLE_TICKS; };
-      const site = want === 'home' ? null : want === 'green' ? SITES.fire : s.job === 'pray' && kind ? SITES.shrine : SITES[h.keeps];
+      const site = want === 'home' ? null : want === 'green' ? SITES.fire : s.job === 'build' && kind && hutSite ? hutSite : s.job === 'pray' && kind ? SITES.shrine : SITES[h.keeps];
       const goal = (): Vec2 => (site ? spotAt(site, rand) : house.door);
       const mealSpot = (): Vec2 => spotAt(SITES.fire, rand, 0.4);
       s.hunger = Math.min(1, s.hunger + HUNGER_PER_TICK * (s.inside ? 0.5 : 1));
@@ -529,6 +587,15 @@ export function advance(v: Village, ticks: number): void {
             } else if (s.errand === 'firewood') {
               if (!s.carry) { const n = Math.min(WOOD_PER_NIGHT, Math.floor(v.stores.wood)); v.stores.wood -= n; s.carry = { kind: 'wood', n }; s.path = [{ x: SITES.fire.x + 1.0, z: SITES.fire.z + 0.4 }]; s.activity = 'carrying'; say('wood for the night'); }
               else { v.fireWood = Math.min(WOOD_PER_NIGHT * 2, v.fireWood + s.carry.n); s.carry = null; s.errand = null; s.speed = 0; s.wanderAt = v.tick + WANDER_EVERY; say('feeding the fire'); }
+            } else if (s.errand === 'fetch') {
+              // G1: at the store for the hut: an armful of what it still needs (less what others bring), then to the hut with it.
+              const k: 'wood' | 'water' = dist(s, storeSpot(STORES.wood)) <= dist(s, storeSpot(STORES.water)) ? 'wood' : 'water', n = Math.min(CARRY[k], siteNeeds(v, k) - siteBringing(v, k), storeSpare(v, k));
+              if (n >= 1 && hut) { v.stores[k] -= n; s.carry = { kind: k, n }; s.errand = 'hut'; s.path = route(s, hut.door); s.activity = 'carrying'; say(`${STORES[k].unit} for the hut`); }
+              else { s.errand = null; s.path = route(s, goal()); s.activity = 'walking'; }
+            } else if (s.errand === 'hut') {
+              if (s.carry && v.site && (s.carry.kind === 'wood' || s.carry.kind === 'water')) { const k = s.carry.kind; v.site[k] = Math.min(k === 'wood' ? HUT_WOOD : HUT_WATER, v.site[k] + s.carry.n); s.carry = null; }
+              else if (s.carry) { s.errand = 'deliver'; s.path = route(s, storeSpot(STORES[s.carry.kind])); s.activity = 'carrying'; continue; }
+              s.errand = null; s.speed = 0; s.wanderAt = v.tick + WANDER_EVERY;
             } else if (!site) { s.inside = true; s.activity = 'sleeping'; s.speed = 0; s.x = house.door.x; s.z = house.door.z; say(''); }
             else { s.speed = 0; s.wanderAt = v.tick + WANDER_EVERY + Math.floor(rand() * WANDER_EVERY); }
           }
@@ -544,11 +611,19 @@ export function advance(v: Village, ticks: number): void {
       } else if (s.job === 'pray' && kind || h.keeps === 'shrine') {
         // Praying at the stone: faced to it, still; the stone's keeper always; a gatherer while the stores hold enough for the next meal.
         s.activity = 'praying'; s.heading = Math.atan2(SITES.shrine.z - s.z, SITES.shrine.x - s.x); praying++; if (h.keeps === 'shrine') nell = true;
-        if (kind && v.tick >= s.jobAt) { s.jobAt = v.tick + JOB_EVERY; if (!supplied(v, kind) && landStock(v, kind) >= 1 && s.missed < REST_MEALS) { s.job = 'gather'; s.gatherAt = v.tick + GATHER_TICKS; s.path = route(s, spotAt(SITES[h.keeps], rand)); s.activity = 'walking'; say(''); continue; } }
+        if (kind && v.tick >= s.jobAt) { s.jobAt = v.tick + JOB_EVERY; if (!supplied(v, kind) && landStock(v, kind) >= 1 && s.missed < REST_MEALS) { s.job = 'gather'; s.gatherAt = v.tick + GATHER_TICKS; s.path = route(s, spotAt(SITES[h.keeps], rand)); s.activity = 'walking'; say(''); continue; } if (hutSite && siteWants(v) && s.missed < REST_MEALS) { s.job = 'build'; s.path = route(s, spotAt(hutSite, rand, 0.4)); s.activity = 'walking'; say('to the new hut'); continue; } }
+      } else if (s.job === 'build' && kind && hutSite && hut) {
+        // G1: at the hut: fetch what it still needs from the stores, or build while the materials are in; nothing to do there, and they pray. Short again at their store, and they go back to gathering.
+        s.activity = 'working'; s.heading = Math.atan2(hut.z - s.z, hut.x - s.x);
+        if (v.tick >= s.jobAt) { s.jobAt = v.tick + JOB_EVERY; if (!supplied(v, kind) && landStock(v, kind) >= 1 && s.missed < REST_MEALS) { s.job = 'gather'; s.gatherAt = v.tick + GATHER_TICKS; s.path = route(s, spotAt(SITES[h.keeps], rand)); s.activity = 'walking'; say(''); continue; } }
+        const w = siteWants(v);
+        if (w === 'wood' || w === 'water') { s.errand = 'fetch'; s.path = route(s, storeSpot(STORES[w])); s.activity = 'walking'; say(`to ${STORES[w].name} for the hut`); continue; }
+        if (w === 'work') { v.site!.work++; if (v.site!.work >= HUT_WORK_TICKS) finishHut(v); continue; }
+        s.job = 'pray'; s.path = route(s, spotAt(SITES.shrine, rand, 0.7)); s.activity = 'walking'; say('to the stone'); continue;
       } else {
         s.activity = 'working'; if (site && v.tick >= s.faceAt) { s.heading = Math.atan2(site.z - s.z, site.x - s.x) + (rand() - 0.5) * 2.4; s.faceAt = v.tick + FACE_EVERY + Math.floor(rand() * FACE_EVERY); }
         // Gathering: a unit every GATHER_TICKS while the land has one and the store has room for it; an armful, or the last of what there is, goes to the store. Enough for the next meal already, and they go to the stone instead.
-        if (kind && want === 'place' && v.tick >= s.jobAt) { s.jobAt = v.tick + JOB_EVERY; if (supplied(v, kind) && !s.carry) { s.job = 'pray'; s.path = route(s, spotAt(SITES.shrine, rand, 0.7)); s.activity = 'walking'; say('to the stone'); continue; } }
+        if (kind && want === 'place' && v.tick >= s.jobAt) { s.jobAt = v.tick + JOB_EVERY; if (supplied(v, kind) && !s.carry) { if (hutSite && siteWants(v)) { s.job = 'build'; s.path = route(s, spotAt(hutSite, rand, 0.4)); s.activity = 'walking'; say('to the new hut'); continue; } s.job = 'pray'; s.path = route(s, spotAt(SITES.shrine, rand, 0.7)); s.activity = 'walking'; say('to the stone'); continue; } }
         if (kind && want === 'place' && v.tick >= s.gatherAt) {
           s.gatherAt = v.tick + GATHER_TICKS; const room = STORES[kind].cap - v.stores[kind] - inFlight(v, kind), stock = landStock(v, kind);
           if (!supplied(v, kind) || s.carry) s.carry = takeOne(v, kind, s.carry, room);
@@ -588,7 +663,7 @@ function die(v: Village, s: HobbitState): void {
   event(v, `${name} has died of hunger`); for (const o of v.hobbits) if (o.stage !== 'infant') { o.bubble = `mourning ${name}`; o.bubbleUntil = v.tick + BUBBLE_TICKS * 4; }
 }
 /** The house a child would be born into: one with room, the fullest first (parents), then by id. */
-export const houseWithRoom = (v: Village): House | null => [...HOUSES].filter(h => living(v, h.id).length < ROOM_PER_HOUSE).sort((a, b) => living(v, b.id).length - living(v, a.id).length || a.id - b.id)[0] ?? null;
+export const houseWithRoom = (v: Village): House | null => housesOf(v).filter(h => living(v, h.id).length < ROOM_PER_HOUSE).sort((a, b) => living(v, b.id).length - living(v, a.id).length || a.id - b.id)[0] ?? null;
 /** The next newcomer to be born: the pool in order, the dead not born again. */
 export const nextNewcomer = (v: Village): Hobbit | null => { const out = takenIds(v); return NEWCOMERS.find(n => !v.hobbits.some(s => s.id === n.id) && !v.dead.some(d => d.id === n.id) && !out.includes(n.id)) ?? null; };
 /** Dawn: a whole day without anyone going without counts toward a birth; the stages move on; a birth when it is due and there is room. */
@@ -603,6 +678,8 @@ function newDay(v: Village): void {
     else if (s.stage === 'child' && age >= INFANT_DAYS + CHILD_DAYS) { s.stage = 'grown'; event(v, `${name} is grown`); }
   }
   if (v.wellFedDays >= BIRTH_DAYS && bear(v)) v.wellFedDays = 0;
+  // G1: a grown newcomer leaves a crowded house for an emptier one; still crowded, the village sets the stakes for a hut.
+  moveOut(v); if (!v.site && crowded(v)) startSite(v, false);
 }
 /** A birth into the fullest house with room, from the pool in order. Returns whether there was one. */
 export function bear(v: Village): boolean {
@@ -620,6 +697,10 @@ export function thought(s: HobbitState, tick: number): string {
   if (s.errand === 'deliver' && s.carry) return `carrying ${STORES[s.carry.kind].unit} to ${STORES[s.carry.kind].name}`;
   if (s.errand === 'meal') return s.want === 'home' ? 'supper first' : 'breakfast first';
   if (s.errand === 'firewood') return s.carry ? 'wood for the fire' : 'to the woodpile';
+  if (s.errand === 'fetch') return 'to the stores for the hut';
+  if (s.errand === 'hut' && s.carry) return `carrying ${STORES[s.carry.kind].unit} to the new hut`;
+  if (s.job === 'build' && s.activity === 'walking' && s.path.length && s.want === 'place') return 'to the new hut';
+  if (s.job === 'build' && s.activity === 'working') return 'building the new hut';
   if (s.activity === 'praying') return 'praying';
   if (s.activity === 'returning') return 'going home';
   if (s.activity === 'walking' && s.path.length && s.want !== 'place') return s.want === 'green' ? 'walking to the fire' : 'going home';
@@ -629,7 +710,7 @@ export function thought(s: HobbitState, tick: number): string {
   return SITES[h.keeps].verb;
 }
 export const everyone = (v: Village, where: 'inside' | 'green' | 'out' | 'praying'): number => v.hobbits.filter(s => where === 'inside' ? s.inside : where === 'green' ? !s.inside && dist(s, SITES.fire) <= SITES.fire.radius + 0.3 : where === 'praying' ? s.activity === 'praying' : !s.inside).length;
-export const inHouse = (p: Vec2): House | null => HOUSES.find(h => dist(p, h) < HOUSE_RADIUS - 0.05) ?? null;
+export const inHouse = (p: Vec2, v?: { huts: number }): House | null => (v ? housesOf(v) : housesOf({ huts: hutsPlaced })).find(h => dist(p, h) < HOUSE_RADIUS - 0.05) ?? null;
 const ACTIVITIES: Activity[] = ['sleeping', 'walking', 'working', 'talking', 'returning', 'carrying', 'eating', 'praying'];
 export function parseVillage(raw: string | null): Village {
   try {
@@ -644,8 +725,10 @@ export function parseVillage(raw: string | null): Village {
     v.stack = carryOf(p.stack);
     if (p.hero && typeof p.hero === 'object') { const pk = p.hero.perks && typeof p.hero.perks === 'object' ? p.hero.perks : {}; v.hero.perks = { vigor: Math.floor(num(pk.vigor, 0, LEVEL_CAP, 0)), strike: Math.floor(num(pk.strike, 0, LEVEL_CAP, 0)), sap: Math.floor(num(pk.sap, 0, LEVEL_CAP, 0)) }; v.hero.xp = num(p.hero.xp, 0, 1e6, 0); v.hero.level = Math.min(LEVEL_CAP, Math.max(1, Math.floor(num(p.hero.level, 1, LEVEL_CAP, 1)))); v.hero.choices = Math.floor(num(p.hero.choices, 0, LEVEL_CAP, 0)); v.hero.vigor = num(p.hero.vigor, 0, vigorMax(v.hero), vigorMax(v.hero)); v.hero.sap = num(p.hero.sap, 0, sapMax(v.hero), sapMax(v.hero)); v.hero.faint = num(p.hero.faint, 0, FAINT_S, 0); v.hero.holding = Math.floor(num(p.hero.holding, -1, 1e6, -1)); v.hero.calm = num(p.hero.calm, 0, 1e6, 0); }
     if (p.lair && typeof p.lair === 'object') { v.lair.hp = num(p.lair.hp, 0, LAIR_HP, LAIR_HP); v.lair.alive = p.lair.alive !== false; v.lair.slainDay = num(p.lair.slainDay, -99, 1e6, -99); }
+    // G1: the huts built and the one going up.
+    v.huts = Math.floor(num(p.huts, 0, HOUSE_CAP - 6, 0)); if (p.site && typeof p.site === 'object' && 6 + v.huts < HOUSE_CAP) v.site = { id: 6 + v.huts, wood: Math.floor(num(p.site.wood, 0, HUT_WOOD, 0)), water: Math.floor(num(p.site.water, 0, HUT_WATER, 0)), work: Math.floor(num(p.site.work, 0, HUT_WORK_TICKS, 0)), asked: p.site.asked === true };
     // D3: the infants out of their houses and the snatchers abroad.
-    function refOf(x: unknown): InfantRef | null { const r = x as InfantRef; return r && typeof r.id === 'string' && NEWCOMERS.some(n => n.id === r.id) ? { id: r.id, home: Math.floor(num(r.home, 0, HOUSES.length - 1, 0)), born: num(r.born, -1e9, 1e9, 0) } : null; }
+    function refOf(x: unknown): InfantRef | null { const r = x as InfantRef; return r && typeof r.id === 'string' && NEWCOMERS.some(n => n.id === r.id) ? { id: r.id, home: Math.floor(num(r.home, 0, HOUSE_CAP - 1, 0)), born: num(r.born, -1e9, 1e9, 0) } : null; }
     v.taken = Math.floor(num(p.taken, 0, 1e6, 0)); v.returned = Math.floor(num(p.returned, 0, 1e6, 0)); v.snatchDay = num(p.snatchDay, -1, 1e6, -1); v.carried = refOf(p.carried);
     if (Array.isArray(p.bred)) for (const b of p.bred.slice(0, 40)) { const r = refOf(b); if (r) v.bred.push(r); }
     if (Array.isArray(p.brood)) for (const b of p.brood.slice(0, 40)) { const r = refOf(b?.infant); if (r) v.brood.push({ infant: r, due: num(b.due, 0, 1e9, 0) }); }
@@ -660,15 +743,15 @@ export function parseVillage(raw: string | null): Village {
     if (Array.isArray(p.dead)) for (const d of p.dead.slice(0, ALL_HOBBITS.length)) if (d && typeof d.id === 'string' && ALL_HOBBITS.some(h => h.id === d.id) && !seen.has(d.id)) { seen.add(d.id); v.dead.push({ id: d.id, tick: num(d.tick, 0, 1e9, 0) }); }
     for (const s of p.hobbits) {
       if (!s || typeof s.id !== 'string' || seen.has(s.id)) continue; const h = ALL_HOBBITS.find(h => h.id === s.id); if (!h) continue; seen.add(s.id);
-      const base = fresh.find(f => f.id === s.id), home = Math.floor(num(s.home, 0, HOUSES.length - 1, h.home >= 0 ? h.home : 0)), d = HOUSES[home].door;
-      const t: HobbitState = base ?? { id: h.id, x: d.x, z: d.z, heading: HOUSES[home].facing, activity: 'sleeping', want: 'home', job: 'gather', path: [], speed: 0, inside: true, bubble: '', bubbleUntil: 0, wanderAt: 0, faceAt: 0, hunger: 0, carry: null, errand: null, gatherAt: 0, eatUntil: 0, jobAt: 0, meals: 0, ate: -1, home, stage: 'grown', born: 0, missed: 0 };
+      const base = fresh.find(f => f.id === s.id), home = Math.floor(num(s.home, 0, HOUSE_CAP - 1, h.home >= 0 ? h.home : 0)), d = housePlace(home).door;
+      const t: HobbitState = base ?? { id: h.id, x: d.x, z: d.z, heading: housePlace(home).facing, activity: 'sleeping', want: 'home', job: 'gather', path: [], speed: 0, inside: true, bubble: '', bubbleUntil: 0, wanderAt: 0, faceAt: 0, hunger: 0, carry: null, errand: null, gatherAt: 0, eatUntil: 0, jobAt: 0, meals: 0, ate: -1, home, stage: 'grown', born: 0, missed: 0 };
       t.home = home; t.stage = ['infant', 'child', 'grown'].includes(s.stage) ? s.stage : 'grown'; t.born = num(s.born, -1e9, 1e9, t.born); t.missed = Math.floor(num(s.missed, 0, DEATH_MEALS, 0));
       v.hobbits.push(t);
       for (const k of ['x', 'z', 'heading', 'speed', 'bubbleUntil', 'wanderAt', 'faceAt', 'gatherAt', 'eatUntil', 'jobAt', 'meals'] as const) if (Number.isFinite(s[k])) (t as unknown as Record<string, number>)[k] = s[k];
       if (Number.isFinite(s.ate)) t.ate = s.ate;
       t.hunger = num(s.hunger, 0, 1, t.hunger);
-      t.inside = s.inside === true; t.activity = ACTIVITIES.includes(s.activity) ? s.activity : 'sleeping'; t.want = ['home', 'place', 'green'].includes(s.want) ? s.want : 'home'; t.job = s.job === 'pray' ? 'pray' : 'gather';
-      t.errand = ['deliver', 'meal', 'firewood'].includes(s.errand) ? s.errand : null;
+      t.inside = s.inside === true; t.activity = ACTIVITIES.includes(s.activity) ? s.activity : 'sleeping'; t.want = ['home', 'place', 'green'].includes(s.want) ? s.want : 'home'; t.job = s.job === 'pray' ? 'pray' : s.job === 'build' ? 'build' : 'gather';
+      t.errand = ['deliver', 'meal', 'firewood', 'fetch', 'hut'].includes(s.errand) ? s.errand : null;
       t.carry = carryOf(s.carry); if (t.errand === 'deliver' && !t.carry) t.errand = null;
       t.path = pathOf(s.path); t.bubble = typeof s.bubble === 'string' ? s.bubble.slice(0, 40) : '';
     }
@@ -678,7 +761,7 @@ export function parseVillage(raw: string | null): Village {
     return v;
   } catch { return freshVillage(); }
 }
-export const serializeVillage = (v: Village): string => JSON.stringify({ seed: v.seed, tick: v.tick, blight: v.blight, taken: v.taken, returned: v.returned, snatchDay: v.snatchDay, carried: v.carried, bred: v.bred, brood: v.brood, dropped: v.dropped, snatchers: v.snatchers, melted: v.melted, darkMealsToday: v.darkMealsToday, dead: v.dead, wellFedDays: v.wellFedDays, dayMissed: v.dayMissed, mourningUntil: v.mourningUntil, events: v.events, stores: v.stores, land: { ...v.land, berries: Math.round(v.land.berries * 100) / 100, crops: v.land.crops.map(c => Math.round(c * 1000) / 1000) }, fireWood: Math.round(v.fireWood * 100) / 100, take: v.take, lastTake: v.lastTake, prayer: Math.round(v.prayer * 1000) / 1000, prayed: Math.round(v.prayed * 1000) / 1000, stack: v.stack, hero: { vigor: Math.round(v.hero.vigor * 10) / 10, sap: Math.round(v.hero.sap * 10) / 10, faint: Math.round(v.hero.faint * 100) / 100, calm: Math.round(v.hero.calm * 100) / 100, xp: v.hero.xp, level: v.hero.level, choices: v.hero.choices, perks: v.hero.perks, holding: v.hero.holding }, lair: { hp: Math.round(v.lair.hp * 10) / 10, alive: v.lair.alive, slainDay: v.lair.slainDay }, raidDay: v.raidDay, slain: v.slain, eaten: v.eaten, raiders: v.raiders.map(r => ({ ...r, x: Math.round(r.x * 100) / 100, z: Math.round(r.z * 100) / 100, heading: Math.round(r.heading * 1000) / 1000, hp: Math.round(r.hp * 10) / 10, aggro: Math.round(r.aggro * 100) / 100, rooted: Math.round(r.rooted * 100) / 100, gone: Math.round(r.gone * 100) / 100 })), spirits: v.spirits.map(s => ({ ...s, x: Math.round(s.x * 100) / 100, z: Math.round(s.z * 100) / 100, heading: Math.round(s.heading * 1000) / 1000 })), hobbits: v.hobbits.map(s => ({ ...s, x: Math.round(s.x * 100) / 100, z: Math.round(s.z * 100) / 100, heading: Math.round(s.heading * 1000) / 1000, hunger: Math.round(s.hunger * 1000) / 1000 })) });
+export const serializeVillage = (v: Village): string => JSON.stringify({ seed: v.seed, tick: v.tick, huts: v.huts, site: v.site, blight: v.blight, taken: v.taken, returned: v.returned, snatchDay: v.snatchDay, carried: v.carried, bred: v.bred, brood: v.brood, dropped: v.dropped, snatchers: v.snatchers, melted: v.melted, darkMealsToday: v.darkMealsToday, dead: v.dead, wellFedDays: v.wellFedDays, dayMissed: v.dayMissed, mourningUntil: v.mourningUntil, events: v.events, stores: v.stores, land: { ...v.land, berries: Math.round(v.land.berries * 100) / 100, crops: v.land.crops.map(c => Math.round(c * 1000) / 1000) }, fireWood: Math.round(v.fireWood * 100) / 100, take: v.take, lastTake: v.lastTake, prayer: Math.round(v.prayer * 1000) / 1000, prayed: Math.round(v.prayed * 1000) / 1000, stack: v.stack, hero: { vigor: Math.round(v.hero.vigor * 10) / 10, sap: Math.round(v.hero.sap * 10) / 10, faint: Math.round(v.hero.faint * 100) / 100, calm: Math.round(v.hero.calm * 100) / 100, xp: v.hero.xp, level: v.hero.level, choices: v.hero.choices, perks: v.hero.perks, holding: v.hero.holding }, lair: { hp: Math.round(v.lair.hp * 10) / 10, alive: v.lair.alive, slainDay: v.lair.slainDay }, raidDay: v.raidDay, slain: v.slain, eaten: v.eaten, raiders: v.raiders.map(r => ({ ...r, x: Math.round(r.x * 100) / 100, z: Math.round(r.z * 100) / 100, heading: Math.round(r.heading * 1000) / 1000, hp: Math.round(r.hp * 10) / 10, aggro: Math.round(r.aggro * 100) / 100, rooted: Math.round(r.rooted * 100) / 100, gone: Math.round(r.gone * 100) / 100 })), spirits: v.spirits.map(s => ({ ...s, x: Math.round(s.x * 100) / 100, z: Math.round(s.z * 100) / 100, heading: Math.round(s.heading * 1000) / 1000 })), hobbits: v.hobbits.map(s => ({ ...s, x: Math.round(s.x * 100) / 100, z: Math.round(s.z * 100) / 100, heading: Math.round(s.heading * 1000) / 1000, hunger: Math.round(s.hunger * 1000) / 1000 })) });
 
 // Hulda's ways through the meadow. Grass roots are everywhere she can walk: a free medium, faster than
 // running, shown as a bulge under the grass. Tree roots join the trees of the copse and the wood: fixed
@@ -752,4 +835,4 @@ export function nearestTree(x: number, z: number): { tree: Tree; distance: numbe
 }
 export const hopTargets = (t: Tree): Tree[] => treesNear(t.x, t.z, HOP_REACH).filter(o => o !== t && o.id !== t.id && Math.hypot(o.x - t.x, o.z - t.z) <= HOP_REACH && Math.abs(crownHeight(o) - crownHeight(t)) <= HOP_RISE);
 /** Where the grass (and a root) can run: anywhere under the land (the chunks are unbounded), the stream's bed included (she wades it on foot, and under the soil the water is not in her way: Noah found the old refusal an invisible wall), not under the houses. */
-export const grassCan = (x: number, z: number): boolean => !HOUSES.some(h => Math.hypot(x - h.x, z - h.z) < HOUSE_RADIUS + 0.2);
+export const grassCan = (x: number, z: number): boolean => !housesOf({ huts: hutsPlaced }).some(h => Math.hypot(x - h.x, z - h.z) < HOUSE_RADIUS + 0.2);

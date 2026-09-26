@@ -14,7 +14,7 @@ export type KarstMode = 'ground' | 'trunk' | 'crown' | 'hop' | 'sink' | 'mouth' 
 export interface KarstVisual { form: HuldaForm; position: THREE.Vector3; rotation: THREE.Quaternion; present: HuldaForm | 'ride' }
 export interface KarstAtmosphere { colour: THREE.Color; fog: number; lantern: number; inCavern: boolean; vision: number }
 const LEGACY_KEY = 'rootwake-karst-flow-v2';
-export function createKarstFeature(scene: THREE.Scene, player: Player, camera: THREE.PerspectiveCamera, origin: { x: number; z: number }, hooks: { orbit: (target: THREE.Vector3, back?: number, up?: number) => void; want: () => THREE.Vector3; ground: () => TraversalWorld; locked: TraversalWorld; height?: (x: number, z: number) => number; portal?: (n: Node) => boolean }) {
+export function createKarstFeature(scene: THREE.Scene, player: Player, camera: THREE.PerspectiveCamera, origin: { x: number; z: number }, hooks: { orbit: (target: THREE.Vector3, back?: number, up?: number, ease?: number) => void; want: () => THREE.Vector3; ground: () => TraversalWorld; locked: TraversalWorld; height?: (x: number, z: number) => number; portal?: (n: Node) => boolean }) {
   const KEY = `rootwake-world-karst:${origin.x},${origin.z}:v1`;
   const offset = new THREE.Vector3(origin.x, 0, origin.z), group = new THREE.Group(); group.position.copy(offset); scene.add(group);
   const world = buildKarstFlow(group as unknown as THREE.Scene, { sharedGround: true });
@@ -46,7 +46,9 @@ export function createKarstFeature(scene: THREE.Scene, player: Player, camera: T
     canOccupy: (p, r, h) => p.y >= hooks.height!(p.x, p.z) - 0.03 && zoneWorlds.floor.canOccupy(new THREE.Vector3(p.x, groundAt(ZONES.floor, p.x - origin.x, p.z - origin.z), p.z), r, h),
   };
   function mouthYaw(n: Node): number { const p = pillarById(ZONES[n.zone].pillar), dx = n.mouth.x - p.x, dz = n.mouth.z - p.z, r = Math.hypot(dx, dz) || 1, k = n.zone === 'cavern' ? -1 : 1; return Math.atan2(k * dx / r, k * dz / r); }
-  function turnToward(yaw: number, dt: number, rate: number): void { player.yaw += wrap(yaw - player.yaw) * Math.min(1, dt * rate); }
+  function turnToward(yaw: number, dt: number, rate: number, cap = Infinity): void { const step = wrap(yaw - player.yaw) * Math.min(1, dt * rate), c = cap * dt; player.yaw += Math.max(-c, Math.min(c, step)); }
+  /** A ride's heading is followed no faster than RIDE_TURN_MAX rad/s and the camera trails her (RIDE_CAM_FOLLOW): the helix up a sister at ride speed whipped the view (Noah's playtest). Tuning. */
+  const RIDE_TURN_MAX = 0.9, RIDE_CAM_FOLLOW = 6;
   function lock(): void { player.traversalWorld = hooks.locked; player.motor.velocity.set(0, 0, 0); player.avatar.visible = false; }
   function place(pLocal: THREE.Vector3): void { const p = W(pLocal); player.motor.feet.copy(p); player.position.x = p.x; player.position.z = p.z; }
   function standOn(zoneId: string, x: number, z: number, yaw = player.yaw): void {
@@ -110,7 +112,7 @@ export function createKarstFeature(scene: THREE.Scene, player: Player, camera: T
       if (hop.t === 1) { visit(hop.node); arrive(progress, hop.node.id); save(); crown = { az: hop.az, armed: true }; mode = 'crown'; hop = null; }
     } else if ((mode === 'sink' || mode === 'rise') && move) {
       move.t = Math.min(1, move.t + dt / move.seconds); const k = move.t * move.t * (3 - 2 * move.t); const p = move.from.clone().lerp(move.to, k);
-      if (mode === 'sink') turnToward(mouthYaw(at), dt, 6); place(p); hooks.orbit(W(p), 3.2, 1.3);
+      if (mode === 'sink') turnToward(mouthYaw(at), dt, 6); place(p); hooks.orbit(W(p), 3.2, 1.3, 1 - Math.exp(-dt * RIDE_CAM_FOLLOW));
       if (move.t === 1) { const then = move.then; move = null; then(); }
     } else if (mode === 'mouth') {
       if (settle > 0) turnToward(mouthYaw(at), dt, 5); place(at.mouth); hooks.orbit(W(at.mouth), 3.2, 1.3); camera.updateMatrixWorld(); settle = Math.max(0, settle - dt);
@@ -120,7 +122,7 @@ export function createKarstFeature(scene: THREE.Scene, player: Player, camera: T
       if (!root) choice = null; else if (choice && choice.root === root) { choice.held += dt; if (choice.held >= ARM_S) startRide(root); } else choice = { root, held: 0 };
     } else if (mode === 'ride' && ride) {
       const step = stepRide(ride.root, ride.from, ride.s, ride.speed, dt); ride.s = step.s; ride.speed = step.speed; const { point, tangent } = ridePoint(ride.root, ride.from, ride.s); rideTangent.copy(tangent).normalize();
-      const heading = Math.atan2(-tangent.x, -tangent.z); player.yaw += wrap(heading - player.yaw) * Math.min(1, dt * 3.5); place(point); hooks.orbit(W(point), 3.0, 1.2); if (step.done) finishRide();
+      turnToward(Math.atan2(-tangent.x, -tangent.z), dt, 3.5, RIDE_TURN_MAX); place(point); hooks.orbit(W(point), 3.0, 1.2, 1 - Math.exp(-dt * RIDE_CAM_FOLLOW)); if (step.done) finishRide();
     }
     const wantVision = mode === 'sink' || mode === 'mouth' || mode === 'ride' || mode === 'rise' ? 1 : 0; vision += (wantVision - vision) * Math.min(1, dt * 3);
     world.update(Math.max(vision, externalVision), time, ride?.root ?? null, choice?.root ?? null);

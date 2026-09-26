@@ -164,7 +164,12 @@ every study here has used.
 
 - **G1. Quickening and construction.** *Question: does turning a crowded village into a build project
   make its growth feel earned, not automatic?* The two miracles above; the build-site port from
-  `site.ts`; the first `builder` role.
+  `site.ts`; the first `builder` role. (Built 2026-09-26; see VILLAGE_HANDOFF.md. Decided in the
+  building: prayer for both miracles; a hut is sticks and water, no clay; the village self-builds when
+  there are more people than beds, two to a house, and she can ask one at any time; the builders are the
+  freed gatherers rather than a named role, since W1's rule already frees them; the stakes are a
+  model-side site with the same shape as the plateau's rather than a port of `site.ts`, because the
+  village's figures do the carrying that the plateau's board did.)
 - **G2. The village as a hub.** *Question: do villagers talking about the wider world make the meadow
   feel like a hub rather than a terminus?* State tags, map marks, rumor bubbles.
 - **G3. Other lairs and the danger gradient.** *Question: does danger-by-distance teach itself through
@@ -211,5 +216,5 @@ not required to unblock this arc; quickening and construction (G1) can ship as t
 of W2's fuller tree. V2 (roles/personality/hunting/farming) and V3 (relationships) are unaffected except
 that G1 pulls a first `builder` role forward — the rest of V2/V3 waits its own turn. The two mechanical
 bugs raised in the same conversation (root-travel camera nausea from fast involuntary yaw around the
-karst's curves; the karst summit using the meadow's ground-level fog instead of a vista-scaled one) are
-fixes, tracked here only so they aren't lost, not part of this content plan.
+karst's curves; the karst summit using the meadow's ground-level fog instead of a vista-scaled one) were
+fixed the same day (VILLAGE_HANDOFF.md, "Fixes after Noah's playtest"), not as part of this content plan.

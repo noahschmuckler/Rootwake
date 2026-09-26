@@ -35,11 +35,23 @@ export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain 
     add(wood, cards, bark, leaf); add(dwood, dcards, darkBark, darkLeaf); add(bwood, bcards, blightBark, blightLeaf); if (collars.length) { const g = mergeGeometries(collars)!; group.add(new THREE.Mesh(g, collar)); geometries.push(g); }
     scene.add(group); return { key: chunkKey(cx, cz), group, trees, colliders, geometries };
   }
+  /** The far land: past the loaded ring, ground alone out to FAR_RING chunks at FAR_STEP m, one merged mesh rebuilt when she crosses into another chunk, so that from a height the land goes on to the horizon instead of ending at the loaded ring (the summit had no view: Noah's playtest). No trees, no blight out there. Tuning. */
+  const FAR_RING = 7, FAR_STEP = 16;
+  let far: THREE.Mesh | null = null, farKey = '';
+  function buildFar(x: number, z: number): void {
+    const near = new Set(chunksAround(x, z).map(c => chunkKey(c.cx, c.cz))), parts: THREE.BufferGeometry[] = [], n = CHUNK / FAR_STEP;
+    for (const c of chunksAround(x, z, FAR_RING)) { if (near.has(chunkKey(c.cx, c.cz))) continue;
+      const geo = new THREE.PlaneGeometry(CHUNK, CHUNK, n, n); geo.rotateX(-Math.PI / 2); geo.translate((c.cx + 0.5) * CHUNK, 0, (c.cz + 0.5) * CHUNK);
+      const pos = geo.attributes.position as THREE.BufferAttribute, col: number[] = []; for (let i = 0; i < pos.count; i++) { const px = pos.getX(i), pz = pos.getZ(i); pos.setY(i, terrain.vertex(px, pz)); col.push(...colourOf(px, pz)); } geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); geo.computeVertexNormals(); parts.push(geo); }
+    if (far) { scene.remove(far); far.geometry.dispose(); far = null; }
+    if (parts.length) { const g = mergeGeometries(parts)!; for (const p of parts) p.dispose(); far = new THREE.Mesh(g, ground); far.name = 'far-ground'; scene.add(far); }
+  }
   /** Keep the ring round (x, z) loaded and nothing else. Returns how many chunks were built. */
   function update(x: number, z: number): number {
     const want = new Set<string>(); let built = 0;
     for (const c of chunksAround(x, z)) { const key = chunkKey(c.cx, c.cz); want.add(key); if (!loaded.has(key)) { loaded.set(key, build(c.cx, c.cz)); built++; } }
     for (const [key, ch] of loaded) if (!want.has(key)) { scene.remove(ch.group); for (const g of ch.geometries) g.dispose(); loaded.delete(key); }
+    { const c = chunksAround(x, z, 0)[0], key = chunkKey(c.cx, c.cz); if (key !== farKey) { farKey = key; buildFar(x, z); } }
     return built;
   }
   const treesNear = (x: number, z: number, r: number): Tree[] => { const out: Tree[] = []; for (const ch of loaded.values()) for (const t of ch.trees) if (Math.hypot(t.x - x, t.z - z) <= r) out.push(t); return out; };

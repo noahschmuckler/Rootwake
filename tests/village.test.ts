@@ -1,5 +1,5 @@
 import { test } from 'node:test'; import assert from 'node:assert/strict';
-import { setLair, isSpoiled, spoil, mealFood, collect, landStock, DY_FLEE, HOLD_RANGE, HOLD_SAP, HOLD_MELT_S, DARK_PER_SITE, DARK_FED_DAYS, SPOIL_TICKS, YIELD_SITES, HOBBITS, HOUSES, SITES, NEWCOMERS, ALL_HOBBITS, INFANT_DAYS, CHILD_DAYS, BIRTH_DAYS, DEATH_MEALS, REST_MEALS, ROOM_PER_HOUSE, paceOf, houseWithRoom, living, DAY_TICKS, PHASES, TICKS_PER_SECOND, phaseAt, clockOf, daylightAt, freshVillage, advance, wants, everyone, inHouse, route, parseVillage, serializeVillage, hobbitById, houseOf, HOUSE_RADIUS, HOUSE_RING } from '../src/villageModel';
+import { setLair, isSpoiled, spoil, mealFood, collect, landStock, DY_FLEE, HOLD_RANGE, HOLD_SAP, HOLD_MELT_S, DARK_PER_SITE, DARK_FED_DAYS, SPOIL_TICKS, YIELD_SITES, HOBBITS, HOUSES, housesOf, housePlace, HUT_RING, BEDS, HUT_PRAYER, QUICKEN_COST, quicken, quickenable, askHut, deliverToSite, siteWants, crowded, bear, thought, SITES, NEWCOMERS, ALL_HOBBITS, INFANT_DAYS, CHILD_DAYS, BIRTH_DAYS, DEATH_MEALS, REST_MEALS, ROOM_PER_HOUSE, paceOf, houseWithRoom, living, DAY_TICKS, PHASES, TICKS_PER_SECOND, phaseAt, clockOf, daylightAt, freshVillage, advance, wants, everyone, inHouse, route, parseVillage, serializeVillage, hobbitById, houseOf, HOUSE_RADIUS, HOUSE_RING } from '../src/villageModel';
 test('eight hobbits in six houses on a ring round the green, each keeping to a place at a gap between the houses', () => {
   assert.equal(HOBBITS.length, 8); assert.equal(HOUSES.length, 6); assert.equal(new Set(HOBBITS.map(h => h.name)).size, 8, 'names are distinct');
   assert.ok(HOBBITS.every(h => h.home >= 0 && h.home < 6)); assert.equal(new Set(HOBBITS.map(h => h.home)).size, 6, 'every house is lived in');
@@ -242,12 +242,12 @@ test('D1: fed through every meal for days, a child is born into a house with roo
   let bornAt = -1, wentOut = -1; const before = v.hobbits.length;
   for (let t = 0; t < DT * (BIRTH_DAYS + INFANT_DAYS + CHILD_DAYS + 2); t++) { feed(); step(v, 1); const n = v.hobbits.find(s => NEWCOMERS.some(c => c.id === s.id)); if (n && bornAt < 0) bornAt = v.tick; if (n && n.stage !== 'infant' && wentOut < 0) wentOut = v.tick; }
   assert.ok(bornAt > 0 && bornAt <= DT * (BIRTH_DAYS + 1) + 1, `born by day ${BIRTH_DAYS + 1} (${bornAt})`); assert.ok(v.hobbits.length > before);
-  const first = v.hobbits.find(s => s.id === NEWCOMERS[0].id)!; assert.ok(first, 'the pool in order'); assert.ok(first.home >= 0 && first.home < HOUSES.length); assert.ok(living(v, first.home).length <= ROOM_PER_HOUSE);
+  const first = v.hobbits.find(s => s.id === NEWCOMERS[0].id)!; assert.ok(first, 'the pool in order'); assert.ok(first.home >= 0 && first.home < housesOf(v).length, 'in a house of the village (a hut, once grown and moved out)'); assert.ok(living(v, first.home).length <= ROOM_PER_HOUSE);
   assert.ok(wentOut - bornAt >= INFANT_DAYS * DT - 1 && wentOut - bornAt <= (INFANT_DAYS + 1) * DT, `out after INFANT_DAYS (${(wentOut - bornAt) / DT} days)`); assert.equal(first.stage, 'grown', 'grown after CHILD_DAYS more');
   assert.ok(v.events.some(e => e.text.includes('is born in house')) && v.events.some(e => e.text.includes('goes out with the others')), JSON.stringify(v.events));
-  assert.ok(v.hobbits.every(s => ALL_HOBBITS.some(h => h.id === s.id))); assert.ok(HOUSES.every(h => living(v, h.id).length <= ROOM_PER_HOUSE));
+  assert.ok(v.hobbits.every(s => ALL_HOBBITS.some(h => h.id === s.id))); assert.ok(housesOf(v).every(h => living(v, h.id).length <= ROOM_PER_HOUSE));
   const same = freshV(6); for (let t = 0; t < v.tick; t++) { same.stores.berries = 8; same.stores.milk = 8; same.stores.grain = 12; same.stores.water = 10; same.stores.wood = 12; step(same, 1); } assert.equal(ser(same), ser(v), 'deterministic');
-  const back = par(ser(v)); assert.equal(ser(back), ser(v), 'a newcomer survives a save'); assert.ok(houseWithRoom(v) !== null || v.hobbits.length >= HOUSES.length * ROOM_PER_HOUSE);
+  const back = par(ser(v)); assert.equal(ser(back), ser(v), 'a newcomer survives a save'); assert.ok(houseWithRoom(v) !== null || v.hobbits.length >= housesOf(v).length * ROOM_PER_HOUSE);
 });
 
 // D2: the spoiled land and the retreat.
@@ -354,4 +354,38 @@ test('D4: no Dark Young bred, no blight; each bred one widens its reach; each da
     const before = w.blight; step(w, DT); assert.ok(w.blight < before || w.blight === 0, 'draws back as they are gone'); step(w, 10 * DT); assert.equal(w.blight, 0, 'gone');
     const back = par(ser(w)); assert.equal(back.blight, w.blight);
   } finally { setLair(null); }
+});
+
+// G1: quickening and the huts (EXPANSION.md).
+test('G1: a quickening at the stone fills a place at once for prayer; refused when short, full or spoiled; the huts and the site survive a save', () => {
+  const v = freshV(1); v.land.berries = 10; v.prayer = 0; assert.equal(quicken(v, 'thicket'), false, 'no prayer, no quickening'); assert.equal(v.land.berries, 10);
+  v.prayer = PRAYER_CAP; assert.ok(quicken(v, 'thicket'), 'the thicket quickened'); assert.equal(v.land.berries, BERRY_CAP, 'the bushes hang full'); assert.equal(v.prayer, PRAYER_CAP - QUICKEN_COST); assert.ok(v.events.some(e => e.text.startsWith('The thicket is quickened')));
+  assert.equal(quicken(v, 'thicket'), false, 'already full'); assert.equal(quickenable(v, 'thicket'), false);
+  v.land.crops = v.land.crops.map(() => 0.2); assert.ok(quickenable(v, 'field')); assert.ok(quicken(v, 'field')); assert.ok(v.land.crops.every(c => c === 1), 'every strip ripe');
+  spoil(v, 'copse'); v.land.branches = 0; assert.equal(quickenable(v, 'copse'), false, 'a spoiled place cannot be quickened'); assert.equal(quicken(v, 'copse'), false);
+  v.land.milk = 0; assert.ok(quicken(v, 'pen')); assert.equal(v.land.milk, MILK_PER_DAY);
+  const back = par(ser(v)); assert.equal(back.huts, 0); assert.equal(back.site, null); assert.equal(ser(back), ser(v));
+});
+test('G1: she asks a hut of the stone; the freed gatherers fetch wood and water to the stakes (the woodpile keeps the night back), build it, and a hut stands; her stack goes straight in; the next house is on the second ring', () => {
+  const v = freshV(4); assert.equal(askHut(v), false, 'no prayer, no hut'); v.prayer = PRAYER_CAP; assert.ok(askHut(v), 'a hut asked'); assert.equal(v.prayer, PRAYER_CAP - HUT_PRAYER); assert.ok(v.site && v.site.id === 6 && v.site.asked, JSON.stringify(v.site)); assert.equal(askHut(v), false, 'one at a time');
+  assert.ok(v.events.some(e => e.text.startsWith('A hut is asked')));
+  const h = housePlace(6); assert.ok(Math.abs(Math.hypot(h.x, h.z) - HUT_RING) < 1e-9, 'on the second ring'); assert.ok(Math.hypot(h.door.x, h.door.z) < Math.hypot(h.x, h.z), 'its door to the green'); for (const f of HOUSES) assert.ok(Math.hypot(h.x - f.x, h.z - f.z) > HOUSE_RADIUS * 2 + 0.5, 'clear of the founders\' houses'); for (const s of Object.values(SITES)) if (s.id !== 'fire') assert.ok(Math.hypot(h.x - s.x, h.z - s.z) > HOUSE_RADIUS + s.radius, `clear of ${s.id}`);
+  // Her hands: wood from her stack into the hut.
+  v.stack = { kind: 'wood', n: 2 }; assert.ok(deliverToSite(v) && deliverToSite(v)); assert.equal(v.site!.wood, 2); assert.equal(v.stack, null); v.stack = { kind: 'berries', n: 1 }; assert.equal(deliverToSite(v), false, 'berries build nothing'); v.stack = null;
+  // The woodpile keeps the night's wood: at WOOD_PER_NIGHT nothing can be spared.
+  v.stores.wood = WOOD_PER_NIGHT; v.stores.water = 0; assert.equal(siteWants(v), null, 'nothing to spare yet'); v.stores.water = 10; assert.equal(siteWants(v), 'water');
+  v.stores.wood = 12; assert.equal(siteWants(v), 'wood');
+  let fetched = false, carriedToHut = false, built = false; const feed = () => { v.stores.berries = 8; v.stores.milk = 8; v.stores.grain = 12; v.stores.water = Math.max(v.stores.water, 6); v.stores.wood = Math.max(v.stores.wood, 10); };
+  for (let t = 0; t < DT * 3 && v.huts === 0; t++) { feed(); step(v, 1); for (const s of v.hobbits) { if (s.job === 'build' && s.errand === 'fetch') fetched = true; if (s.errand === 'hut' && s.carry) carriedToHut = true; if (s.job === 'build' && s.activity === 'working' && thought(s, v.tick) === 'building the new hut') built = true; } }
+  assert.ok(fetched && carriedToHut && built, `fetched ${fetched}, carried ${carriedToHut}, built ${built}`); assert.equal(v.huts, 1, 'a hut stands within days'); assert.equal(v.site, null); assert.ok(v.events.some(e => e.text.startsWith('A new hut stands: house 7')), JSON.stringify(v.events.map(e => e.text)));
+  assert.equal(housesOf(v).length, 7); assert.ok(v.hobbits.every(s => s.job !== 'build'), 'the builders freed');
+  const back = par(ser(v)); assert.equal(back.huts, 1); assert.equal(ser(back), ser(v), 'the hut survives a save');
+});
+test('G1: more people than beds and the village sets its own stakes at dawn; a grown newcomer moves out of a crowded house to one with a bed free; deterministic', () => {
+  const v = freshV(2); while (v.hobbits.length <= housesOf(v).length * BEDS) assert.ok(bear(v)); assert.ok(crowded(v));
+  step(v, DT - (v.tick % DT)); assert.ok(v.site && !v.site.asked, 'the stakes set at dawn'); assert.ok(v.events.some(e => e.text.includes('is crowded')), JSON.stringify(v.events.map(e => e.text)));
+  const w = freshV(2); while (w.hobbits.length <= housesOf(w).length * BEDS) bear(w); step(w, DT - (w.tick % DT)); assert.equal(ser(w), ser(v), 'deterministic');
+  // Grown, a newcomer in a house past its beds leaves for a house with a bed free.
+  const full = freshV(3); const kid = NEWCOMERS[0]; full.hobbits.push({ ...full.hobbits[0], id: kid.id, home: 0, stage: 'grown', born: -10 * DT }); assert.equal(living(full, 0).length, 3); const emptiest = housesOf(full).filter(h => h.id !== 0).sort((a, b) => living(full, a.id).length - living(full, b.id).length || a.id - b.id)[0];
+  step(full, DT); const moved = full.hobbits.find(s => s.id === kid.id)!; assert.equal(moved.home, emptiest.id, 'moved out to the emptiest house'); assert.ok(full.events.some(e => e.text.includes('moves out to house')));
 });
