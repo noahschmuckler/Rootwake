@@ -261,12 +261,16 @@ function stations(dt: number): void {
   if (!say && village.carried) say = `carrying ${hobbitById(village.carried.id).name} home to house ${village.carried.home + 1}`;
   if (!say && notice.until > time) say = notice.text;
   tip.hidden = !say; if (say) tip.textContent = say;
-  miracles.hidden = st?.kind !== 'shrine'; if (!miracles.hidden) { const cost = spiritCost(village); for (const b of miracles.querySelectorAll('button')) { const q = b.dataset.quicken as YieldSite | undefined; if (q) { b.disabled = village.prayer < QUICKEN_COST || !quickenable(village, q); b.querySelector('i')!.textContent = String(QUICKEN_COST); } else if (b.dataset.hut) { b.disabled = village.prayer < HUT_PRAYER || !!village.site || 6 + village.huts >= HOUSE_CAP; b.querySelector('i')!.textContent = String(HUT_PRAYER); b.childNodes[0].textContent = village.site ? 'A hut is going up ' : 6 + village.huts >= HOUSE_CAP ? 'No room for more huts ' : 'A new hut '; } else { b.disabled = village.prayer < cost; b.querySelector('i')!.textContent = String(cost); } } }
+  if (!miracles.hidden) { const cost = spiritCost(village); for (const b of miracles.querySelectorAll('button')) { const q = b.dataset.quicken as YieldSite | undefined; if (q) { b.disabled = village.prayer < QUICKEN_COST || !quickenable(village, q); b.querySelector('i')!.textContent = String(QUICKEN_COST); } else if (b.dataset.hut) { b.disabled = village.prayer < HUT_PRAYER || !!village.site || 6 + village.huts >= HOUSE_CAP; b.querySelector('i')!.textContent = String(HUT_PRAYER); b.childNodes[0].textContent = village.site ? 'A hut is going up ' : 6 + village.huts >= HOUSE_CAP ? 'No room for more huts ' : 'A new hut '; } else { b.disabled = village.prayer < cost; b.querySelector('i')!.textContent = String(cost); } } }
   prayerEl.textContent = `prayer ${Math.floor(village.prayer)} / ${PRAYER_CAP}`; world.updatePrayer(village.prayer / PRAYER_CAP);
   wobble = Math.max(0, wobble - dt);
   world.setStack(village.stack?.kind ?? null, village.stack?.n ?? 0);
   if (village.stack && mode === 'ground') { const yaw = player.yaw; world.stack.position.set(f.x + Math.sin(yaw) * 0.16, f.y + 0.78, f.z + Math.cos(yaw) * 0.16); world.stack.rotation.set(Math.sin(wobble * 20) * wobble * 0.5, yaw, 0); } else world.stack.visible = false;
 }
+// Noah: the miracles from anywhere, behind a button, and the fight buttons behind a toggle: fewer buttons on the screen.
+const prayBtn = el<HTMLButtonElement>('pray'), fightBox = el('fight'), fightToggle = el<HTMLButtonElement>('fightToggle');
+prayBtn.addEventListener('click', () => { miracles.hidden = !miracles.hidden; prayBtn.setAttribute('aria-expanded', String(!miracles.hidden)); });
+fightToggle.addEventListener('pointerdown', e => { e.preventDefault(); const open = fightBox.classList.toggle('closed'); fightToggle.setAttribute('aria-expanded', String(!open)); });
 miracles.addEventListener('click', e => { const b = (e.target as HTMLElement).closest('button'); if (!b) return; if (b.dataset.quicken) { if (quicken(village, b.dataset.quicken as YieldSite)) save(); } else if (b.dataset.hut) { if (askHut(village)) save(); } else if (b.dataset.keeps && summonSpirit(village, b.dataset.keeps as SiteKind)) save(); });
 // The spirits: shown like the hobbits, eased after the model, as figures of leaves that bob a little.
 const shownSpirits: { x: number; z: number; heading: number }[] = [];
@@ -295,7 +299,7 @@ function fight(simDt: number, dt: number): void {
   // The lair: shown, its hp over it while near; the forest's air darkens with the depth.
   world.setLair(village.lair.alive, village.lair.hurt, time, village.lair.hp / LAIR_HP);
   if (village.hero.faint > 0 && mode !== 'faint') { const p = player.feet(); dropCarried(village, p.x, p.z); lock(); mode = 'faint'; grass = null; root = null; trunk = null; crown = null; }
-  if (mode === 'faint') { const p = player.feet(); place(p); orbitCamera(p, 3.2, 1.3); if (village.hero.faint === 0) { const st = STATIONS.find(s => s.kind === 'shrine')!; standOn(st.x, st.z, Math.atan2(-(SITES.shrine.x - st.x), -(SITES.shrine.z - st.z))); } }
+  if (mode === 'faint') { const p = player.feet(); place(p); orbitCamera(p, 3.2, 1.3); if (village.hero.faint === 0) { const st = SITES.shrine, a = Math.atan2(st.z, st.x), x = st.x - Math.cos(a) * 1.6, z = st.z - Math.sin(a) * 1.6; standOn(x, z, Math.atan2(-(st.x - x), -(st.z - z))); } }
   world.updateStrokes(dt);
 }
 function attack(k: 'strike' | 'thorn' | 'root'): void {

@@ -200,9 +200,9 @@ export function route(from: Vec2, to: Vec2): Vec2[] {
 function spotAt(site: Site, rand: () => number, ring = 0.55): Vec2 { const a = rand() * Math.PI * 2, r = site.radius * (0.35 + rand() * ring); return { x: site.x + Math.cos(a) * r, z: site.z + Math.sin(a) * r }; }
 /** Where one stands to hand over at a store: a step in from it, toward the fire. */
 export const storeSpot = (st: StoreSpot): Vec2 => { const a = Math.atan2(st.z, st.x); return { x: st.x - Math.cos(a) * 0.7, z: st.z - Math.sin(a) * 0.7 }; };
-/** Her stations (W1): a ring at each yielding place where standing collects into her stack, a ring at each store where standing delivers, and the ring before the stone where a miracle is asked. Radii: tuning. */
+/** Her stations (W1): a ring at each yielding place where standing collects into her stack, a ring at each store where standing delivers (the ring before the stone is gone: the miracles are asked from anywhere, Noah's call). Radii: tuning. */
 export interface Station { id: string; kind: 'gather' | 'deliver' | 'shrine' | 'site'; x: number; z: number; r: number; keeps?: SiteKind; store?: Store }
-export const STATION_R = 1.4, STORE_RING_R = 1.1, SHRINE_RING_R = 1.5, SITE_RING_R = 1.4;
+export const STATION_R = 1.4, STORE_RING_R = 1.1, SITE_RING_R = 1.4;
 /** G1: the ring before the stakes, where her stack of wood or water goes into the hut. */
 export const siteStation = (v: Village, x: number, z: number): Station | null => { const h = siteHouse(v); return h && v.site && Math.hypot(x - h.door.x, z - h.door.z) <= SITE_RING_R ? { id: 'site', kind: 'site', x: h.door.x, z: h.door.z, r: SITE_RING_R } : null; };
 export const STATIONS: Station[] = (() => {
@@ -212,7 +212,6 @@ export const STATIONS: Station[] = (() => {
   const clear: Record<string, number> = { thicket: 3.6, stream: 1.4, copse: 5.2, field: 3.6, pen: 3.8 };
   for (const k of ['thicket', 'stream', 'copse', 'field', 'pen'] as SiteKind[]) { const st = SITES[k], p = inward(st.x, st.z, clear[k]); out.push({ id: `gather-${k}`, kind: 'gather', ...p, r: STATION_R, keeps: k }); }
   for (const k of STORE_LIST) if (k !== 'dark') { const p = storeSpot(STORES[k]); out.push({ id: `deliver-${k}`, kind: 'deliver', ...p, r: STORE_RING_R, store: k }); }
-  { const st = SITES.shrine, p = inward(st.x, st.z, 1.6); out.push({ id: 'shrine', kind: 'shrine', ...p, r: SHRINE_RING_R }); }
   return out;
 })();
 export const stationAt = (x: number, z: number): Station | null => STATIONS.find(st => Math.hypot(x - st.x, z - st.z) <= st.r) ?? null;
