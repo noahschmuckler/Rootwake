@@ -18,8 +18,13 @@ export function places(seed: number): Place[] {
 }
 /** Exploration: cells of CELL m, revealed within EXPLORE_RADIUS of where she stands. Tuning. */
 export const CELL = 24, EXPLORE_RADIUS = 70;
-export interface Overworld { seed: number; revealed: Set<string>; known: Set<string> }
-export const freshOverworld = (seed = 1): Overworld => ({ seed, revealed: new Set(), known: new Set(['village', 'karst']) });
+/** G2: a hint is what the villagers said of a place she has not found: a bearing from the green and the words, drawn on the map as a fan HINT_REACH m long, HINT_SPREAD either side, until she finds the place. Tuning. */
+export interface Hint { about: string; bearing: number; text: string }
+export const HINT_REACH = 320, HINT_SPREAD = 22;
+export interface Overworld { seed: number; revealed: Set<string>; known: Set<string>; hints: Hint[] }
+export const freshOverworld = (seed = 1): Overworld => ({ seed, revealed: new Set(), known: new Set(['village', 'karst']), hints: [] });
+/** A hint from talk: one per subject, nothing for a place already known. Returns whether it is new. */
+export function addHint(o: Overworld, h: Hint): boolean { if (o.known.has(h.about)) return false; const i = o.hints.findIndex(x => x.about === h.about); if (i >= 0) { o.hints[i] = h; return false; } o.hints.push(h); return true; }
 export const cellKey = (cx: number, cz: number): string => `${cx},${cz}`;
 export const cellOf = (x: number, z: number): { cx: number; cz: number } => ({ cx: Math.floor(x / CELL), cz: Math.floor(z / CELL) });
 /** Reveal the cells round a point. Returns how many were new. */
@@ -27,13 +32,14 @@ export function explore(o: Overworld, x: number, z: number, radius = EXPLORE_RAD
   let n = 0; const r = Math.ceil(radius / CELL), c = cellOf(x, z);
   for (let i = -r; i <= r; i++) for (let k = -r; k <= r; k++) { const cx = c.cx + i, cz = c.cz + k, mx = (cx + 0.5) * CELL, mz = (cz + 0.5) * CELL; if (Math.hypot(mx - x, mz - z) <= radius) { const key = cellKey(cx, cz); if (!o.revealed.has(key)) { o.revealed.add(key); n++; } } }
   for (const p of places(o.seed)) if (Math.hypot(p.x - x, p.z - z) <= p.radius + radius) o.known.add(p.id);
+  o.hints = o.hints.filter(h => !o.known.has(h.about));
   return n;
 }
 export const isRevealed = (o: Overworld, x: number, z: number): boolean => { const c = cellOf(x, z); return o.revealed.has(cellKey(c.cx, c.cz)); };
 export const knownPlaces = (o: Overworld): Place[] => places(o.seed).filter(p => o.known.has(p.id));
-export const serializeOverworld = (o: Overworld): string => JSON.stringify({ seed: o.seed, revealed: [...o.revealed], known: [...o.known] });
+export const serializeOverworld = (o: Overworld): string => JSON.stringify({ seed: o.seed, revealed: [...o.revealed], known: [...o.known], hints: o.hints });
 export function parseOverworld(raw: string | null): Overworld {
-  try { const p = JSON.parse(raw ?? 'null'); if (!p || typeof p !== 'object') return freshOverworld(); const o = freshOverworld(Number.isFinite(p.seed) ? p.seed : 1); if (Array.isArray(p.revealed)) for (const k of p.revealed) if (typeof k === 'string' && /^-?\d+,-?\d+$/.test(k)) o.revealed.add(k); if (Array.isArray(p.known)) for (const k of p.known) if (['village', 'karst', 'lair'].includes(k)) o.known.add(k); return o; } catch { return freshOverworld(); }
+  try { const p = JSON.parse(raw ?? 'null'); if (!p || typeof p !== 'object') return freshOverworld(); const o = freshOverworld(Number.isFinite(p.seed) ? p.seed : 1); if (Array.isArray(p.revealed)) for (const k of p.revealed) if (typeof k === 'string' && /^-?\d+,-?\d+$/.test(k)) o.revealed.add(k); if (Array.isArray(p.known)) for (const k of p.known) if (['village', 'karst', 'lair'].includes(k)) o.known.add(k); if (Array.isArray(p.hints)) for (const h of p.hints) if (h && typeof h.about === 'string' && typeof h.text === 'string' && Number.isFinite(h.bearing) && !o.known.has(h.about)) o.hints.push({ about: h.about, bearing: ((h.bearing % 360) + 360) % 360, text: h.text }); return o; } catch { return freshOverworld(); }
 }
 /** The pinch: the camera pulls from ZOOM_MIN m at her shoulder to ZOOM_MAX m overhead, its elevation rising from ELEV_LOW to ELEV_HIGH with the distance; past the end, the map. Tuning. */
 export const ZOOM_MIN = 3, ZOOM_MAX = 40, ELEV_LOW = 0.38, ELEV_HIGH = 1.36;

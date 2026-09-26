@@ -171,7 +171,10 @@ every study here has used.
   model-side site with the same shape as the plateau's rather than a port of `site.ts`, because the
   village's figures do the carrying that the plateau's board did.)
 - **G2. The village as a hub.** *Question: do villagers talking about the wider world make the meadow
-  feel like a hub rather than a terminus?* State tags, map marks, rumor bubbles.
+  feel like a hub rather than a terminus?* State tags, map marks, rumor bubbles. (Built 2026-09-26; see
+  VILLAGE_HANDOFF.md. Decided in the building: directions in words; hints stay until the place is found;
+  the state's colour on both the map's mark and the compass tick; the elder tells the condition and the
+  stone's keeper the omens, the rest draw from all of it.)
 - **G3. Other lairs and the danger gradient.** *Question: does danger-by-distance teach itself through
   exploration, and do peaceful villages feel like relief rather than emptiness?* Generalized lair
   placement, the den and ruin templates, the deep-root entrance.

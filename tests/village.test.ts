@@ -1,5 +1,5 @@
 import { test } from 'node:test'; import assert from 'node:assert/strict';
-import { setLair, isSpoiled, spoil, mealFood, collect, landStock, DY_FLEE, HOLD_RANGE, HOLD_SAP, HOLD_MELT_S, DARK_PER_SITE, DARK_FED_DAYS, SPOIL_TICKS, YIELD_SITES, HOBBITS, HOUSES, housesOf, housePlace, HUT_RING, BEDS, HUT_PRAYER, QUICKEN_COST, quicken, quickenable, askHut, deliverToSite, siteWants, crowded, bear, thought, SITES, NEWCOMERS, ALL_HOBBITS, INFANT_DAYS, CHILD_DAYS, BIRTH_DAYS, DEATH_MEALS, REST_MEALS, ROOM_PER_HOUSE, paceOf, houseWithRoom, living, DAY_TICKS, PHASES, TICKS_PER_SECOND, phaseAt, clockOf, daylightAt, freshVillage, advance, wants, everyone, inHouse, route, parseVillage, serializeVillage, hobbitById, houseOf, HOUSE_RADIUS, HOUSE_RING } from '../src/villageModel';
+import { setLair, isSpoiled, spoil, mealFood, collect, landStock, DY_FLEE, HOLD_RANGE, HOLD_SAP, HOLD_MELT_S, DARK_PER_SITE, DARK_FED_DAYS, SPOIL_TICKS, YIELD_SITES, HOBBITS, HOUSES, housesOf, villageState, stateText, rumors, bearingWords, housePlace, HUT_RING, BEDS, HUT_PRAYER, QUICKEN_COST, quicken, quickenable, askHut, deliverToSite, siteWants, crowded, bear, thought, SITES, NEWCOMERS, ALL_HOBBITS, INFANT_DAYS, CHILD_DAYS, BIRTH_DAYS, DEATH_MEALS, REST_MEALS, ROOM_PER_HOUSE, paceOf, houseWithRoom, living, DAY_TICKS, PHASES, TICKS_PER_SECOND, phaseAt, clockOf, daylightAt, freshVillage, advance, wants, everyone, inHouse, route, parseVillage, serializeVillage, hobbitById, houseOf, HOUSE_RADIUS, HOUSE_RING } from '../src/villageModel';
 test('eight hobbits in six houses on a ring round the green, each keeping to a place at a gap between the houses', () => {
   assert.equal(HOBBITS.length, 8); assert.equal(HOUSES.length, 6); assert.equal(new Set(HOBBITS.map(h => h.name)).size, 8, 'names are distinct');
   assert.ok(HOBBITS.every(h => h.home >= 0 && h.home < 6)); assert.equal(new Set(HOBBITS.map(h => h.home)).size, 6, 'every house is lived in');
@@ -180,7 +180,7 @@ test('fighting: a cheap strike ahead of her, a thorn burst round her and a root 
   const back = par(ser(v)); assert.equal(back.raiders.length, v.raiders.length); assert.equal(back.hero.vigor, Math.round(v.hero.vigor * 10) / 10, 'her vigor and the raid survive a save'); assert.ok(SAP_MAX > THORN_SAP + ROOT_SAP);
 });
 
-import { freshOverworld, explore, isRevealed, knownPlaces, places, parseOverworld, serializeOverworld, CELL, EXPLORE_RADIUS, LAIR_DISTANCE, KARST_AT, ZOOM_MIN, ZOOM_MAX, zoomElevation, ELEV_LOW, ELEV_HIGH, bearingOf, wrapDeg } from '../src/overworldModel';
+import { addHint, freshOverworld, explore, isRevealed, knownPlaces, places, parseOverworld, serializeOverworld, CELL, EXPLORE_RADIUS, LAIR_DISTANCE, KARST_AT, ZOOM_MIN, ZOOM_MAX, zoomElevation, ELEV_LOW, ELEV_HIGH, bearingOf, wrapDeg } from '../src/overworldModel';
 test('the overworld: the village at the origin, the karst north, the lair placed by the seed 400 m away from the karst\'s side; exploring reveals cells round her and the places she comes near; the pinch rises from the shoulder to overhead', () => {
   const ps = places(1); assert.deepEqual(ps.map(p => p.id), ['village', 'karst', 'lair']); assert.deepEqual({ x: ps[0].x, z: ps[0].z }, { x: 0, z: 0 }); assert.deepEqual({ x: ps[1].x, z: ps[1].z }, KARST_AT);
   const lair = ps[2]; assert.ok(Math.abs(Math.hypot(lair.x, lair.z) - LAIR_DISTANCE) < 2, 'the lair at its distance'); assert.ok(lair.z > 0, 'away from the karst'); assert.ok(Math.hypot(lair.x - KARST_AT.x, lair.z - KARST_AT.z) > 500, 'and far from it');
@@ -388,4 +388,38 @@ test('G1: more people than beds and the village sets its own stakes at dawn; a g
   // Grown, a newcomer in a house past its beds leaves for a house with a bed free.
   const full = freshV(3); const kid = NEWCOMERS[0]; full.hobbits.push({ ...full.hobbits[0], id: kid.id, home: 0, stage: 'grown', born: -10 * DT }); assert.equal(living(full, 0).length, 3); const emptiest = housesOf(full).filter(h => h.id !== 0).sort((a, b) => living(full, a.id).length - living(full, b.id).length || a.id - b.id)[0];
   step(full, DT); const moved = full.hobbits.find(s => s.id === kid.id)!; assert.equal(moved.home, emptiest.id, 'moved out to the emptiest house'); assert.ok(full.events.some(e => e.text.includes('moves out to house')));
+});
+
+// G2: the village as a hub (EXPANSION.md).
+test('G2: the village\'s state is a read-off: steady at first, thriving after fed days, pressured by a spoiled place or a short woodpile, besieged by infants at the lair or the blight near, lost with nobody; told as a banner when it changes', () => {
+  const v = freshV(1); assert.equal(villageState(v).kind, 'steady', 'the first morning');
+  step(v, DT * 3); assert.equal(villageState(v).kind, 'thriving', `three fed days (${JSON.stringify(villageState(v))})`); assert.ok(v.events.some(e => e.text === 'The village is thriving' && e.banner), 'told as a banner');
+  spoil(v, 'thicket'); const st = villageState(v); assert.equal(st.kind, 'pressured'); assert.ok(st.needs.includes('the thicket spoiled'), st.needs.join(', ')); assert.equal(stateText(st), 'The village is pressured: the thicket spoiled');
+  v.land.spoiled.thicket = 0; v.stores.wood = 2; assert.ok(villageState(v).needs.includes('wood for the fire')); v.stores.wood = 12;
+  v.bred.push({ id: NEWCOMERS[0].id, home: 0, born: 0 }); assert.equal(villageState(v).kind, 'besieged'); assert.ok(villageState(v).needs.includes('1 infant at the lair')); v.bred = [];
+  v.lastRaidEaten = 8; assert.equal(villageState(v).kind, 'besieged'); assert.ok(villageState(v).needs.includes('the Dark Young ate a meal')); v.lastRaidEaten = 0;
+  setLair({ x: 300, z: 300, radius: 75 }); try { v.blight = 300; assert.equal(villageState(v).kind, 'besieged', 'the blight near'); v.blight = 0; } finally { setLair(null); }
+  spoil(v, 'thicket'); step(v, 40); assert.ok(v.events.some(e => e.text.startsWith('The village is pressured') && e.banner), JSON.stringify(v.events.map(e => e.text)));
+  const w = freshV(1); w.hobbits = []; assert.equal(villageState(w).kind, 'lost');
+});
+test('G2: rumor at the fire: the elder tells the condition, the keeper the omens with a bearing from the green; what is said is kept, with the bearing, and survives a save; deterministic', () => {
+  setLair({ x: 283, z: 283, radius: 75 });
+  try {
+    const v = freshV(2); const r = rumors(v); const lair = r.find(x => x.about === 'lair')!; assert.ok(lair && lair.who === 'keeper' && Math.abs(lair.bearing! - 135) < 1 && lair.text.endsWith('south-east'), JSON.stringify(lair));
+    const karst = r.find(x => x.about === 'karst')!; assert.ok(karst && karst.text.includes('north'), JSON.stringify(karst)); assert.ok(!r.some(x => x.about === 'blight'), 'no blight, no black trees');
+    v.blight = 80; assert.ok(rumors(v).some(x => x.about === 'blight' && x.text.includes('south-east'))); v.blight = 0;
+    spoil(v, 'thicket'); assert.ok(rumors(v).some(x => x.who === 'elder' && x.text === 'the thicket has gone bad')); v.land.spoiled.thicket = 0;
+    assert.equal(bearingWords(0), 'north'); assert.equal(bearingWords(44), 'north-east'); assert.equal(bearingWords(270), 'west'); assert.equal(bearingWords(359), 'north');
+    const u = freshV(2); step(u, PHASES[3][1] + 5); assert.ok(u.voiced.length >= 1, 'said at noon'); assert.ok(u.voiced.every(x => typeof x.by === 'string' && x.tick > 0));
+    const said = u.voiced.filter(x => x.bearing !== undefined); for (const x of said) assert.ok(x.about && x.who === 'keeper', JSON.stringify(x));
+    const odo = u.voiced.filter(x => x.by === 'odo'); for (const x of odo) assert.ok(x.who === 'elder' || !x.who, `the elder tells the condition (${JSON.stringify(x)})`);
+    const back = par(ser(u)); assert.equal(ser(back), ser(u), 'what was said survives a save'); assert.deepEqual(back.voiced, u.voiced);
+    const same = freshV(2); step(same, u.tick); assert.equal(ser(same), ser(u), 'deterministic');
+  } finally { setLair(null); }
+});
+test('G2: a hint on the map from talk: one per subject, none for a place already known, gone when she finds it; saved', () => {
+  const o = freshOverworld(1); assert.equal(addHint(o, { about: 'karst', bearing: 350, text: 'the pillar stands to the north' }), false, 'the karst is known from the start');
+  assert.ok(addHint(o, { about: 'lair', bearing: 135, text: 'something walks in the wood to the south-east' })); assert.equal(addHint(o, { about: 'lair', bearing: 140, text: 'the trees to the south-east have gone black' }), false, 'one per subject, the newer words kept'); assert.equal(o.hints.length, 1); assert.equal(o.hints[0].bearing, 140);
+  const back = parseOverworld(serializeOverworld(o)); assert.deepEqual(back.hints, o.hints, 'saved');
+  const lair = places(1).find(p => p.id === 'lair')!; explore(o, lair.x, lair.z); assert.ok(o.known.has('lair')); assert.equal(o.hints.length, 0, 'found, the hint is gone'); assert.equal(addHint(o, { about: 'lair', bearing: 135, text: 'x' }), false);
 });
