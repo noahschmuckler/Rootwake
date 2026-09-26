@@ -112,7 +112,8 @@ const timectl = el('timectl'); el('clock').addEventListener('click', () => { tim
 timectl.addEventListener('click', e => { const b = (e.target as HTMLElement).closest('button'); if (!b) return; if (b.dataset.jump) setTick(village.tick + Number(b.dataset.jump)); else if (b.dataset.to) jumpTo(b.dataset.to as 'dawn'); else if (b.dataset.speed) { speed = Number(b.dataset.speed); for (const o of timectl.querySelectorAll('button[data-speed]')) o.classList.toggle('on', o === b); }
   // Dev: the village from its first dawn again (its people, stores, land, spirits, raids and her level); the karst's progress and the map she has seen stay. Noah: to watch the Dark Young's work with no hand of hers in it.
   else if (b.dataset.reset !== undefined) { if (confirm('Start the village over? Its day, people, stores, land, spirits and her level go back to the first dawn. The map and the karst keep what she has seen.')) { resetVillage(); timectl.hidden = true; } } });
-function resetVillage(): void { for (const c of ctxs) freshCtx(c); shareHero(); tickBank = 0; course = null; courseTarget = null; carried = false; for (const c of ctxs) { syncShown(c); pruneShown(c); } save(); say('the villages begin again', 4); }
+// Noah: a reset takes the summoned spirits from the land and the villagers' rumors from the map.
+function resetVillage(): void { for (const c of ctxs) freshCtx(c); shareHero(); tickBank = 0; course = null; courseTarget = null; carried = false; overworld.hints = []; for (const c of ctxs) { syncShown(c); pruneShown(c); c.shownSpirits.length = 0; for (const f of c.world.spiritFigures) f.visible = false; c.heardRumor = null; c.toldEvent = null; } save(); if (mapOpen) drawMap(); say('the villages begin again', 4); }
 
 // Her ways through the meadow (the clearing's moves): into a trunk, up to the crown, across the crowns; under the
 // grass as a bulge, free and fast; onto a tree root, faster still but held to its path; out by a double tap.
@@ -310,7 +311,7 @@ fightToggle.addEventListener('pointerdown', e => { e.preventDefault(); const ope
 miracles.addEventListener('click', e => { const b = (e.target as HTMLElement).closest('button'); if (!b) return; if (b.dataset.quicken) { if (quicken(village, b.dataset.quicken as YieldSite)) save(); } else if (b.dataset.hut) { if (askHut(village)) save(); } else if (b.dataset.keeps && summonSpirit(village, b.dataset.keeps as SiteKind)) save(); });
 // The spirits: shown like the hobbits, eased after the model, as figures of leaves that bob a little.
 function presentSpirits(c: Ctx, dt: number, wall = dt): void {
-  const shownSpirits = c.shownSpirits;
+  const shownSpirits = c.shownSpirits; shownSpirits.length = Math.min(shownSpirits.length, c.v.spirits.length); for (let i = 0; i < c.world.spiritFigures.length; i++) c.world.spiritFigures[i].visible = i < c.v.spirits.length;
   for (let i = 0; i < c.v.spirits.length; i++) {
     const s = c.v.spirits[i]; if (!shownSpirits[i]) shownSpirits[i] = { x: s.x, z: s.z, heading: s.heading };
     const v = shownSpirits[i], f = c.world.spiritFigure(i), dx = s.x - v.x, dz = s.z - v.z, d = Math.hypot(dx, dz), step = d < 0.03 ? d : Math.min(d, (d > 2.5 ? 3 : 1.3) * speed * wall);

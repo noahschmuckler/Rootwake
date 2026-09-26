@@ -264,7 +264,8 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   const slash = new THREE.Mesh(new THREE.RingGeometry(0.6, 1.9, 24, 1, -0.9, 1.8), slashMat); slash.rotation.x = -Math.PI / 2; slash.visible = false; scene.add(slash);
   const burst = new THREE.Mesh(new THREE.RingGeometry(0.7, 1.0, 40), burstMat); burst.rotation.x = -Math.PI / 2; burst.visible = false; scene.add(burst);
   let slashT = 0, burstT = 0;
-  function flashSlash(x: number, y: number, z: number, yaw: number): void { slash.position.set(x, y + 0.5, z); slash.rotation.z = -yaw - Math.PI / 2; slashT = 0.18; slash.visible = true; }
+  // The arc lies flat (rotation.x) and is turned about the vertical by rotation.z, applied first: the ring's +x, turned by θ, then laid down, points along (cos θ, 0, -sin θ); her facing is (-sin yaw, 0, -cos yaw), so θ = yaw + π/2 (Noah: the slash pointed anywhere but where she faced).
+  function flashSlash(x: number, y: number, z: number, yaw: number): void { slash.position.set(x, y + 0.5, z); slash.rotation.z = yaw + Math.PI / 2; slashT = 0.18; slash.visible = true; }
   function flashBurst(x: number, y: number, z: number): void { burst.position.set(x, y + 0.15, z); burstT = 0.4; burst.visible = true; }
   function updateStrokes(dt: number): void { if (slashT > 0) { slashT -= dt; slashMat.opacity = Math.max(0, slashT / 0.18); slash.visible = slashT > 0; } if (burstT > 0) { burstT -= dt; const k = 1 - burstT / 0.4; burst.scale.setScalar(0.5 + k * 3.0); burstMat.opacity = 0.8 * (1 - k); burst.visible = burstT > 0; } }
   // The lair's manifestation (M1b): a local mother of goats at the dark forest's centre, a great dark mass with many horns that writhe, eyes with their own light; it does not walk. Placed by setLairAt; animated and shown alive or gone by setLair.

@@ -157,6 +157,42 @@ rule (see Principles): match-3 tier and world-state tier both exist, and her act
 of the two. It also gives the danger gradient (system 3) a reason to exist beyond flavor — the
 guardians blocking her growth are why the frontier is dangerous, and why she has reason to go there.
 
+## Noah's second brief (2026-09-26): the crystal spring, the deep node, and the guardians
+
+Recorded from the conversation, in his words where they matter:
+
+- **The guardians are not creatures.** "The 'guardians' I referenced are the 6 other characters that
+  the player can recruit. Each will have their own tech tree, and may or may not be directly playable
+  vs directed by Hulda as heroic units." System 5 below and the G5 plan read "guardian" as a lair-template
+  monster per karst; that was my misreading. The gate on her tiers is the six companions and the
+  villages held steady, not a boss. Their recruitment, tech trees and command are a chapter of their
+  own (see "Future sprints").
+- **The karst as launching station, his vision** (back from DiggyDwarves, where it was an alchemical
+  crafting station): "a heavenly stream of pure water falls from the sky and impacts the top of the
+  karst, forming a small crystalline pool. Here she should dive into the waters, which feed the root of
+  the karst, a thick root that plunges straight downward to a point far below the karst, as deep as the
+  karst is tall. From there, she is only in first person, and looks up at the world, seeing the roots in
+  a wide fish angle view. Villages and other markers from the map are visible, though inverted since they
+  are now being viewed from below. Deep ethereal roots emerge from this sacred space below the karst to
+  all the root convergence sites on the surface, and to each shrine dedicated to her. She can select any
+  of them and be launched towards it, moving rapidly along the deep roots as they emerge towards the
+  surface where she chooses."
+- **The cost is match-3 energy** ("needs a different name": here it is called *clarity*, gathered at the
+  still pool; to be judged). "She meditates at the top of the karst before she can enter the crystal
+  spring, doing match3 until her energy reaches a threshold, then dives into the spring and can select a
+  location. If she's at a shrine or root convergence, she meditates there, doing match3 until she has
+  enough energy to travel back to the karst's deep node."
+- **Depth and reach.** "There is a default starting depth with corresponding deep roots for the karst
+  deep node. If she purifies enough villages (downstream we should also add sanctified groves) to reach
+  a threshold circumference of controlled territory, then she can return to the karst and solve a series
+  of match3 puzzles (first version of this is just vanilla match3 to a points threshold) and expend that
+  match3 energy deepening the node, which widens the reach of the deep roots on the surface."
+
+This replaces system 4's "spring as a way down, fisheye as a dashboard, shrine-teleport" with something
+more specific: the spring is a dive into the karst's own taproot; the fisheye is the view from beneath
+the world; travel is along deep roots to convergences and shrines, paid in clarity; reach grows with
+territory. The confinement→vista rhythm holds: the climb is the price, the dive is the release.
+
 ## The pass plan
 
 Each pass answers one question, is judged on the phone, and is not skipped ahead of — the discipline
@@ -186,9 +222,16 @@ every study here has used.
   each a whole village with its own wolves, saves and rumors, the nearest to her feet being hers; Noah's
   calls: same folk with new names, villagers can die, the village panel collapsible. G3b, the ruins and
   the thorn hedge, follows.)
-- **G4. The karst re-framed.** *Question: does the spring's fisheye view feel like the launching-station
-  beat, and is root travel still worth using for the places that aren't shrined?* The spring mode,
-  the fisheye dashboard, shrine-teleport.
+- **G4. The karst re-framed** (Noah's second brief above). *Question: does the dive into the taproot and
+  the view from beneath the world feel like the launching-station beat, and does paying for it in
+  clarity make the meditation worth doing?* Built in sub-passes: **G4a** the heavenly stream and the
+  crystal pool on the summit; meditation there (the plateau's match-3 board, gathering clarity); the
+  dive down the taproot to the deep node, first person; the fisheye view of the world from below with the
+  deep roots drawn to every reachable destination; the launch along one to the surface; shrines (a village
+  whose prayer given at the stone passes a threshold) and root convergences (the root network's hubs
+  nearest the places she knows) as destinations; the way back by meditating at a shrine or a convergence.
+  **G4b** the deepening: enough shrined villages and she can solve puzzles at the pool (vanilla match-3 to
+  a points threshold) and spend clarity to deepen the node, widening the deep roots' reach.
 - **G5. Cultivation and the gated tiers.** *Question: does hitting the world-gated cap send the player
   outward with clear purpose, rather than reading as a wall?* The cultivation board at the karst, the
   tier cap, the three-nearest-karsts gate, guardians and purification wired to G3/G2.
@@ -210,14 +253,23 @@ gate before there's anything on the other side of it would read as a wall with n
 - **Does construction need her, or can a village self-build slowly alone?** Recommend self-build slowly,
   her help (quickening, delivering materials) as acceleration — keeps the standing pattern that every
   system holds a steady state without her and she is always the accelerant, never the requirement.
-- **Are guardians per karst unique creatures, or the same lair template reskinned?** Recommend the same
-  template first, cheap to place three or more of, differentiated later once the gated-tier pattern is
-  proven on the phone.
+- **Guardians.** Answered 2026-09-26: they are the six recruitable companions, each with a tech tree, playable
+  or directed as heroic units (Noah's second brief). Not creatures, not a lair template.
 - **Is the danger field radial from the single nearest karst, or do karsts' fields overlap/leave safe
   pockets between hostile ones?** Recommend radial-from-nearest-karst first — it's the simplest field to
   seed, and it's what Noah's own "three closest karsts" language already assumes.
 - **Does the spring replace the vine-climb as the way up, or only add the way down?** Recommend adding
   only the way down (see Principles/system 4) — the climb is the confinement, the spring is the vista.
+
+## Future sprints (from Noah's second brief, not yet planned in detail)
+
+- **Sanctified groves**: a second kind of controlled territory beside shrined villages, counting toward the
+  circumference that lets the node deepen.
+- **The six companions**: recruitment, each one's tech tree, whether each is played directly or directed
+  by Hulda as a heroic unit; they are the gate on her tiers (system 5), together with villages held steady.
+- **Deepening puzzles beyond vanilla**: authored match-3 puzzles in a series, once G4b's points-threshold
+  version has been judged.
+- **G3b** as planned: the den as a delve, the ruin found by a hidden root, the thorn hedge.
 
 ## Not this arc
 

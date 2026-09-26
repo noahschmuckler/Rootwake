@@ -430,6 +430,8 @@ export const SNATCH_TICK = 900, SNATCHERS_PER_NIGHT = 1, SNATCH_PACE = 9, SNATCH
 export const DY_DEVOUR_S = 10, SPOIL_TICKS = DAY_TICKS, DARK_PER_UNIT = 1, DARK_PER_SITE = 3, DARK_FED_DAYS = 3, DY_FLEE = 9, LAIR_HOME = 10, HOLD_RANGE = 3.5, HOLD_SAP = 3, HOLD_MELT_S = 60, MELT_S = 6;
 export const raidSize = (day: number): number => Math.min(3, 1 + Math.floor(day / 2));
 /** Fighting. Hers: a strike (STRIKE_DMG within STRIKE_RANGE ahead, every STRIKE_CD s, no sap), a thorn burst (THORN_DMG to all within THORN_RANGE, THORN_CD s to recharge, THORN_SAP), a root bind (holds one within ROOT_RANGE for ROOT_S, ROOT_CD, ROOT_SAP). Theirs: struck, a Dark Young hunts her for DY_AGGRO_S at DY_CHARGE m/s and bites DY_BITE every DY_BITE_S within DY_REACH. Vigor refills VIGOR_REGEN a second after VIGOR_CALM_S unbitten; sap SAP_REGEN a second. At no vigor she faints for FAINT_S and wakes at the stone with FAINT_VIGOR. Tuning. */
+/** A strike lands only in front of her (Noah: it seemed to fire in a random direction): within STRIKE_COS of her facing, or right under her feet. Tuning. */
+export const STRIKE_COS = 0.5;
 export const STRIKE_DMG = 5, STRIKE_RANGE = 1.9, STRIKE_CD = 0.45, THORN_DMG = 14, THORN_RANGE = 3.2, THORN_CD = 10, THORN_SAP = 25, ROOT_S = 4, ROOT_RANGE = 5, ROOT_CD = 14, ROOT_SAP = 15;
 export const DY_AGGRO_S = 8, DY_CHARGE = 1.7, DY_BITE = 12, DY_BITE_S = 1.4, DY_REACH = 1.5, VIGOR_MAX = 100, VIGOR_REGEN = 3, VIGOR_CALM_S = 4, SAP_MAX = 100, SAP_REGEN = 2, FAINT_S = 3, FAINT_VIGOR = 40, DY_CORPSE_S = 12;
 /** Levelling (Noah: kills count, a choice each level). A Dark Young is XP_DY, the manifestation XP_LAIR; the levels come at LEVEL_XP, capped at LEVEL_CAP. Each level grants one choice: vigor (+PERK_VIGOR to the cap), strike (+PERK_STRIKE to the strike), sap (+PERK_SAP to the cap). Tuning. */
@@ -641,7 +643,7 @@ const bindable = (v: Village): Raider[] => v.raiders.filter(r => r.state !== 'de
 /** Her strike: the nearest Dark Young within reach and ahead of her (facing (fx, fz)). Returns it, or null when nothing was there. */
 export function strike(v: Village, her: Vec2, fx: number, fz: number): Raider | null {
   scare(v, her, STRIKE_RANGE + 0.6);
-  let best: Raider | null = null, bd = Infinity; for (const r of alive(v)) { const dx = r.x - her.x, dz = r.z - her.z, d = Math.hypot(dx, dz); if (d <= STRIKE_RANGE + 0.6 && (dx * fx + dz * fz) / (d || 1) > -0.2 && d < bd) { best = r; bd = d; } }
+  let best: Raider | null = null, bd = Infinity; for (const r of alive(v)) { const dx = r.x - her.x, dz = r.z - her.z, d = Math.hypot(dx, dz); if (d <= STRIKE_RANGE + 0.6 && (d < 0.5 || (dx * fx + dz * fz) / d > STRIKE_COS) && d < bd) { best = r; bd = d; } }
   if (best) hurt(v, best, strikeDamage(v.hero)); else if (lairAt && v.lair.alive && Math.hypot(her.x - lairAt.x, her.z - lairAt.z) <= LAIR_HURT_RANGE) hurtLair(v, strikeDamage(v.hero));
   return best;
 }
