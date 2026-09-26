@@ -512,8 +512,8 @@ function frame(now: number) {
   // The ease settles exactly: the ground's alpha hash would stipple forever on a residual 0.01.
   under += (wantUnder - under) * Math.min(1, dt * 4); if (Math.abs(under - wantUnder) < 0.01) under = wantUnder;
   // The overhead camera is placed before the names, bubbles and marks are projected (Noah: zoomed out they drifted from their figures: they were cast through the shoulder camera, then the camera moved).
-  // Dev: the camera's turn rate about her while she is carried, for the journey to hold under CARRY_TURN_MAX.
-  { const f = player.feet(), yaw = Math.atan2(camera.position.x - f.x, camera.position.z - f.z), carried = mode === 'root' || (mode === 'karst' && karst.mode === 'ride'); if (carried && camTurn.carried) camTurn.max = Math.max(camTurn.max, Math.abs(Math.atan2(Math.sin(yaw - camTurn.yaw), Math.cos(yaw - camTurn.yaw))) / Math.max(dt, 1e-3)); camTurn.yaw = yaw; camTurn.carried = carried; }
+  // Dev: the camera's turn rate about her while she is carried, per second of the carried clock (`sim`), for the journey to hold under CARRY_TURN_MAX.
+  { const f = player.feet(), yaw = Math.atan2(camera.position.x - f.x, camera.position.z - f.z), carried = mode === 'root' || (mode === 'karst' && karst.mode === 'ride'); if (carried && camTurn.carried) camTurn.max = Math.max(camTurn.max, Math.abs(Math.atan2(Math.sin(yaw - camTurn.yaw), Math.cos(yaw - camTurn.yaw))) / Math.max(sim, 1e-3)); camTurn.yaw = yaw; camTurn.carried = carried; }
   overheadCamera();
   fight(Math.min(0.25, wall) * speed, Math.min(0.25, wall)); stations(Math.min(0.25, wall)); presentHulda(dt); presentHobbits(dt, wall); presentSpirits(dt, wall); presentRaiders(dt); presentCourse(); villageInfo(dt);
   const light = daylightAt(village.tick), dusk = Math.max(0, 1 - Math.abs(light - 0.12) / 0.12);
