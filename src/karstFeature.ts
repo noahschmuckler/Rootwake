@@ -126,6 +126,8 @@ export function createKarstFeature(scene: THREE.Scene, player: Player, camera: T
     }
     const wantVision = mode === 'sink' || mode === 'mouth' || mode === 'ride' || mode === 'rise' ? 1 : 0; vision += (wantVision - vision) * Math.min(1, dt * 3);
     world.update(Math.max(vision, externalVision), time, ride?.root ?? null, choice?.root ?? null);
+    // The stream fades as the camera comes within a few metres (standing in the pool it filled the view).
+    { const cd = Math.hypot(camera.position.x - poolAt.x, camera.position.z - poolAt.z); streamMat.opacity = (0.24 + 0.08 * Math.sin(time * 0.006)) * Math.min(1, Math.max(0.06, (cd - 1.2) / 4)); } stream.scale.x = stream.scale.z = 1 + 0.08 * Math.sin(time * 0.011); water.rotation.z = time * 0.0002; splash.intensity = 1.4 + 0.5 * Math.sin(time * 0.009);
     trailClock += dt; if (trailDirty && trailClock > 0.5) { world.setTrail(progress); trailClock = 0; trailDirty = false; }
   }
   /** Where and what she is while the karst has her, in world coordinates; null on the ground. */
@@ -144,8 +146,19 @@ export function createKarstFeature(scene: THREE.Scene, player: Player, camera: T
     colour.copy(inCavern ? cavernColour : skyColour); if (!inCavern) colour.lerp(rootColour, vision * 0.4); lantern.intensity = inCavern ? 1.2 : vision * 2.5;
     return { colour, fog: inCavern ? 0.05 : 0.009 + vision * 0.012, lantern: lantern.intensity, inCavern, vision };
   }
+  // G4 (Noah): the heavenly stream falls on the summit into a crystal pool. A column of light-water from high above to the summit's centre, a ring of crystals round a still disc of water; the stream's faces scroll (update). POOL_R is where she can meditate and dive. Tuning.
+  const POOL_R = 1.6, summitY = ZONES.summit.y, pool = new THREE.Group(); pool.position.set(0, summitY, 0); group.add(pool);
+  const streamMat = new THREE.MeshBasicMaterial({ color: '#d8f0ff', transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide, blending: THREE.AdditiveBlending });
+  const stream = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.1, 90, 8, 1, true), streamMat); stream.position.y = 45; pool.add(stream);
+  const water = new THREE.Mesh(new THREE.CircleGeometry(1.15, 32), new THREE.MeshStandardMaterial({ color: '#9fd8ee', emissive: '#4fa0c8', emissiveIntensity: 0.55, roughness: 0.15, metalness: 0.2, transparent: true, opacity: 0.9 })); water.rotation.x = -Math.PI / 2; water.position.y = 0.06; pool.add(water);
+  const crystalMat = new THREE.MeshStandardMaterial({ color: '#cfeeff', emissive: '#6fc0e8', emissiveIntensity: 0.4, roughness: 0.2, flatShading: true, transparent: true, opacity: 0.85 });
+  for (let i = 0; i < 12; i++) { const a = i / 12 * Math.PI * 2, c = new THREE.Mesh(new THREE.ConeGeometry(0.12 + (i % 3) * 0.05, 0.4 + (i % 4) * 0.18, 5), crystalMat); c.position.set(Math.cos(a) * 1.3, 0.2, Math.sin(a) * 1.3); c.rotation.set((i % 2) * 0.3, a, -(i % 3) * 0.2); pool.add(c); }
+  const splash = new THREE.PointLight('#bfe8ff', 1.6, 9, 1.6); splash.position.y = 1.2; pool.add(splash);
+  const poolAt = W(vec(0, summitY, 0));
+  /** Within the pool's ring on the summit. */
+  const atPool = (feet: THREE.Vector3): boolean => zone.id === 'summit' && mode === 'ground' && Math.hypot(feet.x - poolAt.x, feet.z - poolAt.z) <= POOL_R;
   player.cameraClear = p => !insideRock(L(p));
   world.setTrail(progress);
-  return { world, colliders, inside, owns, traversal, groundFrame, update, visual, atmosphere, emerge, enterRootsNear, standOn, leave, save, travel, stop, destinations: destinationsFrom, get travelling() { return travelling; }, get queued() { return queue.length; }, get mode() { return mode; }, get zone() { return zone.id; }, get at() { return at.id; }, get progress() { return progress; }, get vision() { return vision; }, get underground() { return ['sink', 'mouth', 'ride', 'rise'].includes(mode); }, origin, local, toWorld: W };
+  return { world, colliders, inside, owns, traversal, groundFrame, poolAt, atPool, POOL_R, update, visual, atmosphere, emerge, enterRootsNear, standOn, leave, save, travel, stop, destinations: destinationsFrom, get travelling() { return travelling; }, get queued() { return queue.length; }, get mode() { return mode; }, get zone() { return zone.id; }, get at() { return at.id; }, get progress() { return progress; }, get vision() { return vision; }, get underground() { return ['sink', 'mouth', 'ride', 'rise'].includes(mode); }, origin, local, toWorld: W };
 }
 export type KarstFeature = ReturnType<typeof createKarstFeature>;

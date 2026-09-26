@@ -499,3 +499,25 @@ test('G4: the same folk under other names: a folk\'s ids are the founders\' and 
   try { const h = housePlace(0), h6 = housePlace(6); assert.equal(grass(site.x + h.x, site.z + h.z), false, 'not under a house there'); assert.equal(grass(site.x + h6.x, site.z + h6.z), false, 'nor its hut'); assert.equal(grass(h6.x, h6.z), true, 'the first village has no hut'); assert.ok(water(site.x + 3, site.z + STREAM_Z(3)), 'its stream'); assert.ok(!water(site.x + 3, site.z - 30)); assert.equal(inHouse({ x: site.x + h.x, z: site.z + h.z })?.id, 0); }
   finally { setLayouts([{ x: 0, z: 0, huts: 0 }]); }
 });
+
+import { freshDeep, gather, canDive, dive, canReturn, returnDeep, isShrined, canDeepen, deepen, reachable, launchSeconds, fisheye, nodeDepth, deepReach, serializeDeep, parseDeep, CLARITY_CAP, DIVE_COST, RETURN_COST, DEEPEN_COST, DEEPEN_VILLAGES, NODE_DEPTH, DEPTH_STEP, DEEP_REACH_BASE, DEEP_REACH_STEP, SHRINE_PRAYER, DEEP_SPEED } from '../src/deepModel';
+import { STRIKE_COS, STRIKE_RANGE } from '../src/villageModel';
+test('G4: clarity is gathered on the board to a cap and spent on the dive and the way back; a village is shrined by prayer given; the node lies as deep as the karst is tall and its roots reach so far; enough shrines and clarity deepen it, widening the reach; the fisheye puts the zenith at the centre and swaps east and west; saved', () => {
+  const d = freshDeep(); assert.equal(gather(d, 3), 3); assert.equal(gather(d, CLARITY_CAP), CLARITY_CAP - 3, 'to the cap'); assert.equal(d.clarity, CLARITY_CAP);
+  assert.ok(canDive(d)); assert.ok(dive(d)); assert.equal(d.clarity, CLARITY_CAP - DIVE_COST); assert.equal(d.dives, 1); d.clarity = DIVE_COST - 1; assert.ok(!canDive(d)); assert.ok(!dive(d));
+  d.clarity = RETURN_COST; assert.ok(canReturn(d)); assert.ok(returnDeep(d)); assert.equal(d.clarity, 0); assert.ok(!canReturn(d));
+  assert.ok(!isShrined({ prayed: SHRINE_PRAYER - 1 })); assert.ok(isShrined({ prayed: SHRINE_PRAYER }));
+  assert.equal(nodeDepth(d), NODE_DEPTH); assert.equal(deepReach(d), DEEP_REACH_BASE);
+  const karst = { x: -60, z: -330 }, places = [{ id: 'pool', kind: 'pool' as const, name: 'the pool', x: -60, z: -330 }, { id: 'near', kind: 'shrine' as const, name: 'near', x: 0, z: 0 }, { id: 'far', kind: 'convergence' as const, name: 'far', x: -60, z: -330 - DEEP_REACH_BASE - 50 }];
+  assert.deepEqual(reachable(d, karst, places).map(p => p.id), ['pool', 'near'], 'within the reach');
+  d.clarity = DEEPEN_COST; assert.ok(!canDeepen(d, DEEPEN_VILLAGES - 1), 'not enough shrined'); assert.ok(canDeepen(d, DEEPEN_VILLAGES)); assert.ok(deepen(d, DEEPEN_VILLAGES)); assert.equal(d.depth, 1); assert.equal(d.clarity, 0); assert.equal(nodeDepth(d), NODE_DEPTH + DEPTH_STEP); assert.equal(deepReach(d), DEEP_REACH_BASE + DEEP_REACH_STEP);
+  assert.deepEqual(reachable(d, karst, places).map(p => p.id), ['pool', 'near', 'far'], 'deeper, farther'); assert.ok(!canDeepen(d, DEEPEN_VILLAGES), 'the next deepening wants more shrines');
+  assert.ok(Math.abs(launchSeconds(freshDeep(), karst, { x: 0, z: 0 }) - Math.hypot(Math.hypot(60, 330), NODE_DEPTH) / DEEP_SPEED) < 1e-9); assert.equal(launchSeconds(freshDeep(), karst, karst), 2.5, 'never shorter than the least');
+  const z = fisheye(freshDeep(), karst, karst); assert.deepEqual(z, { u: -0, v: 0 }); const e = fisheye(freshDeep(), karst, { x: karst.x + 100, z: karst.z }); assert.ok(e.u < 0 && Math.abs(e.v) < 1e-9, 'east lies to the left from beneath'); const n = fisheye(freshDeep(), karst, { x: karst.x, z: karst.z - 100 }); assert.ok(n.v < 0 && Math.abs(n.u) < 1e-9, 'north is up'); assert.ok(Math.hypot(e.u, e.v) < 1 && Math.hypot(e.u, e.v) > 0.5, 'a hundred metres out, past the middle of the view'); const far = fisheye(freshDeep(), karst, { x: karst.x + 5000, z: karst.z }); assert.ok(Math.hypot(far.u, far.v) > 0.98 && Math.hypot(far.u, far.v) <= 1, 'the horizon at the edge');
+  const back = parseDeep(serializeDeep(d)); assert.deepEqual(back, d); assert.deepEqual(parseDeep('junk'), freshDeep());
+});
+test('the strike lands only where she faces (Noah): a raider behind her is not hit, one before her is', () => {
+  setLair(null); const v = freshV(1); v.raiders.push({ id: 7, x: 0, z: 1.2, heading: 0, hp: 30, state: 'coming', target: null, ate: 0, eatClock: 0, aggro: 0, rooted: 0, biteClock: 0, hurt: 0, gone: 0, site: null, devourClock: 0, held: 0, infant: null, kind: 'dy', den: null, prey: null });
+  assert.equal(strike(v, { x: 0, z: 0 }, 0, -1), null, 'behind her: no'); assert.equal(v.raiders[0].hp, 30); assert.equal(strike(v, { x: 0, z: 0 }, 0, 1)?.id, 7, 'before her: yes'); assert.ok(v.raiders[0].hp < 30);
+  v.raiders[0].x = STRIKE_RANGE * 0.9; v.raiders[0].z = 0; v.raiders[0].hp = 30; assert.equal(strike(v, { x: 0, z: 0 }, Math.cos(Math.acos(STRIKE_COS) + 0.2), Math.sin(Math.acos(STRIKE_COS) + 0.2)), null, 'outside the cone: no'); assert.equal(strike(v, { x: 0, z: 0 }, 1, 0)?.id, 7, 'in the cone: yes');
+});
