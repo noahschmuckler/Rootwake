@@ -24,17 +24,21 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   // The chunk surface owns the meadow ground; no second translucent disc.
   // The green: a worn circle, and paths trodden from it to each door and out through each gap.
   const worn = new THREE.MeshStandardMaterial({ color: '#8a7a56', roughness: 1, transparent: true, opacity: 0.85, depthWrite: false });
-  const green = new THREE.Mesh(new THREE.CircleGeometry(5.2, 40), worn); green.rotation.x = -Math.PI / 2; green.position.set(GREEN.x, 0.04, GREEN.z); scene.add(green);
+  // The decals on the ground (the green, the paths, the stream) follow the meadow's relief vertex by vertex (it undulates five centimetres, so a flat decal sank under it in places) and draw after the ground tiles (renderOrder 1: the tiles are transparent for the view through the soil, and a transparent tile drawn after a decal that writes no depth covered it, from some angles and not others).
+  const onGround = (geo: THREE.BufferGeometry, lift: number): THREE.BufferGeometry => { const pos = geo.attributes.position as THREE.BufferAttribute; for (let i = 0; i < pos.count; i++) pos.setY(i, relief(pos.getX(i), pos.getZ(i)) + lift); geo.computeVertexNormals(); return geo; };
+  const DECAL_ORDER = 1;
+  { const geo = new THREE.CircleGeometry(5.2, 40, 0, Math.PI * 2); geo.rotateX(-Math.PI / 2); geo.translate(GREEN.x, 0, GREEN.z); const green = new THREE.Mesh(onGround(geo, 0.04), worn); green.renderOrder = DECAL_ORDER; scene.add(green); }
   const pathGeos: THREE.BufferGeometry[] = [];
-  const path = (a: { x: number; z: number }, b: { x: number; z: number }, w: number): void => { const dx = b.x - a.x, dz = b.z - a.z, L = Math.hypot(dx, dz); const g = new THREE.PlaneGeometry(w, L); g.rotateX(-Math.PI / 2); g.rotateY(-Math.atan2(dz, dx) - Math.PI / 2); g.translate((a.x + b.x) / 2, 0.035, (a.z + b.z) / 2); pathGeos.push(g); };
+  const path = (a: { x: number; z: number }, b: { x: number; z: number }, w: number): void => { const dx = b.x - a.x, dz = b.z - a.z, L = Math.hypot(dx, dz); const g = new THREE.PlaneGeometry(w, L, 1, Math.max(2, Math.ceil(L / 1.2))); g.rotateX(-Math.PI / 2); g.rotateY(-Math.atan2(dz, dx) - Math.PI / 2); g.translate((a.x + b.x) / 2, 0, (a.z + b.z) / 2); pathGeos.push(onGround(g, 0.035)); };
   for (const h of HOUSES) path(GREEN, h.door, 1.0);
   for (const s of Object.values(SITES)) if (s.id !== 'fire') path(GREEN, s, 1.1);
-  scene.add(new THREE.Mesh(mergeGeometries(pathGeos)!, worn));
+  { const paths = new THREE.Mesh(mergeGeometries(pathGeos)!, worn); paths.renderOrder = DECAL_ORDER; scene.add(paths); }
   // The stream: a ribbon of water along the north edge, banks of dark earth, past the stream site.
   const water = new THREE.MeshStandardMaterial({ color: '#4f93a8', emissive: '#1a4a58', emissiveIntensity: 0.4, roughness: 0.2, metalness: 0.2, transparent: true, opacity: 0.85 });
   const stream = new THREE.CatmullRomCurve3(Array.from({ length: 14 }, (_, i) => { const x = -70 + i * 10.8; return new THREE.Vector3(x, 0.02, STREAM_Z(x)); }));
-  const ribbon = (curve: THREE.Curve<THREE.Vector3>, width: number, y: number): THREE.BufferGeometry => { const n = 60, pos: number[] = [], idx: number[] = []; for (let i = 0; i <= n; i++) { const t = i / n, p = curve.getPointAt(t), tan = curve.getTangentAt(t); const nx = -tan.z, nz = tan.x; pos.push(p.x + nx * width / 2, y, p.z + nz * width / 2, p.x - nx * width / 2, y, p.z - nz * width / 2); if (i < n) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } } const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals(); return g; };
-  scene.add(new THREE.Mesh(ribbon(stream, 5, 0.06), new THREE.MeshStandardMaterial({ color: '#3d4a33', roughness: 1 })), new THREE.Mesh(ribbon(stream, 3.4, 0.08), water));
+  // The ribbon's triangles face up (they were wound facing down, and a single-sided bank and water were culled from above: no visible stream), and it lies on the relief.
+  const ribbon = (curve: THREE.Curve<THREE.Vector3>, width: number, lift: number): THREE.BufferGeometry => { const n = 120, pos: number[] = [], idx: number[] = []; for (let i = 0; i <= n; i++) { const t = i / n, p = curve.getPointAt(t), tan = curve.getTangentAt(t); const nx = -tan.z, nz = tan.x; pos.push(p.x + nx * width / 2, 0, p.z + nz * width / 2, p.x - nx * width / 2, 0, p.z - nz * width / 2); if (i < n) { const a = i * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); } } const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); return onGround(g, lift); };
+  { const bank = new THREE.Mesh(ribbon(stream, 5, 0.06), new THREE.MeshStandardMaterial({ color: '#3d4a33', roughness: 1 })), flow = new THREE.Mesh(ribbon(stream, 3.4, 0.08), water); bank.name = 'stream-bank'; flow.name = 'stream-water'; flow.renderOrder = DECAL_ORDER; scene.add(bank, flow); }
   // Houses: a round wall, a cone of thatch, a round door to the green, a window that glows at night.
   const wall = new THREE.MeshStandardMaterial({ color: '#c9b79a', roughness: 1, flatShading: true }), thatch = new THREE.MeshStandardMaterial({ color: '#8a7a3e', roughness: 1, flatShading: true }), doorMat = new THREE.MeshStandardMaterial({ color: '#3a2a1a', roughness: 0.9 });
   const windowMat = new THREE.MeshStandardMaterial({ color: '#f0d890', emissive: '#f0b050', emissiveIntensity: 0, roughness: 0.6 });
@@ -50,11 +54,11 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   for (const h of HOUSES) { houseGroup(h); colliders.push({ x: h.x, z: h.z, radius: HOUSE_RADIUS + 0.05, minY: -0.2, maxY: 2 }); }
   const baseColliders = colliders.length;
   // G1: the huts built since, on the second ring, each with a worn path to the green; shown as the model says how many stand (setHouses), hidden again when the village starts over.
-  const huts = new Map<number, THREE.Group>();
+  const huts = new Map<number, THREE.Group>(), hutPaths = new Map<number, THREE.Mesh>();
   function setHouses(v: Village): void {
-    for (let id = 6; id < 6 + v.huts; id++) if (!huts.has(id)) { const h = housePlace(id), g = houseGroup(h); const pg = new THREE.PlaneGeometry(1.0, Math.hypot(h.door.x - GREEN.x, h.door.z - GREEN.z)); pg.rotateX(-Math.PI / 2); pg.rotateY(-Math.atan2(h.door.z - GREEN.z, h.door.x - GREEN.x) - Math.PI / 2); pg.translate((GREEN.x + h.door.x) / 2 - h.x, 0.035 - relief(h.x, h.z), (GREEN.z + h.door.z) / 2 - h.z); const path = new THREE.Mesh(pg, worn); path.rotation.y = h.facing; g.add(path); huts.set(id, g); }
+    for (let id = 6; id < 6 + v.huts; id++) if (!huts.has(id)) { const h = housePlace(id), g = houseGroup(h); const pg = new THREE.PlaneGeometry(1.0, Math.hypot(h.door.x - GREEN.x, h.door.z - GREEN.z), 1, 12); pg.rotateX(-Math.PI / 2); pg.rotateY(-Math.atan2(h.door.z - GREEN.z, h.door.x - GREEN.x) - Math.PI / 2); pg.translate((GREEN.x + h.door.x) / 2, 0, (GREEN.z + h.door.z) / 2); const path = new THREE.Mesh(onGround(pg, 0.035), worn); path.renderOrder = DECAL_ORDER; scene.add(path); hutPaths.set(id, path); huts.set(id, g); }
     colliders.length = baseColliders;
-    for (const [id, g] of huts) { g.visible = id < 6 + v.huts; if (g.visible) { const h = housePlace(id); colliders.push({ x: h.x, z: h.z, radius: HOUSE_RADIUS + 0.05, minY: -0.2, maxY: 2 }); } }
+    for (const [id, g] of huts) { g.visible = id < 6 + v.huts; hutPaths.get(id)!.visible = g.visible; if (g.visible) { const h = housePlace(id); colliders.push({ x: h.x, z: h.z, radius: HOUSE_RADIUS + 0.05, minY: -0.2, maxY: 2 }); } }
   }
   // G1: the stakes for a hut going up: four stakes, a wall that rises with the wood and water brought, the thatch with the work (setSite).
   const stakeMat = new THREE.MeshStandardMaterial({ color: '#7a6448', roughness: 1 }), siteGroup = new THREE.Group(); siteGroup.visible = false; siteGroup.name = 'hut-site'; scene.add(siteGroup);

@@ -270,10 +270,10 @@ function stations(dt: number): void {
 miracles.addEventListener('click', e => { const b = (e.target as HTMLElement).closest('button'); if (!b) return; if (b.dataset.quicken) { if (quicken(village, b.dataset.quicken as YieldSite)) save(); } else if (b.dataset.hut) { if (askHut(village)) save(); } else if (b.dataset.keeps && summonSpirit(village, b.dataset.keeps as SiteKind)) save(); });
 // The spirits: shown like the hobbits, eased after the model, as figures of leaves that bob a little.
 const shownSpirits: { x: number; z: number; heading: number }[] = [];
-function presentSpirits(dt: number): void {
+function presentSpirits(dt: number, wall = dt): void {
   for (let i = 0; i < village.spirits.length; i++) {
     const s = village.spirits[i]; if (!shownSpirits[i]) shownSpirits[i] = { x: s.x, z: s.z, heading: s.heading };
-    const v = shownSpirits[i], f = world.spiritFigure(i), dx = s.x - v.x, dz = s.z - v.z, d = Math.hypot(dx, dz), step = d < 0.03 ? d : Math.min(d, (d > 2.5 ? 3 : 1.3) * speed * dt);
+    const v = shownSpirits[i], f = world.spiritFigure(i), dx = s.x - v.x, dz = s.z - v.z, d = Math.hypot(dx, dz), step = d < 0.03 ? d : Math.min(d, (d > 2.5 ? 3 : 1.3) * speed * wall);
     if (d > 1e-4) { v.x += dx / d * step; v.z += dz / d * step; }
     const th = d > 0.05 ? Math.atan2(dz, dx) : s.heading; v.heading += wrap(th - v.heading) * Math.min(1, dt * 8);
     f.position.set(v.x, relief(v.x, v.z) + Math.sin(time * 0.004 + i) * 0.04, v.z); f.rotation.y = -Math.PI / 2 - v.heading;
@@ -336,15 +336,16 @@ function presentCourse(): void {
   if (show) { const x = (tmp.x + 1) * innerWidth / 2, py = (1 - tmp.y) * innerHeight / 2; wayLabel.style.transform = `translate(${x}px,${py}px) translate(-50%,-100%)`; wayLabel.textContent = `the way in · ${Math.round(dist)} m`; }
 }
 const lairLabel = document.createElement('div'); lairLabel.className = 'name foe lair'; lairLabel.textContent = 'the mother of goats'; const lairMeter = document.createElement('i'); lairMeter.className = 'hunger'; const lairHp = document.createElement('b'); lairMeter.append(lairHp); lairLabel.append(lairMeter); lairLabel.hidden = true; labels.append(lairLabel);
-function presentHobbits(dt: number): void {
+/** `dt` is the capped animation step; `wall` the real seconds the village's ticks came from. The figure's walk toward the model's place uses the real seconds (Noah: they ran, stopped and ran again on the phone: on slow frames the capped step covered less ground than the ticks did, the lag grew past a hitch and they sprinted to close it), the mixer the capped step. */
+function presentHobbits(dt: number, wall = dt): void {
   camera.updateMatrixWorld();
   pruneShown();
   for (const s of village.hobbits) {
     const v = shownFor(s), f = world.figureFor(s), h = hobbitById(s.id); if (s.stage === 'infant') { v.label.hidden = true; v.bubble.hidden = true; f.group.visible = false; continue; }
     // The model moves in ticks; the shown figure walks toward its place at the hobbit's own pace (a touch faster, so the lag never grows), so a tick's step is a stride, not a sprint and a wait. Only a hitch catches up quickly.
-    const dx = s.x - v.x, dz = s.z - v.z, d = Math.hypot(dx, dz), step = d < 0.03 ? d : Math.min(d, (d > 2.5 ? h.pace * 2.5 : h.pace * 1.08) * speed * dt);
+    const dx = s.x - v.x, dz = s.z - v.z, d = Math.hypot(dx, dz), step = d < 0.03 ? d : Math.min(d, (d > 2.5 ? h.pace * 2.5 : h.pace * 1.08) * speed * wall);
     if (d > 1e-4) { v.x += dx / d * step; v.z += dz / d * step; }
-    const moving = step / Math.max(1e-6, dt); v.speed += (moving - v.speed) * Math.min(1, dt * 10);
+    const moving = step / Math.max(1e-6, wall); v.speed += (moving - v.speed) * Math.min(1, dt * 10);
     const targetHeading = d > 0.05 ? Math.atan2(dz, dx) : s.heading; v.heading += wrap(targetHeading - v.heading) * Math.min(1, dt * 8);
     f.group.visible = !s.inside; f.group.position.set(v.x, relief(v.x, v.z), v.z);
     // The rig faces -Z at yaw 0 and the model's heading is an angle in x,z: forward (-sin yaw, -cos yaw) = (cos h, sin h) gives yaw = -pi/2 - h.
@@ -514,7 +515,7 @@ function frame(now: number) {
   // Dev: the camera's turn rate about her while she is carried, for the journey to hold under CARRY_TURN_MAX.
   { const f = player.feet(), yaw = Math.atan2(camera.position.x - f.x, camera.position.z - f.z), carried = mode === 'root' || (mode === 'karst' && karst.mode === 'ride'); if (carried && camTurn.carried) camTurn.max = Math.max(camTurn.max, Math.abs(Math.atan2(Math.sin(yaw - camTurn.yaw), Math.cos(yaw - camTurn.yaw))) / Math.max(dt, 1e-3)); camTurn.yaw = yaw; camTurn.carried = carried; }
   overheadCamera();
-  fight(Math.min(0.25, wall) * speed, Math.min(0.25, wall)); stations(Math.min(0.25, wall)); presentHulda(dt); presentHobbits(dt); presentSpirits(dt); presentRaiders(dt); presentCourse(); villageInfo(dt);
+  fight(Math.min(0.25, wall) * speed, Math.min(0.25, wall)); stations(Math.min(0.25, wall)); presentHulda(dt); presentHobbits(dt, wall); presentSpirits(dt, wall); presentRaiders(dt); presentCourse(); villageInfo(dt);
   const light = daylightAt(village.tick), dusk = Math.max(0, 1 - Math.abs(light - 0.12) / 0.12);
   // From a height the view opens: the fog thins to VISTA_FOG of the ground's and the far plane reaches out, over VISTA_ALT m above the ground beneath her (the summit had the meadow's fog and a 220 m far plane, and no view: Noah's playtest). Tuning.
   const vista = (() => { const f = player.feet(), t = Math.max(0, Math.min(1, (f.y - relief(f.x, f.z) - VISTA_ALT[0]) / (VISTA_ALT[1] - VISTA_ALT[0]))); return t * t * (3 - 2 * t); })(), fogScale = 1 - vista * (1 - VISTA_FOG), far = FAR_GROUND + vista * (FAR_VISTA - FAR_GROUND);
