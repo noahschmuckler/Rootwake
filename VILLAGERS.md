@@ -222,6 +222,17 @@ service or the same without the price.
   supplied, a spirit doing a job, costs rising. Journey: collect, deliver, a villager at the
   stone, a spirit summoned.
 
+## The world filled in (Noah's brief, 2026-09-26; plan recorded in `EXPANSION.md`, build to be decided)
+Following D4 and a phone playtest: growth with nowhere to go (a supplied, worshipping village has no
+way to turn its success into more capacity), the village as a hub rather than a terminus, other lairs
+and ruins reached by deep roots (the first study's buried structure generalized), danger that increases
+with distance from the karst, the karst re-framed as a launching station (a spring down through its
+centre, a fisheye view of known villages, shrine-teleport), and Hulda's own leveling gated by both
+match-3 cultivation and world-state (awakened guardians, purified villages near the karsts closest to
+her). The full brief, principles and pass plan (G1 quickening and construction, G2 the hub, G3 lairs and
+the danger gradient, G4 the karst re-framed, G5 cultivation and the gated tiers) live in `EXPANSION.md`,
+to be built before the other six characters.
+
 ## The wider world (Noah's brief, 2026-09-23; assessment recorded, build to be decided)
 
 **The brief.** An overworld map and a larger connected world, with chunk loading and some procedural
