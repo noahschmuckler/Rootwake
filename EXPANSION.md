@@ -181,7 +181,11 @@ every study here has used.
   VILLAGE_HANDOFF.md: the field, the dens, the wolves. Decided in the building: Shub's lair keeps its
   place regardless of the field for now, dens obey it; wolves hurt villagers but never kill them; wolves
   first, boars later; the first village's ground is calm, and the keeper names the nearest den beyond
-  reach so there is a direction to walk. G3b, the ruins and the thorn hedge, follows.)
+  reach so there is a direction to walk. The other villages built 2026-09-26, see VILLAGE_HANDOFF.md
+  "The other villages": two more by the seed on the karst's safe side, the same folk under other names,
+  each a whole village with its own wolves, saves and rumors, the nearest to her feet being hers; Noah's
+  calls: same folk with new names, villagers can die, the village panel collapsible. G3b, the ruins and
+  the thorn hedge, follows.)
 - **G4. The karst re-framed.** *Question: does the spring's fisheye view feel like the launching-station
   beat, and is root travel still worth using for the places that aren't shrined?* The spring mode,
   the fisheye dashboard, shrine-teleport.

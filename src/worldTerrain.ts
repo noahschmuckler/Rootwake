@@ -1,6 +1,6 @@
 // One surface for mesh vertices, feet, grass and vegetation. Authored patches are
 // constraints in the field, not overlapping meshes. Heights use the world seed.
-import { biomeAt, hills, MEADOW_ISLAND, ISLAND_FADE, KARST_ISLAND, KARST_FADE } from './chunkModel';
+import { biomeAt, hills, islands, MEADOW_ISLAND, ISLAND_FADE, KARST_ISLAND, KARST_FADE } from './chunkModel';
 import { KARST_AT } from './overworldModel';
 export const TERRAIN_STEP = 2;
 export const smoothBand = (inner: number, outer: number, distance: number): number => {
@@ -33,7 +33,7 @@ export function createTerrain(seed: number): Terrain {
     let c: [number, number, number] = b === 'meadow' ? [0.36, 0.47, 0.29] : b === 'wood' ? [0.30, 0.42, 0.26] : [0.16, 0.13, 0.19];
     const mix = (to: number[], k: number) => { c = c.map((v, i) => v * (1 - k) + to[i] * k) as typeof c; };
     // Colors are linear, matching Three.Color(hex) for the authored materials.
-    mix([0.0953, 0.1714, 0.0685], 1 - smoothBand(MEADOW_ISLAND - 15, MEADOW_ISLAND + ISLAND_FADE, Math.hypot(x, z)));
+    for (const o of islands(seed)) mix([0.0953, 0.1714, 0.0685], 1 - smoothBand(MEADOW_ISLAND - 15, MEADOW_ISLAND + ISLAND_FADE, Math.hypot(x - o.x, z - o.z)));
     mix([0.0782, 0.1441, 0.0595], 1 - smoothBand(KARST_ISLAND - 10, KARST_ISLAND + KARST_FADE, Math.hypot(x - KARST_AT.x, z - KARST_AT.z)));
     return c;
   };

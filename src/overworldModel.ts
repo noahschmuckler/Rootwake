@@ -25,7 +25,7 @@ export function dens(seed: number): Den[] {
     const rand = mulberry32((seed * 9173 + (cx + 50) * 613 + (cz + 50) * 7919 + 100003) >>> 0);
     const x = Math.round((cx + 0.5) * DEN_CELL + (rand() - 0.5) * 0.6 * DEN_CELL), z = Math.round((cz + 0.5) * DEN_CELL + (rand() - 0.5) * 0.6 * DEN_CELL), dg = danger(x, z), roll = rand();
     if (roll >= dg * DEN_CHANCE) continue;
-    if (Math.hypot(x, z) < 44 + DEN_CLEAR || Math.hypot(x - KARST_AT.x, z - KARST_AT.z) < 100 + DEN_CLEAR || Math.hypot(x - lair.x, z - lair.z) < FOREST_RADIUS + DEN_CLEAR) continue;
+    if (Math.hypot(x, z) < VILLAGE_RADIUS + DEN_CLEAR || Math.hypot(x - KARST_AT.x, z - KARST_AT.z) < 100 + DEN_CLEAR || Math.hypot(x - lair.x, z - lair.z) < FOREST_RADIUS + DEN_CLEAR || villageSites(seed).some(v => Math.hypot(x - v.x, z - v.z) < VILLAGE_RADIUS + DEN_CLEAR)) continue;
     const tier = 1 + Math.min(2, Math.floor(dg * 3)); out.push({ id: `den-${cx},${cz}`, x, z, tier, pack: PACK_BASE + tier });
   }
   denCache.set(seed, out); return out;
@@ -33,18 +33,35 @@ export function dens(seed: number): Den[] {
 function basePlaces(seed: number): Place[] {
   const rand = mulberry32((seed * 3251 + 17) >>> 0); const a = 0.55 + rand() * 1.4; // south-east to south-west: away from the karst
   return [
-    { id: 'village', kind: 'village', name: 'the village', x: 0, z: 0, radius: 44 },
+    { id: 'village', kind: 'village', name: 'the village', x: 0, z: 0, radius: VILLAGE_RADIUS },
     { id: 'karst', kind: 'karst', name: 'the karst', x: KARST_AT.x, z: KARST_AT.z, radius: 60 },
     { id: 'lair', kind: 'lair', name: 'the dark forest', x: Math.round(Math.cos(a) * LAIR_DISTANCE), z: Math.round(Math.sin(a) * LAIR_DISTANCE), radius: FOREST_RADIUS },
   ];
 }
-/** Every place: the village, the karst, the lair, and the dens. */
-export function places(seed: number): Place[] { return [...basePlaces(seed), ...dens(seed).map(d => ({ id: d.id, kind: 'den' as const, name: "a wolves' den", x: d.x, z: d.z, radius: DEN_RADIUS, tier: d.tier }))]; }
+/** G4 (EXPANSION.md): the other villages. Same folk, other names (villageModel's FOLK), each a whole village of its own on calmer ground: within SITE_KARST of the karst (the danger field's safe side, where the dens are few), SITE_NEAR to SITE_FAR from the first village, past the dark forest by SITE_LAIR (so the first village is always the nearest to the lair), and SITE_APART from one another. Placed by the seed. Their names and folk pools are authored (SITE_NAMES), in order. Tuning. */
+export const VILLAGE_RADIUS = 44, SITE_KARST: [number, number] = [560, 700], SITE_NEAR = 650, SITE_FAR = 1400, SITE_LAIR = 500, SITE_APART = 450;
+export const SITE_NAMES: { short: string; name: string }[] = [{ short: 'the ford', name: 'the village at the ford' }, { short: 'the pines', name: 'the village under the pines' }];
+export interface VillageSite { id: string; folk: number; short: string; name: string; x: number; z: number }
+const siteCache = new Map<number, VillageSite[]>();
+export function villageSites(seed: number): VillageSite[] {
+  const cached = siteCache.get(seed); if (cached) return cached;
+  const rand = mulberry32((seed * 5417 + 91) >>> 0), lair = basePlaces(seed)[2], out: VillageSite[] = [];
+  for (let i = 0; i < 60 && out.length < SITE_NAMES.length; i++) {
+    const a = rand() * Math.PI * 2, r = SITE_KARST[0] + rand() * (SITE_KARST[1] - SITE_KARST[0]), x = Math.round(KARST_AT.x + Math.cos(a) * r), z = Math.round(KARST_AT.z + Math.sin(a) * r), d = Math.hypot(x, z);
+    if (d < SITE_NEAR || d > SITE_FAR || Math.hypot(x - lair.x, z - lair.z) < SITE_LAIR || out.some(o => Math.hypot(o.x - x, o.z - z) < SITE_APART)) continue;
+    const k = out.length + 1; out.push({ id: `village-${k}`, folk: k, ...SITE_NAMES[k - 1], x, z });
+  }
+  siteCache.set(seed, out); return out;
+}
+/** Every place: the village, the karst, the lair, the other villages, and the dens. */
+export function places(seed: number): Place[] { return [...basePlaces(seed), ...villageSites(seed).map(s => ({ id: s.id, kind: 'village' as const, name: s.name, x: s.x, z: s.z, radius: VILLAGE_RADIUS })), ...dens(seed).map(d => ({ id: d.id, kind: 'den' as const, name: "a wolves' den", x: d.x, z: d.z, radius: DEN_RADIUS, tier: d.tier }))]; }
 /** Exploration: cells of CELL m, revealed within EXPLORE_RADIUS of where she stands. Tuning. */
 export const CELL = 24, EXPLORE_RADIUS = 70;
 /** G2: a hint is what the villagers said of a place she has not found: a bearing from the green and the words, drawn on the map as a fan HINT_REACH m long, HINT_SPREAD either side, until she finds the place. Tuning. */
-export interface Hint { about: string; bearing: number; text: string }
+export interface Hint { about: string; bearing: number; text: string; from?: { x: number; z: number } }
 export const HINT_REACH = 320, HINT_SPREAD = 22;
+/** Where a hint's fan starts: the green of the village that said it (G4), the first village's when none is given. */
+export const hintFrom = (h: Hint): { x: number; z: number } => h.from ?? { x: 0, z: 0 };
 export interface Overworld { seed: number; revealed: Set<string>; known: Set<string>; hints: Hint[] }
 export const freshOverworld = (seed = 1): Overworld => ({ seed, revealed: new Set(), known: new Set(['village', 'karst']), hints: [] });
 /** A hint from talk: one per subject, nothing for a place already known. Returns whether it is new. */
@@ -63,7 +80,7 @@ export const isRevealed = (o: Overworld, x: number, z: number): boolean => { con
 export const knownPlaces = (o: Overworld): Place[] => places(o.seed).filter(p => o.known.has(p.id));
 export const serializeOverworld = (o: Overworld): string => JSON.stringify({ seed: o.seed, revealed: [...o.revealed], known: [...o.known], hints: o.hints });
 export function parseOverworld(raw: string | null): Overworld {
-  try { const p = JSON.parse(raw ?? 'null'); if (!p || typeof p !== 'object') return freshOverworld(); const o = freshOverworld(Number.isFinite(p.seed) ? p.seed : 1); if (Array.isArray(p.revealed)) for (const k of p.revealed) if (typeof k === 'string' && /^-?\d+,-?\d+$/.test(k)) o.revealed.add(k); if (Array.isArray(p.known)) for (const k of p.known) if (typeof k === 'string' && (['village', 'karst', 'lair'].includes(k) || /^den--?\d+,-?\d+$/.test(k))) o.known.add(k); if (Array.isArray(p.hints)) for (const h of p.hints) if (h && typeof h.about === 'string' && typeof h.text === 'string' && Number.isFinite(h.bearing) && !o.known.has(h.about)) o.hints.push({ about: h.about, bearing: ((h.bearing % 360) + 360) % 360, text: h.text }); return o; } catch { return freshOverworld(); }
+  try { const p = JSON.parse(raw ?? 'null'); if (!p || typeof p !== 'object') return freshOverworld(); const o = freshOverworld(Number.isFinite(p.seed) ? p.seed : 1); if (Array.isArray(p.revealed)) for (const k of p.revealed) if (typeof k === 'string' && /^-?\d+,-?\d+$/.test(k)) o.revealed.add(k); if (Array.isArray(p.known)) for (const k of p.known) if (typeof k === 'string' && (['village', 'karst', 'lair'].includes(k) || /^den--?\d+,-?\d+$/.test(k) || /^village-\d$/.test(k))) o.known.add(k); if (Array.isArray(p.hints)) for (const h of p.hints) if (h && typeof h.about === 'string' && typeof h.text === 'string' && Number.isFinite(h.bearing) && !o.known.has(h.about)) o.hints.push({ about: h.about, bearing: ((h.bearing % 360) + 360) % 360, text: h.text, ...(h.from && Number.isFinite(h.from.x) && Number.isFinite(h.from.z) ? { from: { x: h.from.x, z: h.from.z } } : {}) }); return o; } catch { return freshOverworld(); }
 }
 /** The pinch: the camera pulls from ZOOM_MIN m at her shoulder to ZOOM_MAX m overhead, its elevation rising from ELEV_LOW to ELEV_HIGH with the distance; past the end, the map. Tuning. */
 export const ZOOM_MIN = 3, ZOOM_MAX = 40, ELEV_LOW = 0.38, ELEV_HIGH = 1.36;

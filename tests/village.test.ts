@@ -182,7 +182,7 @@ test('fighting: a cheap strike ahead of her, a thorn burst round her and a root 
 
 import { addHint, danger, dens, DANGER_SAFE, DANGER_FAR, DEN_CLEAR, PACK_BASE, FOREST_RADIUS, freshOverworld, explore, isRevealed, knownPlaces, places, parseOverworld, serializeOverworld, CELL, EXPLORE_RADIUS, LAIR_DISTANCE, KARST_AT, ZOOM_MIN, ZOOM_MAX, zoomElevation, ELEV_LOW, ELEV_HIGH, bearingOf, wrapDeg } from '../src/overworldModel';
 test('the overworld: the village at the origin, the karst north, the lair placed by the seed 400 m away from the karst\'s side; exploring reveals cells round her and the places she comes near; the pinch rises from the shoulder to overhead', () => {
-  const ps = places(1); assert.deepEqual(ps.slice(0, 3).map(p => p.id), ['village', 'karst', 'lair']); assert.ok(ps.slice(3).every(p => p.kind === 'den'), 'then the dens'); assert.deepEqual({ x: ps[0].x, z: ps[0].z }, { x: 0, z: 0 }); assert.deepEqual({ x: ps[1].x, z: ps[1].z }, KARST_AT);
+  const ps = places(1); assert.deepEqual(ps.slice(0, 3).map(p => p.id), ['village', 'karst', 'lair']); assert.deepEqual(ps.slice(3, 5).map(p => p.id), ['village-1', 'village-2'], 'then the other villages (G4)'); assert.ok(ps.slice(5).every(p => p.kind === 'den'), 'then the dens'); assert.deepEqual({ x: ps[0].x, z: ps[0].z }, { x: 0, z: 0 }); assert.deepEqual({ x: ps[1].x, z: ps[1].z }, KARST_AT);
   const lair = ps[2]; assert.ok(Math.abs(Math.hypot(lair.x, lair.z) - LAIR_DISTANCE) < 2, 'the lair at its distance'); assert.ok(lair.z > 0, 'away from the karst'); assert.ok(Math.hypot(lair.x - KARST_AT.x, lair.z - KARST_AT.z) > 500, 'and far from it');
   assert.notDeepEqual(places(2)[2], lair, 'placed by the seed');
   const o = freshOverworld(1); assert.deepEqual(knownPlaces(o).map(p => p.id), ['village', 'karst'], 'the village and the karst known from the start');
@@ -438,7 +438,7 @@ test('G3a: danger is distance from the nearest karst; dens fall by the seed wher
 test('G3a: a den in reach sends its pack down at dusk; villagers out of doors run home, one caught is bitten and weakened, never killed; her strike kills a wolf; the pack slain, the den lies quiet, then comes back a wolf a day; no den in reach, no wolves; saved', () => {
   setDens([{ id: 'den-1,1', x: 300, z: 300, pack: 3 }]);
   try {
-    const v = freshV(1); assert.equal(densInReach().length, 1); assert.ok(rumors(v).some(r => r.about === 'den-1,1' && r.text === 'wolves howl to the south-east' && r.who === 'keeper'), 'the keeper says where the wolves are'); setDens([{ id: 'den-2,2', x: 700, z: 700, pack: 3 }]); assert.ok(rumors(v).some(r => r.about === 'den-2,2' && r.text === 'wolves howl far to the south-east'), 'and names the nearest den beyond reach'); setDens([{ id: 'den-1,1', x: 300, z: 300, pack: 3 }]); assert.ok(villageState(v).needs.includes('wolves at dusk')); assert.equal(villageState(v).kind, 'pressured');
+    const v = freshV(1); assert.equal(densInReach(v).length, 1); assert.ok(rumors(v).some(r => r.about === 'den-1,1' && r.text === 'wolves howl to the south-east' && r.who === 'keeper'), 'the keeper says where the wolves are'); setDens([{ id: 'den-2,2', x: 700, z: 700, pack: 3 }]); assert.ok(rumors(v).some(r => r.about === 'den-2,2' && r.text === 'wolves howl far to the south-east'), 'and names the nearest den beyond reach'); setDens([{ id: 'den-1,1', x: 300, z: 300, pack: 3 }]); assert.ok(villageState(v).needs.includes('wolves at dusk')); assert.equal(villageState(v).kind, 'pressured');
     step(v, WOLF_TICK + 1); assert.equal(wolves(v).length, 3, 'the pack at dusk'); assert.ok(v.events.some(e => e.text === 'Wolves come down from the south-east at dusk' && e.banner), JSON.stringify(v.events.map(e => e.text))); assert.ok(wolves(v).every(w => w.kind === 'wolf' && w.den === 'den-1,1' && w.hp === WOLF_HP));
     const out = v.hobbits.find(s => !s.inside && s.stage !== 'infant')!; assert.ok(out, 'someone still out at dusk'); const w0 = wolves(v)[0]; w0.x = out.x + 0.5; w0.z = out.z;
     stepRaiders(v, 0.25, null); step(v, 1); assert.equal(out.errand, 'flee', 'they run for the door'); assert.equal(thought(out, v.tick), 'wolves!');
@@ -453,4 +453,48 @@ test('G3a: a den in reach sends its pack down at dusk; villagers out of doors ru
     for (let d = 0; d < DEN_PEACE_DAYS + 1; d++) step(v, DT); assert.ok(v.dens['den-1,1'].alive >= 1, 'a wolf a day comes back after the peace');
   } finally { setDens([]); }
   const q = freshV(1); step(q, WOLF_TICK + 1); assert.equal(wolves(q).length, 0, 'no den in reach, no wolves'); assert.ok(!villageState(q).needs.includes('wolves at dusk'));
+});
+
+import { villageSites, SITE_NAMES, SITE_KARST, SITE_NEAR, SITE_FAR, SITE_LAIR, SITE_APART, VILLAGE_RADIUS, hintFrom } from '../src/overworldModel';
+import { beyond as beyondAt, islands } from '../src/chunkModel';
+import { createTerrain as terrainOf } from '../src/worldTerrain';
+import { folkOf, folkIndex, foundersOf, newcomersOf, isHome, setLayouts, setVillageSites, inWater as water, grassCan as grass, FOLK_NAMES, WOLF_TICK as WT } from '../src/villageModel';
+test('G4: two more villages by the seed, on the karst\'s safe side, past the first village and the forest, apart from one another; dens keep clear of them; each an island in the land, flat and treeless, coloured like the meadow', () => {
+  for (const seed of [1, 2, 3, 4, 5, 6]) {
+    const sites = villageSites(seed), lair = places(seed).find(p => p.id === 'lair')!; assert.equal(sites.length, SITE_NAMES.length, `seed ${seed} places them all`);
+    sites.forEach((s, i) => { assert.equal(s.id, `village-${i + 1}`); assert.equal(s.folk, i + 1); assert.equal(s.name, SITE_NAMES[i].name); const dk = Math.hypot(s.x - KARST_AT.x, s.z - KARST_AT.z), d0 = Math.hypot(s.x, s.z); assert.ok(dk >= SITE_KARST[0] - 1 && dk <= SITE_KARST[1] + 1, 'near the karst'); assert.ok(d0 >= SITE_NEAR && d0 <= SITE_FAR, 'a walk from the first village'); assert.ok(Math.hypot(s.x - lair.x, s.z - lair.z) >= SITE_LAIR, 'past the forest'); assert.ok(danger(s.x, s.z) < 0.5, 'calmer ground'); });
+    assert.ok(Math.hypot(sites[0].x - sites[1].x, sites[0].z - sites[1].z) >= SITE_APART, 'apart');
+    for (const d of dens(seed)) for (const s of sites) assert.ok(Math.hypot(d.x - s.x, d.z - s.z) >= VILLAGE_RADIUS + DEN_CLEAR, 'a den keeps clear of a village');
+  }
+  assert.deepEqual(villageSites(1), villageSites(1), 'deterministic'); assert.notDeepEqual(villageSites(1).map(s => s.x), villageSites(2).map(s => s.x), 'by the seed');
+  const s1 = villageSites(1)[0]; assert.equal(islands(1).length, 3); assert.equal(beyondAt(s1.x + 10, s1.z, 1), 0, 'an island'); assert.equal(hills(s1.x + 10, s1.z, 1), 0, 'flat'); assert.ok(chunkTrees(Math.floor(s1.x / CHUNK), Math.floor(s1.z / CHUNK), 1).every(t => Math.hypot(t.x - s1.x, t.z - s1.z) > MEADOW_ISLAND), 'no chunk trees on it');
+  const t = terrainOf(1); assert.deepEqual(t.colour(s1.x + 3, s1.z + 3), t.colour(3, 3), 'the meadow\'s colour'); assert.ok(Math.abs(t.height(s1.x + 3, s1.z + 3)) < 0.2, 'level ground');
+  const o = freshOverworld(1); assert.ok(!o.known.has('village-1')); explore(o, s1.x, s1.z); assert.ok(o.known.has('village-1'), 'known when she comes to it'); const back = parseOverworld(serializeOverworld(o)); assert.ok(back.known.has('village-1'), 'saved');
+  assert.ok(addHint(o, { about: 'village-2', bearing: 40, text: 'folk live at the pines to the north-east', from: { x: s1.x, z: s1.z } })); assert.deepEqual(hintFrom(parseOverworld(serializeOverworld(o)).hints[0]), { x: s1.x, z: s1.z }, 'a hint keeps the green it was said from'); assert.deepEqual(hintFrom({ about: 'x', bearing: 0, text: '' }), { x: 0, z: 0 });
+});
+test('G4: the same folk under other names: a folk\'s ids are the founders\' and the newcomers\' with the folk\'s mark, its names all distinct and none of the first village\'s; a village of another folk lives its day at its origin with the wolves but without the mother of goats; its den reach, its rumors and its talk of the other villages are from its own green; saved whole', () => {
+  const f1 = folkOf(1), f2 = folkOf(2); assert.equal(f1.founders.length, HOBBITS.length); assert.equal(f1.newcomers.length, NEWCOMERS.length); assert.equal(FOLK_NAMES[1].length, ALL_HOBBITS.length); assert.equal(FOLK_NAMES[2].length, ALL_HOBBITS.length);
+  const names = [...ALL_HOBBITS, ...f1.all, ...f2.all].map(h => h.name); assert.equal(new Set(names).size, names.length, 'every name in the world is one hobbit\'s');
+  f1.founders.forEach((h, i) => { assert.equal(h.id, `${HOBBITS[i].id}~1`); assert.equal(h.home, HOBBITS[i].home); assert.equal(h.keeps, HOBBITS[i].keeps); assert.equal(h.pace, HOBBITS[i].pace); assert.equal(folkIndex(h.id), 1); assert.equal(byId(h.id).name, h.name); });
+  assert.equal(folkIndex('odo'), 0); assert.equal(byId('odo').name, 'Odo'); assert.equal(byId('odo~2').name, f2.founders[6].name);
+  const site = villageSites(1)[0], v = freshVillage(1, 1, site); assert.equal(v.folk, 1); assert.deepEqual(v.origin, { x: site.x, z: site.z }); assert.ok(!isHome(v)); assert.ok(isHome(freshVillage(1)));
+  assert.deepEqual(v.hobbits.map(s => s.id), foundersOf(v).map(h => h.id)); assert.equal(newcomersOf(v)[0].id, 'fen~1'); assert.equal(nextNewcomer(v)!.id, 'fen~1', 'its births are its own folk');
+  setLair({ x: 300, z: 300, radius: 75 }); setDens([{ id: 'den-1,1', x: site.x + 300, z: site.z, pack: 3 }, { id: 'den-0,0', x: 100, z: 100, pack: 3 }]); setVillageSites(villageSites(1).map(s => ({ id: s.id, x: s.x, z: s.z, short: s.short })));
+  try {
+    assert.deepEqual(densInReach(v).map(d => d.id), ['den-1,1'], 'the dens in reach are by its own green'); assert.deepEqual(densInReach(freshVillage(1)).map(d => d.id), ['den-0,0']);
+    const rs = rumors(v); assert.ok(rs.some(r => r.about === 'den-1,1' && r.text === 'wolves howl to the east'), 'the wolves from its green'); assert.ok(!rs.some(r => r.about === 'lair'), 'the mother is not its story'); assert.ok(rs.some(r => r.about === 'karst' && r.bearing !== undefined), 'the pillar from its green');
+    const other = rs.find(r => r.about === 'village' || r.about === 'village-2'); assert.ok(other && other.who === 'keeper' && / to the [a-z-]+$/.test(other.text), `it names the nearest other village (${JSON.stringify(other)})`);
+    const home = freshVillage(1); const told = rumors(home).find(r => r.about?.startsWith('village-')); assert.ok(told && told.text.startsWith('folk live at the '), `the first village names one too (${JSON.stringify(told)})`); assert.ok(!rumors(home).some(r => r.about === 'village'));
+    assert.ok(rs.some(r => r.text === `${f1.founders[2].name} fell in`), 'its own names in its chatter');
+    // Its day: out, fed, home; wolves at dusk from its den; no raid, no snatchers, no blight ever.
+    v.hobbits[0].stage = 'infant'; step(v, WT + 1); assert.equal(wolves(v).length, 3, 'its wolves come'); assert.equal(v.raiders.filter(r => r.kind === 'dy').length, 0); step(v, DT + SNATCH_TICK + 5 - (v.tick % DT)); assert.equal(v.snatchers.length, 0, 'no snatchers'); assert.equal(v.raidDay, -1, 'no raid'); assert.equal(v.snatchDay, -1); v.bred.push({ id: 'fen~1', home: 0, born: 0 }); step(v, DT); assert.equal(v.blight, 0, 'no blight');
+    assert.ok(v.hobbits.every(s => Math.hypot(s.x, s.z) < 60), 'it lives in its own frame'); assert.ok(v.hobbits.some(s => s.meals > 0), 'and eats');
+    const back = par(ser(v)); assert.equal(back.folk, 1); assert.deepEqual(back.origin, v.origin); assert.equal(ser(back), ser(v), 'saved whole, its folk and its origin with it'); assert.deepEqual(back.hobbits.map(s => s.id), v.hobbits.map(s => s.id));
+    assert.equal(par('{"folk":1,"hobbits":[{"id":"odo"}]}').hobbits.length, 0 + par('{"folk":1,"hobbits":[{"id":"odo"}]}').hobbits.length, 'a stray id of another folk is dropped'); assert.equal(par('{"folk":1,"hobbits":[{"id":"odo"}]}').folk, 0, 'nothing left, a fresh first village');
+    assert.equal(par('{"folk":9,"hobbits":[{"id":"odo"}]}').folk, 0, 'an unknown folk is the first');
+  } finally { setLair(null); setDens([]); setVillageSites([]); }
+  // The land's lookups see every village: a house and the stream at another village's origin.
+  setLayouts([{ x: 0, z: 0, huts: 0 }, { x: site.x, z: site.z, huts: 1 }]);
+  try { const h = housePlace(0), h6 = housePlace(6); assert.equal(grass(site.x + h.x, site.z + h.z), false, 'not under a house there'); assert.equal(grass(site.x + h6.x, site.z + h6.z), false, 'nor its hut'); assert.equal(grass(h6.x, h6.z), true, 'the first village has no hut'); assert.ok(water(site.x + 3, site.z + STREAM_Z(3)), 'its stream'); assert.ok(!water(site.x + 3, site.z - 30)); assert.equal(inHouse({ x: site.x + h.x, z: site.z + h.z })?.id, 0); }
+  finally { setLayouts([{ x: 0, z: 0, huts: 0 }]); }
 });
