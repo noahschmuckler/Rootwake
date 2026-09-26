@@ -438,7 +438,7 @@ const deepBtn = el<HTMLButtonElement>('deepBtn'), diveBtn = el<HTMLButtonElement
 /** Where she can meditate: in the pool's ring on the summit, before a shrined village's stone (within SHRINE_R), or at a root convergence (within CONV_R). Tuning. */
 const SHRINE_R = 2.8, CONV_R = 3.5, DIVE_S = 5;
 type Still = { kind: 'pool' } | { kind: 'shrine'; c: Ctx } | { kind: 'convergence'; place: DeepPlace };
-let session: { kind: 'meditate' | 'deepen'; points: number } | null = null, deepMove: { curve: THREE.Curve<THREE.Vector3>; t: number; seconds: number; then: () => void } | null = null, deepTo: DeepPlace | null = null;
+let session: { kind: 'meditate' | 'deepen'; points: number; at: THREE.Vector3 } | null = null, deepMove: { curve: THREE.Curve<THREE.Vector3>; t: number; seconds: number; then: () => void } | null = null, deepTo: DeepPlace | null = null;
 const shrinedCount = (): number => ctxs.filter(c => isShrined(c.v)).length;
 /** The deep roots' ends on the surface: the pool; every shrined village's stone; and a root convergence (the root network's hub nearest it) for every place she knows. */
 function deepPlaces(): DeepPlace[] {
@@ -457,7 +457,8 @@ function saveDeep(): void { try { localStorage.setItem(DEEP_KEY, serializeDeep(d
 /** The board: meditation gathers clarity a gem at a time; the deepening puzzle counts gems toward DEEPEN_POINTS. Her camera stays where it was; the board hangs before it. */
 function startSession(kind: 'meditate' | 'deepen'): boolean {
   if (mode !== 'ground' || boardView.isBusy || !stillPlace()) return false; if (kind === 'deepen' && !canDeepen(deep, shrinedCount())) return false;
-  session = { kind, points: 0 }; mode = 'meditate'; player.cancelInput(); player.enabled = false; boardView.bind(board); boardView.show(time); meditateEl.hidden = false; refreshMeditate(); return true;
+  const st = stillPlace()!, at = st.kind === 'pool' ? karst.poolAt.clone() : st.kind === 'shrine' ? new THREE.Vector3(st.c.ox + SITES.shrine.x, relief(st.c.ox + SITES.shrine.x, st.c.oz + SITES.shrine.z), st.c.oz + SITES.shrine.z) : new THREE.Vector3(st.place.x, relief(st.place.x, st.place.z), st.place.z);
+  session = { kind, points: 0, at }; mode = 'meditate'; player.cancelInput(); player.enabled = false; boardView.bind(board); boardView.show(time); meditateEl.hidden = false; refreshMeditate(); return true;
 }
 function endSession(): void { if (mode !== 'meditate' || boardView.isBusy) return; boardView.hide(); boardView.unbind(); player.enabled = true; player.cancelInput(); mode = 'ground'; session = null; meditateEl.hidden = true; saveDeep(); }
 function refreshMeditate(): void { if (!session) return; meditateSub.textContent = session.kind === 'deepen' ? `the puzzle: ${session.points} / ${DEEPEN_POINTS} gems, then the node deepens for ${DEEPEN_COST} clarity` : deep.clarity >= CLARITY_CAP ? 'clarity is full' : `tap neighbouring gems: each run is clarity · ${DIVE_COST} to dive, ${RETURN_COST} to return`; }
@@ -687,7 +688,8 @@ function frame(now: number) {
       } }
     } else r.off = 0;
     if (mode === 'root') { const p = rootPoint(r.root, r.s); place(p); const t = rootTangent(r.root, r.s); if (!r.forward) t.negate(); followHeading(Math.atan2(-t.x, -t.z), sim); orbitCamera(p, 3.2, 1.3, carryEase(sim)); }
-  } else if (mode === 'dive' || mode === 'launch') { deepFrame(sim); }
+  } else if (mode === 'meditate' && session) { const a = session.at, yaw = player.yaw; camera.position.set(a.x + Math.sin(yaw) * 2.6, a.y + 3.4, a.z + Math.cos(yaw) * 2.6); camera.lookAt(a.x, a.y + 0.3, a.z); }
+  else if (mode === 'dive' || mode === 'launch') { deepFrame(sim); }
   else if (mode === 'deep') { const n = nodeAt(); place(n); camera.position.set(n.x, n.y + 0.4, n.z); camera.lookAt(n.x + Math.sin(time * 0.0003) * 0.4, n.y + 12, n.z + Math.cos(time * 0.0003) * 0.4); }
   else if ((mode === 'sink' || mode === 'rise') && move) {
     move.t = Math.min(1, move.t + sim / move.seconds); const k = move.t * move.t * (3 - 2 * move.t); const p = move.from.clone().lerp(move.to, k);
