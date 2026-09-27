@@ -42,5 +42,15 @@ export function chunkTrees(cx: number, cz: number, seed = 1): Tree[] {
   }
   return out;
 }
+/** The root network's hub of a chunk (worldRoots joins the chunk's roots there): near its middle, nudged by the seed. The same rule serves the deep roots' convergences. */
+export const hubAt = (cx: number, cz: number, seed = 1): { x: number; z: number } => ({ x: (cx + 0.5) * CHUNK + (noise(cx * 19, cz * 19, 13, seed + 31) - 0.5) * 16, z: (cz + 0.5) * CHUNK + (noise(cx * 19, cz * 19, 13, seed + 67) - 0.5) * 16 });
+/** G4 (Noah): a root convergence for every place on the land but the karst: the hub of the place's chunk, marked above ground by a fairy ring with a pool of crystal water in it. One per chunk; `about` is the place it serves. */
+export interface Convergence { id: string; about: string; name: string; cx: number; cz: number; x: number; z: number }
+const convCache = new Map<number, Convergence[]>();
+export function convergences(seed = 1): Convergence[] {
+  const cached = convCache.get(seed); if (cached) return cached; const out: Convergence[] = [], seen = new Set<string>();
+  for (const p of places(seed)) { if (p.kind === 'karst') continue; const c = chunkOf(p.x, p.z), key = chunkKey(c.cx, c.cz); if (seen.has(key)) continue; seen.add(key); const h = hubAt(c.cx, c.cz, seed); out.push({ id: `conv:${p.id}`, about: p.id, name: `the fairy ring by ${p.name}`, cx: c.cx, cz: c.cz, x: h.x, z: h.z }); }
+  convCache.set(seed, out); return out;
+}
 /** The chunks in the ring round a point. */
 export function chunksAround(x: number, z: number, ring = LOAD_RING): { cx: number; cz: number }[] { const c = chunkOf(x, z), out: { cx: number; cz: number }[] = []; for (let i = -ring; i <= ring; i++) for (let k = -ring; k <= ring; k++) out.push({ cx: c.cx + i, cz: c.cz + k }); return out; }

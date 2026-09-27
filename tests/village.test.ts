@@ -524,3 +524,12 @@ test('the strike lands only where she faces (Noah): a raider behind her is not h
   assert.equal(strike(v, { x: 0, z: 0 }, 0, -1), null, 'behind her: no'); assert.equal(v.raiders[0].hp, 30); assert.equal(strike(v, { x: 0, z: 0 }, 0, 1)?.id, 7, 'before her: yes'); assert.ok(v.raiders[0].hp < 30);
   v.raiders[0].x = STRIKE_RANGE * 0.9; v.raiders[0].z = 0; v.raiders[0].hp = 30; assert.equal(strike(v, { x: 0, z: 0 }, Math.cos(Math.acos(STRIKE_COS) + 0.2), Math.sin(Math.acos(STRIKE_COS) + 0.2)), null, 'outside the cone: no'); assert.equal(strike(v, { x: 0, z: 0 }, 1, 0)?.id, 7, 'in the cone: yes');
 });
+
+import { hubAt, convergences } from '../src/chunkModel';
+import { createRootNetwork } from '../src/worldRoots';
+test('G4: a root convergence for every place but the karst, at the hub of its chunk (the same hub the root network joins its roots at), one per chunk, named for the place; deterministic', () => {
+  const cs = convergences(1); assert.ok(cs.length >= 4, `convergences (${cs.length})`); assert.ok(cs.some(c => c.about === 'village' && c.name === 'the fairy ring by the village')); assert.ok(!cs.some(c => c.about === 'karst'));
+  assert.equal(new Set(cs.map(c => `${c.cx},${c.cz}`)).size, cs.length, 'one per chunk'); for (const c of cs) { const h = hubAt(c.cx, c.cz, 1); assert.equal(c.x, h.x); assert.equal(c.z, h.z); assert.ok(c.x >= c.cx * CHUNK && c.x < (c.cx + 1) * CHUNK, 'in its chunk'); }
+  assert.deepEqual(convergences(1), cs, 'deterministic'); assert.notDeepEqual(convergences(2).map(c => c.x), cs.map(c => c.x), 'by the seed');
+  const net = createRootNetwork(terrainOf(1)), home = cs.find(c => c.about === 'village')!; net.chunkRoots(home.cx, home.cz); const hub = net.nodesNear(home.x, home.z, 2, true).find(n => n.kind === 'hub'); assert.ok(hub && Math.abs(hub.x - home.x) < 1e-9 && Math.abs(hub.z - home.z) < 1e-9, 'the network joins its roots at the same point');
+});

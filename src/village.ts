@@ -26,7 +26,7 @@ import { KARST_AT } from './overworldModel';
 import { NODES as NODES_HANDLE } from './karstFlowModel';
 import { biomeAt } from './chunkModel';
 import { freshOverworld, parseOverworld, serializeOverworld, explore, isRevealed, knownPlaces, places, dens, danger, addHint, hintFrom, villageSites, HINT_REACH, HINT_SPREAD, CELL, ZOOM_MIN, ZOOM_MAX, zoomElevation, bearingOf, wrapDeg, type Overworld, type VillageSite } from './overworldModel';
-import { islands } from './chunkModel';
+import { islands, convergences } from './chunkModel';
 import type { TraversalWorld } from './mobility';
 import { Board } from './match3';
 import { BoardView } from './board3d';
@@ -69,7 +69,7 @@ const network = createRootNetwork(terrain), networkScene = rootNetworkWorld(scen
 const nextRoot = network.next;
 // The other villages' meadow trees are the first's, placed at their origins (ids past every chunk's), so they can be stood by and climbed there too.
 const siteTrees: Tree[] = ctxs.slice(1).flatMap(c => TREES.map(t => ({ id: 500000 + c.folk * 1000 + t.id, x: t.x + c.ox, z: t.z + c.oz, size: t.size })));
-const chunks = createChunks(scene, home.seed, terrain, dens(home.seed)); setTreeProvider((x, z, r) => [...chunks.treesNear(x, z, r), ...siteTrees.filter(t => Math.hypot(t.x - x, t.z - z) <= r)]);
+const chunks = createChunks(scene, home.seed, terrain, dens(home.seed), convergences(home.seed)); setTreeProvider((x, z, r) => [...chunks.treesNear(x, z, r), ...siteTrees.filter(t => Math.hypot(t.x - x, t.z - z) <= r)]);
 // The lair (M1b): placed by the seed (overworldModel), told to the model and set in the scene.
 const lairPlace = places(home.seed).find(p => p.id === 'lair')!; setDens(dens(home.seed).map(d => ({ id: d.id, x: d.x, z: d.z, pack: d.pack }))); setLair({ x: lairPlace.x, z: lairPlace.z, radius: lairPlace.radius }); home_().world.setLairAt(lairPlace.x, lairPlace.z);
 /** Where she stands in the active village's frame. */
@@ -449,7 +449,8 @@ const shrinedCount = (): number => ctxs.filter(c => isShrined(c.v)).length;
 function deepPlaces(): DeepPlace[] {
   const out: DeepPlace[] = [{ id: 'pool', kind: 'pool', name: 'the crystal pool', x: karst.poolAt.x, z: karst.poolAt.z }];
   for (const c of ctxs) if (isShrined(c.v)) out.push({ id: `shrine:${c.id}`, kind: 'shrine', name: `the stone of ${c.i ? c.short : 'the village'}`, x: c.ox + SITES.shrine.x, z: c.oz + SITES.shrine.z });
-  for (const p of knownPlaces(overworld)) { if (p.kind === 'karst') continue; const hub = network.nodesNear(p.x, p.z, 110, true).find(n => n.kind === 'hub'); if (hub) out.push({ id: `conv:${p.id}`, kind: 'convergence', name: `the roots by ${p.name}`, x: hub.x, z: hub.z }); }
+  // The convergences (chunkModel): a fairy ring at the hub of every place's chunk; hers to use once she knows the place it serves.
+  for (const c of convergences(home.seed)) if (overworld.known.has(c.about)) out.push({ id: c.id, kind: 'convergence', name: c.name, x: c.x, z: c.z });
   return out;
 }
 const nodeAt = (): THREE.Vector3 => new THREE.Vector3(KARST_AT.x, terrain.height(KARST_AT.x, KARST_AT.z) - nodeDepth(deep), KARST_AT.z);
@@ -478,7 +479,7 @@ function startDive(): boolean {
   const curve: THREE.Curve<THREE.Vector3> = st.kind === 'pool' ? new THREE.LineCurve3(f.clone().setY(f.y - 0.3), n) : new THREE.QuadraticBezierCurve3(f.clone().setY(f.y - 0.3), new THREE.Vector3((f.x + n.x) / 2, n.y + (f.y - n.y) * 0.25, (f.z + n.z) / 2), n);
   deepWorld.show(true); deepWorld.showDrop(false); deepWorld.setBore(curve); deepWorld.setNode(n); deepMove = { curve, t: 0, seconds: st.kind === 'pool' ? DIVE_S : launchSeconds(deep, KARST_AT, f), then: arriveNode }; say(st.kind === 'pool' ? 'she dives' : 'the roots take her down', 3); return true;
 }
-function arriveNode(): void { deepMove = null; mode = 'deep'; const n = nodeAt(); place(n); openDeep(); }
+function arriveNode(): void { deepMove = null; mode = 'deep'; const n = nodeAt(); place(n); player.pitch = 1.1; player.cancelInput(); openDeep(); }
 /** At the node (Noah): the inside of a spherical waterdrop, every place a point of light on its skin where the deep root to it would break the surface (the zenith above her, the horizon round her, east and west swapped as seen from below); the places she knows but cannot reach faint. Turn to look; a light near the middle of the view gets its name, the one under the aim gets the button. */
 const deepLabels = new Map<string, { el: HTMLElement; place: DeepPlace | null; reach: boolean }>();
 let deepAimed: string | null = null;
@@ -488,13 +489,16 @@ function openDeep(): void {
   const dirOf = (p: { x: number; z: number }): THREE.Vector3 => { const d = deepDirection(deep, KARST_AT, p); return new THREE.Vector3(d.x, d.y, d.z); };
   for (const p of places) { const ok = reach.has(p.id); list.push({ id: p.id, dir: dirOf(p), colour: p.kind === 'pool' ? '#d8f07a' : p.kind === 'shrine' ? '#e8dcff' : '#cfeeff', size: p.kind === 'pool' ? 0.9 : 0.7, reachable: ok }); const e = document.createElement('div'); e.className = 'name deep'; e.hidden = true; labels.append(e); deepLabels.set(p.id, { el: e, place: p, reach: ok }); }
   for (const p of knownPlaces(overworld)) { if (p.kind === 'karst' || places.some(q => q.id === `conv:${p.id}`)) continue; list.push({ id: `faint:${p.id}`, dir: dirOf(p), colour: p.kind === 'village' ? villageColour(p.id) : p.id === 'lair' ? '#c070c0' : '#c8b8a0', size: 0.4, reachable: false, faint: true }); }
-  deepWorld.clearBore(); deepWorld.setPoints(list); deepWorld.setReach(reachAngle(deep)); deepWorld.showDrop(true); player.pitch = 1.1; player.cancelInput();
+  deepWorld.clearBore(); deepWorld.setPoints(list); deepWorld.setReach(reachAngle(deep)); deepWorld.showDrop(true); deepKey = places.map(p => p.id).join('|') + '#' + deepReach(deep);
 }
 function closeDeepLabels(): void { for (const l of deepLabels.values()) l.el.remove(); deepLabels.clear(); }
-function closeDeep(): void { deepEl.hidden = true; deepGo.hidden = true; deepAimed = null; closeDeepLabels(); }
+function closeDeep(): void { deepEl.hidden = true; deepGo.hidden = true; deepAimed = null; deepKey = ''; closeDeepLabels(); }
 /** The lights' names, each frame at the node: a name within TAG_ANGLE of the view's middle, the nearest first, none over another (TAG_GAP px); the one within AIM_ANGLE of the aim is the aimed. Tuning. */
 const TAG_ANGLE = 0.55, AIM_ANGLE = 0.16, TAG_GAP = 64;
+let deepKey = '';
 function presentDeep(): void {
+  // The lights follow the world: a village shrined or a place found while she is at the node lights up (the set of ends is compared each frame; it is short).
+  { const key = deepPlaces().map(p => p.id).join('|') + '#' + deepReach(deep); if (key !== deepKey) { deepKey = key; openDeep(); } }
   camera.updateMatrixWorld(); const fwd = player.forward(), shown: { x: number; y: number }[] = []; let best: { id: string; angle: number } | null = null;
   const order = [...deepLabels.entries()].map(([id, l]) => { if (!deepWorld.spritePosition(id, tmp)) return { id, l, angle: Infinity, x: 0, y: 0 }; const to = tmp.clone().sub(camera.position).normalize(), angle = Math.acos(Math.max(-1, Math.min(1, to.dot(fwd)))); tmp.project(camera); return { id, l, angle, x: (tmp.x + 1) * innerWidth / 2, y: (1 - tmp.y) * innerHeight / 2 }; }).sort((a, b) => a.angle - b.angle);
   for (const o of order) { const ok = o.angle < TAG_ANGLE && !shown.some(q => Math.hypot(q.x - o.x, q.y - o.y) < TAG_GAP); o.l.el.hidden = !ok; if (!ok) continue; shown.push({ x: o.x, y: o.y }); const aimed = o.l.reach && o.angle < AIM_ANGLE && (!best || o.angle < best.angle); if (aimed) best = { id: o.id, angle: o.angle }; o.l.el.classList.toggle('aimed', aimed); o.l.el.innerHTML = `${o.l.place!.name}<i>${o.l.reach ? (o.l.place!.kind === 'pool' ? 'up' : `${Math.round(Math.hypot(o.l.place!.x - KARST_AT.x, o.l.place!.z - KARST_AT.z))} m`) : 'beyond reach'}</i>`; o.l.el.style.transform = `translate(${o.x}px,${o.y - 14}px) translate(-50%,-100%)`; }
@@ -509,7 +513,7 @@ function launchTo(id: string): boolean {
 }
 function arriveAt(p: DeepPlace): void {
   deepMove = null; deepTo = null; deepWorld.show(false);
-  if (p.kind === 'pool') { karst.standOn('summit', -1.3, 0.5, Math.atan2(1.3, -0.5)); mode = 'ground'; } else { const a = Math.atan2(p.z - KARST_AT.z, p.x - KARST_AT.x); standOn(p.x, p.z, Math.atan2(-Math.cos(a), -Math.sin(a))); }
+  if (p.kind === 'pool') { karst.standOn('summit', -1.3, 0.5, Math.atan2(1.3, -0.5)); mode = 'ground'; } else { const a = Math.atan2(p.z - KARST_AT.z, p.x - KARST_AT.x); let gx = p.x, gz = p.z; if (!standable(gx, gz)) { for (let r = 0.8; r <= 4 && !standable(gx, gz); r += 0.8) for (let k = 0; k < 12; k++) { const b = k / 12 * Math.PI * 2, x = p.x + Math.cos(b) * r, z = p.z + Math.sin(b) * r; if (standable(x, z)) { gx = x; gz = z; break; } } } standOn(gx, gz, Math.atan2(-Math.cos(a), -Math.sin(a))); }
   player.pitch = 0.08; say(`she rises at ${p.name}`, 4); chunks.update(player.feet().x, player.feet().z); explore(overworld, player.feet().x, player.feet().z);
 }
 deepBtn.addEventListener('click', () => { startSession(canDeepen(deep, shrinedCount()) && stillPlace()?.kind === 'pool' && deep.clarity >= CLARITY_CAP - 1 ? 'deepen' : 'meditate'); });
@@ -567,6 +571,8 @@ function renderMap(c: CanvasRenderingContext2D, w: number, h: number, s: number,
   // G2: what the villagers said of places she has not found, as fans from the green along the bearing they gave.
   for (const hnt of overworld.hints) { const a = (hnt.bearing - 90) * Math.PI / 180, r = HINT_REACH * s, sp = HINT_SPREAD * Math.PI / 180, o = hintFrom(hnt), fx = sx(o.x), fz = sz(o.z); c.fillStyle = '#e0a0f02a'; c.strokeStyle = '#e0a0f0'; c.lineWidth = 1 * devicePixelRatio; c.setLineDash([4 * devicePixelRatio, 4 * devicePixelRatio]); c.beginPath(); c.moveTo(fx, fz); c.arc(fx, fz, r, a - sp, a + sp); c.closePath(); c.fill(); c.stroke(); c.setLineDash([]); c.fillStyle = '#e0a0f0'; c.textAlign = 'center'; const [what, way] = hnt.text.split(/ to the (?=[a-z-]+$)/), tx = fx + Math.cos(a) * r * 0.4, ty = fz + Math.sin(a) * r * 0.4; c.fillText(what, tx, ty); if (way) c.fillText(`to the ${way}`, tx, ty + 14 * devicePixelRatio); }
   for (const p of knownPlaces(overworld)) { const x = sx(p.x), y = sz(p.z); c.strokeStyle = p.id === 'lair' ? '#c070c0' : p.kind === 'village' ? villageColour(p.id) : p.kind === 'den' ? '#c8b8a0' : '#f1edcf'; c.lineWidth = 2 * devicePixelRatio; c.beginPath(); if (p.kind === 'village') c.arc(x, y, 7 * devicePixelRatio, 0, Math.PI * 2); else if (p.kind === 'den') { c.fillStyle = '#c8b8a0'; c.arc(x, y, 5 * devicePixelRatio, 0, Math.PI * 2); c.fill(); } else if (p.id === 'karst') { c.moveTo(x, y - 9 * devicePixelRatio); c.lineTo(x + 8 * devicePixelRatio, y + 7 * devicePixelRatio); c.lineTo(x - 8 * devicePixelRatio, y + 7 * devicePixelRatio); c.closePath(); } else { c.moveTo(x - 7 * devicePixelRatio, y - 7 * devicePixelRatio); c.lineTo(x + 7 * devicePixelRatio, y + 7 * devicePixelRatio); c.moveTo(x + 7 * devicePixelRatio, y - 7 * devicePixelRatio); c.lineTo(x - 7 * devicePixelRatio, y + 7 * devicePixelRatio); } c.stroke(); c.fillStyle = c.strokeStyle; c.fillText(p.name, x, y + 24 * devicePixelRatio); }
+  // G4: the fairy rings she can use, as small pale rings.
+  for (const p of deepPlaces()) if (p.kind === 'convergence') { const x = sx(p.x), y = sz(p.z); c.strokeStyle = '#cfeeff'; c.lineWidth = 1.5 * devicePixelRatio; c.beginPath(); c.arc(x, y, 4 * devicePixelRatio, 0, Math.PI * 2); c.stroke(); }
   // Incidents: a red mark where it happened, with what it was.
   for (const inc of allIncidents()) { const x = sx(inc.x), y = sz(inc.z); c.fillStyle = INCIDENT_FOE; c.strokeStyle = INCIDENT_FOE; c.lineWidth = 2 * devicePixelRatio; c.beginPath(); c.arc(x, y, 4 * devicePixelRatio, 0, Math.PI * 2); c.fill(); c.beginPath(); c.arc(x, y, 9 * devicePixelRatio, 0, Math.PI * 2); c.stroke(); c.fillStyle = INCIDENT_VICTIM; c.textAlign = 'center'; c.fillText(inc.text, x, y - 14 * devicePixelRatio); }
   if (course) { c.strokeStyle = '#f0d060'; c.lineWidth = 2 * devicePixelRatio; c.beginPath(); for (const r of course.roots) for (let i = 0; i < r.samples.length; i++) { const p = r.samples[i]; if (i === 0) c.moveTo(sx(p.x), sz(p.z)); else c.lineTo(sx(p.x), sz(p.z)); } c.stroke(); const e = network.nodeAt(course.entry); if (e) { c.beginPath(); c.arc(sx(e.x), sz(e.z), 5 * devicePixelRatio, 0, Math.PI * 2); c.stroke(); } }

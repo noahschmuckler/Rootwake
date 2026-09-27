@@ -7,7 +7,7 @@ import { CatmullRomCurve3, Vector3 } from 'three';
 import { TREES, TREE_ROOTS, type RootEdge, grassCan } from './villageModel';
 import { NODES, FLOW_ROOTS, PILLARS, ZONES, type Node } from './karstFlowModel';
 import { KARST_AT } from './overworldModel';
-import { CHUNK, chunkKey, chunksAround, chunkTrees, noise } from './chunkModel';
+import { CHUNK, chunkKey, chunksAround, chunkTrees, hubAt } from './chunkModel';
 import type { Terrain } from './worldTerrain';
 export interface WorldRoot extends RootEdge { surface: boolean; bounds: [number, number, number, number] }
 /** A node of the graph: a tree (the village's, a chunk's, a karst plant) or a hub (a junction under a chunk). Ids: village trees 0.., chunk trees 100000.., karst plants -1.., hubs -1000000... */
@@ -47,8 +47,7 @@ export function createRootNetwork(terrain: Terrain) {
   function reindex() { all = [...authored, ...[...loaded.values()].flat()]; junctions.clear(); for (const r of all) for (const id of [r.a, r.b]) { const list = junctions.get(id) ?? []; list.push(r); junctions.set(id, list); } }
   const hubId = (cx: number, cz: number): number => { const a = cx >= 0 ? cx * 2 : -cx * 2 - 1, b = cz >= 0 ? cz * 2 : -cz * 2 - 1; return -1000000 - ((a + b) * (a + b + 1) / 2 + b); };
   const hub = (cx: number, cz: number) => {
-    const x = (cx + 0.5) * CHUNK + (noise(cx * 19, cz * 19, 13, terrain.seed + 31) - 0.5) * 16;
-    const z = (cz + 0.5) * CHUNK + (noise(cx * 19, cz * 19, 13, terrain.seed + 67) - 0.5) * 16;
+    const { x, z } = hubAt(cx, cz, terrain.seed);
     // Signed coordinate pairing avoids the old modulo-1024 identity collisions.
     const id = hubId(cx, cz);
     if (!where.has(id)) where.set(id, { id, x, z, kind: 'hub', cx, cz });
