@@ -499,3 +499,67 @@ playing and realized belonged to other heroes:
   spent on them, or the villages' prayer.
 - **The board on a phone.** A jobs list per village fits the collapsible village panel; guards,
   searchers and hunting parties need a target as well as a job, which is a map tap.
+
+---
+
+## Part 5. Noah's second round (2026-09-27): the sage's research loop, chaos keeping pace, pools
+
+Recorded from the conversation, in his words where they matter. The building tree these imply, and the
+sprints, are in `SETTLEMENTS.md`.
+
+- **Build organically.** "I think we can build this somewhat organically."
+- **The sage stays home.** "The sage may actually remain inside his karst for a significant amount of
+  functionality — his karst houses a massive library. If the sage needs to leave, it's to visit other
+  knowledge storehouses (like Gandalf visiting different libraries to track the lore of the One Ring).
+  The sage researches and advises. Research takes time and location. Perhaps he needs to travel to a
+  particular karst to study — in his karst he can spend time improving his research speed — or if
+  there is a tech that requires multiple disciplines he'll need to travel to their karsts in turn."
+- **No escorting by Hulda.** "Escort quests are awful, so Hulda probably won't walk the whole way;
+  rather, via the steward, parties of villager warriors and perhaps one or more PC heroes would
+  escort the sage, collect texts, and return to his home karst to finalize the research — and then
+  unlock improved granaries, alchemical recipes, advanced combat techniques, etc."
+- **The worked quest (the core quest mechanic).** "He needs to visit two karsts, and his research
+  shows that a lost civilization had advanced granaries in the area of the village under the pines.
+  The steward organizes a search party at the village, and they find rocks that look shaped by
+  masonry in the indicated area. The steward organizes an excavation, but monsters emerge and it's
+  quickly resealed. Hulda assembles villager warriors and PC heroes (the sage shouldn't be totally
+  defenseless, just more defense and crowd control and utility as a party member). They delve the
+  ruins, clear the monsters, find the ancient scrolls or wall carvings, escort the sage back to his
+  karst, he finalizes his research and now improved granaries can be built at any village with the
+  right villager training and resources."
+- **The pick.** "So really, I think we pick the steward first, connected to hunting ecology, but we
+  know what direction we're building towards."
+- **Master of Magic as the framework.** "Steal blatantly the settlement building tech tree from
+  Master of Magic as a framework … Whenever we get to a point where it's not clear what building or
+  functionality to build next, we'll refer to the MoM buildings for inspiration." (`SETTLEMENTS.md` §2.)
+- **Chaos keeps pace (an earlier idea, returned).** "When a hero is released, a new tech learned, the
+  chaos forces also level up and get the same tech or a special ability to counter that tech in some
+  way — Dark Young learn to penetrate the advanced granaries; some wolves become corrupted dire wolves
+  who aggressively kill all game, livestock, and people, instead of regular wolves that hunt for food
+  and never overhunt, and only escalate to livestock and people when resources become scarce."
+- **The ecology simplified to pools.** "Just as villages have resource pools, wolf dens can also have
+  resource pools — a rabbit warren in between them, visited by both villager hunters and wolves. Hulda
+  can quicken the warren and fill it up with rabbits, but this might boost wolf population." And, for
+  later: "Shub's Dark Young could poison a rabbit warren and make legions of vicious rabbits."
+
+### What this settles and adds
+
+- **The sage's shape is settled**: a researcher at home in a library-karst, who advises from there and
+  travels only to other storehouses, escorted by the steward's parties. Research has a time and a
+  place; texts are collected in the world and finalized at home. This is DD's REMEMBER verb and
+  "literacy quests bloom" with the escort problem solved by the steward.
+- **Techs are the currency between heroes and villages.** A finished research unlocks a building
+  "at any village with the right villager training and resources": a building needs a hero's
+  knowledge, a villager's training (the steward's board) and the stores. That is the rule
+  `SETTLEMENTS.md` builds the tree on.
+- **Every gain has a counter.** Each hero released or tech learned is matched by chaos. The counter
+  is content, not a difficulty slider: dire wolves are a new creature with a visibly different hunger.
+- **Pools everywhere.** The land's sites already are pools with caps and regrowth (`BERRY_CAP`,
+  `BRANCHES_PER_DAY`, `MILK_PER_DAY`, the crops). A warren is one more, placed between a den and a
+  village and visited by both. Quicken already exists as a miracle on a village's sites; at a warren it
+  is the same act with a new consequence (more rabbits, more wolves).
+- **The worked quest is the template** for the quest mechanic: rumor → search party → excavation →
+  resealed by monsters → a delve by warriors and heroes → the texts → the escort home → the research
+  finalized → the building unlocked everywhere. Every step is a system this world has or is about to
+  have (rumor, search parties, the den generator for the dug ruin, the hedge and strike for the
+  fight, the walk home, the sage's karst).
