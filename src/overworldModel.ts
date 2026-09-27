@@ -5,7 +5,7 @@
 // within EXPLORE_RADIUS of her, saved; and the places she knows.
 import { mulberry32 } from './colors';
 
-export type PlaceKind = 'village' | 'karst' | 'lair' | 'den' | 'ruin' | 'warren';
+export type PlaceKind = 'village' | 'karst' | 'lair' | 'den' | 'ruin' | 'warren' | 'moot';
 export interface Place { id: string; kind: PlaceKind; name: string; x: number; z: number; radius: number; tier?: number }
 /** The lair's distance and the dark forest's breadth (Noah: 400 m, 150 m across). The karst 330 m north. Tuning. */
 export const LAIR_DISTANCE = 400, FOREST_RADIUS = 75, KARST_AT = { x: -60, z: -330 };
@@ -90,7 +90,20 @@ export function warrens(seed: number): Warren[] {
   }
   warrenCache.set(seed, out); return out;
 }
-export function places(seed: number): Place[] { return [...basePlaces(seed), ...villageSites(seed).map(s => ({ id: s.id, kind: 'village' as const, name: s.name, x: s.x, z: s.z, radius: VILLAGE_RADIUS })), ...dens(seed).map(d => ({ id: d.id, kind: 'den' as const, name: "a wolves' den", x: d.x, z: d.z, radius: DEN_RADIUS, tier: d.tier })), ...ruins(seed).map(r => ({ id: r.id, kind: 'ruin' as const, name: r.name, x: r.x, z: r.z, radius: RUIN_RADIUS })), ...warrens(seed).map(w => ({ id: w.id, kind: 'warren' as const, name: 'a rabbit warren', x: w.x, z: w.z, radius: WARREN_RADIUS }))]; }
+/** S2 (SETTLEMENTS.md): the old moot, where the steward sleeps in a fallen chair within a ring of stone seats: MOOT_NEAR to MOOT_FAR m from the first village by the seed, clear of every other place by MOOT_CLEAR, MOOT_RADIUS across. Tuning. */
+export const MOOT_NEAR = 130, MOOT_FAR = 260, MOOT_CLEAR = 60, MOOT_RADIUS = 10;
+const mootCache = new Map<number, { x: number; z: number }>();
+export function moot(seed: number): { id: 'moot'; name: string; x: number; z: number } {
+  let at = mootCache.get(seed);
+  if (!at) { const rand = mulberry32((seed * 6007 + 4243) >>> 0), lair = basePlaces(seed).find(p => p.id === 'lair')!;
+    for (let i = 0; i < 800 && !at; i++) { const a = rand() * Math.PI * 2, r = MOOT_NEAR + rand() * (MOOT_FAR - MOOT_NEAR), x = Math.round(Math.cos(a) * r), z = Math.round(Math.sin(a) * r);
+      if (Math.hypot(x - KARST_AT.x, z - KARST_AT.z) < 100 + MOOT_CLEAR || Math.hypot(x - lair.x, z - lair.z) < FOREST_RADIUS + MOOT_CLEAR) continue;
+      if (dens(seed).some(d => Math.hypot(x - d.x, z - d.z) < DEN_RADIUS + MOOT_CLEAR) || ruins(seed).some(r => Math.hypot(x - r.x, z - r.z) < RUIN_RADIUS + MOOT_CLEAR) || warrens(seed).some(w => Math.hypot(x - w.x, z - w.z) < WARREN_RADIUS + MOOT_CLEAR) || villageSites(seed).some(v => Math.hypot(x - v.x, z - v.z) < VILLAGE_RADIUS + MOOT_CLEAR)) continue;
+      at = { x, z }; }
+    at ??= { x: MOOT_NEAR, z: 0 }; mootCache.set(seed, at); }
+  return { id: 'moot', name: 'the old moot', x: at.x, z: at.z };
+}
+export function places(seed: number): Place[] { return [...basePlaces(seed), ...villageSites(seed).map(s => ({ id: s.id, kind: 'village' as const, name: s.name, x: s.x, z: s.z, radius: VILLAGE_RADIUS })), ...dens(seed).map(d => ({ id: d.id, kind: 'den' as const, name: "a wolves' den", x: d.x, z: d.z, radius: DEN_RADIUS, tier: d.tier })), ...ruins(seed).map(r => ({ id: r.id, kind: 'ruin' as const, name: r.name, x: r.x, z: r.z, radius: RUIN_RADIUS })), ...warrens(seed).map(w => ({ id: w.id, kind: 'warren' as const, name: 'a rabbit warren', x: w.x, z: w.z, radius: WARREN_RADIUS })), (() => { const m = moot(seed); return { id: m.id, kind: 'moot' as const, name: m.name, x: m.x, z: m.z, radius: MOOT_RADIUS }; })()]; }
 /** Exploration: cells of CELL m, revealed within EXPLORE_RADIUS of where she stands. Tuning. */
 export const CELL = 24, EXPLORE_RADIUS = 70;
 /** G2: a hint is what the villagers said of a place she has not found: a bearing from the green and the words, drawn on the map as a fan HINT_REACH m long, HINT_SPREAD either side, until she finds the place. Tuning. */
