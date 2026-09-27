@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createTerrain, TERRAIN_STEP } from '../src/worldTerrain';
-import { createRootNetwork, soilAt } from '../src/worldRoots';
+import { createRootNetwork, soilAt, siteTreeId, ENTRY_REACH } from '../src/worldRoots';
+import { TREES } from '../src/villageModel';
 import { chunkTrees } from '../src/chunkModel';
 import { KARST_AT } from '../src/overworldModel';
 import { PILLARS } from '../src/karstFlowModel';
@@ -70,7 +71,7 @@ test('sphere streaming selection covers faces with disjoint tiles and grows by L
 // R1: roots as a way. A course is planned through the surface roots between a tree near her and a node near the place, across chunks she has never loaded; the karst's own roots have shortest paths and portal destinations.
 import { GOAL_REACH } from '../src/worldRoots';
 import { shortestPath, destinationsFrom, nodeName, NODES, PILLARS } from '../src/karstFlowModel';
-import { places as overworldPlaces } from '../src/overworldModel';
+import { places as overworldPlaces, villageSites } from '../src/overworldModel';
 test('a course runs from a tree by the village to the karst and back, joined root to root, surface roots only, the same twice', () => {
   const g = createRootNetwork(createTerrain(1));
   for (const [from, to] of [[{ x: 0, z: -16 }, KARST_AT], [{ x: KARST_AT.x + 20, z: KARST_AT.z + 30 }, { x: 0, z: 0 }], [{ x: 0, z: -16 }, overworldPlaces(1)[2]]] as const) {
@@ -95,6 +96,16 @@ test('the karst roots: no way up from the foot (Noah: the trees near the karst h
   assert.equal(nodeName('pine'), 'the summit pine'); assert.equal(nodeName('pineB'), "the Heron's summit"); assert.equal(nodeName('B3'), 'the Heron, ledge 4'); assert.equal(nodeName('Cfoot'), 'the foot of the Anvil'); assert.equal(destinationsFrom('B0')[0].name, 'the Heron, halfway up');
   // The karsts' names (Noah, 2026-09-27): every pillar has one, all different, the one with the pool the Wellspire, the place on the map named after it.
   assert.equal(PILLARS.find(p => p.id === 'main')!.name, 'the Wellspire'); assert.equal(new Set(PILLARS.map(p => p.name)).size, PILLARS.length); assert.equal(overworldPlaces(1).find(p => p.kind === 'karst')!.name, 'the Wellspire');
+});
+test('the other villages have roots too (Noah: root travel did not work at the pines): a course from each far green home and back, an entry tree in reach, a root under the copse', () => {
+  const g = createRootNetwork(createTerrain(1));
+  for (const site of villageSites(1)) {
+    const out = g.plan({ x: site.x, z: site.z }, { x: 0, z: 0 }), back = g.plan({ x: 0, z: -16 }, { x: site.x, z: site.z });
+    assert.ok(out && out.roots.length >= 3, `${site.short}: a course home from its green`); assert.ok(back, `${site.short}: and a course to it`);
+    const entry = g.nodeAt(out!.entry)!; assert.equal(entry.kind, 'village'); assert.equal(entry.id, siteTreeId(site.folk, entry.id - siteTreeId(site.folk, 0)), 'the way in is one of its own trees');
+    assert.ok(g.nodesNear(site.x, site.z, ENTRY_REACH, false).length >= 6, 'its trees are in reach of its green');
+    const copse = TREES[0]; assert.ok(g.nearest({ x: copse.x + site.x + 1, z: copse.z + site.z }, 6), 'a root under its copse for a tap');
+  }
 });
 test('D4: blighted roots refuse root travel: no course ends in the blight, none crosses it, and a tap finds no root there', () => {
   const g = createRootNetwork(createTerrain(1)), lair = overworldPlaces(1)[2], R = 150;

@@ -6,7 +6,7 @@
 import { CatmullRomCurve3, Vector3 } from 'three';
 import { TREES, TREE_ROOTS, type RootEdge, grassCan } from './villageModel';
 import { NODES, FLOW_ROOTS, PILLARS, ZONES, type Node } from './karstFlowModel';
-import { KARST_AT } from './overworldModel';
+import { KARST_AT, villageSites } from './overworldModel';
 import { CHUNK, chunkKey, chunksAround, chunkTrees, hubAt } from './chunkModel';
 import type { Terrain } from './worldTerrain';
 export interface WorldRoot extends RootEdge { surface: boolean; bounds: [number, number, number, number] }
@@ -26,8 +26,17 @@ function wrap(r: RootEdge, surface: boolean): WorldRoot {
   return { ...r, surface, bounds: [Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs)] };
 }
 const chunkOf = (x: number, z: number) => ({ cx: Math.floor(x / CHUNK), cz: Math.floor(z / CHUNK) });
+/** The other villages' trees (G4): the same layout as the first village's at each site's origin, with ids the entry's tree provider uses too (500000 + folk × 1000 + the tree's id). */
+export const siteTreeId = (folk: number, treeId: number): number => 500000 + folk * 1000 + treeId;
 export function createRootNetwork(terrain: Terrain) {
   const authored: WorldRoot[] = TREE_ROOTS.map(r => wrap(r, true));
+  // The other villages (Noah, 2026-09-27: root travel did not work at the pines): their trees are nodes and their roots the first village's, laid at each site's origin, so a course can start and a tap can go in there as at home. Their islands keep chunk trees off, so without these there was no tree within ENTRY_REACH of their greens.
+  const siteTrees: { id: number; x: number; z: number }[] = [];
+  for (const site of villageSites(terrain.seed)) {
+    const off = new Vector3(site.x, 0, site.z);
+    for (const t of TREES) siteTrees.push({ id: siteTreeId(site.folk, t.id), x: t.x + site.x, z: t.z + site.z });
+    for (const r of TREE_ROOTS) { const curve = new CatmullRomCurve3(r.curve.points.map(p => p.clone().add(off)), false, r.curve.curveType, r.curve.tension); authored.push(wrap({ id: `site:${site.folk}:${r.id}`, a: siteTreeId(site.folk, r.a), b: siteTreeId(site.folk, r.b), curve, length: curve.getLength(), samples: curve.getSpacedPoints(r.samples.length) }, true)); }
+  }
   const endpoints = new Map<number, Node>(Object.entries(NODES).map(([id, n]) => [nodeIds.get(id)!, n]));
   for (const r of FLOW_ROOTS) {
     const curve = new CatmullRomCurve3(r.curve.points.map(p => p.clone().add(offset)), false, r.curve.curveType, r.curve.tension);
@@ -37,6 +46,7 @@ export function createRootNetwork(terrain: Terrain) {
   // Every node the graph has met, by id: where it stands and which chunk owns it.
   const where = new Map<number, WorldNode>();
   for (const t of TREES) { const c = chunkOf(t.x, t.z); where.set(t.id, { id: t.id, x: t.x, z: t.z, kind: 'village', ...c }); }
+  for (const t of siteTrees) { const c = chunkOf(t.x, t.z); where.set(t.id, { id: t.id, x: t.x, z: t.z, kind: 'village', ...c }); }
   for (const [id, n] of endpoints) { const x = n.mouth.x + offset.x, z = n.mouth.z + offset.z; where.set(id, { id, x, z, kind: 'karst', ...chunkOf(x, z) }); }
   const memo = new Map<string, WorldRoot[]>(), loaded = new Map<string, WorldRoot[]>();
   // D4: where the blight lies, roots refuse root travel: a root is closed when either end or its middle is in it.
@@ -63,7 +73,7 @@ export function createRootNetwork(terrain: Terrain) {
         points.push(new Vector3(x, terrain.height(x, z) - 0.5 - Math.sin(t * Math.PI) * 0.7, z));
       }
       // Authored sockets must meet exactly, even when their mouth sits above soil.
-      const socket = (id: number): Vector3 | undefined => endpoints.get(id)?.mouth.clone().add(offset) ?? (id >= 0 && id < 100000 ? TREE_ROOTS.find(r => r.a === id || r.b === id)?.curve.getPointAt(TREE_ROOTS.find(r => r.a === id || r.b === id)!.a === id ? 0 : 1) : undefined);
+      const socket = (id: number): Vector3 | undefined => { const m = endpoints.get(id); if (m) return m.mouth.clone().add(offset); const r = authoredAt.get(id)?.[0]; return r ? r.curve.getPointAt(r.a === id ? 0 : 1) : undefined; };
       const A = socket(a.id), B = socket(b.id); if (A) points[0] = A; if (B) points[points.length - 1] = B;
       const curve = new CatmullRomCurve3(points), length = curve.getLength();
       out.push(wrap({ id: `world:${cx},${cz}:${key}`, a: a.id, b: b.id, curve, length, samples: curve.getSpacedPoints(Math.ceil(length * 2)) }, true));
@@ -72,6 +82,7 @@ export function createRootNetwork(terrain: Terrain) {
     join(h, hub(cx + 1, cz), 'east'); join(h, hub(cx, cz + 1), 'south'); join(h, hub(cx + 1, cz + 1), 'southeast'); join(h, hub(cx - 1, cz + 1), 'southwest');
     for (const t of chunkTrees(cx, cz, terrain.seed)) { if (!where.has(t.id)) where.set(t.id, { id: t.id, x: t.x, z: t.z, kind: 'tree', cx, cz }); join(h, t, `tree:${t.id}`); }
     for (const t of TREES) if (Math.floor(t.x / CHUNK) === cx && Math.floor(t.z / CHUNK) === cz) join(h, t, `village:${t.id}`);
+    for (const t of siteTrees) if (Math.floor(t.x / CHUNK) === cx && Math.floor(t.z / CHUNK) === cz) join(h, t, `site:${t.id}`);
     const floor = Object.values(NODES).filter(n => n.zone === 'floor').map(n => ({ id: nodeIds.get(n.id)!, x: n.mouth.x + offset.x, z: n.mouth.z + offset.z }));
     const near = floor.filter(n => Math.hypot(n.x - h.x, n.z - h.z) < CHUNK * 1.5).sort((a, b) => Math.hypot(a.x - h.x, a.z - h.z) - Math.hypot(b.x - h.x, b.z - h.z));
     for (const n of near.slice(0, 3)) join(h, n, `karst:${n.id}`);
