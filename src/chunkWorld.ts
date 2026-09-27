@@ -13,7 +13,12 @@ import { crownHeight, trunkRadius, type Tree } from './villageModel';
 import type { Collider } from './player';
 
 interface Chunk { key: string; group: THREE.Group; trees: Tree[]; colliders: Collider[]; geometries: THREE.BufferGeometry[] }
-export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain = createTerrain(seed), dens: { x: number; z: number }[] = [], rings: { x: number; z: number }[] = []) {
+/** G3b: a ruin: RUIN_STONES old stones leaning round a dry basin RUIN_STONE_R out; sanctified, the basin holds crystal water, lit, and the stones carry a pale glow. Tuning. */
+export const RUIN_STONES = 7, RUIN_STONE_R = 2.8;
+export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain = createTerrain(seed), dens: { x: number; z: number }[] = [], rings: { x: number; z: number }[] = [], ruinList: { id: string; x: number; z: number }[] = []) {
+  let sanctified = new Set<string>();
+  const oldStone = new THREE.MeshStandardMaterial({ color: '#6e6a60', roughness: 1, flatShading: true }), holyStone = new THREE.MeshStandardMaterial({ color: '#8a8a80', emissive: '#6a8a70', emissiveIntensity: 0.35, roughness: 0.9, flatShading: true }), dryBasin = new THREE.MeshStandardMaterial({ color: '#4a4438', roughness: 1 });
+  const applySanctity = (g: THREE.Group): void => { const on = sanctified.has(g.userData.id as string); (g.getObjectByName('living') as THREE.Group).visible = on; (g.getObjectByName('dry') as THREE.Group).visible = !on; (g.getObjectByName('stones') as THREE.Mesh).material = on ? holyStone : oldStone; };
   const relief = terrain.height;
   const loaded = new Map<string, Chunk>();
   const bark = new THREE.MeshStandardMaterial({ color: '#6d5f48', roughness: 1 }), leaf = spriteMaterial('leaf', '#5f8657'), darkBark = new THREE.MeshStandardMaterial({ color: '#2a2230', roughness: 1 }), darkLeaf = spriteMaterial('leaf', '#2e2a3a', { emissive: '#1a0a20', emissiveIntensity: 0.25 }), collar = new THREE.MeshStandardMaterial({ color: '#8a6f4e', roughness: 0.95 });
@@ -33,13 +38,23 @@ export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain 
     { const pos = geo.attributes.position as THREE.BufferAttribute, col: number[] = []; for (let i = 0; i < pos.count; i++) { const x = pos.getX(i), z = pos.getZ(i); pos.setY(i, terrain.vertex(x, z)); const c = colourOf(x, z); col.push(...(blighted(x, z) ? [c[0] * 0.35 + 0.05, c[1] * 0.2, c[2] * 0.35 + 0.06] as [number, number, number] : c)); } geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); const normals = geo.attributes.normal as THREE.BufferAttribute; for (let i = 0; i < pos.count; i++) normals.setXYZ(i, ...terrain.normal(pos.getX(i), pos.getZ(i))); }
     const surface = new THREE.Mesh(geo, ground); surface.name = "world-ground"; group.add(surface); geometries.push(geo);
     const here = dens.filter(d => Math.floor(d.x / CHUNK) === cx && Math.floor(d.z / CHUNK) === cz);
-    const trees = chunkTrees(cx, cz, seed).filter(t => !dens.some(d => Math.hypot(t.x - d.x, t.z - d.z) < 14) && !rings.some(r => Math.hypot(t.x - r.x, t.z - r.z) < 5)), rand = mulberry32((cx * 31 + cz * 17 + seed) >>> 0), colliders: Collider[] = [];
+    const trees = chunkTrees(cx, cz, seed).filter(t => !dens.some(d => Math.hypot(t.x - d.x, t.z - d.z) < 14) && !rings.some(r => Math.hypot(t.x - r.x, t.z - r.z) < 5) && !ruinList.some(r => Math.hypot(t.x - r.x, t.z - r.z) < 7)), rand = mulberry32((cx * 31 + cz * 17 + seed) >>> 0), colliders: Collider[] = [];
     // G3: a den: a mound of dark rocks round a low mouth, bones about it. The rocks are colliders.
     for (const d of here) { const y = relief(d.x, d.z), rocks: THREE.BufferGeometry[] = [], bones: THREE.BufferGeometry[] = [];
       for (let i = 0; i < 7; i++) { const a = i / 7 * Math.PI * 2 + 0.4, r = 1.6 + (i % 2) * 0.5, g = new THREE.DodecahedronGeometry(0.55 + (i % 3) * 0.2, 0); g.translate(d.x + Math.cos(a) * r, y + 0.3, d.z + Math.sin(a) * r); rocks.push(g); colliders.push({ x: d.x + Math.cos(a) * r, z: d.z + Math.sin(a) * r, radius: 0.7, minY: y - 0.2, maxY: y + 1.2 }); }
       { const g = new THREE.BoxGeometry(2.2, 0.5, 1.6).toNonIndexed(); g.translate(d.x, y + 0.95, d.z); rocks.push(g); const mouth = new THREE.BoxGeometry(1.0, 0.7, 1.2); mouth.translate(d.x, y + 0.35, d.z); const m = new THREE.Mesh(mouth, new THREE.MeshBasicMaterial({ color: '#08060a' })); group.add(m); }
       for (let i = 0; i < 8; i++) { const g = new THREE.CylinderGeometry(0.03, 0.04, 0.5 + (i % 3) * 0.2, 4); g.rotateZ(Math.PI / 2); g.rotateY(i * 1.3); g.translate(d.x + Math.cos(i * 2.1) * (2.4 + (i % 2)), y + 0.05, d.z + Math.sin(i * 2.1) * (2.4 + (i % 2))); bones.push(g); }
       const rm = new THREE.Mesh(mergeGeometries(rocks)!, denRock), bm = new THREE.Mesh(mergeGeometries(bones)!, bone); group.add(rm, bm); geometries.push(rm.geometry, bm.geometry); }
+    // G3b: the ruins of this chunk: leaning stones round a basin, dry until sanctified.
+    for (const ru of ruinList.filter(r => Math.floor(r.x / CHUNK) === cx && Math.floor(r.z / CHUNK) === cz)) {
+      const y = relief(ru.x, ru.z), g = new THREE.Group(); g.name = `ruin:${ru.id}`; g.userData.id = ru.id; g.position.set(ru.x, y, ru.z); group.add(g); const stones: THREE.BufferGeometry[] = [], rr = mulberry32((ru.x * 131 + ru.z * 17 + seed) >>> 0);
+      for (let i = 0; i < RUIN_STONES; i++) { const a = i / RUIN_STONES * Math.PI * 2 + rr() * 0.3, r = RUIN_STONE_R + (rr() - 0.5) * 0.5, h = 1.3 + rr() * 1.1, x = Math.cos(a) * r, z = Math.sin(a) * r, dy = relief(ru.x + x, ru.z + z) - y; const st = new THREE.BoxGeometry(0.5 + rr() * 0.25, h, 0.35 + rr() * 0.2).toNonIndexed(); st.rotateZ((rr() - 0.5) * 0.5); st.rotateX((rr() - 0.5) * 0.3); st.rotateY(a); st.translate(x, dy + h * 0.42, z); stones.push(st); colliders.push({ x: ru.x + x, z: ru.z + z, radius: 0.45, minY: y - 0.2, maxY: y + h }); }
+      const sm = new THREE.Mesh(mergeGeometries(stones)!, oldStone); sm.name = 'stones'; g.add(sm); geometries.push(sm.geometry);
+      const bowl = new THREE.Mesh(new THREE.RingGeometry(0.75, 1.15, 20), new THREE.MeshStandardMaterial({ color: '#5a5a52', roughness: 1, flatShading: true })); bowl.rotation.x = -Math.PI / 2; bowl.position.y = 0.06; g.add(bowl);
+      const dry = new THREE.Group(); dry.name = 'dry'; { const d = new THREE.Mesh(new THREE.CircleGeometry(0.78, 20), dryBasin); d.rotation.x = -Math.PI / 2; d.position.y = 0.03; dry.add(d); } g.add(dry);
+      const living = new THREE.Group(); living.name = 'living'; { const pool = new THREE.Mesh(new THREE.CircleGeometry(0.78, 20), ringWater); pool.rotation.x = -Math.PI / 2; pool.position.y = 0.07; pool.renderOrder = 2; living.add(pool); const light = new THREE.PointLight('#cfeeb0', 1.1, 9, 1.8); light.position.y = 0.9; living.add(light); } g.add(living);
+      applySanctity(g);
+    }
     for (const rg of rings.filter(r => Math.floor(r.x / CHUNK) === cx && Math.floor(r.z / CHUNK) === cz)) {
       const y = relief(rg.x, rg.z), g = new THREE.Group(); g.name = 'fairy-ring'; g.position.set(rg.x, y, rg.z); group.add(g); const caps: THREE.BufferGeometry[] = [], stems: THREE.BufferGeometry[] = [], spots: THREE.BufferGeometry[] = [], crystals: THREE.BufferGeometry[] = [];
       for (let i = 0; i < RING_N; i++) { const a = i / RING_N * Math.PI * 2 + rand() * 0.25, r = RING_R + (rand() - 0.5) * 0.4, h = 0.16 + rand() * 0.14, cr = 0.1 + rand() * 0.07, x = Math.cos(a) * r, z = Math.sin(a) * r, dy = relief(rg.x + x, rg.z + z) - y; const st = new THREE.CylinderGeometry(0.035, 0.045, h, 5); st.translate(x, dy + h / 2, z); stems.push(st); const cap = new THREE.SphereGeometry(cr, 7, 5, 0, Math.PI * 2, 0, Math.PI / 2); cap.translate(x, dy + h, z); caps.push(cap); for (let k = 0; k < 3; k++) { const sp = new THREE.SphereGeometry(0.02, 4, 3); const sa = rand() * Math.PI * 2, sr = rand() * cr * 0.7; sp.translate(x + Math.cos(sa) * sr, dy + h + Math.sqrt(Math.max(0, cr * cr - sr * sr)) * 0.9, z + Math.sin(sa) * sr); spots.push(sp); } }
@@ -78,5 +93,7 @@ export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain 
   const colliders = (): Collider[] => { const out: Collider[] = []; for (const ch of loaded.values()) out.push(...ch.colliders); return out; };
   /** The blight moved: the loaded chunks are built again under it. */
   function setBlight(f: (x: number, z: number) => boolean): void { blighted = f; for (const [key, ch] of loaded) { scene.remove(ch.group); for (const g of ch.geometries) g.dispose(); const [cx, cz] = key.split(',').map(Number); loaded.set(key, build(cx, cz)); } }
-  return { setBlight, update, treesNear, colliders, setUnder, get count() { return loaded.size; }, get trees() { let n = 0; for (const ch of loaded.values()) n += ch.trees.length; return n; } };
+  /** The sanctified ruins (the entry, from the overworld's save and on each sanctifying): the living look on those, the dry on the rest. */
+  function setSanctified(ids: Set<string>): void { sanctified = new Set(ids); for (const ch of loaded.values()) ch.group.traverse(o => { if (o.name.startsWith('ruin:')) applySanctity(o as THREE.Group); }); }
+  return { setBlight, update, treesNear, colliders, setUnder, setSanctified, get count() { return loaded.size; }, get trees() { let n = 0; for (const ch of loaded.values()) n += ch.trees.length; return n; } };
 }

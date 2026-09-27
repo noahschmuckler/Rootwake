@@ -223,8 +223,15 @@ every study here has used.
   reach so there is a direction to walk. The other villages built 2026-09-26, see VILLAGE_HANDOFF.md
   "The other villages": two more by the seed on the karst's safe side, the same folk under other names,
   each a whole village with its own wolves, saves and rumors, the nearest to her feet being hers; Noah's
-  calls: same folk with new names, villagers can die, the village panel collapsible. G3b, the ruins and
-  the thorn hedge, follows.)
+  calls: same folk with new names, villagers can die, the village panel collapsible. G3b built
+  2026-09-27, see VILLAGE_HANDOFF.md "G3b": three ruins by the seed, each a ring of old stones round a dry
+  basin, told of by the keeper and found by walking; sanctified by a channelling of clarity into the basin a
+  ruin is a grove, the sanctified grove of the future-sprints list: counted with the shrined villages toward
+  the deepening's territory, and an end of the deep roots; and the thorn hedge, a miracle grown across the
+  wolves' run where she stands, that holds raiders off, slides them along it and pricks them. Decided in the
+  building: the ruin's "one restorative thing" is the channelling, not a delivery; its reward is the grove
+  (territory, a deep-root end, her clarity filled) and a line of lore; the den as a delve, an authored
+  chamber under the mound, is not built and stays open.)
 - **G4. The karst re-framed** (Noah's second brief above). *Question: does the dive into the taproot and
   the view from beneath the world feel like the launching-station beat, and does paying for it in
   clarity make the meditation worth doing?* Built in sub-passes: **G4a** the heavenly stream and the
@@ -266,13 +273,13 @@ gate before there's anything on the other side of it would read as a wall with n
 
 ## Future sprints (from Noah's second brief, not yet planned in detail)
 
-- **Sanctified groves**: a second kind of controlled territory beside shrined villages, counting toward the
-  circumference that lets the node deepen.
+- **Sanctified groves**: built 2026-09-27 as the ruins' reward (G3b): a sanctified ruin is a grove, counted with the
+  shrined villages toward the deepening's territory, and an end of the deep roots.
 - **The six companions**: recruitment, each one's tech tree, whether each is played directly or directed
   by Hulda as a heroic unit; they are the gate on her tiers (system 5), together with villages held steady.
 - **Deepening puzzles beyond vanilla**: authored match-3 puzzles in a series, once G4b's points-threshold
   version has been judged.
-- **G3b** as planned: the den as a delve, the ruin found by a hidden root, the thorn hedge.
+- **G3b**: built 2026-09-27 but for the den as a delve (the authored chamber under the mound), which stays open.
 
 ## Not this arc
 

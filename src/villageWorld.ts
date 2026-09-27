@@ -7,7 +7,7 @@
 // fire by the wood laid on it (updateLand).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { HOUSES, HOUSE_CAP, housePlace, siteHouse, SITE_RING_R, HUT_WOOD, HUT_WATER, HUT_WORK_TICKS, SITES, STORES, STORE_LIST, STATIONS, STACK_CAP, OVERFILL, HOUSE_RADIUS, MEADOW_RADIUS, GREEN, TREES, TREE_ROOTS, STREAM_Z, BERRY_CAP, BRANCH_CAP, MILK_PER_DAY, CROP_STRIPS, WOOD_PER_NIGHT, crownHeight, trunkRadius, hobbitById, isSpoiled, YIELD_SITES, type YieldSite, type HobbitState, type Tree, type Village, type Store, type House } from './villageModel';
+import { HEDGE_LEN, type Hedge, HOUSES, HOUSE_CAP, housePlace, siteHouse, SITE_RING_R, HUT_WOOD, HUT_WATER, HUT_WORK_TICKS, SITES, STORES, STORE_LIST, STATIONS, STACK_CAP, OVERFILL, HOUSE_RADIUS, MEADOW_RADIUS, GREEN, TREES, TREE_ROOTS, STREAM_Z, BERRY_CAP, BRANCH_CAP, MILK_PER_DAY, CROP_STRIPS, WOOD_PER_NIGHT, crownHeight, trunkRadius, hobbitById, isSpoiled, YIELD_SITES, type YieldSite, type HobbitState, type Tree, type Village, type Store, type House } from './villageModel';
 import { mulberry32 } from './colors';
 import { createTerrain, type Terrain } from './worldTerrain';
 import type { Collider } from './player';
@@ -310,12 +310,21 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   let fireWood = 0;
   /** Which armful each figure shows, for checks. */
   const armfuls = (): (Store | null)[] => livingNow.map(s => { const c = carriedMap.get(figureFor(s))!; return STORE_LIST.find(k => c[k].visible) ?? null; });
+  // G3b: the thorn hedges: HEDGE_CARDS thorn standees along each hedge's line, on thin stems, rebuilt when the model's hedges change (by their keys).
+  const thornMat = spriteMaterial('needle', '#3b4d2c', { emissive: '#1a2a10', emissiveIntensity: 0.2 }), hedgeStem = new THREE.MeshStandardMaterial({ color: '#4a3a24', roughness: 1 }), hedgeGroups = new Map<string, THREE.Group>(), HEDGE_CARDS = 10;
+  function setHedges(list: Hedge[]): void {
+    const keys = new Set(list.map(h => `${h.x.toFixed(2)},${h.z.toFixed(2)}`));
+    for (const [k, g] of hedgeGroups) if (!keys.has(k)) { root.remove(g); g.traverse(o => { if ((o as THREE.Mesh).geometry) (o as THREE.Mesh).geometry.dispose(); }); hedgeGroups.delete(k); }
+    for (const h of list) { const k = `${h.x.toFixed(2)},${h.z.toFixed(2)}`; if (hedgeGroups.has(k)) continue; const g = new THREE.Group(); g.name = 'thorn-hedge'; const fr = mulberry32((h.x * 91 + h.z * 7) >>> 0), cards: Standee[] = [], stems: THREE.BufferGeometry[] = [], ux = Math.cos(h.angle), uz = Math.sin(h.angle);
+      for (let i = 0; i < HEDGE_CARDS; i++) { const t = (i / (HEDGE_CARDS - 1) - 0.5) * HEDGE_LEN, x = h.x + ux * t + (fr() - 0.5) * 0.5, z = h.z + uz * t + (fr() - 0.5) * 0.5, y = relief(x, z), hgt = 1.2 + fr() * 0.5; cards.push({ position: new THREE.Vector3(x, y + hgt / 2, z), yaw: h.angle + (i % 2 ? 0.55 : -0.55), width: 1.7, height: hgt }); const st = new THREE.CylinderGeometry(0.03, 0.05, hgt * 0.8, 4); st.translate(x, y + hgt * 0.4, z); stems.push(st); }
+      g.add(new THREE.Mesh(standees(cards), thornMat), new THREE.Mesh(mergeGeometries(stems)!, hedgeStem)); root.add(g); hedgeGroups.set(k, g); }
+  }
   // Incident marks (Noah: a banner said someone was bitten and there was no telling where): a ring on the ground under the one it marks, and for a victim a shaft of light so it is seen from afar; pooled, placed each frame (setMarks).
   const markPool: { group: THREE.Group; ring: THREE.Mesh; shaft: THREE.Mesh; mat: THREE.MeshBasicMaterial; shaftMat: THREE.MeshBasicMaterial }[] = [];
   function setMarks(list: { x: number; z: number; colour: string; shaft: boolean; r?: number }[], t: number): void {
     while (markPool.length < list.length) { const mat = new THREE.MeshBasicMaterial({ color: '#e0603a', transparent: true, opacity: 0.85, depthWrite: false }), shaftMat = new THREE.MeshBasicMaterial({ color: '#e0603a', transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide }); const group = new THREE.Group(); group.name = 'incident-mark'; const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.06, 8, 40), mat); ring.rotation.x = Math.PI / 2; ring.position.y = 0.08; const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.16, 9, 8, 1, true), shaftMat); shaft.position.y = 4.5; group.add(ring, shaft); root.add(group); markPool.push({ group, ring, shaft, mat, shaftMat }); }
     markPool.forEach((m, i) => { const d = list[i]; m.group.visible = !!d; if (!d) return; m.group.position.set(d.x, relief(d.x, d.z), d.z); m.mat.color.set(d.colour); m.shaftMat.color.set(d.colour); m.shaft.visible = d.shaft; const k = (d.r ?? 1) * (1 + 0.12 * Math.sin(t * 0.006)); m.ring.scale.set(k, k, 1); });
   }
-  return { root, origin: { x: ox, z: oz }, relief, setMarks, setWolf, setHouses, setSite, setSnatcher, hideSnatchersBut, setInfants, colliders, get figures() { return livingNow.map(figureFor); }, figureFor, setFigureClips, figure, mass, update, updateLand, updatePrayer, armfuls, setRaider, hideRaider, flashSlash, flashBurst, updateStrokes, setLairAt, setLair, setStation, get activeStation() { return activeStation; }, setStack, stack, spiritFigure, spiritFigures, stream, crownPoint, trunkPoint };
+  return { root, origin: { x: ox, z: oz }, relief, setMarks, setHedges, setWolf, setHouses, setSite, setSnatcher, hideSnatchersBut, setInfants, colliders, get figures() { return livingNow.map(figureFor); }, figureFor, setFigureClips, figure, mass, update, updateLand, updatePrayer, armfuls, setRaider, hideRaider, flashSlash, flashBurst, updateStrokes, setLairAt, setLair, setStation, get activeStation() { return activeStation; }, setStack, stack, spiritFigure, spiritFigures, stream, crownPoint, trunkPoint };
 }
 export type VillageWorld = ReturnType<typeof buildVillage>;

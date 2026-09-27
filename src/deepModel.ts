@@ -23,7 +23,9 @@ export const isShrined = (v: { prayed: number }): boolean => v.prayed >= SHRINE_
 export const canDeepen = (d: Deep, shrined: number): boolean => shrined >= DEEPEN_VILLAGES * (d.depth + 1) && d.clarity >= DEEPEN_COST;
 export function deepen(d: Deep, shrined: number): boolean { if (!canDeepen(d, shrined)) return false; d.clarity -= DEEPEN_COST; d.depth += 1; d.deepened += 1; return true; }
 /** A destination of the deep roots: where on the surface it comes out, and what it is. */
-export type DeepKind = 'pool' | 'shrine' | 'convergence';
+export type DeepKind = 'pool' | 'shrine' | 'convergence' | 'grove';
+/** G3b: sanctifying a ruin into a grove is a channelling of SANCTIFY_GEMS gems of clarity into its basin; done, the grove's water fills her clarity to the cap. Tuning. */
+export const SANCTIFY_GEMS = 20;
 export interface DeepPlace { id: string; kind: DeepKind; name: string; x: number; z: number }
 /** Which destinations the node's roots reach from the karst: all within its reach; the pool always. */
 export function reachable(d: Deep, karst: { x: number; z: number }, places: DeepPlace[]): DeepPlace[] { const r = deepReach(d); return places.filter(p => p.kind === 'pool' || Math.hypot(p.x - karst.x, p.z - karst.z) <= r); }
