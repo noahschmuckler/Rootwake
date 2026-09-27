@@ -410,6 +410,23 @@ export function rumors(v: Village): Rumor[] {
   return out;
 }
 /** Said at the fire: kept to the last RUMORS_KEPT, for the entry to carry to the map. */
+/** Communing (Noah, 2026-09-27: the news was easy to miss in the talk at the fire): every rumor with a bearing about a place she has not found is carried by one villager, chosen by the place (so the keeper does not hold them all, and each holds their own); that villager wears a mark until she communes with them. `known` says which places she already has (found, or on her map as a hint). */
+export function newsFor(v: Village, s: HobbitState, known: (about: string) => boolean): Rumor | null {
+  if (s.stage !== 'grown') return null; const carriers = v.hobbits.filter(h => h.stage === 'grown'); if (!carriers.length) return null;
+  for (const r of rumors(v)) { if (r.bearing === undefined || !r.about || known(r.about)) continue; let h = 0; for (const ch of r.about) h = (h * 31 + ch.charCodeAt(0)) >>> 0; if (carriers[h % carriers.length].id === s.id) return r; }
+  return null;
+}
+/** What a villager says when she communes with them: their news, if they carry any (the hint goes to her map), else a word about themselves: hurt, fallen in, hungry, at their errand, or well. */
+export function commune(v: Village, s: HobbitState, known: (about: string) => boolean): { text: string; hint: Rumor | null } {
+  const news = newsFor(v, s, known); if (news) return { text: news.text[0].toUpperCase() + news.text.slice(1), hint: news };
+  const name = hobbitById(s.id).name, day = v.tick - DAY_TICKS;
+  if (v.incidents.some(i => i.who === s.id && i.text.endsWith('bitten by a wolf'))) return { text: 'I was bitten by a wolf, but I am all right', hint: null };
+  if (v.events.some(e => e.tick >= day && e.text === `${name} fell in`) || v.voiced.some(r => r.tick >= day && r.text === `${name} fell in`)) return { text: 'I fell in the water, but I am all right', hint: null };
+  if (s.missed >= REST_MEALS) return { text: 'I am starving', hint: null }; if (s.hunger > 0.85 || s.missed > 0) return { text: 'I could eat', hint: null };
+  if (v.mourningUntil > v.tick) return { text: 'We are in mourning', hint: null };
+  const doing = thought(s, v.tick); if (doing && doing !== s.bubble) return { text: `Just ${doing}`, hint: null };
+  const st = villageState(v).kind; return { text: st === 'thriving' ? 'All is well with me, and with the village' : st === 'besieged' || st === 'lost' ? 'I am all right, though these are hard days' : 'I am all right', hint: null };
+}
 function voice(v: Village, r: Rumor, by: string): void { const o: Voiced = { text: r.text, tick: v.tick, by }; if (r.bearing !== undefined) o.bearing = Math.round(r.bearing * 10) / 10; if (r.about) o.about = r.about; if (r.who) o.who = r.who; v.voiced.push(o); if (v.voiced.length > RUMORS_KEPT) v.voiced.shift(); }
 /** The state told when it changes: a banner. */
 function tellState(v: Village): void { const st = villageState(v); if (st.kind !== v.told) { v.told = st.kind; event(v, stateText(st), true); } }

@@ -470,7 +470,7 @@ import { villageSites, SITE_NAMES, SITE_KARST, SITE_NEAR, SITE_FAR, SITE_LAIR, S
 import { beyond as beyondAt, islands } from '../src/chunkModel';
 import { createTerrain as terrainOf } from '../src/worldTerrain';
 import { folkOf, folkIndex, foundersOf, newcomersOf, isHome, setLayouts, setVillageSites, inWater as water, grassCan as grass, FOLK_NAMES, WOLF_TICK as WT, incidents, INCIDENT_TICKS, RAID_FROM } from '../src/villageModel';
-import { setRuins, hedgeAllowed, growHedge, hedgeEnds, HEDGE_PRAYER, HEDGE_MAX, HEDGE_DAYS, HEDGE_LEN, HEDGE_R, parseVillage, packAsleep, packOut, slayAsleep, denState, denAwake, WOLF_END, XP_WOLF } from '../src/villageModel';
+import { setRuins, hedgeAllowed, growHedge, hedgeEnds, HEDGE_PRAYER, HEDGE_MAX, HEDGE_DAYS, HEDGE_LEN, HEDGE_R, parseVillage, packAsleep, packOut, slayAsleep, denState, denAwake, WOLF_END, XP_WOLF, newsFor, commune } from '../src/villageModel';
 test('G3b: the ruins: three by the seed, at their distances, clear of every place; the keeper names the nearest; explored, known; sanctified, a grove that is saved and counted as territory', () => {
   const rs = ruins(1); assert.equal(rs.length, RUIN_N); assert.deepEqual(ruins(1), rs, 'the same each time'); assert.notDeepEqual(ruins(2).map(r => [r.x, r.z]), rs.map(r => [r.x, r.z]), 'by the seed');
   for (const r of rs) { const d = Math.hypot(r.x, r.z); assert.ok(d >= RUIN_NEAR - 1 && d <= RUIN_FAR + 1, `${r.id} at its distance (${d.toFixed(0)})`); assert.ok(Math.hypot(r.x - KARST_AT.x, r.z - KARST_AT.z) >= 100 + RUIN_CLEAR, 'clear of the karst'); for (const o of places(1).filter(p => p.kind !== 'ruin' && p.id !== 'village')) assert.ok(Math.hypot(r.x - o.x, r.z - o.z) >= o.radius + RUIN_CLEAR - 1, `${r.id} clear of ${o.id}`); assert.ok(r.name && r.lore, 'named, with its lore'); }
@@ -481,6 +481,20 @@ test('G3b: the ruins: three by the seed, at their distances, clear of every plac
   assert.ok(canDeepen({ ...freshDeep(), clarity: DEEPEN_COST }, 1 + groves(o).length), 'a shrined village and a grove make the territory for the first deepening');
   // The keeper knows the nearest old stones from the green.
   setRuins(rs.map(r => ({ id: r.id, x: r.x, z: r.z }))); try { const v = freshV(1), near = rs.reduce((a, b) => (Math.hypot(a.x, a.z) < Math.hypot(b.x, b.z) ? a : b)); const told = rumors(v).find(r => r.about === near.id); assert.ok(told && told.who === 'keeper' && told.text.startsWith('old stones lie to the ') && told.bearing !== undefined, `the keeper names the nearest ruin (${JSON.stringify(told)})`); } finally { setRuins([]); }
+});
+test('communing (Noah): each rumor with a bearing about a place she has not found is carried by one villager, who wears the mark until she communes; communing gives the news, or a word about themselves', () => {
+  setDens([{ id: 'den-1,1', x: 300, z: 300, pack: 3 }]);
+  try {
+    const v = freshV(1), none = (): boolean => false, grown = v.hobbits.filter(s => s.stage === 'grown');
+    const carriers = grown.filter(s => newsFor(v, s, none)); assert.ok(carriers.length >= 2, 'more than one villager carries news'); const abouts = carriers.map(s => newsFor(v, s, none)!.about);
+    assert.equal(new Set(abouts).size, abouts.length, 'each their own'); assert.ok(abouts.includes('karst') && abouts.includes('den-1,1'), `the pillar and the den among the news (${abouts})`);
+    const kc = carriers.find(s => newsFor(v, s, none)!.about === 'karst')!; assert.equal(newsFor(v, kc, a => a === 'karst'), null, 'known, no longer news'); assert.deepEqual(newsFor(v, kc, none), rumors(v).find(r => r.about === 'karst'), 'the same rumor each time');
+    const told = commune(v, kc, none); assert.ok(told.hint && told.hint.about === 'karst' && told.text[0] === told.text[0].toUpperCase() && told.text.toLowerCase().includes('the pillar stands to the'), `the news, said (${told.text})`);
+    const quiet = grown.find(s => !newsFor(v, s, none))!; const word = commune(v, quiet, none); assert.equal(word.hint, null); assert.ok(word.text.length > 4, `a word about themselves (${word.text})`);
+    v.incidents.push({ tick: v.tick, text: `${hobbitById(quiet.id).name} bitten by a wolf`, x: 0, z: 0, who: quiet.id, foe: 0 }); assert.equal(commune(v, quiet, none).text, 'I was bitten by a wolf, but I am all right'); v.incidents.length = 0;
+    v.voiced.push({ text: `${hobbitById(quiet.id).name} fell in`, tick: v.tick, by: quiet.id }); assert.equal(commune(v, quiet, none).text, 'I fell in the water, but I am all right');
+    assert.equal(newsFor(v, v.hobbits.find(s => s.stage !== 'grown') ?? { ...quiet, stage: 'infant' }, none), null, 'children carry none');
+  } finally { setDens([]); }
 });
 test('the pack asleep by day (Noah): the den\'s living wolves lie below except while the pack is out at dusk; a wolf slain asleep is the den\'s loss and her level\'s gain, and the pack slain the den lies quiet', () => {
   setDens([{ id: 'den-1,1', x: 300, z: 300, pack: 3 }]);

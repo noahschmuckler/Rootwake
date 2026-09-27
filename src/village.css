@@ -20,6 +20,7 @@
 #labels .name.lair{color:#e0a0f0;font-size:12px}
 #compass{position:fixed;z-index:7;top:calc(env(safe-area-inset-top,0px) + 10px);left:50%;transform:translateX(-50%);width:min(150px,38vw);height:30px;border-radius:8px;pointer-events:auto;cursor:pointer;touch-action:none;transition:width .18s ease-out}#compass.wide{width:min(340px,calc(100vw - 28px));top:calc(env(safe-area-inset-top,0px) + 44px)}
 #minimap{position:fixed;z-index:7;top:calc(env(safe-area-inset-top,0px) + 80px);left:50%;transform:translateX(-50%);width:min(340px,calc(100vw - 28px));display:flex;flex-direction:column;align-items:center;gap:6px;pointer-events:none}#minimap[hidden]{display:none}#minimapCanvas{position:static;inset:auto;width:100%;height:220px;border-radius:10px;background:#101a16cc;border:1px solid #f1edcf44;pointer-events:none}#minimap .buttons{display:flex;gap:8px;pointer-events:auto}#minimap button{min-height:0;height:30px;padding:0 14px;border:0;border-radius:8px;font:12px/1 system-ui;color:#0b1918;background:#f1edcf}#minimap #minimapDetail{background:#d8f07a}
+#labels .name .news{font-style:normal;font-weight:700;color:#ffd84a;font-size:15px;margin-left:4px;display:inline-block;animation:newsbob 1.1s ease-in-out infinite;text-shadow:0 0 6px #ffb020}#labels .name .news[hidden]{display:none}@keyframes newsbob{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
 #labels .name.karst{color:#f1edcf;font-size:13px;letter-spacing:1.2px;text-shadow:0 1px 5px #000}
 #labels .name.house{color:#e8dcc0;font-size:10px;opacity:.85}
 
