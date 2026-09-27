@@ -7,6 +7,8 @@ export const EYE_HEIGHT = 0.55;
 export const PLAYER_RADIUS = BODY_RADIUS;
 export const LOOK_SENSITIVITY = 0.0042;
 export const PITCH_LIMIT = Math.PI * 0.42;
+/** At the closest third-person view the look may go straight up into the sky and straight down to the ground (Noah, 2026-09-27); the entry sets `pitchLimit` to PITCH_FULL there. */
+export const PITCH_FULL = Math.PI * 0.495;
 export const TAP_SLOP_PX = 8;
 export const TAP_MS = 450;
 export const REST_HOLD_MS = 900;
@@ -46,6 +48,8 @@ export class Player {
   readonly position = new THREE.Vector3(0, -1, 0);
   yaw = 0;
   pitch = 0;
+  /** How far the look drag may pitch: PITCH_LIMIT, or PITCH_FULL at the closest third-person view. */
+  pitchLimit = PITCH_LIMIT;
   enabled = true;
   fanScale = 1;
   moveSlowdown = 1;
@@ -361,7 +365,7 @@ export class Player {
     if (Math.hypot(e.clientX - p.startX, e.clientY - p.startY) > TAP_SLOP_PX) { p.moved = true; p.role = 'look'; }
     if (p.role === 'look' && this.enabled) {
       this.yaw -= (e.clientX - p.lastX) * LOOK_SENSITIVITY;
-      this.pitch = THREE.MathUtils.clamp(this.pitch - (e.clientY - p.lastY) * LOOK_SENSITIVITY, -PITCH_LIMIT, PITCH_LIMIT);
+      this.pitch = THREE.MathUtils.clamp(this.pitch - (e.clientY - p.lastY) * LOOK_SENSITIVITY, -this.pitchLimit, this.pitchLimit);
     } else if (!this.enabled && p.moved) this.onOrbit((e.clientX - p.lastX) * ORBIT_SENSITIVITY, (e.clientY - p.lastY) * ORBIT_SENSITIVITY);
     p.lastX = e.clientX; p.lastY = e.clientY;
   };

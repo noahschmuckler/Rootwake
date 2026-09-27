@@ -29,18 +29,25 @@ export interface DeepPlace { id: string; kind: DeepKind; name: string; x: number
 export function reachable(d: Deep, karst: { x: number; z: number }, places: DeepPlace[]): DeepPlace[] { const r = deepReach(d); return places.filter(p => p.kind === 'pool' || Math.hypot(p.x - karst.x, p.z - karst.z) <= r); }
 /** How long a launch takes, by the deep root's length (down from the surface to the node's depth and across). */
 export function launchSeconds(d: Deep, karst: { x: number; z: number }, to: { x: number; z: number }): number { const across = Math.hypot(to.x - karst.x, to.z - karst.z); return Math.max(2.5, Math.hypot(across, nodeDepth(d)) / DEEP_SPEED); }
-/** The fisheye (Noah): the world seen from the node, looking up. A surface point at distance r from the node's foot lies at an angle atan(r / depth) from the zenith, which is the screen's centre; the edge is the horizon. Seen from below, east and west swap. Returns a unit-square position (-1..1). */
+/** The view from the node (Noah, 2026-09-27: the true angles put every place near the horizon, too spread; the karst's peak is the focus straight up and the villages should sit about midway up from the horizontal). A surface point at distance r lies VIEW_MAX × √(r / reach) from the zenith: the reach's edge at VIEW_MAX (63°), a village 330 m out at 36°, one 560 m out at 47°; beyond the reach the angle goes on to VIEW_HORIZON and stops. Tuning. */
+export const VIEW_MAX = Math.PI * 0.35, VIEW_HORIZON = Math.PI * 0.48;
+export const viewAngle = (d: Deep, r: number): number => Math.min(VIEW_HORIZON, VIEW_MAX * Math.sqrt(Math.max(0, r) / deepReach(d)));
+/** The fisheye: the world seen from the node, looking up; the zenith is the screen's centre, the edge the horizon. Seen from below, east and west swap. Returns a unit-square position (-1..1). */
 export function fisheye(d: Deep, karst: { x: number; z: number }, p: { x: number; z: number }): { u: number; v: number } {
-  const dx = p.x - karst.x, dz = p.z - karst.z, r = Math.hypot(dx, dz), a = Math.atan2(r, nodeDepth(d)) / (Math.PI / 2), k = r > 1e-6 ? a / r : 0;
+  const dx = p.x - karst.x, dz = p.z - karst.z, r = Math.hypot(dx, dz), a = viewAngle(d, r) / (Math.PI / 2), k = r > 1e-6 ? a / r : 0;
   return { u: -dx * k, v: dz * k };
 }
 /** The same view as a direction from the node (for the drop's skin): the zenith straight up, a surface point at its angle from the zenith, east and west swapped as seen from below. */
 export function deepDirection(d: Deep, karst: { x: number; z: number }, p: { x: number; z: number }): { x: number; y: number; z: number } {
-  const dx = p.x - karst.x, dz = p.z - karst.z, r = Math.hypot(dx, dz), a = Math.atan2(r, nodeDepth(d)); if (r < 1e-6) return { x: 0, y: 1, z: 0 };
+  const dx = p.x - karst.x, dz = p.z - karst.z, r = Math.hypot(dx, dz), a = viewAngle(d, r); if (r < 1e-6) return { x: 0, y: 1, z: 0 };
   return { x: -dx / r * Math.sin(a), y: Math.cos(a), z: dz / r * Math.sin(a) };
 }
 /** The reach's angle from the zenith. */
-export const reachAngle = (d: Deep): number => Math.atan2(deepReach(d), nodeDepth(d));
+export const reachAngle = (d: Deep): number => viewAngle(d, deepReach(d));
+/** A miracle (Noah, 2026-09-27) is channelled: besides its prayer, MIRACLE_GEMS gems on the board carry her clarity into the place, a point of clarity a gem; she needs MIRACLE_CLARITY to begin. `channel` spends up to `gems` clarity and returns what went. Tuning. */
+export const MIRACLE_GEMS = 12, MIRACLE_CLARITY = 12;
+export const canChannel = (d: Deep): boolean => d.clarity >= MIRACLE_CLARITY;
+export function channel(d: Deep, gems: number): number { const spent = Math.min(d.clarity, Math.max(0, gems)); d.clarity -= spent; return spent; }
 export const serializeDeep = (d: Deep): string => JSON.stringify({ clarity: Math.round(d.clarity * 100) / 100, depth: d.depth, dives: d.dives, launches: d.launches, deepened: d.deepened });
 export function parseDeep(raw: string | null): Deep {
   try { const p = JSON.parse(raw ?? 'null'); if (!p || typeof p !== 'object') return freshDeep(); const num = (x: unknown, lo: number, hi: number, dflt: number): number => (typeof x === 'number' && Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : dflt); return { clarity: num(p.clarity, 0, CLARITY_CAP, 0), depth: Math.floor(num(p.depth, 0, 20, 0)), dives: Math.floor(num(p.dives, 0, 1e6, 0)), launches: Math.floor(num(p.launches, 0, 1e6, 0)), deepened: Math.floor(num(p.deepened, 0, 1e6, 0)) }; } catch { return freshDeep(); }
