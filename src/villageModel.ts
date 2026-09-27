@@ -421,7 +421,7 @@ export function rumors(v: Village): Rumor[] {
   // G3b: the keeper knows of the old stones nearest the green (within RUIN_TELL_M): a ruin to find by walking, and sanctify.
   { let best: RuinPlace | null = null, bd = RUIN_TELL_M; for (const r of ruinsAt) { const d = fromGreen(v, r).distance; if (d < bd) { bd = d; best = r; } } if (best) { const b = fromGreen(v, best).bearing; out.push({ text: `old stones lie to the ${bearingWords(b)}`, bearing: b, about: best.id, who: 'keeper' }); } }
   // S2: the elder remembers the old meeting place, where someone sleeps in the chair.
-  if (mootAt && mootTold && isHome(v)) { const b = fromGreen(v, mootAt).bearing; out.push({ text: `there is an old meeting place to the ${bearingWords(b)}, and someone asleep in its chair`, bearing: b, about: 'moot', who: 'elder' }); }
+  if (mootAt && mootTold && isHome(v)) { const b = fromGreen(v, mootAt).bearing; out.push({ text: `there is an old meeting place to the ${bearingWords(b)}, and someone asleep by its chair`, bearing: b, about: 'moot', who: 'elder' }); }
   { const b = fromGreen(v, KARST_AT).bearing; out.push({ text: `the pillar stands to the ${bearingWords(b)}`, bearing: b, about: 'karst', who: 'keeper' }); }
   // G4: the nearest other village (the first village counts as one for the others), so there is always somewhere to go (Noah).
   { const others = [...(isHome(v) ? [] : [{ id: 'village', x: 0, z: 0, short: 'the first village' }]), ...villageSitesAt.filter(s => Math.hypot(s.x - v.origin.x, s.z - v.origin.z) > 1)].sort((a, b) => fromGreen(v, a).distance - fromGreen(v, b).distance)[0];

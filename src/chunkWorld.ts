@@ -74,12 +74,12 @@ export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain 
         g.add(rb); }
       applyRabbits(g);
     }
-    // S2: the old moot: MOOT_SEATS stone seats in a ring round a fallen chair, where the steward sleeps.
+    // S2: the old moot: MOOT_SEATS stone seats in a ring round a leaning chair, at whose foot the steward sleeps.
     if (mootAt && Math.floor(mootAt.x / CHUNK) === cx && Math.floor(mootAt.z / CHUNK) === cz) {
       const y = relief(mootAt.x, mootAt.z), g = new THREE.Group(); g.name = 'moot'; g.position.set(mootAt.x, y, mootAt.z); group.add(g); const seats: THREE.BufferGeometry[] = [];
       for (let i = 0; i < MOOT_SEATS; i++) { const a = i / MOOT_SEATS * Math.PI * 2, x = Math.cos(a) * MOOT_SEAT_R, z = Math.sin(a) * MOOT_SEAT_R, dy = relief(mootAt.x + x, mootAt.z + z) - y, st = new THREE.BoxGeometry(0.7, 0.5, 0.6).toNonIndexed(); st.rotateY(-a); st.translate(x, dy + 0.2, z); seats.push(st); const back = new THREE.BoxGeometry(0.16, 0.9, 0.6).toNonIndexed(); back.rotateY(-a); back.translate(x + Math.cos(a) * 0.35, dy + 0.5, z + Math.sin(a) * 0.35); seats.push(back); colliders.push({ x: mootAt.x + x, z: mootAt.z + z, radius: 0.4, minY: y - 0.2, maxY: y + 1 }); }
-      const chair: THREE.BufferGeometry[] = []; { const seat = new THREE.BoxGeometry(1.0, 0.55, 0.9).toNonIndexed(); seat.translate(0, 0.25, 0); chair.push(seat); const back = new THREE.BoxGeometry(1.0, 1.4, 0.2).toNonIndexed(); back.rotateX(-1.2); back.translate(0, 0.35, 0.9); chair.push(back); }
-      const sm = new THREE.Mesh(mergeGeometries(seats)!, oldStone), cm = new THREE.Mesh(mergeGeometries(chair)!, oldStone); cm.rotation.z = 0.12; g.add(sm, cm); geometries.push(sm.geometry, cm.geometry);
+      const chair: THREE.BufferGeometry[] = []; { const seat = new THREE.BoxGeometry(0.8, 0.5, 0.7).toNonIndexed(); seat.translate(0, 0.25, 0); chair.push(seat); const back = new THREE.BoxGeometry(0.8, 1.2, 0.16).toNonIndexed(); back.translate(0, 0.85, 0.36); chair.push(back); }
+      const sm = new THREE.Mesh(mergeGeometries(seats)!, oldStone), cm = new THREE.Mesh(mergeGeometries(chair)!, oldStone); cm.rotation.z = 0.08; g.add(sm, cm); geometries.push(sm.geometry, cm.geometry);
     }
     for (const rg of rings.filter(r => Math.floor(r.x / CHUNK) === cx && Math.floor(r.z / CHUNK) === cz)) {
       const y = relief(rg.x, rg.z), g = new THREE.Group(); g.name = 'fairy-ring'; g.position.set(rg.x, y, rg.z); group.add(g); const caps: THREE.BufferGeometry[] = [], stems: THREE.BufferGeometry[] = [], spots: THREE.BufferGeometry[] = [], crystals: THREE.BufferGeometry[] = [];

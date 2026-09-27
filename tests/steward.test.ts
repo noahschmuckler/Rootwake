@@ -52,7 +52,7 @@ test('S2: the old moot by the seed, clear of every place, told of by the first v
   const m = moot(1); assert.deepEqual(moot(1), m); const d = Math.hypot(m.x, m.z); assert.ok(d >= MOOT_NEAR && d <= MOOT_FAR, `within the walk (${d.toFixed(0)})`);
   for (const p of [...dens(1), ...ruins(1), ...warrens(1), ...villageSites(1)]) assert.ok(Math.hypot(p.x - m.x, p.z - m.z) >= MOOT_CLEAR, `clear of ${p.id}`); assert.ok(Math.hypot(m.x - KARST_AT.x, m.z - KARST_AT.z) > 100 + MOOT_CLEAR);
   assert.ok(places(1).some(p => p.id === 'moot' && p.kind === 'moot'));
-  setMoot(m); try { const v = freshVillage(1); assert.ok(rumors(v).some(r => r.about === 'moot' && r.who === 'elder' && r.text.includes('asleep in its chair'))); setMoot(m, false); assert.ok(!rumors(v).some(r => r.about === 'moot'), 'not once he is woken'); } finally { setMoot(null); }
+  setMoot(m); try { const v = freshVillage(1); assert.ok(rumors(v).some(r => r.about === 'moot' && r.who === 'elder' && r.text.includes('asleep by its chair'))); setMoot(m, false); assert.ok(!rumors(v).some(r => r.about === 'moot'), 'not once he is woken'); } finally { setMoot(null); }
 });
 test('S2: the steward sleeps until woken, walks where he is sent round what he must avoid, lies up a day when bitten, never killed; saved', () => {
   const s = freshSteward({ x: 0, z: 0 }); assert.ok(!send(s, 'village', { x: 100, z: 0 }, []), 'asleep, he goes nowhere'); assert.ok(wake(s)); assert.ok(!wake(s));
