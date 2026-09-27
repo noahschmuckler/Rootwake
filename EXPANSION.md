@@ -283,6 +283,8 @@ gate before there's anything on the other side of it would read as a wall with n
   shrined villages toward the deepening's territory, and an end of the deep roots.
 - **The six companions**: recruitment, each one's tech tree, whether each is played directly or directed
   by Hulda as a heroic unit; they are the gate on her tiers (system 5), together with villages held steady.
+  Everything written about them so far, in both repos, is consolidated with a reinterpretation in
+  `COMPANIONS.md` (2026-09-27); read it before planning the chapter.
 - **Deepening puzzles beyond vanilla**: authored match-3 puzzles in a series, once G4b's points-threshold
   version has been judged.
 - **G3b**: built 2026-09-27, the den as a delve included: a generated dirt dungeon under each mound (VILLAGE_HANDOFF.md "The den as a delve").
