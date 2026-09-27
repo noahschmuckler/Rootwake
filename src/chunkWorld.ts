@@ -16,7 +16,9 @@ import type { Collider } from './player';
 interface Chunk { key: string; group: THREE.Group; trees: Tree[]; colliders: Collider[]; geometries: THREE.BufferGeometry[] }
 /** G3b: a ruin: RUIN_STONES old stones leaning round a dry basin RUIN_STONE_R out; sanctified, the basin holds crystal water, lit, and the stones carry a pale glow. Tuning. */
 export const RUIN_STONES = 7, RUIN_STONE_R = 2.8;
-export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain = createTerrain(seed), dens: { id?: string; x: number; z: number; tier?: number }[] = [], rings: { x: number; z: number }[] = [], ruinList: { id: string; x: number; z: number }[] = [], warrenList: { id: string; x: number; z: number }[] = []) {
+/** S2: the moot's stone seats and their ring. Tuning. */
+export const MOOT_SEATS = 7, MOOT_SEAT_R = 4.2;
+export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain = createTerrain(seed), dens: { id?: string; x: number; z: number; tier?: number }[] = [], rings: { x: number; z: number }[] = [], ruinList: { id: string; x: number; z: number }[] = [], warrenList: { id: string; x: number; z: number }[] = [], mootAt: { x: number; z: number } | null = null) {
   let sanctified = new Set<string>();
   // S1: a warren: burrows in the grass and rabbits among them, as many as the pool holds (setRabbits gives the count by id; refreshRabbits applies it to the warrens built). Tuning.
   const WARREN_BURROWS = 5, WARREN_RABBITS = 12, burrowMat = new THREE.MeshStandardMaterial({ color: '#2e2418', roughness: 1 }), moundMat = new THREE.MeshStandardMaterial({ color: '#6a5a44', roughness: 1, flatShading: true }), rabbitMat = new THREE.MeshStandardMaterial({ color: '#a89478', roughness: 0.95 }), rabbitEar = new THREE.MeshStandardMaterial({ color: '#c8b09a', roughness: 0.95 });
@@ -43,7 +45,7 @@ export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain 
     { const pos = geo.attributes.position as THREE.BufferAttribute, col: number[] = []; for (let i = 0; i < pos.count; i++) { const x = pos.getX(i), z = pos.getZ(i); pos.setY(i, terrain.vertex(x, z)); const c = colourOf(x, z); col.push(...(blighted(x, z) ? [c[0] * 0.35 + 0.05, c[1] * 0.2, c[2] * 0.35 + 0.06] as [number, number, number] : c)); } geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); const normals = geo.attributes.normal as THREE.BufferAttribute; for (let i = 0; i < pos.count; i++) normals.setXYZ(i, ...terrain.normal(pos.getX(i), pos.getZ(i))); }
     const surface = new THREE.Mesh(geo, ground); surface.name = "world-ground"; group.add(surface); geometries.push(geo);
     const here = dens.filter(d => Math.floor(d.x / CHUNK) === cx && Math.floor(d.z / CHUNK) === cz);
-    const trees = chunkTrees(cx, cz, seed).filter(t => !dens.some(d => Math.hypot(t.x - d.x, t.z - d.z) < 14) && !rings.some(r => Math.hypot(t.x - r.x, t.z - r.z) < 5) && !ruinList.some(r => Math.hypot(t.x - r.x, t.z - r.z) < 7) && !warrenList.some(w => Math.hypot(t.x - w.x, t.z - w.z) < 9)), rand = mulberry32((cx * 31 + cz * 17 + seed) >>> 0), colliders: Collider[] = [];
+    const trees = chunkTrees(cx, cz, seed).filter(t => !dens.some(d => Math.hypot(t.x - d.x, t.z - d.z) < 14) && !rings.some(r => Math.hypot(t.x - r.x, t.z - r.z) < 5) && !ruinList.some(r => Math.hypot(t.x - r.x, t.z - r.z) < 7) && !warrenList.some(w => Math.hypot(t.x - w.x, t.z - w.z) < 9) && !(mootAt && Math.hypot(t.x - mootAt.x, t.z - mootAt.z) < 9)), rand = mulberry32((cx * 31 + cz * 17 + seed) >>> 0), colliders: Collider[] = [];
     // G3: a den: a mound of dark rocks round a low mouth, bones about it. The rocks are colliders.
     for (const d of here) { const y = relief(d.x, d.z), rocks: THREE.BufferGeometry[] = [], bones: THREE.BufferGeometry[] = [], mouthDir = d.id ? denLayout({ id: d.id, x: d.x, z: d.z, tier: d.tier }, seed, relief).dir : null;
       // The ring of rocks leaves a gap where the hall's mouth is (denModel: the den is walked into there); the cap rock sits back from it.
@@ -71,6 +73,13 @@ export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain 
         for (const zz of [-0.03, 0.03]) { const ear = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.12, 0.04), rabbitEar); ear.position.set(0.13, 0.3, zz); ear.rotation.z = 0.25; rb.add(ear); }
         g.add(rb); }
       applyRabbits(g);
+    }
+    // S2: the old moot: MOOT_SEATS stone seats in a ring round a fallen chair, where the steward sleeps.
+    if (mootAt && Math.floor(mootAt.x / CHUNK) === cx && Math.floor(mootAt.z / CHUNK) === cz) {
+      const y = relief(mootAt.x, mootAt.z), g = new THREE.Group(); g.name = 'moot'; g.position.set(mootAt.x, y, mootAt.z); group.add(g); const seats: THREE.BufferGeometry[] = [];
+      for (let i = 0; i < MOOT_SEATS; i++) { const a = i / MOOT_SEATS * Math.PI * 2, x = Math.cos(a) * MOOT_SEAT_R, z = Math.sin(a) * MOOT_SEAT_R, dy = relief(mootAt.x + x, mootAt.z + z) - y, st = new THREE.BoxGeometry(0.7, 0.5, 0.6).toNonIndexed(); st.rotateY(-a); st.translate(x, dy + 0.2, z); seats.push(st); const back = new THREE.BoxGeometry(0.16, 0.9, 0.6).toNonIndexed(); back.rotateY(-a); back.translate(x + Math.cos(a) * 0.35, dy + 0.5, z + Math.sin(a) * 0.35); seats.push(back); colliders.push({ x: mootAt.x + x, z: mootAt.z + z, radius: 0.4, minY: y - 0.2, maxY: y + 1 }); }
+      const chair: THREE.BufferGeometry[] = []; { const seat = new THREE.BoxGeometry(1.0, 0.55, 0.9).toNonIndexed(); seat.translate(0, 0.25, 0); chair.push(seat); const back = new THREE.BoxGeometry(1.0, 1.4, 0.2).toNonIndexed(); back.rotateX(-1.2); back.translate(0, 0.35, 0.9); chair.push(back); }
+      const sm = new THREE.Mesh(mergeGeometries(seats)!, oldStone), cm = new THREE.Mesh(mergeGeometries(chair)!, oldStone); cm.rotation.z = 0.12; g.add(sm, cm); geometries.push(sm.geometry, cm.geometry);
     }
     for (const rg of rings.filter(r => Math.floor(r.x / CHUNK) === cx && Math.floor(r.z / CHUNK) === cz)) {
       const y = relief(rg.x, rg.z), g = new THREE.Group(); g.name = 'fairy-ring'; g.position.set(rg.x, y, rg.z); group.add(g); const caps: THREE.BufferGeometry[] = [], stems: THREE.BufferGeometry[] = [], spots: THREE.BufferGeometry[] = [], crystals: THREE.BufferGeometry[] = [];

@@ -9,6 +9,21 @@ Source branch: feat/village (from feat/karst-flow, so it carries the rigged Huld
 
 Read `VILLAGERS.md` first: the brief, the principles, the pass order and Noah's decisions. This file is V0 as built.
 
+## S2: the steward, his board and the watch (2026-09-27, SETTLEMENTS.md's second sprint)
+
+Noah's calls (COMPANIONS.md Parts 4 and 5, SETTLEMENTS.md §8): the steward first; he sleeps at a moot within the village's walk (his own karst later); heroes walk, only Hulda rides the roots; they can be hurt, never killed; guards fight with the wolves' bite and may die; two traits on the board; he carries a staff, lies up a day when hurt; the duties he gives hold after he leaves. Built:
+
+- **The old moot** (`overworldModel.ts` `moot(seed)`): `MOOT_NEAR` 130 to `MOOT_FAR` 260 m from the first village by the seed, `MOOT_CLEAR` 60 of every place; in the chunks seven stone seats round a fallen chair (`chunkWorld.ts`, `MOOT_SEATS`, `MOOT_SEAT_R`). A place of kind `moot` on the map (a pale square). The first village's elder tells of it ("there is an old meeting place to the …, and someone asleep in its chair") until he is woken (`setMoot`).
+- **Waking him**: standing within `MOOT_R` (4) of the chair, the side button reads **wake**: a channelling of `WAKE_GEMS` (20) clarity on the board, as a ruin is sanctified. Woken, he walks to the village nearest the moot. **A companion stands with her** from then (G5's `companions` is 1).
+- **The steward** (`stewardModel.ts`, saved under `rootwake-steward-v1`): `Oswin`, a working name and a working look (Hulda's skeleton at a man's height, brown and gold). He walks at `PACE` (1.6 m a real second) along a route that bends round the dark forest and the karst's pillar (`routeBetween`, `MARGIN` 25), shown walking with his label. The **steward** button opens his panel: where he is, and a button to send him to every village she knows.
+- **Bitten on the road**: a wolf nearer him than any villager bites him instead (`setHeroes`); he strikes back with his staff (`STAFF_DMG` 6) and lies up `LIE_UP_TICKS` (a day) where he is, lying down, then walks on. Never killed.
+- **His board**: in the village panel, only where he stands, every grown villager with their traits and a button: **day work** or **on the watch** (`assignDuty`, `GUARDS_MAX` 3). Where he is not, the panel says its people keep to their own work; duties he gave hold.
+- **Traits** (`traitsOf`): **bold or timid** by the seed of the name, **quick or slow** by their pace (`QUICK_PACE` 1.1).
+- **The watch**: a guard's night is at a post `GUARD_POST_R` (15 m) out toward the nearest threat (the nearest den in reach, the mother of goats at the first village), spread `GUARD_SPREAD` apart, after supper. A bold guard holds when wolves come; a timid one runs home like anyone. A guard meets a raider within `GUARD_ENGAGE` (7) of the post and strikes it within `GUARD_REACH` for `GUARD_DMG` (4) every `GUARD_HIT_S` (1.5 s); a wolf killed at the watch is not her kill. **A bite on the watch is not spared**: a guard can be bitten to death ("… is killed by a wolf on the watch").
+- Dev handle: `steward` (state, moot, wake, send, place, arriveAt), `assign(id, duty)`, `guards()`, `traits(id)`.
+
+**Open, flagged in code:** every number above; his name and look; whether a guard should carry a visible weapon (the sharpened stick comes with S3); whether the watch should light a fire.
+
 ## S1: the warren and the wolves' hunger (2026-09-27, SETTLEMENTS.md's first sprint: the pooled ecology)
 
 Noah's rule (SETTLEMENTS.md §5): every creature eats from a pool; the dens get the village's rule. Built:

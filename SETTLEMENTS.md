@@ -198,6 +198,8 @@ the wolves read as an ecology rather than a timer?*
 
 ### S2. The steward wakes; the jobs board; guards
 
+*(Built 2026-09-27; see VILLAGE_HANDOFF.md "S2". Decided with Noah before building: guards may die of bites on the watch, the others keep the cap; guards may have little to face at first, S3 and S4 bring more; two traits, bold or timid and quick or slow; he carries a staff and lies up a day when hurt; duties hold where he is not. Decided in the building: he is woken by a channelling at the moot, as a ruin is sanctified, and walks first to the village nearest the moot; the board lives in the village panel; the send buttons in his own panel.)*
+
 *Question: does putting a hero in a village, and assigning its people through him, make the village
 feel organized rather than managed, and does his walking make sending him a decision?*
 

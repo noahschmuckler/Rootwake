@@ -719,9 +719,9 @@ function stepGuards(v: Village, dt: number): void {
     if (s.duty !== 'guard' || s.inside || s.want !== 'post' || s.activity !== 'guarding') continue;
     const post = guardPost(v, s); s.guardClock = Math.max(0, (s.guardClock ?? 0) - dt);
     let foe: Raider | null = null, fd = Infinity; for (const r of v.raiders) { if (r.state === 'dead' || r.state === 'melting' || r.state === 'retreating' || r.state === 'leaving') continue; const d = Math.hypot(r.x - post.x, r.z - post.z); if (d <= GUARD_ENGAGE && d < fd) { fd = d; foe = r; } }
-    if (!foe) { const d = Math.hypot(post.x - s.x, post.z - s.z); if (d > 0.3) towards(s, post, GUARD_PACE * dt); continue; }
-    const d = Math.hypot(foe.x - s.x, foe.z - s.z); if (d > GUARD_REACH) { towards(s, foe, GUARD_PACE * dt); continue; }
-    s.heading = Math.atan2(foe.z - s.z, foe.x - s.x); if (s.guardClock <= 0) { s.guardClock = GUARD_HIT_S; hurt(v, foe, GUARD_DMG, false); }
+    if (!foe) { const d = Math.hypot(post.x - s.x, post.z - s.z); if (d > 0.3) { towards(s, post, GUARD_PACE * dt); s.speed = GUARD_PACE; } else s.speed = 0; continue; }
+    const d = Math.hypot(foe.x - s.x, foe.z - s.z); if (d > GUARD_REACH) { towards(s, foe, GUARD_PACE * dt); s.speed = GUARD_PACE; continue; }
+    s.speed = 0; s.heading = Math.atan2(foe.z - s.z, foe.x - s.x); if (s.guardClock <= 0) { s.guardClock = GUARD_HIT_S; hurt(v, foe, GUARD_DMG, false); }
   }
 }
 /** The yielding place a Dark Young goes to spoil: the nearest still clean, with stock first. */
