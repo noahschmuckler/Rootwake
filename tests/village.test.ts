@@ -470,7 +470,7 @@ import { villageSites, SITE_NAMES, SITE_KARST, SITE_NEAR, SITE_FAR, SITE_LAIR, S
 import { beyond as beyondAt, islands } from '../src/chunkModel';
 import { createTerrain as terrainOf } from '../src/worldTerrain';
 import { folkOf, folkIndex, foundersOf, newcomersOf, isHome, setLayouts, setVillageSites, inWater as water, grassCan as grass, FOLK_NAMES, WOLF_TICK as WT, incidents, INCIDENT_TICKS, RAID_FROM } from '../src/villageModel';
-import { setRuins, hedgeAllowed, growHedge, hedgeEnds, HEDGE_PRAYER, HEDGE_MAX, HEDGE_DAYS, HEDGE_LEN, HEDGE_R, parseVillage } from '../src/villageModel';
+import { setRuins, hedgeAllowed, growHedge, hedgeEnds, HEDGE_PRAYER, HEDGE_MAX, HEDGE_DAYS, HEDGE_LEN, HEDGE_R, parseVillage, packAsleep, packOut, slayAsleep, denState, denAwake, WOLF_END, XP_WOLF } from '../src/villageModel';
 test('G3b: the ruins: three by the seed, at their distances, clear of every place; the keeper names the nearest; explored, known; sanctified, a grove that is saved and counted as territory', () => {
   const rs = ruins(1); assert.equal(rs.length, RUIN_N); assert.deepEqual(ruins(1), rs, 'the same each time'); assert.notDeepEqual(ruins(2).map(r => [r.x, r.z]), rs.map(r => [r.x, r.z]), 'by the seed');
   for (const r of rs) { const d = Math.hypot(r.x, r.z); assert.ok(d >= RUIN_NEAR - 1 && d <= RUIN_FAR + 1, `${r.id} at its distance (${d.toFixed(0)})`); assert.ok(Math.hypot(r.x - KARST_AT.x, r.z - KARST_AT.z) >= 100 + RUIN_CLEAR, 'clear of the karst'); for (const o of places(1).filter(p => p.kind !== 'ruin' && p.id !== 'village')) assert.ok(Math.hypot(r.x - o.x, r.z - o.z) >= o.radius + RUIN_CLEAR - 1, `${r.id} clear of ${o.id}`); assert.ok(r.name && r.lore, 'named, with its lore'); }
@@ -481,6 +481,16 @@ test('G3b: the ruins: three by the seed, at their distances, clear of every plac
   assert.ok(canDeepen({ ...freshDeep(), clarity: DEEPEN_COST }, 1 + groves(o).length), 'a shrined village and a grove make the territory for the first deepening');
   // The keeper knows the nearest old stones from the green.
   setRuins(rs.map(r => ({ id: r.id, x: r.x, z: r.z }))); try { const v = freshV(1), near = rs.reduce((a, b) => (Math.hypot(a.x, a.z) < Math.hypot(b.x, b.z) ? a : b)); const told = rumors(v).find(r => r.about === near.id); assert.ok(told && told.who === 'keeper' && told.text.startsWith('old stones lie to the ') && told.bearing !== undefined, `the keeper names the nearest ruin (${JSON.stringify(told)})`); } finally { setRuins([]); }
+});
+test('the pack asleep by day (Noah): the den\'s living wolves lie below except while the pack is out at dusk; a wolf slain asleep is the den\'s loss and her level\'s gain, and the pack slain the den lies quiet', () => {
+  setDens([{ id: 'den-1,1', x: 300, z: 300, pack: 3 }]);
+  try {
+    const v = freshV(1), d = densInReach(v)[0]; assert.equal(packAsleep(v, d), 3, 'three asleep at dawn'); assert.ok(!packOut(v, d));
+    step(v, WOLF_TICK + 1); assert.ok(packOut(v, d)); assert.equal(packAsleep(v, d), 0, 'out at dusk, none below'); assert.equal(slayAsleep(v, d), false, 'nothing to slay while they are out');
+    step(v, WOLF_END - (v.tick % DAY_TICKS) + 1); v.raiders = []; assert.equal(packAsleep(v, d), 3, 'home again after the night\'s end');
+    const xp0 = v.hero.xp, slain0 = v.slain; assert.equal(slayAsleep(v, d), true); assert.equal(denState(v, d).alive, 2); assert.equal(v.slain, slain0 + 1); assert.equal(v.hero.xp, xp0 + XP_WOLF); assert.ok(v.events.some(e => e.text === 'A wolf slain asleep in its den'));
+    assert.equal(slayAsleep(v, d), true); assert.equal(slayAsleep(v, d), true); assert.equal(packAsleep(v, d), 0); assert.ok(!denAwake(v, d), 'the pack slain, the den lies quiet'); assert.ok(v.events.some(e => e.text.startsWith('The pack is slain in its den'))); assert.equal(slayAsleep(v, d), false);
+  } finally { setDens([]); }
 });
 test('G3b: the thorn hedge: grown across the run for prayer, on the village\'s ground beyond the green, not too many nor too close; a raider crossing it is held off, slid along it and pricked; it withers after its days; saved', () => {
   const v = freshV(1); v.prayer = HEDGE_PRAYER * 3; assert.ok(!hedgeAllowed(v, 5, 5), 'not on the green'); assert.ok(!hedgeAllowed(v, 0, HEDGE_MAX + 5), 'not beyond the village\'s ground'); assert.ok(hedgeAllowed(v, 0, 40));

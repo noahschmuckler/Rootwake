@@ -517,6 +517,16 @@ export const setVillageSites = (list: VillageSitePlace[]): void => { villageSite
 /** A place's bearing and distance from this village's green. */
 const fromGreen = (v: { origin: Vec2 }, p: Vec2): { bearing: number; distance: number } => ({ bearing: bearingFromGreen(p.x - v.origin.x, p.z - v.origin.z), distance: Math.hypot(p.x - v.origin.x, p.z - v.origin.z) });
 export const denState = (v: Village, d: DenPlace): DenState => (v.dens[d.id] ??= { alive: d.pack, quietDay: -1 });
+/** The pack is out of its den from WOLF_TICK to WOLF_END while its peace is over; the rest of the day it lies asleep in the den's deepest chamber (Noah: the pack asleep by day). */
+export const packOut = (v: Village, d: DenPlace): boolean => { const t = v.tick % DAY_TICKS; return t >= WOLF_TICK && t < WOLF_END && denAwake(v, d); };
+/** How many wolves lie asleep in the den now: its living pack, unless it is out. */
+export const packAsleep = (v: Village, d: DenPlace): number => (packOut(v, d) ? 0 : denState(v, d).alive);
+/** A wolf slain asleep in its den (the delve's payoff): the den's count falls, the kill counts toward her level, and the pack slain the den lies quiet as when it falls in the field. */
+export function slayAsleep(v: Village, d: DenPlace): boolean {
+  if (packAsleep(v, d) < 1) return false; const st = denState(v, d); st.alive -= 1; v.slain += 1; gainXp(v, XP_WOLF); event(v, 'A wolf slain asleep in its den');
+  if (st.alive === 0) { st.quietDay = dayOf(v.tick) + DEN_PEACE_DAYS; event(v, 'The pack is slain in its den: it lies quiet', true); }
+  return true;
+}
 /** A den with wolves at it whose peace is over: a threat at dusk. */
 export const denAwake = (v: Village, d: DenPlace): boolean => { const st = denState(v, d); return st.alive > 0 && dayOf(v.tick) >= st.quietDay; };
 function spawnWolves(v: Village, rand: () => number): void {

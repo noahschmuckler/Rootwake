@@ -9,13 +9,14 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { denLayout, floorAt, insideDen, hallLines, FLOOR_DROP, FLOOR_WIDTH, CHAMBER_FLOOR, type DenLayout } from './denModel';
 import { mulberry32 } from './colors';
+import { makeWolf, type WolfBody } from './wolfFigure';
 import type { Terrain } from './worldTerrain';
-/** Built within DEN_BUILD_M, dropped beyond DEN_DROP_M; the land's surface is offered over a hall only where it lies DEN_ROOF_CUT above the roof (else the mouth is cut through it). Tuning. */
-export const DEN_BUILD_M = 140, DEN_DROP_M = 260, DEN_ROOF_CUT = 0.8;
+/** Built within DEN_BUILD_M, dropped beyond DEN_DROP_M; the land's surface is offered over a hall only where it lies DEN_ROOF_CUT above the roof (else the mouth is cut through it). The pack asleep (Noah): its wolves lie in the deepest chamber, SLEEP_RING of its radius out from the centre; a sleeping wolf has SLEEP_HP and is struck within SLEEP_REACH ahead of her. Tuning. */
+export const DEN_BUILD_M = 140, DEN_DROP_M = 260, DEN_ROOF_CUT = 0.8, SLEEP_RING = 0.5, SLEEP_HP = 18, SLEEP_REACH = 2.4;
 export function createDenField(scene: THREE.Scene, terrain: Terrain, dens: { id: string; x: number; z: number; tier?: number }[], seed: number) {
   const layouts = dens.map(d => denLayout(d, seed, terrain.height)), byId = new Map(layouts.map(l => [l.id, l]));
   const dirt = new THREE.MeshStandardMaterial({ color: '#4a3622', roughness: 1, flatShading: true, side: THREE.BackSide }), floorMat = new THREE.MeshStandardMaterial({ color: '#4a3826', roughness: 1, side: THREE.DoubleSide }), rootMat = new THREE.MeshStandardMaterial({ color: '#5a4a34', roughness: 1 }), boneMat = new THREE.MeshStandardMaterial({ color: '#d9d2bf', roughness: 0.9 });
-  const built = new Map<string, { group: THREE.Group; geometries: THREE.BufferGeometry[] }>();
+  const built = new Map<string, { group: THREE.Group; geometries: THREE.BufferGeometry[]; pack: { body: WolfBody; hp: number; hurt: number; x: number; z: number; y: number }[] }>();
   const jitter = (g: THREE.BufferGeometry, rand: () => number, k: number): THREE.BufferGeometry => { const p = g.attributes.position as THREE.BufferAttribute; for (let i = 0; i < p.count; i++) p.setXYZ(i, p.getX(i) + (rand() - 0.5) * k, p.getY(i) + (rand() - 0.5) * k, p.getZ(i) + (rand() - 0.5) * k); g.computeVertexNormals(); return g; };
   function build(d: DenLayout): void {
     if (built.has(d.id)) return; const group = new THREE.Group(); group.name = `den:${d.id}`; const geometries: THREE.BufferGeometry[] = [], rand = mulberry32((d.x * 7 + d.z * 13 + seed) >>> 0), roots: THREE.BufferGeometry[] = [], bones: THREE.BufferGeometry[] = [];
@@ -36,9 +37,25 @@ export function createDenField(scene: THREE.Scene, terrain: Terrain, dens: { id:
     }
     if (roots.length) { const g = mergeGeometries(roots)!; geometries.push(g); group.add(new THREE.Mesh(g, rootMat)); }
     if (bones.length) { const g = mergeGeometries(bones)!; geometries.push(g); group.add(new THREE.Mesh(g, boneMat)); }
-    scene.add(group); built.set(d.id, { group, geometries });
+    scene.add(group); built.set(d.id, { group, geometries, pack: [] });
   }
   function drop(id: string): void { const b = built.get(id); if (!b) return; scene.remove(b.group); for (const g of b.geometries) g.dispose(); built.delete(id); }
+  /** The pack asleep: `n` wolves lying in the deepest chamber, made or taken away as the count changes; they breathe. */
+  function setPack(id: string, n: number, time: number): void {
+    const b = built.get(id), d = byId.get(id); if (!b || !d) return; const c = d.chambers.find(ch => ch.deepest)!, fy = c.c.y - c.h * CHAMBER_FLOOR + 0.02;
+    while (b.pack.length > n) { const w = b.pack.pop()!; b.group.remove(w.body.group); }
+    while (b.pack.length < n) { const i = b.pack.length, a = i * 2.4 + 0.7, r = c.r * SLEEP_RING * (0.6 + 0.4 * ((i * 7) % 3) / 2), x = c.c.x + Math.cos(a) * r, z = c.c.z + Math.sin(a) * r, body = makeWolf(); body.group.position.set(x, fy, z); body.group.rotation.y = a + 1.2; body.group.rotation.z = 1.35; b.group.add(body.group); b.pack.push({ body, hp: SLEEP_HP, hurt: 0, x, z, y: fy }); }
+    for (const [i, w] of b.pack.entries()) { w.body.group.scale.set(1, 1 + 0.035 * Math.sin(time * 0.0016 + i * 1.9), 1); w.hurt = Math.max(0, w.hurt - 0.016); w.body.hide.emissive.set(w.hurt > 0 ? '#b03030' : '#000000'); }
+  }
+  /** Her strike in the den: the nearest sleeping wolf within SLEEP_REACH ahead of her takes `dmg`; returns what it hit and whether it died (the caller tells the model). */
+  function strikeAsleep(feet: THREE.Vector3, fx: number, fz: number, dmg: number): { hit: boolean; killed: boolean } {
+    const d = current; if (!d) return { hit: false, killed: false }; const b = built.get(d.id); if (!b) return { hit: false, killed: false };
+    let best = -1, bd = Infinity; for (const [i, w] of b.pack.entries()) { const dx = w.x - feet.x, dz = w.z - feet.z, dist = Math.hypot(dx, dz); if (dist <= SLEEP_REACH && (dist < 0.6 || (dx * fx + dz * fz) / dist > 0.5) && dist < bd) { best = i; bd = dist; } }
+    if (best < 0) return { hit: false, killed: false }; const w = b.pack[best]; w.hp -= dmg; w.hurt = 0.3;
+    if (w.hp > 0) return { hit: true, killed: false }; b.group.remove(w.body.group); b.pack.splice(best, 1); return { hit: true, killed: true };
+  }
+  /** The sleeping wolves' places (dev). */
+  const packAt = (id: string): { x: number; y: number; z: number }[] => (built.get(id)?.pack ?? []).map(w => ({ x: w.x, y: w.y, z: w.z }));
   const lantern = new THREE.PointLight('#ffd9a0', 0, 11, 1.5); scene.add(lantern);
   let inside = false, current: DenLayout | null = null;
   /** The den whose layout could lie under (x, z), if any. */
@@ -54,11 +71,11 @@ export function createDenField(scene: THREE.Scene, terrain: Terrain, dens: { id:
   }
   /** The camera's clearance: while she is in a den the camera stays in its hollow; on the land it stays out of the earth. */
   function cameraClear(p: THREE.Vector3): boolean { const t = terrain.height(p.x, p.z); if (p.y >= t - 0.3) return !inside; const d = near(p.x, p.z); return !!d && insideDen(d, p.x, p.y, p.z); }
-  function update(feet: THREE.Vector3, time: number): void {
-    for (const d of layouts) { const dist = Math.hypot(feet.x - d.x, feet.z - d.z); if (dist <= DEN_BUILD_M) build(d); else if (dist > DEN_DROP_M) drop(d.id); }
+  function update(feet: THREE.Vector3, time: number, asleep: (id: string) => number): void {
+    for (const d of layouts) { const dist = Math.hypot(feet.x - d.x, feet.z - d.z); if (dist <= DEN_BUILD_M) { build(d); setPack(d.id, asleep(d.id), time); } else if (dist > DEN_DROP_M) drop(d.id); }
     current = near(feet.x, feet.z); inside = !!current && feet.y < terrain.height(feet.x, feet.z) - 0.6 && !!floorAt(current, feet.x, feet.z);
     lantern.position.set(feet.x, feet.y + 1.3, feet.z); lantern.intensity = inside ? 2.2 + 0.2 * Math.sin(time * 0.011) : 0;
   }
-  return { layouts, layout: (id: string) => byId.get(id) ?? null, surfacesAt, canOccupy, cameraClear, update, get inside() { return inside; }, get current() { return current; }, get builtCount() { return built.size; } };
+  return { layouts, layout: (id: string) => byId.get(id) ?? null, surfacesAt, canOccupy, cameraClear, update, strikeAsleep, packAt, get inside() { return inside; }, get current() { return current; }, get builtCount() { return built.size; } };
 }
 export type DenField = ReturnType<typeof createDenField>;
