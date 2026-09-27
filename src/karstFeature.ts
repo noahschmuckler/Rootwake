@@ -5,7 +5,7 @@
 // carry her. The karst's own progress (visited, summits, trail) keeps its own save.
 import * as THREE from 'three';
 import { buildKarstFlow } from './karstFlowWorld';
-import { NODES, ZONES, CAVERN, shortestPath, destinationsFrom, stepRide, ridePoint, otherEnd, vec, makeZoneWorld, groundAt, nearestNode, chooseRoot, rootsAt, tread, parseProgress, serializeProgress, freshProgress, arrive, insideRock, trunkPoint, crownPoint, hopTargets, standNear, pillarById, PRESS_S, PRESS_RANGE, ENTER_RANGE, ARM_S, SETTLE_S, TRUNK_CLIMB, CROWN_SLIDE, HOP_S, FOREST_RADIUS as KARST_FLOOR, type Root, type Node, type Zone, type Screen } from './karstFlowModel';
+import { NODES, ZONES, CAVERN, shortestPath, destinationsFrom, stepRide, ridePoint, otherEnd, vec, makeZoneWorld, groundAt, nearestNode, chooseRoot, rootsAt, tread, parseProgress, serializeProgress, freshProgress, arrive, insideRock, trunkPoint, crownPoint, hopTargets, standNear, PRESS_S, PRESS_RANGE, ENTER_RANGE, ARM_S, SETTLE_S, TRUNK_CLIMB, CROWN_SLIDE, HOP_S, FOREST_RADIUS as KARST_FLOOR, type Root, type Node, type Zone, type Screen } from './karstFlowModel';
 import type { Player, Collider } from './player';
 import type { TraversalWorld } from './mobility';
 import type { HuldaForm } from './huldaPresentation';
@@ -33,7 +33,7 @@ export function createKarstFeature(scene: THREE.Scene, player: Player, camera: T
   const rideTangent = new THREE.Vector3(0, 0, -1), lantern = new THREE.PointLight('#e8d9a8', 0, 7, 1.5); camera.add(lantern);
   const skyColour = new THREE.Color('#aab8b3'), cavernColour = new THREE.Color('#061312'), rootColour = new THREE.Color('#2a1d0c'), colour = new THREE.Color();
   const screen: Screen = p => { const v = W(p).applyMatrix4(camera.matrixWorldInverse); if (v.z > -0.05) return null; v.applyMatrix4(camera.projectionMatrix); return { x: v.x * innerWidth / 2, y: v.y * innerHeight / 2 }; };
-  const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
+
   const local = (x: number, z: number): { x: number; z: number } => ({ x: x - origin.x, z: z - origin.z });
   /** Inside the karst's region (its forest floor and everything above it). */
   const inside = (x: number, z: number): boolean => { const l = local(x, z); return Math.hypot(l.x, l.z) <= KARST_FLOOR + 4; };
@@ -45,10 +45,7 @@ export function createKarstFeature(scene: THREE.Scene, player: Player, camera: T
     surfacesAt: (x, z) => zoneWorlds.floor.surfacesAt(x, z).length ? [hooks.height!(x, z)] : [],
     canOccupy: (p, r, h) => p.y >= hooks.height!(p.x, p.z) - 0.03 && zoneWorlds.floor.canOccupy(new THREE.Vector3(p.x, groundAt(ZONES.floor, p.x - origin.x, p.z - origin.z), p.z), r, h),
   };
-  function mouthYaw(n: Node): number { const p = pillarById(ZONES[n.zone].pillar), dx = n.mouth.x - p.x, dz = n.mouth.z - p.z, r = Math.hypot(dx, dz) || 1, k = n.zone === 'cavern' ? -1 : 1; return Math.atan2(k * dx / r, k * dz / r); }
-  function turnToward(yaw: number, dt: number, rate: number, cap = Infinity): void { const step = wrap(yaw - player.yaw) * Math.min(1, dt * rate), c = cap * dt; player.yaw += Math.max(-c, Math.min(c, step)); }
-  /** A ride's heading is followed no faster than RIDE_TURN_MAX rad/s and the camera trails her (RIDE_CAM_FOLLOW): the helix up a sister at ride speed whipped the view (Noah's playtest). Tuning. */
-  const RIDE_TURN_MAX = 0.9, RIDE_CAM_FOLLOW = 6;
+  // In the roots (sink, mouth, ride, rise) the camera never turns of itself (Noah, 2026-09-27): her yaw and pitch stay the player's, by the look drag as in every other form, and the camera rides rigidly behind her at that yaw. The knot alone turns with the root.
   function lock(): void { player.traversalWorld = hooks.locked; player.motor.velocity.set(0, 0, 0); player.avatar.visible = false; }
   function place(pLocal: THREE.Vector3): void { const p = W(pLocal); player.motor.feet.copy(p); player.position.x = p.x; player.position.z = p.z; }
   function standOn(zoneId: string, x: number, z: number, yaw = player.yaw): void {
@@ -112,17 +109,17 @@ export function createKarstFeature(scene: THREE.Scene, player: Player, camera: T
       if (hop.t === 1) { visit(hop.node); arrive(progress, hop.node.id); save(); crown = { az: hop.az, armed: true }; mode = 'crown'; hop = null; }
     } else if ((mode === 'sink' || mode === 'rise') && move) {
       move.t = Math.min(1, move.t + dt / move.seconds); const k = move.t * move.t * (3 - 2 * move.t); const p = move.from.clone().lerp(move.to, k);
-      if (mode === 'sink') turnToward(mouthYaw(at), dt, 6); place(p); hooks.orbit(W(p), 3.2, 1.3, 1 - Math.exp(-dt * RIDE_CAM_FOLLOW));
+      place(p); hooks.orbit(W(p), 3.2, 1.3);
       if (move.t === 1) { const then = move.then; move = null; then(); }
     } else if (mode === 'mouth') {
-      if (settle > 0) turnToward(mouthYaw(at), dt, 5); place(at.mouth); hooks.orbit(W(at.mouth), 3.2, 1.3); camera.updateMatrixWorld(); settle = Math.max(0, settle - dt);
+      place(at.mouth); hooks.orbit(W(at.mouth), 3.2, 1.3); camera.updateMatrixWorld(); settle = Math.max(0, settle - dt);
       // A portal ride goes on by itself: the next root once she has settled, and out at the end.
       if (settle <= 0 && queue.length) startRide(queue.shift()!); else if (settle <= 0 && travelling) { travelling = false; emerge(); }
       const root = settle > 0 || !stickHeld ? null : chooseRoot(at.id, { x: stick.x, y: -stick.y }, screen, released || rootsAt(at.id).length === 1 ? null : lastRoot);
       if (!root) choice = null; else if (choice && choice.root === root) { choice.held += dt; if (choice.held >= ARM_S) startRide(root); } else choice = { root, held: 0 };
     } else if (mode === 'ride' && ride) {
       const step = stepRide(ride.root, ride.from, ride.s, ride.speed, dt); ride.s = step.s; ride.speed = step.speed; const { point, tangent } = ridePoint(ride.root, ride.from, ride.s); rideTangent.copy(tangent).normalize();
-      turnToward(Math.atan2(-tangent.x, -tangent.z), dt, 3.5, RIDE_TURN_MAX); place(point); hooks.orbit(W(point), 3.0, 1.2, 1 - Math.exp(-dt * RIDE_CAM_FOLLOW)); if (step.done) finishRide();
+      place(point); hooks.orbit(W(point), 3.0, 1.2); if (step.done) finishRide();
     }
     const wantVision = mode === 'sink' || mode === 'mouth' || mode === 'ride' || mode === 'rise' ? 1 : 0; vision += (wantVision - vision) * Math.min(1, dt * 3);
     world.update(Math.max(vision, externalVision), time, ride?.root ?? null, choice?.root ?? null);

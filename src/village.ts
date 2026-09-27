@@ -18,7 +18,7 @@ import { MODEL_HEIGHT } from './huldaRig';
 import type { HobbitState, VillageEvent } from './villageModel';
 import { createRootNetwork, soilAt as grassCan, type WorldRoot, type Course } from './worldRoots';
 import { rootNetworkWorld } from './rootNetworkWorld';
-import { NODES as ROOT_NODES, standNear, groundAt, nodeName, ZONES as ROOT_ZONES, type Node as RootNode } from './karstFlowModel';
+import { NODES as ROOT_NODES, PILLARS, standNear, groundAt, nodeName, ZONES as ROOT_ZONES, type Node as RootNode } from './karstFlowModel';
 import { createTerrain } from './worldTerrain';
 import { createChunks } from './chunkWorld';
 import { createKarstFeature } from './karstFeature';
@@ -153,10 +153,7 @@ function orbitCamera(target: THREE.Vector3, back = 3.2, up = 1.3, ease = 1): voi
   camAt.lerp(camWant, ease); lookAt.lerp(lookWant, ease); camera.position.copy(camAt); camera.lookAt(lookAt);
 }
 const camWant = new THREE.Vector3(), lookWant = new THREE.Vector3(), camAt = new THREE.Vector3(), lookAt = new THREE.Vector3(); let camEased = false;
-/** Carried along a root her yaw follows the root's heading, eased and never faster than CARRY_TURN_MAX rad/s, and the camera trails her (CARRY_CAM_FOLLOW): the whip round the karst's curves at root speed was nauseating (Noah's playtest). Tuning. */
-const CARRY_TURN = 2.5, CARRY_TURN_MAX = 0.9, CARRY_CAM_FOLLOW = 6;
-function followHeading(heading: number, dt: number): void { const d = Math.atan2(Math.sin(heading - player.yaw), Math.cos(heading - player.yaw)), cap = CARRY_TURN_MAX * dt; player.yaw += Math.max(-cap, Math.min(cap, d * Math.min(1, dt * CARRY_TURN))); }
-const carryEase = (dt: number): number => 1 - Math.exp(-dt * CARRY_CAM_FOLLOW);
+/** Carried along a root the camera never turns of itself (Noah, 2026-09-27: riding the roots should not rotate the camera; the eased follow of the root's heading before it was still nauseating). Her yaw and pitch are the player's, by the look drag as in every other form, and the camera rides rigidly behind her at that yaw, as when she walks; her figure alone turns with the root. */
 const camTurn = { max: 0, yaw: 0, carried: false, reset() { camTurn.max = 0; } };
 function lock(): void { player.traversalWorld = lockedWorld; player.motor.velocity.set(0, 0, 0); player.avatar.visible = false; }
 function place(p: THREE.Vector3): void { player.motor.feet.copy(p); player.position.x = p.x; player.position.z = p.z; }
@@ -389,6 +386,15 @@ function presentCourse(): void {
 }
 // Houses are numbered in what is told ("a hut stands: house 7") and (Noah) the player had no way to tell which was which: a label floats over each house while near. HOUSE_LABEL_M: tuning.
 const HOUSE_LABEL_M = 32;
+// The karsts have names (Noah, 2026-09-27: the one with the pool needed its own, and the others were hard to tell apart): a label floats over each pillar's summit while she is within KARST_LABEL_M, fading at the edge of that. Tuning.
+const KARST_LABEL_M = 420;
+const karstLabels = PILLARS.map(p => { const e = document.createElement('div'); e.className = 'name karst'; e.textContent = p.name; e.hidden = true; labels.append(e); return { p, e }; });
+function presentKarsts(): void {
+  for (const { p, e } of karstLabels) {
+    tmp.set(KARST_AT.x + p.x, p.height + 3, KARST_AT.z + p.z); const dist = tmp.distanceTo(camera.position); tmp.project(camera); const show = !inDeep(mode) && tmp.z < 1 && dist < KARST_LABEL_M && Math.abs(tmp.x) < 1.1 && Math.abs(tmp.y) < 1.1;
+    e.hidden = !show; if (show) { e.style.transform = `translate(${(tmp.x + 1) * innerWidth / 2}px,${(1 - tmp.y) * innerHeight / 2}px) translate(-50%,-100%)`; e.style.opacity = String(Math.min(1, (KARST_LABEL_M - dist) / 60)); }
+  }
+}
 function presentHouses(c: Ctx): void {
   for (const h of housesOf(c.v)) {
     let e = c.houseLabels.get(h.id); if (!e) { e = document.createElement('div'); e.className = 'name house'; e.textContent = `house ${h.id + 1}`; labels.append(e); c.houseLabels.set(h.id, e); }
@@ -708,22 +714,22 @@ function frame(now: number) {
  }
       } }
     } else r.off = 0;
-    if (mode === 'root') { const p = rootPoint(r.root, r.s); place(p); const t = rootTangent(r.root, r.s); if (!r.forward) t.negate(); followHeading(Math.atan2(-t.x, -t.z), sim); orbitCamera(p, 3.2, 1.3, carryEase(sim)); }
+    if (mode === 'root') { const p = rootPoint(r.root, r.s); place(p); orbitCamera(p, 3.2, 1.3); }
   } else if (mode === 'meditate' && session) { const a = session.at, yaw = player.yaw; camera.position.set(a.x + Math.sin(yaw) * 2.6, a.y + 3.4, a.z + Math.cos(yaw) * 2.6); camera.lookAt(a.x, a.y + 0.3, a.z); }
   else if (mode === 'dive' || mode === 'launch') { deepFrame(sim); }
   else if (mode === 'deep') { const n = nodeAt(); place(n); player.pitch = Math.min(1.45, Math.max(0.12, player.pitch)); camera.position.set(n.x, n.y + 0.3, n.z); camera.lookAt(camera.position.clone().add(player.forward())); presentDeep(); }
   else if ((mode === 'sink' || mode === 'rise') && move) {
     move.t = Math.min(1, move.t + sim / move.seconds); const k = move.t * move.t * (3 - 2 * move.t); const p = move.from.clone().lerp(move.to, k);
-    wantUnder = mode === 'sink' ? k : 1 - k; place(p); orbitCamera(p, 3.2, 1.3, carryEase(sim));
+    wantUnder = mode === 'sink' ? k : 1 - k; place(p); orbitCamera(p, 3.2, 1.3);
     if (move.t === 1) { const then = move.then; move = null; then(); }
   }
   // The ease settles exactly: the ground's alpha hash would stipple forever on a residual 0.01.
   under += (wantUnder - under) * Math.min(1, dt * 4); if (Math.abs(under - wantUnder) < 0.01) under = wantUnder;
   // The overhead camera is placed before the names, bubbles and marks are projected (Noah: zoomed out they drifted from their figures: they were cast through the shoulder camera, then the camera moved).
-  // Dev: the camera's turn rate about her while she is carried, per second of the carried clock (`sim`), for the journey to hold under CARRY_TURN_MAX.
+  // Dev: the camera's turn rate about her while she is carried, per second of the carried clock (`sim`): with no drag it stays at zero (the journey holds it there).
   { const f = player.feet(), yaw = Math.atan2(camera.position.x - f.x, camera.position.z - f.z), carried = mode === 'root' || (mode === 'karst' && karst.mode === 'ride'); if (carried && camTurn.carried) camTurn.max = Math.max(camTurn.max, Math.abs(Math.atan2(Math.sin(yaw - camTurn.yaw), Math.cos(yaw - camTurn.yaw))) / Math.max(sim, 1e-3)); camTurn.yaw = yaw; camTurn.carried = carried; }
   if (!inDeep(mode)) overheadCamera();
-  fight(Math.min(0.25, wall) * speed, Math.min(0.25, wall)); stations(Math.min(0.25, wall)); presentHulda(dt); for (const c of ctxs) if (c.near) { presentHobbits(c, dt, wall); presentSpirits(c, dt, wall); presentRaiders(c, dt); presentIncidents(c); presentHouses(c); } presentCourse(); villageInfo(dt); deepButtons(); tellShrines(); boardView.update(time); if (mode === 'meditate') { boardView.group.scale.multiplyScalar(BOARD_FIT); boardView.group.position.y = BOARD_LIFT; } deepWorld.update(time);
+  fight(Math.min(0.25, wall) * speed, Math.min(0.25, wall)); stations(Math.min(0.25, wall)); presentHulda(dt); presentKarsts(); for (const c of ctxs) if (c.near) { presentHobbits(c, dt, wall); presentSpirits(c, dt, wall); presentRaiders(c, dt); presentIncidents(c); presentHouses(c); } presentCourse(); villageInfo(dt); deepButtons(); tellShrines(); boardView.update(time); if (mode === 'meditate') { boardView.group.scale.multiplyScalar(BOARD_FIT); boardView.group.position.y = BOARD_LIFT; } deepWorld.update(time);
   const light = daylightAt(village.tick), dusk = Math.max(0, 1 - Math.abs(light - 0.12) / 0.12);
   // From a height the view opens: the fog thins to VISTA_FOG of the ground's and the far plane reaches out, over VISTA_ALT m above the ground beneath her (the summit had the meadow's fog and a 220 m far plane, and no view: Noah's playtest). Tuning.
   const vista = (() => { const f = player.feet(), t = Math.max(0, Math.min(1, (f.y - relief(f.x, f.z) - VISTA_ALT[0]) / (VISTA_ALT[1] - VISTA_ALT[0]))); return t * t * (3 - 2 * t); })(), fogScale = 1 - vista * (1 - VISTA_FOG), far = FAR_GROUND + vista * (FAR_VISTA - FAR_GROUND);

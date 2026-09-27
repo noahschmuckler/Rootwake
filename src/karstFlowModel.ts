@@ -11,12 +11,13 @@ export { relief, vec, otherEnd, stepRide, ridePoint, pillarRadius, CAVERN, PILLA
 export type { Root } from './karstModel';
 
 /** The pillars: the karst she wakes on and its sisters in the mist. Two of the sisters can be climbed. */
-export interface Pillar { id: string; x: number; z: number; height: number; base: number; climbable: boolean; radius: (y: number) => number }
-const sister = (id: string, x: number, z: number, height: number, base: number, climbable: boolean): Pillar => ({ id, x, z, height, base, climbable, radius: y => base * (1.1 - 0.6 * Math.pow(Math.min(1, Math.max(0, y / height)), 1.2)) + 1.5 * Math.sin(y * 0.2) });
+/** Every pillar has a name (Noah, 2026-09-27: the one with the pool needed its own, and the others were hard to tell apart); the entries float it over the summit. */
+export interface Pillar { id: string; name: string; x: number; z: number; height: number; base: number; climbable: boolean; radius: (y: number) => number }
+const sister = (id: string, name: string, x: number, z: number, height: number, base: number, climbable: boolean): Pillar => ({ id, name, x, z, height, base, climbable, radius: y => base * (1.1 - 0.6 * Math.pow(Math.min(1, Math.max(0, y / height)), 1.2)) + 1.5 * Math.sin(y * 0.2) });
 export const PILLARS: Pillar[] = [
-  { id: 'main', x: 0, z: 0, height: PILLAR_HEIGHT, base: pillarRadius(0), climbable: true, radius: pillarRadius },
-  sister('B', 60, -30, 78, 9, true), sister('C', -55, 40, 58, 12, true),
-  sister('D', 20, 75, 66, 8, false), sister('E', -70, -50, 84, 10, false), sister('F', 85, 45, 52, 11, false), sister('G', -30, -85, 70, 9, false),
+  { id: 'main', name: 'the Wellspire', x: 0, z: 0, height: PILLAR_HEIGHT, base: pillarRadius(0), climbable: true, radius: pillarRadius },
+  sister('B', 'the Heron', 60, -30, 78, 9, true), sister('C', 'the Anvil', -55, 40, 58, 12, true),
+  sister('D', 'the Needle', 20, 75, 66, 8, false), sister('E', 'the Elder', -70, -50, 84, 10, false), sister('F', 'the Stump', 85, 45, 52, 11, false), sister('G', 'the Hood', -30, -85, 70, 9, false),
 ];
 export const pillarById = (id: string): Pillar => PILLARS.find(p => p.id === id)!;
 /** A point on a pillar's face, pushed out by `out`, at height y and angle a about its axis. */
@@ -208,9 +209,9 @@ export function reachFrom(from: string): Map<string, number> {
 /** A node's name, for the portal's menu: the karst's own plants have theirs; the sisters' by pillar and ledge. */
 export function nodeName(id: string): string {
   if (id in PLANTS) return PLANTS[id].name;
-  const pine = /^pine([A-Z])$/.exec(id); if (pine) return `sister ${pine[1]}'s summit`;
-  const foot = /^([A-Z])foot$/.exec(id); if (foot) return `the foot of sister ${foot[1]}`;
-  const ledge = /^([A-Z])(\d+)$/.exec(id); if (ledge) return `sister ${ledge[1]}, ledge ${Number(ledge[2]) + 1}`;
+  const pine = /^pine([A-Z])$/.exec(id); if (pine) return `${pillarById(pine[1]).name}'s summit`;
+  const foot = /^([A-Z])foot$/.exec(id); if (foot) return `the foot of ${pillarById(foot[1]).name}`;
+  const ledge = /^([A-Z])(\d+)$/.exec(id); if (ledge) return `${pillarById(ledge[1]).name}, ledge ${Number(ledge[2]) + 1}`;
   return 'a floor tree';
 }
 /** The places the karst's roots reach from a node: one per zone above the floor, the nearest of its nodes (a sister's helix by its halfway ledge only), nearest first. */
@@ -221,7 +222,7 @@ export function destinationsFrom(from: string): { id: string; name: string; leng
     if (n.zone.startsWith('ledge')) { const pid = n.zone.slice(5, 6); if (id !== `${pid}${Math.floor(HELIX[pid as keyof typeof HELIX].count / 2)}`) continue; }
     const b = best.get(n.zone); if (!b || length < b.length) best.set(n.zone, { id, length });
   }
-  return [...best.values()].sort((a, b) => a.length - b.length).map(d => ({ ...d, name: NODES[d.id].zone.startsWith('ledge') ? `sister ${NODES[d.id].zone.slice(5, 6)}, halfway up` : nodeName(d.id) }));
+  return [...best.values()].sort((a, b) => a.length - b.length).map(d => ({ ...d, name: NODES[d.id].zone.startsWith('ledge') ? `${pillarById(NODES[d.id].zone.slice(5, 6)).name}, halfway up` : nodeName(d.id) }));
 }
 /** Every simple route between two of the karst's own plants over its own roots (small graph). */
 export function routes(from: string, to: string, seen: string[] = []): string[][] {

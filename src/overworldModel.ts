@@ -34,7 +34,7 @@ function basePlaces(seed: number): Place[] {
   const rand = mulberry32((seed * 3251 + 17) >>> 0); const a = 0.55 + rand() * 1.4; // south-east to south-west: away from the karst
   return [
     { id: 'village', kind: 'village', name: 'the village', x: 0, z: 0, radius: VILLAGE_RADIUS },
-    { id: 'karst', kind: 'karst', name: 'the karst', x: KARST_AT.x, z: KARST_AT.z, radius: 60 },
+    { id: 'karst', kind: 'karst', name: 'the Wellspire', x: KARST_AT.x, z: KARST_AT.z, radius: 60 },
     { id: 'lair', kind: 'lair', name: 'the dark forest', x: Math.round(Math.cos(a) * LAIR_DISTANCE), z: Math.round(Math.sin(a) * LAIR_DISTANCE), radius: FOREST_RADIUS },
   ];
 }

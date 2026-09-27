@@ -69,11 +69,11 @@ test('sphere streaming selection covers faces with disjoint tiles and grows by L
 
 // R1: roots as a way. A course is planned through the surface roots between a tree near her and a node near the place, across chunks she has never loaded; the karst's own roots have shortest paths and portal destinations.
 import { GOAL_REACH } from '../src/worldRoots';
-import { shortestPath, destinationsFrom, nodeName, NODES } from '../src/karstFlowModel';
-import { places } from '../src/overworldModel';
+import { shortestPath, destinationsFrom, nodeName, NODES, PILLARS } from '../src/karstFlowModel';
+import { places as overworldPlaces } from '../src/overworldModel';
 test('a course runs from a tree by the village to the karst and back, joined root to root, surface roots only, the same twice', () => {
   const g = createRootNetwork(createTerrain(1));
-  for (const [from, to] of [[{ x: 0, z: -16 }, KARST_AT], [{ x: KARST_AT.x + 20, z: KARST_AT.z + 30 }, { x: 0, z: 0 }], [{ x: 0, z: -16 }, places(1)[2]]] as const) {
+  for (const [from, to] of [[{ x: 0, z: -16 }, KARST_AT], [{ x: KARST_AT.x + 20, z: KARST_AT.z + 30 }, { x: 0, z: 0 }], [{ x: 0, z: -16 }, overworldPlaces(1)[2]]] as const) {
     const c = g.plan(from, to)!; assert.ok(c, `a course from ${from.x},${from.z}`);
     assert.equal(c.roots.length, c.nodes.length - 1); assert.equal(c.entry, c.nodes[0]); assert.equal(c.goal, c.nodes[c.nodes.length - 1]);
     for (let i = 0; i < c.roots.length; i++) { const r = c.roots[i]; assert.ok(r.surface); assert.ok((r.a === c.nodes[i] && r.b === c.nodes[i + 1]) || (r.b === c.nodes[i] && r.a === c.nodes[i + 1]), `root ${i} joins its nodes`); }
@@ -92,10 +92,12 @@ test('the karst roots: no way up from the foot (Noah: the trees near the karst h
   const south = destinationsFrom('southShrub').map(p => p.id); assert.ok(south.includes('pine') && south.includes('cavernFern') && !south.some(id => NODES[id].zone === 'floor'), `the south ledge offers the summit and the cavern, no floor places (${south.join(',')})`);
   assert.ok(places.every((p, i) => i === 0 || p.length >= places[i - 1].length), 'nearest first');
   for (const n of Object.values(NODES)) if (n.zone === 'floor') assert.equal(destinationsFrom(n.id).length, 0, `${n.id}: a floor tree is no portal`);
-  assert.equal(nodeName('pine'), 'the summit pine'); assert.equal(nodeName('pineB'), "sister B's summit"); assert.equal(nodeName('B3'), 'sister B, ledge 4');
+  assert.equal(nodeName('pine'), 'the summit pine'); assert.equal(nodeName('pineB'), "the Heron's summit"); assert.equal(nodeName('B3'), 'the Heron, ledge 4'); assert.equal(nodeName('Cfoot'), 'the foot of the Anvil'); assert.equal(destinationsFrom('B0')[0].name, 'the Heron, halfway up');
+  // The karsts' names (Noah, 2026-09-27): every pillar has one, all different, the one with the pool the Wellspire, the place on the map named after it.
+  assert.equal(PILLARS.find(p => p.id === 'main')!.name, 'the Wellspire'); assert.equal(new Set(PILLARS.map(p => p.name)).size, PILLARS.length); assert.equal(overworldPlaces(1).find(p => p.kind === 'karst')!.name, 'the Wellspire');
 });
 test('D4: blighted roots refuse root travel: no course ends in the blight, none crosses it, and a tap finds no root there', () => {
-  const g = createRootNetwork(createTerrain(1)), lair = places(1)[2], R = 150;
+  const g = createRootNetwork(createTerrain(1)), lair = overworldPlaces(1)[2], R = 150;
   const free = g.plan({ x: 0, z: -16 }, lair); assert.ok(free, 'a way to the lair before the blight');
   g.setBlocked((x, z) => Math.hypot(x - lair.x, z - lair.z) <= R);
   assert.equal(g.plan({ x: 0, z: -16 }, lair), null, 'no course ends in the blight');
