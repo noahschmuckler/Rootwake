@@ -34,6 +34,13 @@ export function fisheye(d: Deep, karst: { x: number; z: number }, p: { x: number
   const dx = p.x - karst.x, dz = p.z - karst.z, r = Math.hypot(dx, dz), a = Math.atan2(r, nodeDepth(d)) / (Math.PI / 2), k = r > 1e-6 ? a / r : 0;
   return { u: -dx * k, v: dz * k };
 }
+/** The same view as a direction from the node (for the drop's skin): the zenith straight up, a surface point at its angle from the zenith, east and west swapped as seen from below. */
+export function deepDirection(d: Deep, karst: { x: number; z: number }, p: { x: number; z: number }): { x: number; y: number; z: number } {
+  const dx = p.x - karst.x, dz = p.z - karst.z, r = Math.hypot(dx, dz), a = Math.atan2(r, nodeDepth(d)); if (r < 1e-6) return { x: 0, y: 1, z: 0 };
+  return { x: -dx / r * Math.sin(a), y: Math.cos(a), z: dz / r * Math.sin(a) };
+}
+/** The reach's angle from the zenith. */
+export const reachAngle = (d: Deep): number => Math.atan2(deepReach(d), nodeDepth(d));
 export const serializeDeep = (d: Deep): string => JSON.stringify({ clarity: Math.round(d.clarity * 100) / 100, depth: d.depth, dives: d.dives, launches: d.launches, deepened: d.deepened });
 export function parseDeep(raw: string | null): Deep {
   try { const p = JSON.parse(raw ?? 'null'); if (!p || typeof p !== 'object') return freshDeep(); const num = (x: unknown, lo: number, hi: number, dflt: number): number => (typeof x === 'number' && Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : dflt); return { clarity: num(p.clarity, 0, CLARITY_CAP, 0), depth: Math.floor(num(p.depth, 0, 20, 0)), dives: Math.floor(num(p.dives, 0, 1e6, 0)), launches: Math.floor(num(p.launches, 0, 1e6, 0)), deepened: Math.floor(num(p.deepened, 0, 1e6, 0)) }; } catch { return freshDeep(); }
