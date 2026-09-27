@@ -626,7 +626,11 @@ test('S1: the pack eats at its warren first, a rabbit a wolf, and goes home fed;
     const alive0 = st.alive; st.rabbits = 0; v.land.goats = 0;
     for (let k = 0; k < PACK_LEAN_NIGHTS; k++) { toDusk(); for (const s of v.hobbits) s.inside = true; st.rabbits = 0; night(); assert.equal(st.fedNight, 0, 'nobody fed'); toDawn(); }
     assert.equal(st.alive, alive0 - 1, 'a wolf starves'); assert.ok(v.events.some(e => e.text === 'A wolf of the pack to the south-east has starved'));
-    { const lean0 = st.leanNights, alive1 = st.alive; step(v, DT * 2); assert.equal(st.leanNights, lean0, 'a day jumped over is not a hungry night'); assert.equal(st.alive, alive1); }
+    { const lean0 = st.leanNights, alive1 = st.alive; step(v, DT * 2); assert.equal(st.leanNights, lean0, 'a day jumped over is not a hungry night'); }
+    // Noah: a den draws wolves, but a newcomer stays only where the last night fed the pack.
+    { st.alive = 2; st.leanNights = 1; toDawn(); assert.equal(st.alive, 2, 'no newcomer after a hungry night'); st.leanNights = 0; toDawn(); assert.equal(st.alive, 3, 'one after a night that was not hungry'); }
+    // Starved out: the den lies quiet, then fills again, a wolf a day to its base.
+    { st.alive = 1; st.leanNights = PACK_LEAN_NIGHTS; st.out = 0; toDawn(); assert.equal(st.alive, 0, 'starved out'); assert.ok(v.events.some(e => e.text === 'The pack to the south-east has starved: the den lies quiet')); for (let k = 0; k < DEN_PEACE_DAYS + 3; k++) toDawn(); assert.equal(st.alive, 3, 'the den has drawn a pack again'); }
     // Quicken: the warren for nothing; the pen brings the goats back first, then the milk.
     st.rabbits = 2; assert.ok(quickenWarren(v, 'den-1,1')); assert.equal(st.rabbits, WARREN_CAP); assert.ok(!quickenWarren(v, 'den-1,1'), 'refused full'); assert.ok(!quickenWarren(v, 'den-9,9'), 'no such den');
     v.prayer = 60; v.land.milk = MILK_PER_DAY; assert.ok(quickenable(v, 'pen'), 'goats short'); assert.ok(quicken(v, 'pen')); assert.equal(v.land.goats, GOATS, 'the goats first'); assert.equal(v.land.milk, MILK_PER_DAY); v.land.milk = 1; assert.ok(quicken(v, 'pen')); assert.equal(v.land.milk, MILK_PER_DAY, 'then the milk'); assert.ok(!quickenable(v, 'pen'));

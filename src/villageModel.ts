@@ -600,15 +600,17 @@ function stepWolf(v: Village, r: Raider, dt: number, t: number): void {
   r.heading = Math.atan2(prey.z - r.z, prey.x - r.x);
   if (r.biteClock <= 0) { r.biteClock = WOLF_BITE_S; prey.missed = Math.min(DEATH_MEALS - 1, prey.missed + WOLF_BITE_MEALS); prey.bubble = 'bitten!'; prey.bubbleUntil = v.tick + BUBBLE_TICKS * 2; v.bitten += 1; r.ate += 1; if (st) st.fedNight += 1; event(v, `${hobbitById(prey.id).name} is bitten by a wolf`, v.bitten === 1); incident(v, `${hobbitById(prey.id).name} bitten by a wolf`, prey, prey.id, r.id); r.prey = null; }
 }
-/** S1: the packs at dawn: the warren regrows; a pack fed every night for PACK_GROW_DAYS grows by one, to PACK_OVER over its base; a pack hungry PACK_LEAN_NIGHTS running loses one (to none, and the den lies quiet as if slain); a slain pack comes back a wolf a day once its peace is over. */
+/** S1: the packs at dawn (a den draws wolves: an emptied or thinned den fills a wolf a day to its base, once its peace is over and only after a night that was not hungry): the warren regrows; a pack fed every night for PACK_GROW_DAYS grows by one, to PACK_OVER over its base; a pack hungry PACK_LEAN_NIGHTS running loses one (to none, and the den lies quiet as if slain); a slain pack comes back a wolf a day once its peace is over. */
 function stepPacks(v: Village): void {
   for (const d of densAt) { const st = v.dens[d.id]; if (!st) continue;
     st.rabbits = Math.min(WARREN_CAP, st.rabbits + WARREN_REGROW);
-    if (st.out > 0 && st.abroad) { if (st.fedNight >= st.out) { st.fedDays += 1; st.leanNights = 0; } else { st.fedDays = 0; st.leanNights += 1; } } st.out = 0; st.fedNight = 0; st.abroad = false;
+    // The night is judged against the wolves that came home: the slain need no supper, and a pack slain entire is not a hungry one.
+    if (st.alive === 0) { st.leanNights = 0; st.fedDays = 0; } else if (st.out > 0 && st.abroad) { if (st.fedNight >= Math.min(st.out, st.alive)) { st.fedDays += 1; st.leanNights = 0; } else { st.fedDays = 0; st.leanNights += 1; } } st.out = 0; st.fedNight = 0; st.abroad = false;
     const where = bearingWords(fromGreen(v, d).bearing);
     if (st.leanNights >= PACK_LEAN_NIGHTS && st.alive > 0) { st.leanNights = 0; st.alive -= 1; if (st.alive === 0) { st.quietDay = dayOf(v.tick) + DEN_PEACE_DAYS; event(v, `The pack to the ${where} has starved: the den lies quiet`, true); } else event(v, `A wolf of the pack to the ${where} has starved`); }
     else if (st.fedDays >= PACK_GROW_DAYS && st.alive < d.pack + PACK_OVER) { st.fedDays = 0; st.alive += 1; event(v, `The pack to the ${where} is well fed: it has grown to ${st.alive}`, true); }
-    else if (st.alive < d.pack && dayOf(v.tick) >= st.quietDay) st.alive++;
+    // Noah (2026-09-27): a den draws wolves in the wild, so an emptied or thinned den fills again, a wolf a day to its base; but a newcomer stays only where the last night fed the pack (the warren decides).
+    else if (st.alive < d.pack && dayOf(v.tick) >= st.quietDay && st.leanNights === 0) st.alive++;
   }
 }
 /** The fullest store but the trough, by share of cap, with a unit in it: what a Dark Young goes for. */

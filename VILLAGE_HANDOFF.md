@@ -21,7 +21,9 @@ Noah's rule (SETTLEMENTS.md §5): every creature eats from a pool; the dens get 
 - **The wolves' night is longer**: `WOLF_END` 840 → 1010 (229 s at `WOLF_PACE` 2.6, some 600 m of walking); the old window of 87 s could not reach a village from a den at all, and the warren first needs the walk den → warren → village within the night.
 - Dev handle: `warrens()` with each pool, `setWarrens`, `setRabbits(den, n)`, `setLand('goats', n)`; `setDens` clears the warrens, `restoreDens` restores them.
 
-**Open, flagged in code:** every number above; whether the first village's calm ground (no den in reach) should have a warren of its own for S3's hunters; whether a starved-out den should recover at all.
+- **A den draws wolves** (Noah, 2026-09-27): an emptied or starved-out den fills again, a wolf a day to its base once its peace is over, but only after a night that was not hungry. A night is judged against the wolves that came home, so a pack slain in the field is not a hungry one.
+
+**Decided after S1 (Noah):** the first village gets a warren of its own in S3, once it has hunters; starved dens recover (above); later, dens become sites that wolves, boars, bears and monsters claim dynamically. **Open, flagged in code:** every number above.
 
 ## G5: cultivation and the gated tiers (2026-09-27, EXPANSION.md's last system: Hulda's ascension)
 - **The rules** (`cultivationModel.ts`, pure, saved as `rootwake-cultivation-v1`): `Cultivation { grown, tier }`, TIER_CAP 5. At the pool a **cultivate** button (`#cultivateBtn`, beside meditate and dive) opens a board session that gathers growth a gem a point toward TIER_POINTS[tier + 1] (40, 60, 80, 100); grown enough, the session ends and the tier rises for TIER_CLARITY (20) clarity, **if the land allows the next tier**, else the banner says what the land wants ("The karst will not raise her yet: one more village must thrive, a grove must be sanctified"). The button reads "rise" when a rise is ready.

@@ -146,6 +146,8 @@ world where its stock is seen. This is already the village's rule (`BERRY_CAP`, 
   quickening a warren (Hulda's existing miracle, on a new place) fills it with rabbits and, left
   alone, breeds wolves. The village's hunters taking the same rabbits is the balance the player
   reads: the equilibrium number gets a second term.
+- **A den draws wolves** (Noah, 2026-09-27: the lore is that a den attracts wolves in the wild): an emptied or starved-out den fills again, a wolf a day to its base once its peace is over, but a newcomer stays only after a night that fed the pack. So the warren, not the den, sets how many wolves the land holds.
+- **Later, lairs are sites, not owners** (Noah): complex terrain with many potential dens, and wolves, boars, bears and monsters laying claim to them dynamically. The den record already separates the place (layout, warren) from its occupants (pack, hunger), which is the seam this grows from.
 - **Corruption removes the hunger rule** (§6): dire wolves kill without eating and ignore the warren;
   a poisoned warren breeds rabbits that bite.
 
@@ -237,6 +239,7 @@ feel organized rather than managed, and does his walking make sending him a deci
 - **The balance.** The village panel's balance gains the warren; the keeper's rumor says when it runs
   thin; wolves answer a thin warren by coming to the pens (S1), so over-hunting is read in wolf
   tracks by the goats.
+- **The first village's warren** (Noah, 2026-09-27): its calm ground has no den in reach, so S3 gives it a warren of its own, fed on by its hunters only, once hunters exist.
 - **Reuse**: the gather-and-carry loop, the stores, the balance readout, S1's pool.
 - **Tests**: hunting drains the pool the wolves read; over-hunting brings the pack; the rack keeps
   meat; no hunter without a spear.
