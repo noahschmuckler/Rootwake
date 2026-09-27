@@ -81,6 +81,9 @@ export const STORES: Record<Store, StoreSpot> = {
 export const YIELD_OF: Partial<Record<SiteKind, Store>> = { thicket: 'berries', stream: 'water', copse: 'wood', field: 'grain', pen: 'milk' };
 /** The land's rates, per day unless said. Berries regrow steadily on the bushes up to BERRY_CAP; branches drop under the copse at dawn (up to BRANCH_CAP lying); the goats have MILK_PER_DAY at dawn and no more; each of CROP_STRIPS strips ripens over CROP_DAYS days and gives GRAIN_PER_STRIP, then is sown again; the stream is endless. Tuning. */
 export const BERRY_CAP = 35, BERRY_REGROW = 16, BRANCHES_PER_DAY = 6, BRANCH_CAP = 12, MILK_PER_DAY = 6, CROP_STRIPS = 5, CROP_DAYS = 4, GRAIN_PER_STRIP = 6;
+/** S1 (Noah: goats are quarry before villagers): the pen holds GOATS goats; the day's milk is MILK_PER_DAY at the full pen and less by the goats the wolves have taken; a quickening at the pen brings the goats back first, and a second fills the milk. Tuning. */
+export const GOATS = 3;
+export const milkFor = (goats: number): number => Math.round(MILK_PER_DAY * Math.min(GOATS, Math.max(0, goats)) / GOATS);
 /** Gathering is paced to the next meal: one unit every GATHER_TICKS at the place (a session between meals yields about a meal's share of one gatherer's kind); an armful is CARRY units, carried in view to the store; the job (gather or pray) is looked at again every JOB_EVERY. Tuning. */
 export const GATHER_TICKS = 40, JOB_EVERY = 20, CARRY: Record<Store, number> = { berries: 4, milk: 3, grain: 6, wood: 3, water: 2, dark: 0 };
 /** Eating: three meals a day at the fire (breakfast on the way out at dawn, noon, supper on the way home at dusk), each one unit of the fullest food and, at noon, one of water; a meal takes EAT_TICKS. Hunger climbs from 0 to 1 in HUNGER_DAYS of a day. Tuning. */
@@ -90,7 +93,7 @@ export const WOOD_PER_NIGHT = 5, FIRE_WOOD_TICK = 690;
 export type YieldSite = 'thicket' | 'copse' | 'field' | 'pen';
 export const YIELD_SITES: YieldSite[] = ['thicket', 'copse', 'field', 'pen'];
 /** The land, and (D2) which of its places the Dark Young have spoiled: the tick until which each is spoiled (0 for clean). A spoiled place looks corrupted, gives nothing, and grows nothing until it is clean again. */
-export interface Land { berries: number; branches: number; milk: number; crops: number[]; spoiled: Record<YieldSite, number> }
+export interface Land { berries: number; branches: number; milk: number; /** S1: the goats in the pen, GOATS at most. */ goats: number; crops: number[]; spoiled: Record<YieldSite, number> }
 export const SITE_OF: Partial<Record<Store, YieldSite>> = { berries: 'thicket', wood: 'copse', grain: 'field', milk: 'pen' };
 export const isSpoiled = (v: { land: Land; tick: number }, site: YieldSite): boolean => v.land.spoiled[site] > v.tick;
 export interface Carry { kind: Store; n: number }
@@ -165,7 +168,7 @@ export interface Spirit { id: number; keeps: SiteKind; x: number; z: number; hea
 // store and eat, and slink back to the wood before dawn. The player outpaces them by gathering more than they
 // can eat, or fights them. Their walking and eating run in real seconds (stepRaiders), like her fighting, and
 // nothing happens while the page is closed; the night's arrival is set by the tick (advance).
-export type RaiderState = 'coming' | 'eating' | 'hunting' | 'leaving' | 'dead' | 'devouring' | 'retreating' | 'melting';
+export type RaiderState = 'coming' | 'eating' | 'hunting' | 'leaving' | 'dead' | 'devouring' | 'retreating' | 'melting' | /** S1: a wolf eating at its warren. */ 'foraging';
 export type RaiderKind = 'dy' | 'wolf';
 export interface Raider { id: number; x: number; z: number; heading: number; hp: number; state: RaiderState; target: Store | null; ate: number; eatClock: number; aggro: number; rooted: number; biteClock: number; hurt: number; gone: number; site: YieldSite | null; devourClock: number; held: number; infant: InfantRef | null; kind: RaiderKind; den: string | null; prey: string | null }
 /** D3: an infant as it is carried off, kept at the lair, bred into a Dark Young, dropped, or carried home: who it is, its house, when it was born. */
@@ -208,8 +211,8 @@ function hedgeHold(v: Village, r: Raider, dt: number, pace: number): boolean {
   }
   return held;
 }
-/** G3: a den's pack as the village knows it: how many wolves are at it, and the day its peace ends after the pack is slain. */
-export interface DenState { alive: number; quietDay: number }
+/** G3: a den's pack as the village knows it: how many wolves are at it, and the day its peace ends after the pack is slain. S1 (SETTLEMENTS.md): its warren's rabbits, and the pack's hunger: the nights fed in a row (`fedDays`), the nights hungry in a row (`leanNights`), how many went out at dusk and how many of them ate. */
+export interface DenState { alive: number; quietDay: number; rabbits: number; fedDays: number; leanNights: number; out: number; fedNight: number; /** Whether the pack out tonight has walked at all (a night jumped over is not a hungry one). */ abroad: boolean }
 /** G1: a hut going up. Its house id (the next on the second ring), the wood and water brought to it so far, the work done on it in ticks, and whether she asked for it. */
 export interface HutSite { id: number; wood: number; water: number; work: number; asked: boolean }
 /** G1, the village grows. A house has BEDS beds; more people than beds and the village is crowded: at dawn it sets the stakes for a hut by itself. A hut takes HUT_WOOD wood (only what the woodpile holds beyond the night's fire) and HUT_WATER water from the stores, fetched an armful at a time by the freed gatherers, and HUT_WORK_TICKS of building at the stakes; she can ask one of the stone for HUT_PRAYER at any time, and her stack of wood or water goes straight into it. At dawn a grown newcomer in a house past its beds moves out to a house with a bed free. A quickening at the stone (QUICKEN_COST) fills a place at once: the bushes, the branches, the milk, or ripens every strip. Tuning. */
@@ -229,7 +232,7 @@ export const living = (v: Village, home: number): HobbitState[] => v.hobbits.fil
 export function freshVillage(seed = 1, folk = 0, origin: Vec2 = { x: 0, z: 0 }): Village {
   const founders = folkOf(folk).founders;
   return {
-    seed, tick: 0, folk, origin: { x: origin.x, z: origin.z }, stores: { berries: 3, milk: 2, grain: 6, wood: 8, water: 5, dark: 0 }, land: { berries: BERRY_CAP, branches: 6, milk: MILK_PER_DAY, crops: Array.from({ length: CROP_STRIPS }, (_, i) => (i + 0.5) / CROP_STRIPS), spoiled: { thicket: 0, copse: 0, field: 0, pen: 0 } }, fireWood: 0, take: freshTake(), lastTake: freshTake(), prayer: 0, prayed: 0, spirits: [], stack: null, raiders: [], hero: { vigor: VIGOR_MAX, sap: SAP_MAX, faint: 0, calm: 0, xp: 0, level: 1, choices: 0, perks: { vigor: 0, strike: 0, sap: 0, regen: 0 }, holding: -1 }, raidDay: -1, slain: 0, eaten: 0, lair: { hp: LAIR_HP, alive: true, slainDay: -99, spawnClock: 0, sweepClock: 0, hurt: 0, woke: false }, dead: [], wellFedDays: 0, dayMissed: false, mourningUntil: 0, events: [], darkMealsToday: 0, melted: 0, blight: 0, snatchers: [], snatchDay: -1, brood: [], bred: [], dropped: [], carried: null, taken: 0, returned: 0, huts: 0, site: null, fedStreak: 0, raidEaten: 0, lastRaidEaten: 0, voiced: [], told: 'steady', dens: {}, wolfDay: -1, hedges: [], bitten: 0, lastBitten: 0, incidents: [],
+    seed, tick: 0, folk, origin: { x: origin.x, z: origin.z }, stores: { berries: 3, milk: 2, grain: 6, wood: 8, water: 5, dark: 0 }, land: { berries: BERRY_CAP, branches: 6, milk: MILK_PER_DAY, goats: GOATS, crops: Array.from({ length: CROP_STRIPS }, (_, i) => (i + 0.5) / CROP_STRIPS), spoiled: { thicket: 0, copse: 0, field: 0, pen: 0 } }, fireWood: 0, take: freshTake(), lastTake: freshTake(), prayer: 0, prayed: 0, spirits: [], stack: null, raiders: [], hero: { vigor: VIGOR_MAX, sap: SAP_MAX, faint: 0, calm: 0, xp: 0, level: 1, choices: 0, perks: { vigor: 0, strike: 0, sap: 0, regen: 0 }, holding: -1 }, raidDay: -1, slain: 0, eaten: 0, lair: { hp: LAIR_HP, alive: true, slainDay: -99, spawnClock: 0, sweepClock: 0, hurt: 0, woke: false }, dead: [], wellFedDays: 0, dayMissed: false, mourningUntil: 0, events: [], darkMealsToday: 0, melted: 0, blight: 0, snatchers: [], snatchDay: -1, brood: [], bred: [], dropped: [], carried: null, taken: 0, returned: 0, huts: 0, site: null, fedStreak: 0, raidEaten: 0, lastRaidEaten: 0, voiced: [], told: 'steady', dens: {}, wolfDay: -1, hedges: [], bitten: 0, lastBitten: 0, incidents: [],
     hobbits: founders.map(h => { const d = houseOf(h).door; return { id: h.id, x: d.x, z: d.z, heading: houseOf(h).facing, activity: 'sleeping', want: 'home', job: 'gather', path: [], speed: 0, inside: true, bubble: '', bubbleUntil: 0, wanderAt: 0, faceAt: 0, hunger: 0.3, carry: null, errand: null, gatherAt: 0, eatUntil: 0, jobAt: 0, meals: 0, ate: -1, home: h.home, stage: 'grown', born: -(INFANT_DAYS + CHILD_DAYS) * DAY_TICKS, missed: 0 }; }),
   };
 }
@@ -328,10 +331,10 @@ export function purify(v: Village, target: PurifyTarget): boolean {
   if (target === 'dark') { v.stores.dark = 0; event(v, 'The leavings are banished: the heap is gone from the green'); } else { v.land.spoiled[target] = 0; event(v, `${SITES[target].name} is purified: the land there is clean again`); }
   return true;
 }
-export const quickenable = (v: Village, site: YieldSite): boolean => !isSpoiled(v, site) && (site === 'thicket' ? v.land.berries < BERRY_CAP - 0.5 : site === 'copse' ? v.land.branches < BRANCH_CAP : site === 'pen' ? v.land.milk < MILK_PER_DAY : v.land.crops.some(c => c < 1));
+export const quickenable = (v: Village, site: YieldSite): boolean => !isSpoiled(v, site) && (site === 'thicket' ? v.land.berries < BERRY_CAP - 0.5 : site === 'copse' ? v.land.branches < BRANCH_CAP : site === 'pen' ? v.land.goats < GOATS || v.land.milk < MILK_PER_DAY : v.land.crops.some(c => c < 1));
 export function quicken(v: Village, site: YieldSite): boolean {
   if (v.prayer < QUICKEN_COST || !quickenable(v, site)) return false; v.prayer -= QUICKEN_COST;
-  if (site === 'thicket') { v.land.berries = BERRY_CAP; event(v, 'The thicket is quickened: the bushes hang full'); } else if (site === 'copse') { v.land.branches = BRANCH_CAP; event(v, 'The copse is quickened: branches lie thick under it'); } else if (site === 'pen') { v.land.milk = MILK_PER_DAY; event(v, 'The pen is quickened: the goats give again'); } else { v.land.crops = v.land.crops.map(() => 1); event(v, 'The field is quickened: every strip stands ripe'); }
+  if (site === 'thicket') { v.land.berries = BERRY_CAP; event(v, 'The thicket is quickened: the bushes hang full'); } else if (site === 'copse') { v.land.branches = BRANCH_CAP; event(v, 'The copse is quickened: branches lie thick under it'); } else if (site === 'pen') { if (v.land.goats < GOATS) { v.land.goats = GOATS; event(v, 'The pen is quickened: the goats are many again'); } else { v.land.milk = MILK_PER_DAY; event(v, 'The pen is quickened: the goats give again'); } } else { v.land.crops = v.land.crops.map(() => 1); event(v, 'The field is quickened: every strip stands ripe'); }
   return true;
 }
 /** The house a hut going up will be, and where the work stands (its door). */
@@ -405,7 +408,7 @@ export function rumors(v: Village): Rumor[] {
   for (const n of st.needs) elder(n === 'meals missed' ? 'we went hungry' : n === 'wood for the fire' ? 'no wood for the fire tonight' : n === 'beds' ? `we are ${v.hobbits.length} to ${housesOf(v).length * BEDS} beds` : n === 'an infant lying out' ? `${v.dropped.length ? infantName(v.dropped[0].infant) : 'a child'} lies out in the dark` : n === 'the Dark Young ate a meal' ? 'the Dark Young came in the night' : n.endsWith('at the lair') ? `${infantName((v.brood[0]?.infant ?? v.bred[0])!)} is with the mother of goats` : n === 'wolves at dusk' ? 'the wolves come at dusk' : n.endsWith('bitten by wolves') ? `${n.split(' ')[0]} of us bitten last night` : n.endsWith('spoiled') ? `${n.replace(' spoiled', '')} has gone bad` : n.endsWith('for the hut') ? `the new hut wants ${n.replace(' for the hut', '')}` : n);
   if (lairAt && isHome(v)) { const b = fromGreen(v, lairAt).bearing; out.push({ text: `something walks in the wood to the ${bearingWords(b)}`, bearing: b, about: 'lair', who: 'keeper' }); if (v.blight > 0) out.push({ text: `the trees to the ${bearingWords(b)} have gone black`, bearing: b, about: 'blight', who: 'keeper' }); }
   { const near = densInReach(v), nearest = densAt.slice().sort((a, b) => fromGreen(v, a).distance - fromGreen(v, b).distance)[0];
-    for (const d of near) { const b = fromGreen(v, d).bearing; out.push({ text: `wolves howl to the ${bearingWords(b)}`, bearing: b, about: d.id, who: 'keeper' }); }
+    for (const d of near) { const b = fromGreen(v, d).bearing; out.push({ text: `wolves howl to the ${bearingWords(b)}`, bearing: b, about: d.id, who: 'keeper' }); const w = warrenOf(d.id); if (w) { const wb = fromGreen(v, w).bearing; out.push({ text: `rabbits run to the ${bearingWords(wb)}`, bearing: wb, about: w.id, who: 'keeper' }); } }
     // No den in reach, and the keeper still names the nearest: the first village is calm ground, and the wolves are something to go and find.
     if (!near.length && nearest) { const b = fromGreen(v, nearest).bearing; out.push({ text: `wolves howl far to the ${bearingWords(b)}`, bearing: b, about: nearest.id, who: 'keeper' }); } }
   // G3b: the keeper knows of the old stones nearest the green (within RUIN_TELL_M): a ruin to find by walking, and sanctify.
@@ -541,7 +544,16 @@ export let villageSitesAt: VillageSitePlace[] = [];
 export const setVillageSites = (list: VillageSitePlace[]): void => { villageSitesAt = list; };
 /** A place's bearing and distance from this village's green. */
 const fromGreen = (v: { origin: Vec2 }, p: Vec2): { bearing: number; distance: number } => ({ bearing: bearingFromGreen(p.x - v.origin.x, p.z - v.origin.z), distance: Math.hypot(p.x - v.origin.x, p.z - v.origin.z) });
-export const denState = (v: Village, d: DenPlace): DenState => (v.dens[d.id] ??= { alive: d.pack, quietDay: -1 });
+export const denState = (v: Village, d: DenPlace): DenState => (v.dens[d.id] ??= { alive: d.pack, quietDay: -1, rabbits: WARREN_CAP, fedDays: 0, leanNights: 0, out: 0, fedNight: 0, abroad: false });
+/** S1 (SETTLEMENTS.md §5, Noah): every creature eats from a pool. A den's warren holds WARREN_CAP rabbits and regrows WARREN_REGROW a day; at dusk the pack goes there first and each wolf eats WOLF_MEAL rabbits (WOLF_EAT_S a rabbit, within WARREN_EAT_R of it) and goes home fed; a warren too thin sends the hungry on to the village, where a goat is taken first (GOAT_KILL_S at the pen), and only with no goat is anyone bitten. A pack fed every night for PACK_GROW_DAYS grows by one, to PACK_OVER over its base; hungry PACK_LEAN_NIGHTS running it loses one. Tuning. */
+export const WARREN_CAP = 12, WARREN_REGROW = 4, WARREN_EAT_R = 3, WOLF_MEAL = 1, WOLF_EAT_S = 5, GOAT_KILL_S = 6, PACK_GROW_DAYS = 3, PACK_OVER = 2, PACK_LEAN_NIGHTS = 2;
+export interface WarrenPlace { id: string; den: string; x: number; z: number }
+export let warrensAt: WarrenPlace[] = [];
+export const setWarrens = (list: WarrenPlace[]): void => { warrensAt = list; };
+export const warrenOf = (den: string): WarrenPlace | null => warrensAt.find(w => w.den === den) ?? null;
+export const rabbitsAt = (v: Village, d: DenPlace): number => denState(v, d).rabbits;
+/** Her quickening of a warren (Noah: clarity, no prayer; the channelling is the entry's): the pool fills at once. Refused full. */
+export function quickenWarren(v: Village, denId: string): boolean { const d = densAt.find(x => x.id === denId); if (!d) return false; const st = denState(v, d); if (st.rabbits >= WARREN_CAP) return false; st.rabbits = WARREN_CAP; event(v, 'The warren is quickened: rabbits run everywhere'); return true; }
 /** The pack is out of its den from WOLF_TICK to WOLF_END while its peace is over; the rest of the day it lies asleep in the den's deepest chamber (Noah: the pack asleep by day). */
 export const packOut = (v: Village, d: DenPlace): boolean => { const t = v.tick % DAY_TICKS; return t >= WOLF_TICK && t < WOLF_END && denAwake(v, d); };
 /** How many wolves lie asleep in the den now: its living pack, unless it is out. */
@@ -559,21 +571,45 @@ function spawnWolves(v: Village, rand: () => number): void {
   // Noah (2026-09-27): the pack starts at its den (not at the wood's edge) and walks in, and walks home again to be gone there: a wolf is met on the road.
   for (const d of densInReach(v)) { if (!denAwake(v, d)) continue; const st = denState(v, d), dx = d.x - v.origin.x, dz = d.z - v.origin.z, a0 = Math.atan2(dz, dx) + Math.PI / 2;
     for (let i = 0; i < st.alive; i++) { const k = (i - (st.alive - 1) / 2) * 1.6 + (rand() - 0.5) * 0.8, id = v.raiders.reduce((m, r) => Math.max(m, r.id), -1) + 1, x = dx + Math.cos(a0) * k, z = dz + Math.sin(a0) * k; v.raiders.push({ id, x, z, heading: Math.atan2(-z, -x), hp: WOLF_HP, state: 'coming', target: null, ate: 0, eatClock: 0, aggro: 0, rooted: 0, biteClock: 0, hurt: 0, gone: 0, site: null, devourClock: 0, held: 0, infant: null, kind: 'wolf', den: d.id, prey: null }); }
+    st.out = st.alive; st.fedNight = 0; st.abroad = false;
     event(v, `Wolves come down from the ${bearingWords(fromGreen(v, d).bearing)} at dusk`, true); { const first = v.raiders[v.raiders.length - 1]; incident(v, `wolves from the ${bearingWords(fromGreen(v, d).bearing)}`, first, undefined, first.id); } }
 }
 export const wolves = (v: Village): Raider[] => v.raiders.filter(r => r.kind === 'wolf' && r.state !== 'dead');
 /** A wolf's hunting by real seconds: the nearest villager out of doors, else the green to prowl; a bite when it reaches one. */
 function stepWolf(v: Village, r: Raider, dt: number, t: number): void {
-  if (t >= WOLF_END || t < WOLF_TICK) r.state = 'leaving';
+  if (t >= WOLF_END || t < WOLF_TICK || r.ate >= WOLF_MEAL) r.state = 'leaving';
   if (r.state === 'leaving') { const d = densAt.find(x => x.id === r.den), home = d ? { x: d.x - v.origin.x, z: d.z - v.origin.z } : (() => { const a = Math.atan2(r.z, r.x); return { x: Math.cos(a) * (RAID_FROM + 2), z: Math.sin(a) * (RAID_FROM + 2) }; })(); if (towards(r, home, WOLF_PACE * 1.3 * dt) < 1.5) r.gone = DY_CORPSE_S; return; }
   r.biteClock = Math.max(0, r.biteClock - dt);
+  const den = densAt.find(x => x.id === r.den), st = den ? denState(v, den) : null, warren = den ? warrenOf(den.id) : null; if (st) st.abroad = true;
+  // S1: the warren first: while it holds rabbits the pack eats there, a rabbit a wolf, and goes home fed; only a warren too thin sends it on to the village.
+  if (st && warren && st.rabbits >= 1 && r.state !== 'hunting') {
+    const w = { x: warren.x - v.origin.x, z: warren.z - v.origin.z };
+    if (Math.hypot(w.x - r.x, w.z - r.z) > WARREN_EAT_R) { r.state = 'coming'; towards(r, w, WOLF_PACE * dt); return; }
+    r.state = 'foraging'; r.heading += dt * 0.4; r.eatClock += dt; if (r.eatClock >= WOLF_EAT_S) { r.eatClock = 0; st.rabbits -= 1; r.ate += 1; st.fedNight += 1; } return;
+  }
+  // The village: a goat first (Noah: goats are quarry before villagers), then whoever is still out of doors.
+  if (v.land.goats >= 1) {
+    if (towards(r, SITES.pen, WOLF_PACE * dt) > SITES.pen.radius * 0.6) { r.state = 'coming'; return; }
+    r.state = 'hunting'; r.eatClock += dt; if (r.eatClock >= GOAT_KILL_S) { r.eatClock = 0; v.land.goats -= 1; v.land.milk = Math.min(v.land.milk, milkFor(v.land.goats)); r.ate += 1; if (st) st.fedNight += 1; event(v, `A goat is taken by the wolves: ${v.land.goats} left in the pen`, true); incident(v, 'a goat taken by wolves', SITES.pen, undefined, r.id); } return;
+  }
   let prey = r.prey ? v.hobbits.find(s => s.id === r.prey && !s.inside && s.stage !== 'infant') ?? null : null;
   if (!prey) { let bd = Infinity; for (const s of v.hobbits) { if (s.inside || s.stage === 'infant') continue; const d = Math.hypot(s.x - r.x, s.z - r.z); if (d < bd) { bd = d; prey = s; } } r.prey = prey?.id ?? null; }
   if (!prey) { r.state = 'eating'; if (towards(r, { x: GREEN.x + Math.cos(r.id) * 2.5, z: GREEN.z + Math.sin(r.id) * 2.5 }, WOLF_PACE * dt) < 0.3) r.heading += dt * 0.6; return; }
   r.state = 'hunting'; const d = Math.hypot(prey.x - r.x, prey.z - r.z);
   if (d > WOLF_REACH) { towards(r, prey, WOLF_PACE * dt); return; }
   r.heading = Math.atan2(prey.z - r.z, prey.x - r.x);
-  if (r.biteClock <= 0) { r.biteClock = WOLF_BITE_S; prey.missed = Math.min(DEATH_MEALS - 1, prey.missed + WOLF_BITE_MEALS); prey.bubble = 'bitten!'; prey.bubbleUntil = v.tick + BUBBLE_TICKS * 2; v.bitten += 1; event(v, `${hobbitById(prey.id).name} is bitten by a wolf`, v.bitten === 1); incident(v, `${hobbitById(prey.id).name} bitten by a wolf`, prey, prey.id, r.id); r.prey = null; }
+  if (r.biteClock <= 0) { r.biteClock = WOLF_BITE_S; prey.missed = Math.min(DEATH_MEALS - 1, prey.missed + WOLF_BITE_MEALS); prey.bubble = 'bitten!'; prey.bubbleUntil = v.tick + BUBBLE_TICKS * 2; v.bitten += 1; r.ate += 1; if (st) st.fedNight += 1; event(v, `${hobbitById(prey.id).name} is bitten by a wolf`, v.bitten === 1); incident(v, `${hobbitById(prey.id).name} bitten by a wolf`, prey, prey.id, r.id); r.prey = null; }
+}
+/** S1: the packs at dawn: the warren regrows; a pack fed every night for PACK_GROW_DAYS grows by one, to PACK_OVER over its base; a pack hungry PACK_LEAN_NIGHTS running loses one (to none, and the den lies quiet as if slain); a slain pack comes back a wolf a day once its peace is over. */
+function stepPacks(v: Village): void {
+  for (const d of densAt) { const st = v.dens[d.id]; if (!st) continue;
+    st.rabbits = Math.min(WARREN_CAP, st.rabbits + WARREN_REGROW);
+    if (st.out > 0 && st.abroad) { if (st.fedNight >= st.out) { st.fedDays += 1; st.leanNights = 0; } else { st.fedDays = 0; st.leanNights += 1; } } st.out = 0; st.fedNight = 0; st.abroad = false;
+    const where = bearingWords(fromGreen(v, d).bearing);
+    if (st.leanNights >= PACK_LEAN_NIGHTS && st.alive > 0) { st.leanNights = 0; st.alive -= 1; if (st.alive === 0) { st.quietDay = dayOf(v.tick) + DEN_PEACE_DAYS; event(v, `The pack to the ${where} has starved: the den lies quiet`, true); } else event(v, `A wolf of the pack to the ${where} has starved`); }
+    else if (st.fedDays >= PACK_GROW_DAYS && st.alive < d.pack + PACK_OVER) { st.fedDays = 0; st.alive += 1; event(v, `The pack to the ${where} is well fed: it has grown to ${st.alive}`, true); }
+    else if (st.alive < d.pack && dayOf(v.tick) >= st.quietDay) st.alive++;
+  }
 }
 /** The fullest store but the trough, by share of cap, with a unit in it: what a Dark Young goes for. */
 export function fullestStore(v: Village): Store | null { let best: Store | null = null; for (const k of STORE_LIST) if (k !== 'water' && k !== 'dark' && v.stores[k] >= 1 && (best === null || v.stores[k] / STORES[k].cap > v.stores[best] / STORES[best].cap)) best = k; return best; }
@@ -738,7 +774,7 @@ export function advance(v: Village, ticks: number): void {
   for (let n = 0; n < ticks; n++) {
     const rand = mulberry32((v.seed * 7919 + v.tick * 131) >>> 0), t = v.tick % DAY_TICKS, phase = phaseAt(v.tick);
     // The land by the day: at dawn the branches drop and the goats have their milk; the bushes and the strips grow every minute; the fire burns down through the night.
-    if (t === 0) { if (!isSpoiled(v, 'copse')) v.land.branches = Math.min(BRANCH_CAP, v.land.branches + BRANCHES_PER_DAY); if (!isSpoiled(v, 'pen')) v.land.milk = MILK_PER_DAY; v.lastTake = v.take; v.take = freshTake(); v.fedStreak = v.dayMissed ? 0 : v.fedStreak + 1; v.lastRaidEaten = v.raidEaten; v.raidEaten = 0; v.lastBitten = v.bitten; v.bitten = 0; for (const d of densAt) { const st = v.dens[d.id]; if (st && st.alive < d.pack && dayOf(v.tick) >= st.quietDay) st.alive++; } daybreak(v); newDay(v); stepBlight(v); }
+    if (t === 0) { if (!isSpoiled(v, 'copse')) v.land.branches = Math.min(BRANCH_CAP, v.land.branches + BRANCHES_PER_DAY); if (!isSpoiled(v, 'pen')) v.land.milk = milkFor(v.land.goats); v.lastTake = v.take; v.take = freshTake(); v.fedStreak = v.dayMissed ? 0 : v.fedStreak + 1; v.lastRaidEaten = v.raidEaten; v.raidEaten = 0; v.lastBitten = v.bitten; v.bitten = 0; stepPacks(v); daybreak(v); newDay(v); stepBlight(v); }
     for (const k of YIELD_SITES) if (v.land.spoiled[k] > 0 && v.land.spoiled[k] <= v.tick) { v.land.spoiled[k] = 0; event(v, `${SITES[k].name} is clean again`); }
     if (!isSpoiled(v, 'thicket')) v.land.berries = Math.min(BERRY_CAP, v.land.berries + BERRY_REGROW / DAY_TICKS);
     if (!isSpoiled(v, 'field')) for (let i = 0; i < v.land.crops.length; i++) v.land.crops[i] = Math.min(1, v.land.crops[i] + 1 / (CROP_DAYS * DAY_TICKS));
@@ -944,7 +980,7 @@ export function parseVillage(raw: string | null): Village {
     const v = freshVillage(Number.isFinite(p.seed) ? p.seed : 1, folk, origin), ALL = folkOf(folk).all, NEW = folkOf(folk).newcomers; v.tick = Number.isInteger(p.tick) && p.tick >= 0 ? p.tick : 0;
     const num = (x: unknown, lo: number, hi: number, d: number): number => (typeof x === 'number' && Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : d);
     if (p.stores && typeof p.stores === 'object') for (const k of STORE_LIST) v.stores[k] = num(p.stores[k], 0, STORES[k].cap + OVERFILL, v.stores[k]);
-    if (p.land && typeof p.land === 'object') { v.land.berries = num(p.land.berries, 0, BERRY_CAP, v.land.berries); v.land.branches = Math.floor(num(p.land.branches, 0, BRANCH_CAP, v.land.branches)); v.land.milk = Math.floor(num(p.land.milk, 0, MILK_PER_DAY, v.land.milk)); if (Array.isArray(p.land.crops) && p.land.crops.length === CROP_STRIPS) v.land.crops = p.land.crops.map((c: unknown, i: number) => num(c, 0, 1, v.land.crops[i])); if (p.land.spoiled && typeof p.land.spoiled === 'object') for (const k of YIELD_SITES) v.land.spoiled[k] = Math.floor(num(p.land.spoiled[k], 0, 1e9, 0)); }
+    if (p.land && typeof p.land === 'object') { v.land.berries = num(p.land.berries, 0, BERRY_CAP, v.land.berries); v.land.branches = Math.floor(num(p.land.branches, 0, BRANCH_CAP, v.land.branches)); v.land.milk = Math.floor(num(p.land.milk, 0, MILK_PER_DAY, v.land.milk)); v.land.goats = Math.floor(num(p.land.goats, 0, GOATS, GOATS)); if (Array.isArray(p.land.crops) && p.land.crops.length === CROP_STRIPS) v.land.crops = p.land.crops.map((c: unknown, i: number) => num(c, 0, 1, v.land.crops[i])); if (p.land.spoiled && typeof p.land.spoiled === 'object') for (const k of YIELD_SITES) v.land.spoiled[k] = Math.floor(num(p.land.spoiled[k], 0, 1e9, 0)); }
     v.fireWood = num(p.fireWood, 0, WOOD_PER_NIGHT * 2, 0); v.prayer = num(p.prayer, 0, PRAYER_CAP, 0); v.prayed = num(p.prayed, 0, 1e6, 0);
     for (const which of ['take', 'lastTake'] as const) if (p[which] && typeof p[which] === 'object') for (const k of STORE_LIST) v[which][k] = num(p[which][k], 0, 1e4, 0);
     const carryOf = (c: unknown): Carry | null => { const k = c as Carry; return k && STORE_LIST.includes(k.kind) && Number.isFinite(k.n) && k.n > 0 ? { kind: k.kind, n: Math.min(STACK_CAP, Math.floor(k.n)) } : null; };
@@ -952,7 +988,7 @@ export function parseVillage(raw: string | null): Village {
     if (p.hero && typeof p.hero === 'object') { const pk = p.hero.perks && typeof p.hero.perks === 'object' ? p.hero.perks : {}; v.hero.perks = { vigor: Math.floor(num(pk.vigor, 0, LEVEL_CAP, 0)), strike: Math.floor(num(pk.strike, 0, LEVEL_CAP, 0)), sap: Math.floor(num(pk.sap, 0, LEVEL_CAP, 0)), regen: Math.floor(num(pk.regen, 0, LEVEL_CAP, 0)) }; v.hero.xp = num(p.hero.xp, 0, 1e6, 0); v.hero.level = Math.min(LEVEL_CAP, Math.max(1, Math.floor(num(p.hero.level, 1, LEVEL_CAP, 1)))); v.hero.choices = Math.floor(num(p.hero.choices, 0, LEVEL_CAP, 0)); v.hero.vigor = num(p.hero.vigor, 0, vigorMax(v.hero), vigorMax(v.hero)); v.hero.sap = num(p.hero.sap, 0, sapMax(v.hero), sapMax(v.hero)); v.hero.faint = num(p.hero.faint, 0, FAINT_S, 0); v.hero.holding = Math.floor(num(p.hero.holding, -1, 1e6, -1)); v.hero.calm = num(p.hero.calm, 0, 1e6, 0); }
     if (p.lair && typeof p.lair === 'object') { v.lair.hp = num(p.lair.hp, 0, LAIR_HP, LAIR_HP); v.lair.alive = p.lair.alive !== false; v.lair.slainDay = num(p.lair.slainDay, -99, 1e6, -99); }
     // G3: the dens' packs, the wolves' day, the bitten.
-    if (p.dens && typeof p.dens === 'object') for (const k of Object.keys(p.dens)) if (/^den--?\d+,-?\d+$/.test(k) && p.dens[k] && typeof p.dens[k] === 'object') v.dens[k] = { alive: Math.floor(num(p.dens[k].alive, 0, 99, 0)), quietDay: Math.floor(num(p.dens[k].quietDay, -1, 1e6, -1)) };
+    if (p.dens && typeof p.dens === 'object') for (const k of Object.keys(p.dens)) if (/^den--?\d+,-?\d+$/.test(k) && p.dens[k] && typeof p.dens[k] === 'object') v.dens[k] = { alive: Math.floor(num(p.dens[k].alive, 0, 99, 0)), quietDay: Math.floor(num(p.dens[k].quietDay, -1, 1e6, -1)), rabbits: Math.floor(num(p.dens[k].rabbits, 0, WARREN_CAP, WARREN_CAP)), fedDays: Math.floor(num(p.dens[k].fedDays, 0, 99, 0)), leanNights: Math.floor(num(p.dens[k].leanNights, 0, 99, 0)), out: Math.floor(num(p.dens[k].out, 0, 99, 0)), fedNight: Math.floor(num(p.dens[k].fedNight, 0, 99, 0)), abroad: p.dens[k].abroad === true };
     v.wolfDay = Math.floor(num(p.wolfDay, -1, 1e6, -1)); v.bitten = Math.floor(num(p.bitten, 0, 1e4, 0)); v.lastBitten = Math.floor(num(p.lastBitten, 0, 1e4, 0));
     // G2: the streak, the night's eating, what was said, the state last told.
     v.fedStreak = Math.floor(num(p.fedStreak, 0, 1e6, 0)); v.raidEaten = Math.floor(num(p.raidEaten, 0, 1e6, 0)); v.lastRaidEaten = Math.floor(num(p.lastRaidEaten, 0, 1e6, 0)); v.told = ['thriving', 'steady', 'pressured', 'besieged', 'lost'].includes(p.told) ? p.told : 'steady';
@@ -968,7 +1004,7 @@ export function parseVillage(raw: string | null): Village {
     if (Array.isArray(p.dropped)) for (const d of p.dropped.slice(0, 40)) { const r = refOf(d?.infant); if (r) v.dropped.push({ infant: r, x: num(d.x, -1e4, 1e4, 0), z: num(d.z, -1e4, 1e4, 0) }); }
     if (Array.isArray(p.snatchers)) for (const n of p.snatchers.slice(0, 8)) { if (!n || typeof n !== 'object') continue; v.snatchers.push({ id: num(n.id, 0, 1e6, v.snatchers.length), x: num(n.x, -1e4, 1e4, 0), z: num(n.z, -1e4, 1e4, 0), heading: num(n.heading, -10, 10, 0), state: ['coming', 'taking', 'fleeing'].includes(n.state) ? n.state : 'coming', targetId: typeof n.targetId === 'string' ? n.targetId : null, clock: num(n.clock, 0, 1e3, 0), infant: refOf(n.infant), told: n.told === true }); }
     v.raidDay = num(p.raidDay, -1, 1e6, -1); v.slain = num(p.slain, 0, 1e6, 0); v.eaten = num(p.eaten, 0, 1e6, 0); v.melted = num(p.melted, 0, 1e6, 0); v.blight = num(p.blight, 0, BLIGHT_MAX, 0); v.darkMealsToday = Math.floor(num(p.darkMealsToday, 0, 1e4, 0));
-    if (Array.isArray(p.raiders)) for (const q of p.raiders.slice(0, 12)) { if (!q || typeof q !== 'object') continue; const st: RaiderState = ['coming', 'eating', 'hunting', 'leaving', 'dead', 'devouring', 'retreating', 'melting'].includes(q.state) ? q.state : 'coming'; v.raiders.push({ id: num(q.id, 0, 1e6, v.raiders.length), x: num(q.x, -DEN_REACH_M - 60, DEN_REACH_M + 60, 0), z: num(q.z, -DEN_REACH_M - 60, DEN_REACH_M + 60, 0), heading: num(q.heading, -10, 10, 0), hp: num(q.hp, 0, DY_HP, q.kind === 'wolf' ? WOLF_HP : DY_HP), state: st, target: STORE_LIST.includes(q.target) ? q.target : null, ate: num(q.ate, 0, 99, 0), eatClock: 0, aggro: num(q.aggro, 0, DY_AGGRO_S, 0), rooted: num(q.rooted, 0, ROOT_S, 0), biteClock: 0, hurt: 0, gone: num(q.gone, 0, DY_CORPSE_S, 0), site: YIELD_SITES.includes(q.site) ? q.site : null, devourClock: 0, held: num(q.held, 0, HOLD_MELT_S, 0), infant: refOf(q.infant), kind: q.kind === 'wolf' ? 'wolf' : 'dy', den: typeof q.den === 'string' ? q.den : null, prey: typeof q.prey === 'string' ? q.prey : null }); }
+    if (Array.isArray(p.raiders)) for (const q of p.raiders.slice(0, 12)) { if (!q || typeof q !== 'object') continue; const st: RaiderState = ['coming', 'eating', 'hunting', 'leaving', 'dead', 'devouring', 'retreating', 'melting', 'foraging'].includes(q.state) ? q.state : 'coming'; v.raiders.push({ id: num(q.id, 0, 1e6, v.raiders.length), x: num(q.x, -DEN_REACH_M - 60, DEN_REACH_M + 60, 0), z: num(q.z, -DEN_REACH_M - 60, DEN_REACH_M + 60, 0), heading: num(q.heading, -10, 10, 0), hp: num(q.hp, 0, DY_HP, q.kind === 'wolf' ? WOLF_HP : DY_HP), state: st, target: STORE_LIST.includes(q.target) ? q.target : null, ate: num(q.ate, 0, 99, 0), eatClock: 0, aggro: num(q.aggro, 0, DY_AGGRO_S, 0), rooted: num(q.rooted, 0, ROOT_S, 0), biteClock: 0, hurt: 0, gone: num(q.gone, 0, DY_CORPSE_S, 0), site: YIELD_SITES.includes(q.site) ? q.site : null, devourClock: 0, held: num(q.held, 0, HOLD_MELT_S, 0), infant: refOf(q.infant), kind: q.kind === 'wolf' ? 'wolf' : 'dy', den: typeof q.den === 'string' ? q.den : null, prey: typeof q.prey === 'string' ? q.prey : null }); }
     const pathOf = (x: unknown): Vec2[] => (Array.isArray(x) ? x.filter((q: unknown) => q && Number.isFinite((q as Vec2).x) && Number.isFinite((q as Vec2).z)).map((q: Vec2) => ({ x: q.x, z: q.z })).slice(0, 4) : []);
     if (Array.isArray(p.spirits)) for (const q of p.spirits.slice(0, 12)) { if (!q || !(q.keeps in YIELD_OF)) continue; const site = SITES[q.keeps as SiteKind]; v.spirits.push({ id: v.spirits.length, keeps: q.keeps, x: num(q.x, -200, 200, site.x), z: num(q.z, -200, 200, site.z), heading: num(q.heading, -10, 10, 0), path: pathOf(q.path), speed: 0, carry: carryOf(q.carry), errand: q.errand === 'deliver' && carryOf(q.carry) ? 'deliver' : null, gatherAt: num(q.gatherAt, 0, 1e9, v.tick), wanderAt: num(q.wanderAt, 0, 1e9, v.tick) }); }
     // The living, by id: founders and newcomers alike (an old save's eight are founders in their houses, grown).

@@ -173,6 +173,8 @@ gives S2 and S3 something to organize.
 
 ### S1. The warren and the wolves' hunger
 
+*(Built 2026-09-27; see VILLAGE_HANDOFF.md "S1". Decided in the building: the pool lives in the den's record, as the pack does; a wolf that has eaten anything, rabbit, goat or bite, goes home, so a bite is once a wolf a night; a night jumped over is not a hungry one; the ruins keep clear of the warrens; the first village's calm ground has no warren yet.)*
+
 *Question: does a pack that eats from a pool the village can see, and only raids when it is thin, make
 the wolves read as an ecology rather than a timer?*
 
@@ -267,13 +269,15 @@ lorehouse's texts; the worked quest end to end: his finding → the search party
 generator with a ruin's skin) → the monsters and the reseal → the delve with warriors and heroes → the
 scrolls → the escort home by a party → the advanced granary buildable everywhere.
 
-## 8. Open calls (Noah's)
+## 8. Open calls, answered (Noah, 2026-09-27)
 
-- The steward's sleeping place: the moot within the villages' walk (recommended for S2) or a karst of
-  his own.
-- Quickening a warren: prayer (whose?) or clarity.
-- Whether heroes can be hurt on the road (recommend yes; never killed).
-- Meat against milk and grain: how much a meal of meat is worth, and whether the goats become quarry
-  for wolves before the villagers.
-- Whether guards fight or only raise the alarm and run.
-- What the lorehouse holds before the sage exists (the ruins' lore lines, unread).
+- **The steward's sleeping place**: a moot within the village's walk for now; his own karst later.
+- **Quickening a warren**: clarity, no prayer.
+- **Heroes on the road**: can be hurt, never killed.
+- **Meat**: a high-satiety meal. **Goats are quarry before villagers**: a pack that reaches the village
+  takes a goat before it bites anyone. Quicken at the pen replenishes the goats first; a second quicken
+  fills the milk.
+- **Guards fight**, with the wolf bite mechanics as they are, and may die. That is the incentive to equip
+  and train them, and the foundation of the mobile fighting groups to come.
+- **The lorehouse** cannot exist before the sage is active; it has no purpose without him. Research takes
+  time; lorehouses with dedicated villager librarians or loremasters speed the sage's research.

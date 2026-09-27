@@ -7,7 +7,7 @@
 // fire by the wood laid on it (updateLand).
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { HEDGE_LEN, type Hedge, HOUSES, HOUSE_CAP, housePlace, siteHouse, SITE_RING_R, HUT_WOOD, HUT_WATER, HUT_WORK_TICKS, SITES, STORES, STORE_LIST, STATIONS, STACK_CAP, OVERFILL, HOUSE_RADIUS, MEADOW_RADIUS, GREEN, TREES, TREE_ROOTS, STREAM_Z, BERRY_CAP, BRANCH_CAP, MILK_PER_DAY, CROP_STRIPS, WOOD_PER_NIGHT, crownHeight, trunkRadius, hobbitById, isSpoiled, YIELD_SITES, type YieldSite, type HobbitState, type Tree, type Village, type Store, type House } from './villageModel';
+import { GOATS, HEDGE_LEN, type Hedge, HOUSES, HOUSE_CAP, housePlace, siteHouse, SITE_RING_R, HUT_WOOD, HUT_WATER, HUT_WORK_TICKS, SITES, STORES, STORE_LIST, STATIONS, STACK_CAP, OVERFILL, HOUSE_RADIUS, MEADOW_RADIUS, GREEN, TREES, TREE_ROOTS, STREAM_Z, BERRY_CAP, BRANCH_CAP, MILK_PER_DAY, CROP_STRIPS, WOOD_PER_NIGHT, crownHeight, trunkRadius, hobbitById, isSpoiled, YIELD_SITES, type YieldSite, type HobbitState, type Tree, type Village, type Store, type House } from './villageModel';
 import { mulberry32 } from './colors';
 import { createTerrain, type Terrain } from './worldTerrain';
 import type { Collider } from './player';
@@ -100,7 +100,9 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2, p = new THREE.CylinderGeometry(0.06, 0.07, 0.9, 5); p.translate(SITES.pen.x + Math.cos(a) * 2.4, 0.45, SITES.pen.z + Math.sin(a) * 2.4); posts.push(p); const b = (i + 1) / 10 * Math.PI * 2, rail = new THREE.BoxGeometry(Math.hypot(Math.cos(b) - Math.cos(a), Math.sin(b) - Math.sin(a)) * 2.4, 0.06, 0.06); rail.rotateY(-Math.atan2(Math.sin(b) - Math.sin(a), Math.cos(b) - Math.cos(a))); rail.translate(SITES.pen.x + Math.cos((a + b) / 2) * 2.4 * Math.cos(Math.PI / 10), 0.7, SITES.pen.z + Math.sin((a + b) / 2) * 2.4 * Math.cos(Math.PI / 10)); posts.push(rail); }
   root.add(new THREE.Mesh(mergeGeometries(posts)!, post));
   const goat = new THREE.MeshStandardMaterial({ color: '#d9d2c4', roughness: 1 });
-  for (let i = 0; i < 3; i++) { const g = new THREE.Group(); g.position.set(SITES.pen.x + (rand() - 0.5) * 2.5, 0, SITES.pen.z + (rand() - 0.5) * 2.5); g.rotation.y = rand() * 6.28; const body = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6), goat); body.scale.set(1.5, 1, 1); body.position.y = 0.42; g.add(body); const head = new THREE.Mesh(new THREE.SphereGeometry(0.14, 7, 5), goat); head.position.set(0.5, 0.58, 0); g.add(head); for (const [x, z] of [[-0.25, -0.12], [-0.25, 0.12], [0.25, -0.12], [0.25, 0.12]]) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.4, 5), goat); leg.position.set(x, 0.2, z); g.add(leg); } root.add(g); }
+  // S1: the goats are as many as the pen holds (the wolves take them).
+  const goats: THREE.Group[] = [];
+  for (let i = 0; i < GOATS; i++) { const g = new THREE.Group(); goats.push(g); g.position.set(SITES.pen.x + (rand() - 0.5) * 2.5, 0, SITES.pen.z + (rand() - 0.5) * 2.5); g.rotation.y = rand() * 6.28; const body = new THREE.Mesh(new THREE.SphereGeometry(0.28, 8, 6), goat); body.scale.set(1.5, 1, 1); body.position.y = 0.42; g.add(body); const head = new THREE.Mesh(new THREE.SphereGeometry(0.14, 7, 5), goat); head.position.set(0.5, 0.58, 0); g.add(head); for (const [x, z] of [[-0.25, -0.12], [-0.25, 0.12], [0.25, -0.12], [0.25, 0.12]]) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.4, 5), goat); leg.position.set(x, 0.2, z); g.add(leg); } root.add(g); }
   // The goats' milk for the day stands by the gate as pails until Bram carries them; the branches lie under the copse until Marlo gathers them.
   const pailMat = new THREE.MeshStandardMaterial({ color: '#c9c2b0', roughness: 0.5, metalness: 0.3 }), milkMat = new THREE.MeshStandardMaterial({ color: '#f4f1e6', roughness: 0.8 });
   const pail = (): THREE.Group => { const g = new THREE.Group(); const body = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.085, 0.16, 8, 1, true), pailMat); body.position.y = 0.08; body.material.side = THREE.DoubleSide; g.add(body); const top = new THREE.Mesh(new THREE.CircleGeometry(0.095, 8), milkMat); top.rotation.x = -Math.PI / 2; top.position.y = 0.15; g.add(top); return g; };
@@ -289,6 +291,7 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
     const nb = Math.floor(v.land.berries); for (let i = 0; i < berries.length; i++) berries[i].visible = i < nb;
     for (let i = 0; i < sticks.length; i++) sticks[i].visible = i < v.land.branches;
     for (let i = 0; i < penPails.length; i++) penPails[i].visible = i < v.land.milk;
+    for (let i = 0; i < goats.length; i++) goats[i].visible = i < v.land.goats;
     for (let i = 0; i < strips.length; i++) { const c = v.land.crops[i]; strips[i].scale.y = 0.08 + 0.92 * c; strips[i].visible = c > 0.02; stalkMats[i].color.set(c >= 1 ? '#d9b44a' : c > 0.7 ? '#b9a852' : '#7fa64a'); }
     for (const k of STORE_LIST) { const n = Math.floor(v.stores[k]); storeItems[k].forEach((o, i) => { o.visible = i < n; }); }
     // The blight spreads over a spoiled place and draws back when it is clean; the bushes and the stalks go dark with it.

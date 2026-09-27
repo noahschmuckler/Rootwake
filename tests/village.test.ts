@@ -182,7 +182,7 @@ test('fighting: a cheap strike ahead of her, a thorn burst round her and a root 
 
 import { ruins, sanctify, groves, RUIN_N, RUIN_NEAR, RUIN_FAR, RUIN_CLEAR, RUIN_RADIUS, addHint, danger, dens, DANGER_SAFE, DANGER_FAR, DEN_CLEAR, PACK_BASE, FOREST_RADIUS, freshOverworld, explore, isRevealed, knownPlaces, places, parseOverworld, serializeOverworld, CELL, EXPLORE_RADIUS, LAIR_DISTANCE, KARST_AT, ZOOM_MIN, ZOOM_MAX, zoomElevation, ELEV_LOW, ELEV_HIGH, bearingOf, wrapDeg } from '../src/overworldModel';
 test('the overworld: the village at the origin, the karst north, the lair placed by the seed 400 m away from the karst\'s side; exploring reveals cells round her and the places she comes near; the pinch rises from the shoulder to overhead', () => {
-  const ps = places(1); assert.deepEqual(ps.slice(0, 3).map(p => p.id), ['village', 'karst', 'lair']); assert.deepEqual(ps.slice(3, 5).map(p => p.id), ['village-1', 'village-2'], 'then the other villages (G4)'); assert.ok(ps.slice(5).every(p => p.kind === 'den' || p.kind === 'ruin'), 'then the dens and the ruins'); assert.ok(ps.slice(5).findIndex(p => p.kind === 'ruin') >= ps.slice(5).filter(p => p.kind === 'den').length, 'the dens, then the ruins'); assert.deepEqual({ x: ps[0].x, z: ps[0].z }, { x: 0, z: 0 }); assert.deepEqual({ x: ps[1].x, z: ps[1].z }, KARST_AT);
+  const ps = places(1); assert.deepEqual(ps.slice(0, 3).map(p => p.id), ['village', 'karst', 'lair']); assert.deepEqual(ps.slice(3, 5).map(p => p.id), ['village-1', 'village-2'], 'then the other villages (G4)'); assert.ok(ps.slice(5).every(p => p.kind === 'den' || p.kind === 'ruin' || p.kind === 'warren'), 'then the dens, the ruins and the warrens (S1)'); assert.ok(ps.slice(5).findIndex(p => p.kind === 'ruin') >= ps.slice(5).filter(p => p.kind === 'den').length, 'the dens, then the ruins'); assert.deepEqual({ x: ps[0].x, z: ps[0].z }, { x: 0, z: 0 }); assert.deepEqual({ x: ps[1].x, z: ps[1].z }, KARST_AT);
   const lair = ps[2]; assert.ok(Math.abs(Math.hypot(lair.x, lair.z) - LAIR_DISTANCE) < 2, 'the lair at its distance'); assert.ok(lair.z > 0, 'away from the karst'); assert.ok(Math.hypot(lair.x - KARST_AT.x, lair.z - KARST_AT.z) > 500, 'and far from it');
   assert.notDeepEqual(places(2)[2], lair, 'placed by the seed');
   const o = freshOverworld(1); assert.deepEqual(knownPlaces(o).map(p => p.id), ['village', 'karst'], 'the village and the karst known from the start');
@@ -450,9 +450,12 @@ test('G3a: a den in reach sends its pack down at dusk; villagers out of doors ru
     step(v, WOLF_TICK + 1); assert.equal(wolves(v).length, 3, 'the pack at dusk');
     // Noah (2026-09-27): the pack starts at its den and walks in; sent home, it walks back to the den and is gone there, not at the wood's edge.
     assert.ok(wolves(v).every(w => Math.hypot(w.x - 300, w.z - 300) < 4), 'at the den at dusk'); { const c = structuredClone(v), w = wolves(c)[0], d0 = Math.hypot(w.x, w.z); stepRaiders(c, 1, null); assert.ok(Math.hypot(w.x, w.z) < d0 - 1, 'and walking in'); w.state = 'leaving'; for (let i = 0; i < 400 && w.gone === 0; i++) stepRaiders(c, 1, null); assert.ok(w.gone > 0 && Math.hypot(w.x - 300, w.z - 300) < 2, `gone at the den (${w.x.toFixed(0)}, ${w.z.toFixed(0)})`); } assert.ok(v.events.some(e => e.text === 'Wolves come down from the south-east at dusk' && e.banner), JSON.stringify(v.events.map(e => e.text))); assert.ok(wolves(v).every(w => w.kind === 'wolf' && w.den === 'den-1,1' && w.hp === WOLF_HP));
-    const out = v.hobbits.find(s => !s.inside && s.stage !== 'infant')!; assert.ok(out, 'someone still out at dusk'); const w0 = wolves(v)[0]; w0.x = out.x + 0.5; w0.z = out.z;
+    // S1 (Noah): goats are quarry before villagers: a wolf at the pen takes a goat and goes home fed; the milk falls with the goats.
+    { const c = structuredClone(v), w = wolves(c)[0]; w.x = SITES.pen.x + 0.5; w.z = SITES.pen.z; for (let i = 0; i < 40 && c.land.goats === GOATS; i++) stepRaiders(c, 0.5, null); stepRaiders(c, 0.1, null); assert.equal(c.land.goats, GOATS - 1, 'a goat taken'); assert.ok(w.ate >= 1 && w.state === 'leaving', 'and the wolf goes home fed'); assert.equal(c.bitten, 0, 'nobody bitten while there are goats'); assert.ok(c.events.some(e => e.text.startsWith('A goat is taken by the wolves')) && incidents(c).some(i => i.text === 'a goat taken by wolves' && i.foe === w.id), 'told and marked at the pen'); assert.ok(c.land.milk <= milkFor(GOATS - 1), 'less milk'); }
+    v.land.goats = 0;
+    const out = v.hobbits.find(s => !s.inside && s.stage !== 'infant')!; assert.ok(out, 'someone still out at dusk'); const w0 = wolves(v)[0]; w0.x = out.x + 0.5; w0.z = out.z; const missed0 = out.missed;
     stepRaiders(v, 0.25, null); step(v, 1); assert.equal(out.errand, 'flee', 'they run for the door'); assert.equal(thought(out, v.tick), 'wolves!');
-    const missed0 = out.missed; let bit = false; for (let i = 0; i < 20 && !bit; i++) { w0.x = out.x + 0.3; w0.z = out.z; stepRaiders(v, 0.3, null); if (out.missed > missed0) bit = true; } assert.ok(bit, 'bitten'); assert.equal(out.missed, Math.min(DEATH_MEALS - 1, missed0 + WOLF_BITE_MEALS)); assert.ok(v.bitten >= 1); assert.ok(v.events.some(e => e.text.endsWith('is bitten by a wolf')));
+    let bit = out.missed > missed0; // S1: a wolf bites once and goes home fed, so the bite may already have landed. for (let i = 0; i < 20 && !bit; i++) { w0.x = out.x + 0.3; w0.z = out.z; stepRaiders(v, 0.3, null); if (out.missed > missed0) bit = true; } assert.ok(bit, 'bitten'); assert.equal(out.missed, Math.min(DEATH_MEALS - 1, missed0 + WOLF_BITE_MEALS)); assert.ok(v.bitten >= 1); assert.ok(v.events.some(e => e.text.endsWith('is bitten by a wolf')));
     { const inc = incidents(v); assert.ok(inc.some(i => i.text === 'wolves from the south-east' && wolves(v).some(w => w.id === i.foe) && Math.hypot(i.x - 300, i.z - 300) < 4), `the pack's coming is an incident at its den (${JSON.stringify(inc)})`); assert.equal(inc.filter(i => i.who === out.id).length, 1, 'one incident per victim, the latest bite'); const bite = inc.find(i => i.who === out.id)!; assert.ok(bite && bite.foe === w0.id && bite.text === `${byId(out.id).name} bitten by a wolf` && Math.hypot(bite.x - out.x, bite.z - out.z) < 3, `the bite is an incident on the victim (${JSON.stringify(bite)})`); assert.deepEqual(par(ser(v)).incidents, v.incidents, 'saved'); const w = par(ser(v)); w.tick += INCIDENT_TICKS + 1; assert.equal(incidents(w).length, 0, 'gone after INCIDENT_TICKS'); }
     for (let i = 0; i < 40 && !out.inside; i++) step(v, 1); assert.ok(out.inside, 'home and in'); assert.ok(out.missed < DEATH_MEALS, 'the bite never kills');
     // Her strike: a wolf dies; the pack slain, the den lies quiet.
@@ -470,7 +473,7 @@ import { villageSites, SITE_NAMES, SITE_KARST, SITE_NEAR, SITE_FAR, SITE_LAIR, S
 import { beyond as beyondAt, islands } from '../src/chunkModel';
 import { createTerrain as terrainOf } from '../src/worldTerrain';
 import { folkOf, folkIndex, foundersOf, newcomersOf, isHome, setLayouts, setVillageSites, inWater as water, grassCan as grass, FOLK_NAMES, WOLF_TICK as WT, incidents, INCIDENT_TICKS, RAID_FROM } from '../src/villageModel';
-import { setRuins, hedgeAllowed, growHedge, hedgeEnds, hedgeNear, dispelHedge, HEDGE_WEAR, HEDGE_PRAYER, HEDGE_MAX, HEDGE_DAYS, HEDGE_LEN, HEDGE_R, parseVillage, packAsleep, packOut, slayAsleep, denState, denAwake, WOLF_END, XP_WOLF, newsFor, commune } from '../src/villageModel';
+import { GOATS, milkFor, setWarrens, warrenOf, rabbitsAt, quickenWarren, WARREN_CAP, WARREN_REGROW, WARREN_EAT_R, WOLF_MEAL, PACK_GROW_DAYS, PACK_OVER, PACK_LEAN_NIGHTS, setRuins, hedgeAllowed, growHedge, hedgeEnds, hedgeNear, dispelHedge, HEDGE_WEAR, HEDGE_PRAYER, HEDGE_MAX, HEDGE_DAYS, HEDGE_LEN, HEDGE_R, parseVillage, packAsleep, packOut, slayAsleep, denState, denAwake, WOLF_END, XP_WOLF, newsFor, commune } from '../src/villageModel';
 test('G3b: the ruins: three by the seed, at their distances, clear of every place; the keeper names the nearest; explored, known; sanctified, a grove that is saved and counted as territory', () => {
   const rs = ruins(1); assert.equal(rs.length, RUIN_N); assert.deepEqual(ruins(1), rs, 'the same each time'); assert.notDeepEqual(ruins(2).map(r => [r.x, r.z]), rs.map(r => [r.x, r.z]), 'by the seed');
   for (const r of rs) { const d = Math.hypot(r.x, r.z); assert.ok(d >= RUIN_NEAR - 1 && d <= RUIN_FAR + 1, `${r.id} at its distance (${d.toFixed(0)})`); assert.ok(Math.hypot(r.x - KARST_AT.x, r.z - KARST_AT.z) >= 100 + RUIN_CLEAR, 'clear of the karst'); for (const o of places(1).filter(p => p.kind !== 'ruin' && p.id !== 'village')) assert.ok(Math.hypot(r.x - o.x, r.z - o.z) >= o.radius + RUIN_CLEAR - 1, `${r.id} clear of ${o.id}`); assert.ok(r.name && r.lore, 'named, with its lore'); }
@@ -597,6 +600,39 @@ test('G4: a root convergence for every place but the karst, at the hub of its ch
   assert.equal(new Set(cs.map(c => `${c.cx},${c.cz}`)).size, cs.length, 'one per chunk'); for (const c of cs) { const h = hubAt(c.cx, c.cz, 1); assert.equal(c.x, h.x); assert.equal(c.z, h.z); assert.ok(c.x >= c.cx * CHUNK && c.x < (c.cx + 1) * CHUNK, 'in its chunk'); }
   assert.deepEqual(convergences(1), cs, 'deterministic'); assert.notDeepEqual(convergences(2).map(c => c.x), cs.map(c => c.x), 'by the seed');
   const net = createRootNetwork(terrainOf(1)), home = cs.find(c => c.about === 'village')!; net.chunkRoots(home.cx, home.cz); const hub = net.nodesNear(home.x, home.z, 2, true).find(n => n.kind === 'hub'); assert.ok(hub && Math.abs(hub.x - home.x) < 1e-9 && Math.abs(hub.z - home.z) < 1e-9, 'the network joins its roots at the same point');
+});
+// S1 (SETTLEMENTS.md): the warren and the wolves' hunger.
+test('S1: the pack eats at its warren first, a rabbit a wolf, and goes home fed; a thin warren sends it to the pen, and only an empty pen to the villagers; fed nights grow the pack, hungry ones shrink it; the warren regrows and is quickened for nothing; the pen quickens goats first; saved', () => {
+  setDens([{ id: 'den-1,1', x: 300, z: 300, pack: 3 }]); setWarrens([{ id: 'warren:den-1,1', den: 'den-1,1', x: 120, z: 120 }]);
+  try {
+    const v = freshV(1), d = densInReach(v)[0]; assert.ok(warrenOf('den-1,1'), 'the den has a warren'); assert.equal(rabbitsAt(v, d), WARREN_CAP, 'full to begin');
+    assert.ok(rumors(v).some(r => r.about === 'warren:den-1,1' && r.text === 'rabbits run to the south-east' && r.who === 'keeper'), 'the keeper says where the rabbits run');
+    const toDawn = (): void => step(v, DT - (v.tick % DT) + 1);
+    const toDusk = (): void => { step(v, ((WOLF_TICK + 1 - (v.tick % DT)) % DT + DT) % DT); assert.equal(wolves(v).length, v.dens['den-1,1'].alive, 'the pack at dusk'); };
+    const night = (): void => { let n = 0; while (n++ < 600 && wolves(v).some(w => w.state !== 'leaving' && w.gone === 0)) stepRaiders(v, 1, null); };
+    step(v, WOLF_TICK + 1); assert.equal(wolves(v).length, 3);
+    let n = 0; while (n++ < 400 && !wolves(v).some(w => w.state === 'foraging')) stepRaiders(v, 1, null);
+    assert.ok(wolves(v).some(w => w.state === 'foraging' && Math.hypot(w.x - 120, w.z - 120) <= WARREN_EAT_R + 0.5), 'at the warren, eating');
+    night(); assert.equal(rabbitsAt(v, d), WARREN_CAP - 3 * WOLF_MEAL, 'a rabbit a wolf'); assert.ok(wolves(v).every(w => w.state === 'leaving' && w.ate === WOLF_MEAL), 'home fed'); assert.equal(v.land.goats, GOATS); assert.equal(v.bitten, 0, 'the village untouched');
+    const st = v.dens['den-1,1']; assert.equal(st.out, 3); assert.equal(st.fedNight, 3);
+    toDawn(); assert.equal(st.fedDays, 1, 'a fed night'); assert.equal(st.leanNights, 0); assert.equal(st.rabbits, Math.min(WARREN_CAP, WARREN_CAP - 3 + WARREN_REGROW), 'the warren regrows by day'); assert.equal(st.alive, 3);
+    for (let i = 1; i < PACK_GROW_DAYS; i++) { toDusk(); night(); toDawn(); }
+    assert.equal(st.alive, 4, 'fed every night, the pack grows'); assert.equal(st.fedDays, 0); assert.ok(v.events.some(e => e.text.startsWith('The pack to the south-east is well fed') && e.banner));
+    for (let k = 0; k < 6; k++) { toDusk(); night(); toDawn(); } assert.equal(st.alive, Math.min(4 + 2, 3 + PACK_OVER), 'to PACK_OVER over its base, no more');
+    // Thin: no rabbits, and the pack comes to the pen; the goats gone, to whoever is out.
+    st.rabbits = 0; toDusk(); n = 0; while (n++ < 600 && v.land.goats === GOATS) stepRaiders(v, 1, null); assert.ok(v.land.goats < GOATS, 'a thin warren sends the pack to the goats'); assert.equal(v.bitten, 0, 'and not to the villagers while there are goats');
+    night(); toDawn(); assert.equal(st.rabbits, WARREN_REGROW, 'regrown from nothing');
+    // Hungry: no rabbits, no goats, everyone indoors: two lean nights and a wolf starves.
+    const alive0 = st.alive; st.rabbits = 0; v.land.goats = 0;
+    for (let k = 0; k < PACK_LEAN_NIGHTS; k++) { toDusk(); for (const s of v.hobbits) s.inside = true; st.rabbits = 0; night(); assert.equal(st.fedNight, 0, 'nobody fed'); toDawn(); }
+    assert.equal(st.alive, alive0 - 1, 'a wolf starves'); assert.ok(v.events.some(e => e.text === 'A wolf of the pack to the south-east has starved'));
+    { const lean0 = st.leanNights, alive1 = st.alive; step(v, DT * 2); assert.equal(st.leanNights, lean0, 'a day jumped over is not a hungry night'); assert.equal(st.alive, alive1); }
+    // Quicken: the warren for nothing; the pen brings the goats back first, then the milk.
+    st.rabbits = 2; assert.ok(quickenWarren(v, 'den-1,1')); assert.equal(st.rabbits, WARREN_CAP); assert.ok(!quickenWarren(v, 'den-1,1'), 'refused full'); assert.ok(!quickenWarren(v, 'den-9,9'), 'no such den');
+    v.prayer = 60; v.land.milk = MILK_PER_DAY; assert.ok(quickenable(v, 'pen'), 'goats short'); assert.ok(quicken(v, 'pen')); assert.equal(v.land.goats, GOATS, 'the goats first'); assert.equal(v.land.milk, MILK_PER_DAY); v.land.milk = 1; assert.ok(quicken(v, 'pen')); assert.equal(v.land.milk, MILK_PER_DAY, 'then the milk'); assert.ok(!quickenable(v, 'pen'));
+    v.land.goats = 1; toDawn(); assert.equal(v.land.milk, milkFor(1), 'the day\'s milk by the goats');
+    const back = par(ser(v)); assert.deepEqual(back.dens, v.dens, 'the warren and the hunger survive a save'); assert.equal(back.land.goats, 1);
+  } finally { setDens([]); setWarrens([]); }
 });
 import './den.test';
 import './cultivation.test';

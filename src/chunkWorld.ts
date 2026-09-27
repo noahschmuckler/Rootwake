@@ -16,8 +16,12 @@ import type { Collider } from './player';
 interface Chunk { key: string; group: THREE.Group; trees: Tree[]; colliders: Collider[]; geometries: THREE.BufferGeometry[] }
 /** G3b: a ruin: RUIN_STONES old stones leaning round a dry basin RUIN_STONE_R out; sanctified, the basin holds crystal water, lit, and the stones carry a pale glow. Tuning. */
 export const RUIN_STONES = 7, RUIN_STONE_R = 2.8;
-export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain = createTerrain(seed), dens: { id?: string; x: number; z: number; tier?: number }[] = [], rings: { x: number; z: number }[] = [], ruinList: { id: string; x: number; z: number }[] = []) {
+export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain = createTerrain(seed), dens: { id?: string; x: number; z: number; tier?: number }[] = [], rings: { x: number; z: number }[] = [], ruinList: { id: string; x: number; z: number }[] = [], warrenList: { id: string; x: number; z: number }[] = []) {
   let sanctified = new Set<string>();
+  // S1: a warren: burrows in the grass and rabbits among them, as many as the pool holds (setRabbits gives the count by id; refreshRabbits applies it to the warrens built). Tuning.
+  const WARREN_BURROWS = 5, WARREN_RABBITS = 12, burrowMat = new THREE.MeshStandardMaterial({ color: '#2e2418', roughness: 1 }), moundMat = new THREE.MeshStandardMaterial({ color: '#6a5a44', roughness: 1, flatShading: true }), rabbitMat = new THREE.MeshStandardMaterial({ color: '#a89478', roughness: 0.95 }), rabbitEar = new THREE.MeshStandardMaterial({ color: '#c8b09a', roughness: 0.95 });
+  let rabbitStock: (id: string) => number = () => WARREN_RABBITS;
+  const applyRabbits = (g: THREE.Group): void => { const n = rabbitStock(g.userData.id as string); g.children.forEach(o => { if (o.name.startsWith('rabbit:')) o.visible = Number(o.name.slice(7)) < n; }); };
   const oldStone = new THREE.MeshStandardMaterial({ color: '#6e6a60', roughness: 1, flatShading: true }), holyStone = new THREE.MeshStandardMaterial({ color: '#8a8a80', emissive: '#6a8a70', emissiveIntensity: 0.35, roughness: 0.9, flatShading: true }), dryBasin = new THREE.MeshStandardMaterial({ color: '#4a4438', roughness: 1 });
   const applySanctity = (g: THREE.Group): void => { const on = sanctified.has(g.userData.id as string); (g.getObjectByName('living') as THREE.Group).visible = on; (g.getObjectByName('dry') as THREE.Group).visible = !on; (g.getObjectByName('stones') as THREE.Mesh).material = on ? holyStone : oldStone; };
   const relief = terrain.height;
@@ -39,7 +43,7 @@ export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain 
     { const pos = geo.attributes.position as THREE.BufferAttribute, col: number[] = []; for (let i = 0; i < pos.count; i++) { const x = pos.getX(i), z = pos.getZ(i); pos.setY(i, terrain.vertex(x, z)); const c = colourOf(x, z); col.push(...(blighted(x, z) ? [c[0] * 0.35 + 0.05, c[1] * 0.2, c[2] * 0.35 + 0.06] as [number, number, number] : c)); } geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); const normals = geo.attributes.normal as THREE.BufferAttribute; for (let i = 0; i < pos.count; i++) normals.setXYZ(i, ...terrain.normal(pos.getX(i), pos.getZ(i))); }
     const surface = new THREE.Mesh(geo, ground); surface.name = "world-ground"; group.add(surface); geometries.push(geo);
     const here = dens.filter(d => Math.floor(d.x / CHUNK) === cx && Math.floor(d.z / CHUNK) === cz);
-    const trees = chunkTrees(cx, cz, seed).filter(t => !dens.some(d => Math.hypot(t.x - d.x, t.z - d.z) < 14) && !rings.some(r => Math.hypot(t.x - r.x, t.z - r.z) < 5) && !ruinList.some(r => Math.hypot(t.x - r.x, t.z - r.z) < 7)), rand = mulberry32((cx * 31 + cz * 17 + seed) >>> 0), colliders: Collider[] = [];
+    const trees = chunkTrees(cx, cz, seed).filter(t => !dens.some(d => Math.hypot(t.x - d.x, t.z - d.z) < 14) && !rings.some(r => Math.hypot(t.x - r.x, t.z - r.z) < 5) && !ruinList.some(r => Math.hypot(t.x - r.x, t.z - r.z) < 7) && !warrenList.some(w => Math.hypot(t.x - w.x, t.z - w.z) < 9)), rand = mulberry32((cx * 31 + cz * 17 + seed) >>> 0), colliders: Collider[] = [];
     // G3: a den: a mound of dark rocks round a low mouth, bones about it. The rocks are colliders.
     for (const d of here) { const y = relief(d.x, d.z), rocks: THREE.BufferGeometry[] = [], bones: THREE.BufferGeometry[] = [], mouthDir = d.id ? denLayout({ id: d.id, x: d.x, z: d.z, tier: d.tier }, seed, relief).dir : null;
       // The ring of rocks leaves a gap where the hall's mouth is (denModel: the den is walked into there); the cap rock sits back from it.
@@ -56,6 +60,17 @@ export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain 
       const dry = new THREE.Group(); dry.name = 'dry'; { const d = new THREE.Mesh(new THREE.CircleGeometry(0.78, 20), dryBasin); d.rotation.x = -Math.PI / 2; d.position.y = 0.03; dry.add(d); } g.add(dry);
       const living = new THREE.Group(); living.name = 'living'; { const pool = new THREE.Mesh(new THREE.CircleGeometry(0.78, 20), ringWater); pool.rotation.x = -Math.PI / 2; pool.position.y = 0.07; pool.renderOrder = 2; living.add(pool); const light = new THREE.PointLight('#cfeeb0', 1.1, 9, 1.8); light.position.y = 0.9; living.add(light); } g.add(living);
       applySanctity(g);
+    }
+    // S1: the warrens of this chunk: burrows, mounds and rabbits, the rabbits as many as the pool holds.
+    for (const w of warrenList.filter(r => Math.floor(r.x / CHUNK) === cx && Math.floor(r.z / CHUNK) === cz)) {
+      const y = relief(w.x, w.z), g = new THREE.Group(); g.name = w.id; g.userData.id = w.id; g.position.set(w.x, y, w.z); group.add(g); const wr = mulberry32((w.x * 97 + w.z * 13 + seed) >>> 0), holes: THREE.BufferGeometry[] = [], mounds: THREE.BufferGeometry[] = [];
+      for (let i = 0; i < WARREN_BURROWS; i++) { const a = i / WARREN_BURROWS * Math.PI * 2 + wr() * 0.8, r = 1.5 + wr() * 4, x = Math.cos(a) * r, z = Math.sin(a) * r, dy = relief(w.x + x, w.z + z) - y; const h = new THREE.CircleGeometry(0.32, 10); h.rotateX(-Math.PI / 2); h.translate(x, dy + 0.03, z); holes.push(h); const m = new THREE.SphereGeometry(0.5, 7, 5); m.scale(1.2, 0.35, 1); m.translate(x + Math.cos(a) * 0.55, dy - 0.05, z + Math.sin(a) * 0.55); mounds.push(m); }
+      const hm = new THREE.Mesh(mergeGeometries(holes)!, burrowMat), mm = new THREE.Mesh(mergeGeometries(mounds)!, moundMat); g.add(hm, mm); geometries.push(hm.geometry, mm.geometry);
+      for (let i = 0; i < WARREN_RABBITS; i++) { const a = wr() * Math.PI * 2, r = 0.8 + wr() * 6.5, x = Math.cos(a) * r, z = Math.sin(a) * r, dy = relief(w.x + x, w.z + z) - y, rb = new THREE.Group(); rb.name = `rabbit:${i}`; rb.position.set(x, dy, z); rb.rotation.y = wr() * Math.PI * 2;
+        const body = new THREE.Mesh(new THREE.SphereGeometry(0.11, 7, 5), rabbitMat); body.scale.set(1.5, 0.9, 0.9); body.position.y = 0.11; rb.add(body); const head = new THREE.Mesh(new THREE.SphereGeometry(0.07, 6, 5), rabbitMat); head.position.set(0.15, 0.19, 0); rb.add(head);
+        for (const zz of [-0.03, 0.03]) { const ear = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.12, 0.04), rabbitEar); ear.position.set(0.13, 0.3, zz); ear.rotation.z = 0.25; rb.add(ear); }
+        g.add(rb); }
+      applyRabbits(g);
     }
     for (const rg of rings.filter(r => Math.floor(r.x / CHUNK) === cx && Math.floor(r.z / CHUNK) === cz)) {
       const y = relief(rg.x, rg.z), g = new THREE.Group(); g.name = 'fairy-ring'; g.position.set(rg.x, y, rg.z); group.add(g); const caps: THREE.BufferGeometry[] = [], stems: THREE.BufferGeometry[] = [], spots: THREE.BufferGeometry[] = [], crystals: THREE.BufferGeometry[] = [];
@@ -96,6 +111,9 @@ export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain 
   /** The blight moved: the loaded chunks are built again under it. */
   function setBlight(f: (x: number, z: number) => boolean): void { blighted = f; for (const [key, ch] of loaded) { scene.remove(ch.group); for (const g of ch.geometries) g.dispose(); const [cx, cz] = key.split(',').map(Number); loaded.set(key, build(cx, cz)); } }
   /** The sanctified ruins (the entry, from the overworld's save and on each sanctifying): the living look on those, the dry on the rest. */
+  /** S1: how many rabbits a warren shows, by its id; applied to the warrens built now and as chunks come in. */
+  function setRabbits(stock: (id: string) => number): void { rabbitStock = stock; refreshRabbits(); }
+  function refreshRabbits(): void { for (const ch of loaded.values()) for (const o of ch.group.children) if (o.name.startsWith('warren:')) applyRabbits(o as THREE.Group); }
   function setSanctified(ids: Set<string>): void { sanctified = new Set(ids); for (const ch of loaded.values()) ch.group.traverse(o => { if (o.name.startsWith('ruin:')) applySanctity(o as THREE.Group); }); }
-  return { setBlight, update, treesNear, colliders, setUnder, setSanctified, get count() { return loaded.size; }, get trees() { let n = 0; for (const ch of loaded.values()) n += ch.trees.length; return n; } };
+  return { setBlight, update, treesNear, colliders, setUnder, setSanctified, setRabbits, refreshRabbits, get count() { return loaded.size; }, get trees() { let n = 0; for (const ch of loaded.values()) n += ch.trees.length; return n; } };
 }
