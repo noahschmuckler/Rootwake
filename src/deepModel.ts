@@ -4,12 +4,12 @@
 // along a deep root to any convergence or shrine within the node's reach. Clarity pays for the dive and for
 // the way back from a shrine or a convergence; enough shrined villages and she can deepen the node at the
 // pool, widening its reach. Pure: no Three.js. Saved under its own key.
-export interface Deep { clarity: number; depth: number; dives: number; launches: number; deepened: number }
+export interface Deep { clarity: number; depth: number; dives: number; launches: number; deepened: number; /** G5: the reach her tier of power adds, set by the entry each frame, never saved. */ bonus?: number }
 /** Clarity: gathered a gem at a time on the board up to CLARITY_CAP; DIVE_COST for the dive at the pool, RETURN_COST for the way back from a shrine or a convergence, DEEPEN_COST spent with the puzzle. The node lies NODE_DEPTH below the karst's foot (as deep as the pillar is tall), DEPTH_STEP deeper per deepening; its deep roots reach DEEP_REACH_BASE m from the karst, DEEP_REACH_STEP more per deepening. A village is shrined once its prayer given at the stone passes SHRINE_PRAYER; DEEPEN_VILLAGES shrined and the node can be deepened, by a puzzle of DEEPEN_POINTS gems. She travels the deep roots at DEEP_SPEED m/s. Tuning, all of it; "clarity" is a working name (Noah: the match-3 energy needs a different name). */
 export const CLARITY_CAP = 60, DIVE_COST = 20, RETURN_COST = 12, DEEPEN_COST = 30, NODE_DEPTH = 64, DEPTH_STEP = 24, DEEP_REACH_BASE = 1000, DEEP_REACH_STEP = 300, SHRINE_PRAYER = 100, DEEPEN_VILLAGES = 2, DEEPEN_POINTS = 40, DEEP_SPEED = 60, CLARITY_PER_GEM = 1;
 export const freshDeep = (): Deep => ({ clarity: 0, depth: 0, dives: 0, launches: 0, deepened: 0 });
 export const nodeDepth = (d: Deep): number => NODE_DEPTH + DEPTH_STEP * d.depth;
-export const deepReach = (d: Deep): number => DEEP_REACH_BASE + DEEP_REACH_STEP * d.depth;
+export const deepReach = (d: Deep): number => DEEP_REACH_BASE + DEEP_REACH_STEP * d.depth + (d.bonus ?? 0);
 /** A run on the board: its gems become clarity, to the cap. Returns what was gained. */
 export function gather(d: Deep, gems: number): number { const before = d.clarity; d.clarity = Math.min(CLARITY_CAP, d.clarity + gems * CLARITY_PER_GEM); return d.clarity - before; }
 export const canDive = (d: Deep): boolean => d.clarity >= DIVE_COST;

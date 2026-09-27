@@ -244,7 +244,13 @@ every study here has used.
   a points threshold) and spend clarity to deepen the node, widening the deep roots' reach.
 - **G5. Cultivation and the gated tiers.** *Question: does hitting the world-gated cap send the player
   outward with clear purpose, rather than reading as a wall?* The cultivation board at the karst, the
-  tier cap, the three-nearest-karsts gate, guardians and purification wired to G3/G2.
+  tier cap, the three-nearest-karsts gate, guardians and purification wired to G3/G2. (Built 2026-09-27,
+  see VILLAGE_HANDOFF.md "G5": cultivation is a board session at the pool gathering growth toward the next
+  tier, a rise for clarity; the land's tier is read from the villages thriving near the one karst, the
+  groves sanctified and the companions with her, and her power is the lesser of the two, widening the deep
+  roots' reach and her sight. Decided in the building: with one karst the three-nearest gate reads as that
+  karst's own needs; the companions are a count of 0 until their chapter, so the top tier waits on it; a
+  refused rise says what the land wants.)
 
 G1 is recommended first: it's the cheapest (plugs into `houseWithRoom` and `site.ts`, both already
 built), and it's the direct answer to "berries and sticks, then nothing to do." G4 and G5 depend on

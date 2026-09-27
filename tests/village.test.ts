@@ -599,3 +599,4 @@ test('G4: a root convergence for every place but the karst, at the hub of its ch
   const net = createRootNetwork(terrainOf(1)), home = cs.find(c => c.about === 'village')!; net.chunkRoots(home.cx, home.cz); const hub = net.nodesNear(home.x, home.z, 2, true).find(n => n.kind === 'hub'); assert.ok(hub && Math.abs(hub.x - home.x) < 1e-9 && Math.abs(hub.z - home.z) < 1e-9, 'the network joins its roots at the same point');
 });
 import './den.test';
+import './cultivation.test';
