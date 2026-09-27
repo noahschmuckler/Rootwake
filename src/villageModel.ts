@@ -179,12 +179,20 @@ export interface Hero { vigor: number; sap: number; faint: number; calm: number;
 export interface Lair { hp: number; alive: boolean; slainDay: number; spawnClock: number; sweepClock: number; hurt: number; woke: boolean }
 export interface Village { seed: number; tick: number; folk: number; origin: Vec2; incidents: Incident[]; hobbits: HobbitState[]; stores: Record<Store, number>; land: Land; fireWood: number; take: Take; lastTake: Take; prayer: number; prayed: number; spirits: Spirit[]; stack: Carry | null; raiders: Raider[]; hero: Hero; raidDay: number; slain: number; eaten: number; lair: Lair; dead: { id: string; tick: number }[]; wellFedDays: number; dayMissed: boolean; mourningUntil: number; events: VillageEvent[]; darkMealsToday: number; melted: number; blight: number; snatchers: Snatcher[]; snatchDay: number; brood: { infant: InfantRef; due: number }[]; bred: InfantRef[]; dropped: { infant: InfantRef; x: number; z: number }[]; carried: InfantRef | null; taken: number; returned: number; huts: number; site: HutSite | null; fedStreak: number; raidEaten: number; lastRaidEaten: number; voiced: Voiced[]; told: StateKind; dens: Record<string, DenState>; wolfDay: number; bitten: number; lastBitten: number; hedges: Hedge[] }
 /** G3b (VILLAGERS.md: "a thorn hedge grown across the wolves' run is a shield"): a hedge is HEDGE_LEN m of thorn laid across the line to the green where she stands (its angle is the run's normal), for HEDGE_PRAYER prayer and the miracle's channelling, standing HEDGE_DAYS; it may be grown HEDGE_MIN to HEDGE_MAX m from the green, HEDGE_APART from another, HEDGES_MAX at once. A raider within HEDGE_R of it is held off it, slid along it toward its nearer end at half pace, and pricked HEDGE_PRICK a second. Tuning. */
-export interface Hedge { x: number; z: number; angle: number; until: number }
+export interface Hedge { x: number; z: number; angle: number; until: number; /** The harm it has dealt: at HEDGE_WEAR it is spent and gone (Noah, 2026-09-27). */ dealt: number }
 export const HEDGE_PRAYER = 15, HEDGE_LEN = 12, HEDGE_R = 1.1, HEDGE_DAYS = 3, HEDGE_PRICK = 4, HEDGE_MIN = 18, HEDGE_MAX = 80, HEDGE_APART = 8, HEDGES_MAX = 4;
+/** A hedge is spent once it has dealt HEDGE_WEAR (three wolves' worth); she may also dispel one she stands by, within HEDGE_DISPEL_R of its line, for nothing (Noah: with a limit on hedges, a way to take one back). Tuning. */
+export const HEDGE_WEAR = 54, HEDGE_DISPEL_R = 2.4;
+export function hedgeNear(v: Village, x: number, z: number): Hedge | null {
+  let best: Hedge | null = null, bd = HEDGE_DISPEL_R;
+  for (const h of v.hedges) { const ux = Math.cos(h.angle), uz = Math.sin(h.angle), t = Math.max(-HEDGE_LEN / 2, Math.min(HEDGE_LEN / 2, (x - h.x) * ux + (z - h.z) * uz)), d = Math.hypot(x - (h.x + ux * t), z - (h.z + uz * t)); if (d < bd) { bd = d; best = h; } }
+  return best;
+}
+export function dispelHedge(v: Village, x: number, z: number): boolean { const h = hedgeNear(v, x, z); if (!h) return false; v.hedges = v.hedges.filter(o => o !== h); event(v, 'The thorn hedge is dispelled'); return true; }
 export const hedgeAllowed = (v: Village, x: number, z: number): boolean => { const d = Math.hypot(x, z); return d >= HEDGE_MIN && d <= HEDGE_MAX && v.hedges.length < HEDGES_MAX && !v.hedges.some(h => Math.hypot(h.x - x, h.z - z) < HEDGE_APART); };
 export function growHedge(v: Village, x: number, z: number): boolean {
   if (v.prayer < HEDGE_PRAYER || !hedgeAllowed(v, x, z)) return false; v.prayer -= HEDGE_PRAYER;
-  v.hedges.push({ x, z, angle: Math.atan2(z, x) + Math.PI / 2, until: v.tick + HEDGE_DAYS * DAY_TICKS }); event(v, `A thorn hedge grows across the run to the ${bearingWords(bearingFromGreen(x, z))}`); return true;
+  v.hedges.push({ x, z, angle: Math.atan2(z, x) + Math.PI / 2, until: v.tick + HEDGE_DAYS * DAY_TICKS, dealt: 0 }); event(v, `A thorn hedge grows across the run to the ${bearingWords(bearingFromGreen(x, z))}`); return true;
 }
 /** A hedge's ends. */
 export const hedgeEnds = (h: Hedge): [Vec2, Vec2] => [{ x: h.x - Math.cos(h.angle) * HEDGE_LEN / 2, z: h.z - Math.sin(h.angle) * HEDGE_LEN / 2 }, { x: h.x + Math.cos(h.angle) * HEDGE_LEN / 2, z: h.z + Math.sin(h.angle) * HEDGE_LEN / 2 }];
@@ -196,7 +204,7 @@ function hedgeHold(v: Village, r: Raider, dt: number, pace: number): boolean {
     if (d >= HEDGE_R) continue; held = true;
     const nx = d > 1e-6 ? dx / d : -uz, nz = d > 1e-6 ? dz / d : ux; r.x = px + nx * HEDGE_R; r.z = pz + nz * HEDGE_R;
     const toA = Math.hypot(a.x - r.x, a.z - r.z), toB = Math.hypot(b.x - r.x, b.z - r.z), s = (toA < toB ? -1 : 1) * pace * 0.5 * dt; r.x += ux * s; r.z += uz * s; r.heading = Math.atan2(uz * s, ux * s);
-    hurt(v, r, HEDGE_PRICK * dt);
+    hurt(v, r, HEDGE_PRICK * dt); h.dealt += HEDGE_PRICK * dt;
   }
   return held;
 }
@@ -584,7 +592,8 @@ export function stepRaiders(v: Village, dt: number, her: Vec2 | null, herTime = 
   if (her && h.faint === 0 && isHome(v)) { const depth = forestDepth(her.x, her.z); if (depth > 0) { h.vigor = Math.max(0, h.vigor - FOREST_DRAIN * depth * dt); h.calm = 0; if (h.vigor === 0) h.faint = FAINT_S; } }
   if (isHome(v)) { stepLair(v, dt, her); stepSnatchers(v, dt); }
   const t = v.tick % DAY_TICKS, night = phaseAt(v.tick) === 'night', leaveAll = !night || t >= RAID_END;
-  v.hedges = v.hedges.filter(h => h.until > v.tick);
+  for (const h of v.hedges) if (h.dealt >= HEDGE_WEAR) event(v, 'A thorn hedge is spent: it has torn all it can');
+  v.hedges = v.hedges.filter(h => h.until > v.tick && h.dealt < HEDGE_WEAR);
   for (const r of v.raiders) {
     r.hurt = Math.max(0, r.hurt - dt); if (r.state === 'dead' || r.state === 'melting') { r.gone += dt; continue; }
     if (v.hedges.length && r.state !== 'retreating') { hedgeHold(v, r, dt, r.kind === 'wolf' ? WOLF_PACE : DY_PACE); if ((r.state as RaiderState) === 'dead') continue; }
@@ -947,7 +956,7 @@ export function parseVillage(raw: string | null): Village {
     v.wolfDay = Math.floor(num(p.wolfDay, -1, 1e6, -1)); v.bitten = Math.floor(num(p.bitten, 0, 1e4, 0)); v.lastBitten = Math.floor(num(p.lastBitten, 0, 1e4, 0));
     // G2: the streak, the night's eating, what was said, the state last told.
     v.fedStreak = Math.floor(num(p.fedStreak, 0, 1e6, 0)); v.raidEaten = Math.floor(num(p.raidEaten, 0, 1e6, 0)); v.lastRaidEaten = Math.floor(num(p.lastRaidEaten, 0, 1e6, 0)); v.told = ['thriving', 'steady', 'pressured', 'besieged', 'lost'].includes(p.told) ? p.told : 'steady';
-    if (Array.isArray(p.hedges)) v.hedges = p.hedges.filter((h: unknown) => h && typeof h === 'object').slice(0, HEDGES_MAX).map((h: Hedge) => ({ x: num(h.x, -HEDGE_MAX - 5, HEDGE_MAX + 5, 0), z: num(h.z, -HEDGE_MAX - 5, HEDGE_MAX + 5, 0), angle: num(h.angle, -10, 10, 0), until: Math.floor(num(h.until, 0, 1e9, 0)) }));
+    if (Array.isArray(p.hedges)) v.hedges = p.hedges.filter((h: unknown) => h && typeof h === 'object').slice(0, HEDGES_MAX).map((h: Hedge) => ({ x: num(h.x, -HEDGE_MAX - 5, HEDGE_MAX + 5, 0), z: num(h.z, -HEDGE_MAX - 5, HEDGE_MAX + 5, 0), angle: num(h.angle, -10, 10, 0), until: Math.floor(num(h.until, 0, 1e9, 0)), dealt: num(h.dealt, 0, HEDGE_WEAR, 0) }));
     if (Array.isArray(p.voiced)) v.voiced = p.voiced.filter((r: unknown) => r && typeof (r as Voiced).text === 'string').slice(-RUMORS_KEPT).map((r: Voiced) => ({ text: r.text, tick: num(r.tick, 0, 1e9, 0), by: typeof r.by === 'string' ? r.by : '', ...(typeof r.bearing === 'number' ? { bearing: num(r.bearing, 0, 360, 0) } : {}), ...(typeof r.about === 'string' && r.about.length <= 40 ? { about: r.about } : {}), ...(['elder', 'keeper'].includes(r.who as string) ? { who: r.who } : {}) }));
     // G1: the huts built and the one going up.
     v.huts = Math.floor(num(p.huts, 0, HOUSE_CAP - 6, 0)); if (p.site && typeof p.site === 'object' && 6 + v.huts < HOUSE_CAP) v.site = { id: 6 + v.huts, wood: Math.floor(num(p.site.wood, 0, HUT_WOOD, 0)), water: Math.floor(num(p.site.water, 0, HUT_WATER, 0)), work: Math.floor(num(p.site.work, 0, HUT_WORK_TICKS, 0)), asked: p.site.asked === true };
