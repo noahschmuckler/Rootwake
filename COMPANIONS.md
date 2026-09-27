@@ -396,3 +396,106 @@ first karst's neighbours hold.
   whether the seven karsts and the seven pillars are the same seven.
 - The artificer's domain in a world without electricity: light and water and mechanism (the
   proposal), or lightning, or something Noah has seen in play.
+
+---
+
+## Part 4. Noah's brief from play (2026-09-27), and what it settles
+
+Recorded from the conversation, in his words where they matter. These are the things he wanted while
+playing and realized belonged to other heroes:
+
+- **Better houses** — the mason.
+- **Organizing the villagers** — "assigning guards, search parties, hunting parties, specific jobs
+  to specific people a la Dwarf Fortress + DFHack + Dwarf Therapist" — the steward.
+- **Hunting** — "needs quarry to hunt, which might interact with wolves e.g., but requires at least
+  minimal tools (sharp sticks, hand axes); steward for organizing parties, mason/smith/artificer for
+  weapons and traps."
+- **A deeper village building and crafting tree** — "granary (mason), grain mill (mason, artificer),
+  oven for breadmaking (mason). I could see contributions from other heroes for more advanced
+  versions, but it feels like mason and steward are first needed."
+- **Order**: "Steward may be first — the mason can use some sort of magic to do a fair amount of
+  construction, but organizing the villagers is a bigger contributor and a better system to develop.
+  The sage may make sense for the third — I could see where she may find ancient ruins with useful
+  info, but she can't read or understand what's written. The sage could help her deepen and improve
+  her own skills, help interpret the events of the world. They'd each be useful on their own, and
+  quickly synergize as more are unlocked."
+- **Two trios**: "The smith, artificer and alchemist bring in metallurgy, steam power/machinery,
+  chemistry, which leans more into the industrial revolution, whereas the mason, steward and sage can
+  fit more smoothly into a medieval-feeling situation with incremental improvements."
+- **Travel**: "Only Hulda can travel by grass and root and karst node. She directs the heroes to
+  locations and they travel by foot until we develop better transportation tech."
+
+### What it settles (against Parts 2 and 3)
+
+- **Order**: steward, mason, sage; then the industrial trio. Under DD's cube the steward's and the
+  mason's karsts are two of home's three neighbours; the sage's is one ring out (adjacent to both of
+  theirs, not to home). The medieval trio is a contiguous corner of that graph, which is a fair
+  reason to keep it if the karsts are ever laid out.
+- **Directed, not played, on the surface**: heroes are units Hulda points at places; they walk. DD's
+  "traversal key" is dropped for the medieval trio: they open nothing by moving, her reach does. Their
+  contribution is what they do where they stand. (Whether each still gets a played opening study when
+  woken, as the metallurgist has, is untouched by this brief; see the open questions.)
+- **Presence is the constraint that makes them units.** A hero on foot is in one village at a time,
+  and the villages are hundreds of metres apart. The steward's jobs board only works where he stands;
+  the mason only builds where he is. Sending them is a decision with a cost in sim days, and that is
+  what keeps "directed" from being a menu.
+- **The steward keeps Hulda's idiom.** `VILLAGERS.md` rules that "she never gives orders; she changes
+  the world they live in." V2 planned roles "chosen by trait fit against what the village lacks; the
+  elder can reassign; Hulda can, later, whisper a suggestion." The steward is the one who gives the
+  orders. Hulda directs him; he assigns them. The Dwarf-Therapist screen is his, and it exists only in
+  villages he has reached.
+- **Gifts of knowledge get their sources.** Granary, mill and oven are W2's "bread from grain and
+  water" and the stores' caps made buildable; the mason is their source, the artificer improves the
+  mill. This answers Part 3's question about whether gifts belong to companions: they do, and the
+  village stays the thing that grows.
+- **Hunting is an ecology lever, not a menu.** `VILLAGERS.md` already lists "game (animals that
+  wander and breed)" in the land and "Wolves (hunt game, then livestock, then the timid)" among the
+  threats. Quarry shared between hunters and wolves means over-hunting is what sends the wolves to the
+  pens: the equilibrium number gets a second term. Tools gate it in the plateau's own terms (a
+  sharpened stick from a stick; the knapped hand axe recipe already exists).
+- **The sage is the reader and the tutor.** `RUIN_LORE` lines already sit at every ruin and nobody
+  can read them; the sage turns them into knowledge (a miracle or rune learned from a place, the
+  open question in `VILLAGE_HANDOFF.md`). She also works on Hulda herself (G5's open "what else a
+  tier should give" and the perks) and on the reading of the world (G2's state tags and omens, the
+  fisheye's readouts, told through her).
+
+### A pass order to argue with (not planned in detail)
+
+- **C1. The steward.** *Question: does putting a hero in a village, and assigning its people through
+  him, make the village feel organized rather than managed?* Where he sleeps and how he is woken
+  (see questions); his walk to her village; the jobs board in the village panel where he stands:
+  every villager, their trait fit, an assignable job (gatherer, builder, guard, searcher, hunter once
+  C2 exists); guards who stand watch at night and meet wolves and Dark Young at the edge; search
+  parties who walk out and find the places the rumors name and mark them on her map.
+- **C2. Hunting.** *Question: does quarry shared with the wolves make hunting a judgement rather than
+  a faucet?* Game animals that wander and breed on the land; the hunter job needing a tool (a
+  sharpened stick, the hand axe); parties of two or three organized by the steward; meat as a store,
+  and a smokehouse later; wolves that take game first, and the pens when the game is thin.
+- **C3. The mason.** *Question: does a hero whose work is visible stone make a village read as
+  settled rather than camped?* Stone houses (more room, warmth), the granary (store caps and
+  spoilage), the mill and the oven (bread, the first knowledge gift with a building behind it), a wall.
+  His construction is magic in the miracle pattern: a site the village raises is finished by his verb
+  on the board when he stands at it.
+- **C4. The sage.** *Question: does reading the ruins turn exploration into learning?* The lore read
+  and kept; a form or miracle learned at a grove; her counsel on Hulda's tiers and perks; the events
+  of the world interpreted in her words at the fisheye and the hub.
+- **Then the industrial trio**, each raising the versions above (the artificer's mill, the smith's
+  weapons and traps, the alchemist's medicine), by which time transport tech is a real question.
+
+### Questions this brief opens
+
+- **Where the three sleep and how they are woken.** DD: a statue on each karst's crown, woken by a
+  pulse. Rootwake has the deep roots and the Wellspire's sister pillars (the Heron and the Anvil can be
+  climbed). Options: a karst each, reached by root at a tier (DD's shape; three more karsts in the
+  world); or nearer, within the walk of the villages (a ruin for the sage, a moot-stone between the
+  villages for the steward, a quarry for the mason), woken by a channelling of clarity as a ruin is
+  sanctified. The second keeps the medieval chapter inside the world that exists.
+- **Whether each gets a played opening.** The metallurgist's U passes are one; the brief speaks only
+  of directing. A short played awakening per hero (their confinement, their verb, once) is the
+  record's answer to attachment; skipping it is cheaper.
+- **Can a hero be hurt.** Hulda cannot die; villagers can. A hero walking between villages through
+  wolf country either can be bitten (a real cost to sending him) or cannot (a unit with no stakes).
+- **What grows a hero.** Their own stat and verb at their own place (Part 2.3), or Hulda's clarity
+  spent on them, or the villages' prayer.
+- **The board on a phone.** A jobs list per village fits the collapsible village panel; guards,
+  searchers and hunting parties need a target as well as a job, which is a map tap.
