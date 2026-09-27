@@ -230,8 +230,8 @@ every study here has used.
   the deepening's territory, and an end of the deep roots; and the thorn hedge, a miracle grown across the
   wolves' run where she stands, that holds raiders off, slides them along it and pricks them. Decided in the
   building: the ruin's "one restorative thing" is the channelling, not a delivery; its reward is the grove
-  (territory, a deep-root end, her clarity filled) and a line of lore; the den as a delve, an authored
-  chamber under the mound, is not built and stays open.)
+  (territory, a deep-root end, her clarity filled) and a line of lore; the den as a delve is generated, not
+  authored: dirt halls slipping down to chambers, walked into with no loading, each den its own shape.)
 - **G4. The karst re-framed** (Noah's second brief above). *Question: does the dive into the taproot and
   the view from beneath the world feel like the launching-station beat, and does paying for it in
   clarity make the meditation worth doing?* Built in sub-passes: **G4a** the heavenly stream and the
@@ -279,7 +279,7 @@ gate before there's anything on the other side of it would read as a wall with n
   by Hulda as a heroic unit; they are the gate on her tiers (system 5), together with villages held steady.
 - **Deepening puzzles beyond vanilla**: authored match-3 puzzles in a series, once G4b's points-threshold
   version has been judged.
-- **G3b**: built 2026-09-27 but for the den as a delve (the authored chamber under the mound), which stays open.
+- **G3b**: built 2026-09-27, the den as a delve included: a generated dirt dungeon under each mound (VILLAGE_HANDOFF.md "The den as a delve").
 
 ## Not this arc
 

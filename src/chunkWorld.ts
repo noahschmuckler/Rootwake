@@ -4,6 +4,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { CHUNK, chunkKey, chunksAround, chunkTrees, biomeAt } from './chunkModel';
+import { denLayout } from './denModel';
 import { createTerrain, TERRAIN_STEP, type Terrain } from './worldTerrain';
 import { groundVision } from './groundVision';
 import { mulberry32 } from './colors';
@@ -15,7 +16,7 @@ import type { Collider } from './player';
 interface Chunk { key: string; group: THREE.Group; trees: Tree[]; colliders: Collider[]; geometries: THREE.BufferGeometry[] }
 /** G3b: a ruin: RUIN_STONES old stones leaning round a dry basin RUIN_STONE_R out; sanctified, the basin holds crystal water, lit, and the stones carry a pale glow. Tuning. */
 export const RUIN_STONES = 7, RUIN_STONE_R = 2.8;
-export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain = createTerrain(seed), dens: { x: number; z: number }[] = [], rings: { x: number; z: number }[] = [], ruinList: { id: string; x: number; z: number }[] = []) {
+export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain = createTerrain(seed), dens: { id?: string; x: number; z: number; tier?: number }[] = [], rings: { x: number; z: number }[] = [], ruinList: { id: string; x: number; z: number }[] = []) {
   let sanctified = new Set<string>();
   const oldStone = new THREE.MeshStandardMaterial({ color: '#6e6a60', roughness: 1, flatShading: true }), holyStone = new THREE.MeshStandardMaterial({ color: '#8a8a80', emissive: '#6a8a70', emissiveIntensity: 0.35, roughness: 0.9, flatShading: true }), dryBasin = new THREE.MeshStandardMaterial({ color: '#4a4438', roughness: 1 });
   const applySanctity = (g: THREE.Group): void => { const on = sanctified.has(g.userData.id as string); (g.getObjectByName('living') as THREE.Group).visible = on; (g.getObjectByName('dry') as THREE.Group).visible = !on; (g.getObjectByName('stones') as THREE.Mesh).material = on ? holyStone : oldStone; };
@@ -40,9 +41,10 @@ export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain 
     const here = dens.filter(d => Math.floor(d.x / CHUNK) === cx && Math.floor(d.z / CHUNK) === cz);
     const trees = chunkTrees(cx, cz, seed).filter(t => !dens.some(d => Math.hypot(t.x - d.x, t.z - d.z) < 14) && !rings.some(r => Math.hypot(t.x - r.x, t.z - r.z) < 5) && !ruinList.some(r => Math.hypot(t.x - r.x, t.z - r.z) < 7)), rand = mulberry32((cx * 31 + cz * 17 + seed) >>> 0), colliders: Collider[] = [];
     // G3: a den: a mound of dark rocks round a low mouth, bones about it. The rocks are colliders.
-    for (const d of here) { const y = relief(d.x, d.z), rocks: THREE.BufferGeometry[] = [], bones: THREE.BufferGeometry[] = [];
-      for (let i = 0; i < 7; i++) { const a = i / 7 * Math.PI * 2 + 0.4, r = 1.6 + (i % 2) * 0.5, g = new THREE.DodecahedronGeometry(0.55 + (i % 3) * 0.2, 0); g.translate(d.x + Math.cos(a) * r, y + 0.3, d.z + Math.sin(a) * r); rocks.push(g); colliders.push({ x: d.x + Math.cos(a) * r, z: d.z + Math.sin(a) * r, radius: 0.7, minY: y - 0.2, maxY: y + 1.2 }); }
-      { const g = new THREE.BoxGeometry(2.2, 0.5, 1.6).toNonIndexed(); g.translate(d.x, y + 0.95, d.z); rocks.push(g); const mouth = new THREE.BoxGeometry(1.0, 0.7, 1.2); mouth.translate(d.x, y + 0.35, d.z); const m = new THREE.Mesh(mouth, new THREE.MeshBasicMaterial({ color: '#08060a' })); group.add(m); }
+    for (const d of here) { const y = relief(d.x, d.z), rocks: THREE.BufferGeometry[] = [], bones: THREE.BufferGeometry[] = [], mouthDir = d.id ? denLayout({ id: d.id, x: d.x, z: d.z, tier: d.tier }, seed, relief).dir : null;
+      // The ring of rocks leaves a gap where the hall's mouth is (denModel: the den is walked into there); the cap rock sits back from it.
+      for (let i = 0; i < 7; i++) { const a = i / 7 * Math.PI * 2 + 0.4; if (mouthDir !== null && Math.abs(Math.atan2(Math.sin(a - mouthDir), Math.cos(a - mouthDir))) < 0.62) continue; const r = 1.6 + (i % 2) * 0.5, g = new THREE.DodecahedronGeometry(0.55 + (i % 3) * 0.2, 0); g.translate(d.x + Math.cos(a) * r, y + 0.3, d.z + Math.sin(a) * r); rocks.push(g); colliders.push({ x: d.x + Math.cos(a) * r, z: d.z + Math.sin(a) * r, radius: 0.7, minY: y - 0.2, maxY: y + 1.2 }); }
+      { const back = mouthDir === null ? 0 : mouthDir + Math.PI, g = new THREE.BoxGeometry(2.2, 0.5, 1.6).toNonIndexed(); g.rotateY(-back); g.translate(d.x + Math.cos(back) * 0.6, y + 0.95, d.z + Math.sin(back) * 0.6); rocks.push(g); colliders.push({ x: d.x + Math.cos(back) * 0.6, z: d.z + Math.sin(back) * 0.6, radius: 1.0, minY: y - 0.2, maxY: y + 1.3 }); }
       for (let i = 0; i < 8; i++) { const g = new THREE.CylinderGeometry(0.03, 0.04, 0.5 + (i % 3) * 0.2, 4); g.rotateZ(Math.PI / 2); g.rotateY(i * 1.3); g.translate(d.x + Math.cos(i * 2.1) * (2.4 + (i % 2)), y + 0.05, d.z + Math.sin(i * 2.1) * (2.4 + (i % 2))); bones.push(g); }
       const rm = new THREE.Mesh(mergeGeometries(rocks)!, denRock), bm = new THREE.Mesh(mergeGeometries(bones)!, bone); group.add(rm, bm); geometries.push(rm.geometry, bm.geometry); }
     // G3b: the ruins of this chunk: leaning stones round a basin, dry until sanctified.
