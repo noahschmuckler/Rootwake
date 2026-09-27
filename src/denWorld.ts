@@ -7,7 +7,7 @@
 // stays walkable. The camera may not leave the hollow while she is in it.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { denLayout, floorAt, insideDen, hallLines, FLOOR_DROP, FLOOR_WIDTH, CHAMBER_FLOOR, type DenLayout } from './denModel';
+import { denLayout, floorAt, floorsAt, insideDen, hallLines, FLOOR_DROP, FLOOR_WIDTH, CHAMBER_FLOOR, type DenLayout } from './denModel';
 import { mulberry32 } from './colors';
 import { makeWolf, type WolfBody } from './wolfFigure';
 import type { Terrain } from './worldTerrain';
@@ -26,12 +26,13 @@ export function createDenField(scene: THREE.Scene, terrain: Terrain, dens: { id:
       // The packed floor: a ribbon FLOOR_WIDTH of the radius wide at the chord's height.
       const n = segs * 2, pos: number[] = [], idx: number[] = []; for (let i = 0; i <= n; i++) { const t = i / n, c = curve.getPointAt(t), tg = curve.getTangentAt(t), nx = -tg.z, nz = tg.x, l = Math.hypot(nx, nz) || 1, w = r * FLOOR_WIDTH * 1.08, y = c.y - r * FLOOR_DROP + 0.02; pos.push(c.x + nx / l * w, y, c.z + nz / l * w, c.x - nx / l * w, y, c.z - nz / l * w); if (i < n) { const k = i * 2; idx.push(k, k + 1, k + 2, k + 1, k + 3, k + 2); } }
       const floor = new THREE.BufferGeometry(); floor.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); floor.setIndex(idx); floor.computeVertexNormals(); geometries.push(floor); group.add(new THREE.Mesh(floor, floorMat));
-      for (let i = 0; i < segs / 2; i++) { const t = rand(), c = curve.getPointAt(t), len = 0.3 + rand() * 0.7, g = new THREE.CylinderGeometry(0.02, 0.04, len, 4); g.translate(c.x + (rand() - 0.5) * r, c.y + r * 0.75 - len / 2, c.z + (rand() - 0.5) * r); roots.push(g); }
+      // Roots hang by the walls, short, out of her way down the middle (they never collide; Noah read them as the block when the chamber's floor was the block).
+      for (let i = 0; i < segs / 2; i++) { const t = rand(), c = curve.getPointAt(t), tg = curve.getTangentAt(t), side = (rand() < 0.5 ? -1 : 1) * (0.55 + rand() * 0.3) * r, len = 0.15 + rand() * 0.35, g = new THREE.CylinderGeometry(0.02, 0.04, len, 4); g.translate(c.x - tg.z * side, c.y + r * 0.7 - len / 2, c.z + tg.x * side); roots.push(g); }
     }
     for (const c of d.chambers) {
       const hollow = jitter(new THREE.SphereGeometry(c.r, 18, 12).toNonIndexed(), rand, 0.22); hollow.scale(1, c.h * 0.6 / c.r, 1); hollow.translate(c.c.x, c.c.y, c.c.z); geometries.push(hollow); group.add(new THREE.Mesh(hollow, dirt));
       const fy = c.c.y - c.h * CHAMBER_FLOOR + 0.02, floor = new THREE.CircleGeometry(c.r * 0.95, 24); floor.rotateX(-Math.PI / 2); floor.translate(c.c.x, fy, c.c.z); geometries.push(floor); group.add(new THREE.Mesh(floor, floorMat));
-      for (let i = 0; i < 9; i++) { const a = rand() * Math.PI * 2, rr = rand() * c.r * 0.8, len = 0.5 + rand() * 1.1, g = new THREE.CylinderGeometry(0.02, 0.05, len, 4); g.translate(c.c.x + Math.cos(a) * rr, c.c.y + c.h * 0.5 - len / 2, c.c.z + Math.sin(a) * rr); roots.push(g); }
+      for (let i = 0; i < 9; i++) { const a = rand() * Math.PI * 2, rr = (0.55 + rand() * 0.35) * c.r, len = 0.25 + rand() * 0.5, g = new THREE.CylinderGeometry(0.02, 0.05, len, 4); g.translate(c.c.x + Math.cos(a) * rr, c.c.y + c.h * 0.5 - len / 2, c.c.z + Math.sin(a) * rr); roots.push(g); }
       const light = new THREE.PointLight(c.deepest ? '#d08050' : '#c8a070', c.deepest ? 1.5 : 1.3, c.r * 3.2, 1.5); light.position.set(c.c.x, c.c.y + c.h * 0.05, c.c.z); group.add(light);
       if (c.deepest) for (let i = 0; i < 12; i++) { const a = rand() * Math.PI * 2, rr = 0.4 + rand() * c.r * 0.6, g = new THREE.CylinderGeometry(0.03, 0.045, 0.35 + rand() * 0.4, 4); g.rotateZ(Math.PI / 2); g.rotateY(rand() * Math.PI); g.translate(c.c.x + Math.cos(a) * rr, fy + 0.04, c.c.z + Math.sin(a) * rr); bones.push(g); }
     }
@@ -61,13 +62,13 @@ export function createDenField(scene: THREE.Scene, terrain: Terrain, dens: { id:
   /** The den whose layout could lie under (x, z), if any. */
   const near = (x: number, z: number): DenLayout | null => { for (const d of layouts) if (Math.hypot(x - d.x, z - d.z) <= d.reach) return d; return null; };
   /** The tops at (x, z) as the den sees them: the den's floor where a hall or chamber lies under, with the land's surface only where the roof lies DEN_ROOF_CUT beneath it; null where no den lies. */
-  function surfacesAt(x: number, z: number): number[] | null { const d = near(x, z); if (!d) return null; const f = floorAt(d, x, z); if (!f) return null; const t = terrain.height(x, z); return t - f.roof > DEN_ROOF_CUT ? [t, f.floor] : [f.floor]; }
+  function surfacesAt(x: number, z: number): number[] | null { const d = near(x, z); if (!d) return null; const fs = floorsAt(d, x, z); if (!fs.length) return null; const t = terrain.height(x, z), floors = fs.map(f => f.floor); return t - fs[0].roof > DEN_ROOF_CUT ? [t, ...floors] : floors; }
   /** Whether a body may stand at p as the den sees it: on the den's floor under its roof; null where the land decides (no den, or on the surface over a deep hall); false in the earth. */
   function canOccupy(p: THREE.Vector3, _radius: number, height: number): boolean | null {
-    const d = near(p.x, p.z); if (!d) return null; const t = terrain.height(p.x, p.z), f = floorAt(d, p.x, p.z);
-    if (!f) return p.y >= t - 0.3 ? null : false;
-    if (p.y >= t - 0.03 && t - f.roof > DEN_ROOF_CUT) return null;
-    return p.y >= f.floor - 0.03 && p.y + height <= f.roof + 0.35;
+    const d = near(p.x, p.z); if (!d) return null; const t = terrain.height(p.x, p.z), fs = floorsAt(d, p.x, p.z);
+    if (!fs.length) return p.y >= t - 0.3 ? null : false;
+    if (p.y >= t - 0.03 && t - fs[0].roof > DEN_ROOF_CUT) return null;
+    return fs.some(f => p.y >= f.floor - 0.03 && p.y + height <= f.roof + 0.35);
   }
   /** The camera's clearance: while she is in a den the camera stays in its hollow; on the land it stays out of the earth. */
   function cameraClear(p: THREE.Vector3): boolean { const t = terrain.height(p.x, p.z); if (p.y >= t - 0.3) return !inside; const d = near(p.x, p.z); return !!d && insideDen(d, p.x, p.y, p.z); }

@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { denLayout, floorAt, insideDen, hallLines, MOUTH_OUT, HALL_RUNS, HALL_SLOPE, FLOOR_DROP, ROOF_RISE, CHAMBER_FLOOR } from '../src/denModel';
+import { denLayout, floorAt, insideDen, hallLines, floorsAlong, MOUTH_OUT, HALL_RUNS, HALL_SLOPE, FLOOR_DROP, ROOF_RISE, CHAMBER_FLOOR } from '../src/denModel';
+import { STEP_HEIGHT, BODY_HEIGHT } from '../src/mobility';
 import { dens } from '../src/overworldModel';
 import { createTerrain } from '../src/worldTerrain';
 const flat = (): number => 10;
@@ -20,6 +21,10 @@ test('the den generator: from the mound\'s mouth a hall of a few runs slips down
     const side = { x: mid.x - (h0.b.z - h0.a.z) / Math.hypot(h0.b.x - h0.a.x, h0.b.z - h0.a.z) * 4, z: mid.z + (h0.b.x - h0.a.x) / Math.hypot(h0.b.x - h0.a.x, h0.b.z - h0.a.z) * 4 }; assert.equal(floorAt(d, side.x, side.z), null, 'nothing four metres off the hall'); assert.equal(floorAt(d, d.x + 500, d.z), null);
     const c = d.chambers[0]; assert.ok(floorAt(d, c.c.x, c.c.z)!.floor <= c.c.y - c.h * CHAMBER_FLOOR + 1e-9, 'the chamber\'s floor'); assert.ok(insideDen(d, c.c.x, c.c.y, c.c.z) && !insideDen(d, c.c.x, c.c.y + c.h * 2, c.c.z), 'inside the hollow, not above it');
     assert.ok(hallLines(d).length >= 1 && hallLines(d)[0][0] === d.mouth, 'the lines start at the mouth');
+    // The way is walkable end to end (Noah: she was stopped at the chamber's threshold): no step along the halls or into a chamber taller than a stride, and headroom for her body everywhere.
+    for (const run of floorsAlong(d, 0.5)) { for (let i = 1; i < run.length; i++) assert.ok(Math.abs(run[i].floor - run[i - 1].floor) <= STEP_HEIGHT + 1e-6, `${d.id}: a step of ${Math.abs(run[i].floor - run[i - 1].floor).toFixed(2)} m along a run`); for (const f of run) assert.ok(f.roof - f.floor >= BODY_HEIGHT + 0.3, 'headroom'); }
+    for (const h of d.halls) for (const g of d.halls) if (g.a === h.b) assert.ok(Math.abs(floorAt(d, h.b.x, h.b.z)!.floor - floorAt(d, g.a.x, g.a.z)!.floor) <= STEP_HEIGHT, 'run to run');
+    for (const c of d.chambers) assert.ok(d.halls.some(h => Math.abs(h.b.y - h.r * FLOOR_DROP - (c.c.y - c.h * CHAMBER_FLOOR)) < 1e-6 && Math.hypot(h.b.x - c.c.x, h.b.z - c.c.z) < c.r), `${d.id}: a hall ends in the chamber with its floor at the chamber's`);
   }
   const shapes = layouts.map(d => `${d.halls.length}:${d.chambers.length}:${d.dir.toFixed(3)}:${d.depth.toFixed(2)}:${d.reach.toFixed(2)}`); assert.equal(new Set(shapes).size, shapes.length, `every den its own (${shapes.join(' ')})`);
   assert.notEqual(denLayout(all[0], 2, t.height).dir, layouts[0].dir, 'and by the seed');

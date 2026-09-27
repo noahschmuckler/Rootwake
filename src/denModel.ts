@@ -31,33 +31,35 @@ export function denLayout(den: { id: string; x: number; z: number; tier?: number
     }
     return { end: p, heading: hd };
   };
-  const chamber = (at: Vec3, heading: number, deepest: boolean): DenChamber => { const r = between(rand, CHAMBER_R), ch: DenChamber = { c: { x: at.x + Math.cos(heading) * r * 0.6, y: at.y - 0.4, z: at.z + Math.sin(heading) * r * 0.6 }, r, h: between(rand, CHAMBER_H), deepest }; chambers.push(ch); note({ x: ch.c.x + r, y: ch.c.y - ch.h * CHAMBER_FLOOR, z: ch.c.z + r }); return ch; };
+  // A chamber's floor meets the floor of the hall that enters it (Noah: she was stopped at the threshold, where it lay a stride lower): its centre sits CHAMBER_FLOOR of its height above that.
+  const chamber = (at: Vec3, heading: number, hallR: number, deepest: boolean): DenChamber => { const r = between(rand, CHAMBER_R), h = between(rand, CHAMBER_H), ch: DenChamber = { c: { x: at.x + Math.cos(heading) * r * 0.6, y: at.y - hallR * FLOOR_DROP + h * CHAMBER_FLOOR, z: at.z + Math.sin(heading) * r * 0.6 }, r, h, deepest }; chambers.push(ch); note({ x: ch.c.x + r, y: ch.c.y - ch.h * CHAMBER_FLOOR, z: ch.c.z + r }); return ch; };
   const first = hall(mouth, dir, Math.round(between(rand, HALL_RUNS)), r1, between(rand, HALL_SLOPE), true);
-  const more = (den.tier ?? 1) >= 2 || rand() < 0.6, c1 = chamber(first.end, first.heading, !more);
+  const more = (den.tier ?? 1) >= 2 || rand() < 0.6, c1 = chamber(first.end, first.heading, r1, !more);
   if (more) {
     // On from the first chamber's far side, deeper, to a second.
-    const out = first.heading + (rand() - 0.5) * 1.2, start: Vec3 = { x: c1.c.x + Math.cos(out) * c1.r * 0.8, y: c1.c.y - c1.h * CHAMBER_FLOOR + r1 * FLOOR_DROP, z: c1.c.z + Math.sin(out) * c1.r * 0.8 };
-    const second = hall(start, out, Math.round(between(rand, [1, 3])), between(rand, HALL_R), between(rand, HALL_SLOPE), false); chamber(second.end, second.heading, true);
+    const out = first.heading + (rand() - 0.5) * 1.2, r2 = between(rand, HALL_R), start: Vec3 = { x: c1.c.x + Math.cos(out) * c1.r * 0.8, y: c1.c.y - c1.h * CHAMBER_FLOOR + r2 * FLOOR_DROP, z: c1.c.z + Math.sin(out) * c1.r * 0.8 };
+    const second = hall(start, out, Math.round(between(rand, [1, 3])), r2, between(rand, HALL_SLOPE), false); chamber(second.end, second.heading, r2, true);
   }
   if (rand() < 0.45) {
     // A dead-end run off the first chamber, the other way.
-    const side = first.heading + (rand() < 0.5 ? 1 : -1) * (1.3 + rand() * 0.8), start: Vec3 = { x: c1.c.x + Math.cos(side) * c1.r * 0.8, y: c1.c.y - c1.h * CHAMBER_FLOOR + r1 * FLOOR_DROP, z: c1.c.z + Math.sin(side) * c1.r * 0.8 };
-    hall(start, side, 1 + Math.round(rand()), between(rand, [1.1, 1.4]), between(rand, [0.05, 0.2]), false);
+    const side = first.heading + (rand() < 0.5 ? 1 : -1) * (1.3 + rand() * 0.8), r3 = between(rand, [1.1, 1.4]), start: Vec3 = { x: c1.c.x + Math.cos(side) * c1.r * 0.8, y: c1.c.y - c1.h * CHAMBER_FLOOR + r3 * FLOOR_DROP, z: c1.c.z + Math.sin(side) * c1.r * 0.8 };
+    hall(start, side, 1 + Math.round(rand()), r3, between(rand, [0.05, 0.2]), false);
   }
   return { id: den.id, x: den.x, z: den.z, y: y0, dir, mouth, halls, chambers, reach, depth };
 }
-/** The floor and the roof under (x, z), if a hall or a chamber lies there: the highest floor of those that do (a hall meeting a chamber). */
-export function floorAt(d: DenLayout, x: number, z: number): { floor: number; roof: number } | null {
-  let best: { floor: number; roof: number } | null = null;
-  const take = (floor: number, roof: number): void => { if (!best || floor > best.floor) best = { floor, roof }; };
+/** Every floor and roof under (x, z): one for each hall run or chamber that lies there (a hall meeting a chamber, a bend, one hall crossing under another), highest first. The traversal world offers them all, and the shared player takes the highest within a stride of her feet. */
+export function floorsAt(d: DenLayout, x: number, z: number): { floor: number; roof: number }[] {
+  const out: { floor: number; roof: number }[] = [];
   for (const h of d.halls) {
     const dx = h.b.x - h.a.x, dz = h.b.z - h.a.z, len2 = dx * dx + dz * dz, t = Math.max(0, Math.min(1, ((x - h.a.x) * dx + (z - h.a.z) * dz) / len2)), px = h.a.x + dx * t, pz = h.a.z + dz * t;
     if (Math.hypot(x - px, z - pz) > h.r * FLOOR_WIDTH) continue;
-    const y = h.a.y + (h.b.y - h.a.y) * t; take(y - h.r * FLOOR_DROP, y + h.r * ROOF_RISE);
+    const y = h.a.y + (h.b.y - h.a.y) * t; out.push({ floor: y - h.r * FLOOR_DROP, roof: y + h.r * ROOF_RISE });
   }
-  for (const c of d.chambers) if (Math.hypot(x - c.c.x, z - c.c.z) <= c.r * 0.92) take(c.c.y - c.h * CHAMBER_FLOOR, c.c.y + c.h * CHAMBER_ROOF);
-  return best;
+  for (const c of d.chambers) if (Math.hypot(x - c.c.x, z - c.c.z) <= c.r * 0.92) out.push({ floor: c.c.y - c.h * CHAMBER_FLOOR, roof: c.c.y + c.h * CHAMBER_ROOF });
+  return out.sort((a, b) => b.floor - a.floor);
 }
+/** The highest floor under (x, z), if any. */
+export const floorAt = (d: DenLayout, x: number, z: number): { floor: number; roof: number } | null => floorsAt(d, x, z)[0] ?? null;
 /** Whether a point lies inside the den's hollow (for the camera): within a hall's bore or a chamber's hollow. */
 export function insideDen(d: DenLayout, x: number, y: number, z: number): boolean {
   for (const h of d.halls) {
@@ -66,6 +68,10 @@ export function insideDen(d: DenLayout, x: number, y: number, z: number): boolea
   }
   for (const c of d.chambers) { const ex = (x - c.c.x) / c.r, ey = (y - c.c.y) / (c.h * 0.6), ez = (z - c.c.z) / c.r; if (ex * ex + ey * ey + ez * ez <= 0.92) return true; }
   return false;
+}
+/** The floors along each hall's line, sampled every `step` m, for checking the way is walkable: per run, each sample a floor and its roof. */
+export function floorsAlong(d: DenLayout, step = 0.5): { floor: number; roof: number }[][] {
+  return d.halls.map(h => { const out: { floor: number; roof: number }[] = [], len = Math.hypot(h.b.x - h.a.x, h.b.z - h.a.z), n = Math.max(1, Math.ceil(len / step)); for (let i = 0; i <= n; i++) { const t = i / n, own = h.a.y + (h.b.y - h.a.y) * t - h.r * FLOOR_DROP, fs = floorsAt(d, h.a.x + (h.b.x - h.a.x) * t, h.a.z + (h.b.z - h.a.z) * t); if (fs.length) out.push(fs.reduce((a, b) => (Math.abs(b.floor - own) < Math.abs(a.floor - own) ? b : a))); } return out; });
 }
 /** The hall's line as points for drawing: the mouth's run and the bends, one polyline per connected hall. */
 export function hallLines(d: DenLayout): Vec3[][] {
