@@ -133,6 +133,9 @@ only reads as a relief if other regions are genuinely not.
 
 ### 4. The karst re-framed — the spring, the fisheye, shrines and teleport
 
+- *(2026-09-27, Noah: the trees near the karst have flat roots; no root leaves the floor. The climb by
+  root from the foot is gone: a sister is climbed by leaf, the karst's summit reached through the deep from
+  a fairy ring or a shrined stone. See VILLAGE_HANDOFF.md.)*
 - **The spring** is a new mode alongside the existing climb/root/leaf routes (`karstFeature.ts`), a way
   *down* through the pillar's centre — the climbing stays the effortful ascent, the spring becomes the
   reward for having gone up, which keeps the confinement→vista rhythm (struggle up, release down) rather

@@ -10,17 +10,19 @@ test('every tree is a node: the karst’s plants, a dense forest at the foot, th
   assert.equal(Object.keys(ZONES).filter(z => z.startsWith('summit')).length, 3, 'three summits');
 });
 test('the roots: the karst’s own (no taproot), a network joining every floor tree in one piece, and the sisters’ long roots', () => {
-  assert.equal(KARST_ROOTS.length, 9); assert.ok(!KARST_ROOTS.some(r => r.dormant));
+  // Noah (2026-09-27): no root leaves the floor. The karst's own roots are the ones between its pillar's plants and the fine foot root; every root at a floor tree stays flat, like a tree's roots anywhere.
+  assert.equal(KARST_ROOTS.length, 6); assert.ok(!KARST_ROOTS.some(r => r.dormant)); assert.ok(!KARST_ROOTS.some(r => ['south-floor', 'west-floor', 'cavern-floor'].includes(r.id)), 'no climb from the floor');
+  for (const n of nodesOf('floor')) for (const r of rootsAt(n.id)) { assert.ok(NODES[r.a].zone === 'floor' && NODES[r.b].zone === 'floor', `${r.id} stays on the floor`); for (let i = 0; i <= 10; i++) { const y = r.curve.getPointAt(i / 10).y; assert.ok(y > -2.5 && y < 1, `${r.id} is flat (${y.toFixed(1)})`); } }
   assert.ok(NETWORK_ROOTS.length >= FOREST.length, `${NETWORK_ROOTS.length} network roots`); for (const r of NETWORK_ROOTS) { assert.ok(r.length < 22, `${r.id} is short`); for (let i = 1; i < 8; i++) assert.ok(r.curve.getPointAt(i / 8).y < -0.2, 'the network runs under the soil'); }
   for (const n of nodesOf('floor')) assert.ok(reachable('floorOak', n.id), `${n.id} joined to the oak by root`);
-  assert.equal(SISTER_ROOTS.length, 4 + HELIX.B.count + HELIX.C.count, 'the long roots and a root up every ledge'); for (const r of SISTER_ROOTS) { assert.ok(r.length < 60, `${r.id} ${r.length.toFixed(0)} m`); for (let i = 1; i < 12; i++) { const p = r.curve.getPointAt(i / 12), pillar = PILLARS.find(q => q.id === r.id[0])!; assert.ok(Math.hypot(p.x - pillar.x, p.z - pillar.z) >= pillar.radius(p.y) - 0.05 || p.y > pillar.height - 0.5, `${r.id} stays on the face`); } }
+  assert.equal(SISTER_ROOTS.length, 2 + (HELIX.B.count - 1) + (HELIX.C.count - 1), 'the top roots and a root between every pair of ledges; none from the foot'); for (const r of SISTER_ROOTS) { assert.ok(r.length < 60, `${r.id} ${r.length.toFixed(0)} m`); for (let i = 1; i < 12; i++) { const p = r.curve.getPointAt(i / 12), pillar = PILLARS.find(q => q.id === r.id[0])!; assert.ok(Math.hypot(p.x - pillar.x, p.z - pillar.z) >= pillar.radius(p.y) - 0.05 || p.y > pillar.height - 0.5, `${r.id} stays on the face`); } }
   assert.equal(FLOW_ROOTS.length, KARST_ROOTS.length + SISTER_ROOTS.length + NETWORK_ROOTS.length);
-  assert.ok(routes('pine', 'floorOak').length >= 2); assert.ok([...routes('floorOak', 'pine'), ...routes('floorMaple', 'pine')].length >= 3, 'the karst’s own ways up');
+  assert.equal(routes('pine', 'floorOak').length, 0, 'no root route from the summit to the floor'); assert.ok(routes('pine', 'cavernFern').length >= 2 && reachable('pine', 'southShrub'), 'the pillar’s own plants are joined among themselves');
   for (const n of Object.values(NODES)) assert.ok(rootsAt(n.id).length >= 1, `${n.id} has a root`);
 });
 test('each sister summit has a root route and a leaf route from the karst’s foot, and the helix hops are within reach', () => {
   for (const pid of Object.keys(HELIX)) {
-    assert.ok(reachable('pine', `pine${pid}`, 'root'), `root route from the summit to ${pid}`); assert.ok(reachable(`pine${pid}`, 'floorOak', 'root'), 'and back');
+    assert.ok(!reachable('pine', `pine${pid}`, 'root'), `no root route from the summit to ${pid}: the pillars stand apart`); assert.ok(!reachable(`pine${pid}`, 'floorOak', 'root'), 'nor down to the floor'); assert.ok(reachable(`${pid}0`, `pine${pid}`, 'root'), 'but the helix’s own roots run from its first ledge to its summit');
     assert.ok(reachable('floorOak', `pine${pid}`, 'hop'), `leaf route from the oak to ${pid}`); assert.ok(reachable(`pine${pid}`, 'floorOak', 'hop'), 'and back by leaf');
     const h = HELIX[pid as keyof typeof HELIX]; for (let i = 0; i + 1 < h.count; i++) assert.ok(hopTargets(NODES[`${pid}${i}`]).some(o => o.id === `${pid}${i + 1}`), `${pid}${i} leaps to ${pid}${i + 1}`);
     assert.ok(hopTargets(NODES[`${pid}${h.count - 1}`]).some(o => o.id === `pine${pid}`), 'the last ledge leaps to the summit pine'); assert.ok(hopTargets(NODES[`${pid}foot`]).some(o => o.id === `${pid}0`), 'the foot tree leaps to the first ledge');

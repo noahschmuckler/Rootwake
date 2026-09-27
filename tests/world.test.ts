@@ -82,14 +82,16 @@ test('a course runs from a tree by the village to the karst and back, joined roo
     assert.ok(c.length < Math.hypot(to.x - e.x, to.z - e.z) * 1.6 + 120, `not the long way round (${c.length.toFixed(0)} m)`);
   }
 });
-test('the karst roots have a shortest way from the foot to the summit, and a foot tree offers the places above', () => {
-  const up = shortestPath('floorOak', 'pine')!; assert.ok(up && up.length >= 2);
-  let at = 'floorOak'; for (const r of up) { assert.ok(r.a === at || r.b === at); at = r.a === at ? r.b : r.a; } assert.equal(at, 'pine');
-  const sister = shortestPath('Bfoot', 'pineB')!; assert.ok(sister, 'up sister B');
-  const places = destinationsFrom('floorOak'); const ids = places.map(p => p.id);
-  assert.ok(ids.includes('cavernFern') && ids.includes('pine') && ids.includes('southShrub'), ids.join(','));
-  assert.ok(!ids.some(id => NODES[id].zone === 'floor'), 'no floor places'); assert.ok(places.every((p, i) => i === 0 || p.length >= places[i - 1].length), 'nearest first');
-  const anyFloor = Object.values(NODES).find(n => n.zone === 'floor' && n.id.startsWith('t'))!; assert.ok(destinationsFrom(anyFloor.id).length > 0, 'every floor tree is a portal');
+test('the karst roots: no way up from the foot (Noah: the trees near the karst have flat roots); a ledge tree offers the places its pillar’s roots reach', () => {
+  assert.equal(shortestPath('floorOak', 'pine'), null, 'no root route from the foot to the summit'); assert.equal(shortestPath('Bfoot', 'pineB'), null, 'nor up sister B from its foot tree');
+  const up = shortestPath('B0', 'pineB')!; assert.ok(up && up.length >= 2, 'up sister B from its first ledge');
+  let at = 'B0'; for (const r of up) { assert.ok(r.a === at || r.b === at); at = r.a === at ? r.b : r.a; } assert.equal(at, 'pineB');
+  assert.ok(shortestPath('southShrub', 'pine') && shortestPath('eastShrub', 'cavernFern'), 'the karst’s own plants reach each other');
+  const places = destinationsFrom('B6'); const ids = places.map(p => p.id);
+  assert.deepEqual(ids, ['pineB'], `sister B's halfway tree offers its summit and nothing of the other pillars (${ids.join(',')})`);
+  const south = destinationsFrom('southShrub').map(p => p.id); assert.ok(south.includes('pine') && south.includes('cavernFern') && !south.some(id => NODES[id].zone === 'floor'), `the south ledge offers the summit and the cavern, no floor places (${south.join(',')})`);
+  assert.ok(places.every((p, i) => i === 0 || p.length >= places[i - 1].length), 'nearest first');
+  for (const n of Object.values(NODES)) if (n.zone === 'floor') assert.equal(destinationsFrom(n.id).length, 0, `${n.id}: a floor tree is no portal`);
   assert.equal(nodeName('pine'), 'the summit pine'); assert.equal(nodeName('pineB'), "sister B's summit"); assert.equal(nodeName('B3'), 'sister B, ledge 4');
 });
 test('D4: blighted roots refuse root travel: no course ends in the blight, none crosses it, and a tap finds no root there', () => {

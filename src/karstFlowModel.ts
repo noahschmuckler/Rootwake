@@ -139,7 +139,9 @@ export function standNear(n: Node): { x: number; z: number; yaw: number } {
 // floor tree to its neighbours, and the sisters' long roots: from a foot tree up the face to a
 // mid-helix tree, and from there over the rim to the summit pine.
 const makeRoot = (id: string, a: string, b: string, interior: boolean, points: Vector3[]): Root => { const curve = new CatmullRomCurve3(points, false, 'centripetal', 0.6); return { id, a, b, interior, curve, length: curve.getLength() }; };
-export const KARST_ROOTS: Root[] = ROOTS.filter(r => !r.dormant);
+/** Noah (2026-09-27, the village): the trees near the karst have roots like any tree's, relatively flat; riding a root from the floor up the pillar (or down it) was nauseating even with the camera's follow. So no root leaves the floor: the karst's own roots that ran from the floor trees up to the ledges and the cavern (`south-floor`, `west-floor`, `cavern-floor`), and the sisters' from their foot trees (`foot-mid`, `h0`), are gone from the flow. The floor keeps its flat network; the pillars keep the roots between their own plants (the way up a sister is the leaf-hops of its helix; the way onto the karst's summit is the deep, from a fairy ring or a shrined stone). The old study's ROOTS are untouched. */
+const leavesFloor = (r: Root): boolean => (NODES[r.a].zone === 'floor') !== (NODES[r.b].zone === 'floor');
+export const KARST_ROOTS: Root[] = ROOTS.filter(r => !r.dormant && !leavesFloor(r));
 export const NETWORK_LINK = 9.5, NETWORK_JOIN = 18;
 export const NETWORK_ROOTS: Root[] = (() => {
   const floor = nodesOf('floor'), out: Root[] = [], seen = new Set<string>();
@@ -159,13 +161,12 @@ export const NETWORK_ROOTS: Root[] = (() => {
 export const SISTER_ROOTS: Root[] = (() => {
   const out: Root[] = [];
   for (const [pid, h] of Object.entries(HELIX)) {
-    const p = pillarById(pid), mid = Math.floor(h.count / 2), midNode = NODES[`${pid}${mid}`], foot = NODES[`${pid}foot`];
+    const p = pillarById(pid), mid = Math.floor(h.count / 2), midNode = NODES[`${pid}${mid}`];
     // Draped over the face the short way round, keeping just outside the rock (the sisters' faces are jittered more than the karst's).
     const drape = (a: Node, b: Node, y0: number, y1: number, a0: number, a1: number): Vector3[] => { const sweep = Math.atan2(Math.sin(a1 - a0), Math.cos(a1 - a0)), pts: Vector3[] = []; for (let i = 1; i < 7; i++) { const t = i / 7; pts.push(onPillar(p, y0 + (y1 - y0) * t, a0 + sweep * t, 0.75 + 0.15 * Math.sin(t * 9))); } return [a.mouth.clone(), ...pts, b.mouth.clone()]; };
-    const footAngle = h.angle0, midAngle = h.angle0 + mid * h.turn, topAngle = h.angle0 + (h.count - 1) * h.turn;
-    out.push(makeRoot(`${pid}-foot-mid`, foot.id, midNode.id, false, drape(foot, midNode, 1.5, midNode.at.y - 0.5, footAngle, midAngle)));
-    // And ledge to ledge up the helix, so every clinging tree has roots to sink into and the climb can be taken a ledge at a time.
-    for (let i = -1; i + 1 < h.count; i++) { const a = i < 0 ? foot : NODES[`${pid}${i}`], b = NODES[`${pid}${i + 1}`]; out.push(makeRoot(`${pid}-h${i + 1}`, a.id, b.id, false, drape(a, b, i < 0 ? 1.5 : a.at.y + 0.3, b.at.y - 0.3, i < 0 ? footAngle : h.angle0 + i * h.turn, h.angle0 + (i + 1) * h.turn))); }
+    const midAngle = h.angle0 + mid * h.turn, topAngle = h.angle0 + (h.count - 1) * h.turn;
+    // No root from the foot tree (see KARST_ROOTS): ledge to ledge up the helix from the first ledge, so every clinging tree has roots to sink into and the climb can be taken a ledge at a time.
+    for (let i = 0; i + 1 < h.count; i++) { const a = NODES[`${pid}${i}`], b = NODES[`${pid}${i + 1}`]; out.push(makeRoot(`${pid}-h${i + 1}`, a.id, b.id, false, drape(a, b, a.at.y + 0.3, b.at.y - 0.3, h.angle0 + i * h.turn, h.angle0 + (i + 1) * h.turn))); }
     const pine = NODES[`pine${pid}`], rim = [onPillar(p, p.height - 1.5, topAngle, 0.6), onPillar(p, p.height, topAngle, 0.35).setY(p.height + 0.1), onPillar(p, p.height, topAngle, -1.2).setY(p.height + 0.15)];
     out.push(makeRoot(`${pid}-mid-top`, midNode.id, pine.id, false, [...drape(midNode, pine, midNode.at.y + 0.5, p.height - 2.5, midAngle, topAngle).slice(0, -1), ...rim, pine.mouth.clone()]));
   }
