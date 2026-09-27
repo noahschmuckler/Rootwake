@@ -283,6 +283,8 @@ function presentHulda(dt: number): void {
   const kv = mode === 'karst' ? karst.visual() : null; if (kv) { form = kv.form; visualPosition.copy(kv.position); visualRotation.copy(kv.rotation); }
   if (form === 'human' || form === 'leaf') visualPosition.y += HUMAN_CENTRE;
   if (mode === 'dive' || mode === 'launch') form = 'knot';
+  // In the deep she is the camera: her figure, which only fades when hidden, is put far below it, or its leaves fill the view (Noah).
+  if (inDeep(mode) && mode !== 'meditate') visualPosition.set(camera.position.x, camera.position.y - 40, camera.position.z);
   presentation.update(dt, form, visualPosition, visualRotation, player.motor.speed, heading, mode === 'ground' || mode === 'meditate', (mode !== 'ground' && mode !== 'dive' && mode !== 'launch' && mode !== 'deep') || player.view === 'third', kv ? kv.present : form);
   player.avatar.visible = false;
 }
