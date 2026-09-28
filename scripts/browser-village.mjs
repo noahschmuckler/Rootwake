@@ -45,8 +45,9 @@ try{
  // With the baskets full she is told so and collects only the overfill; the heap beside the rack takes it.
  await v(page,()=>{const k=window.__village;k.setStore('berries',8);const st=k.stations.find(s=>s.id==='gather-thicket');k.standAt(st.x,st.z,0);});await page.waitForTimeout(2500);
  assert.ok(await page.locator('#tip').isVisible()&&/full/.test(await page.locator('#tip').textContent()),'the tip says the baskets are full');assert.ok((await v(page,()=>window.__village.stack.n))<=8,'her stack is bounded by the room');
- await v(page,()=>{const k=window.__village;k.setStore('berries',0);const st=k.stations.find(s=>s.id==='deliver-berries');k.standAt(st.x,st.z,0);});await page.waitForTimeout(2500);
- const handed=await v(page,()=>({stack:window.__village.stack,berries:window.__village.stores.berries}));assert.ok(!handed.stack,`handed over, all of it (${JSON.stringify(handed)})`);assert.equal(handed.berries,8,`the baskets hold it (${handed.berries})`);
+ // (what she carries: the baskets' room counts what villagers carry to them too, so it can be less than 8)
+ const inStack=await v(page,()=>{const k=window.__village,n=k.stack.n;k.setStore('berries',0);const st=k.stations.find(s=>s.id==='deliver-berries');k.standAt(st.x,st.z,0);return n;});await page.waitForTimeout(2500);
+ const handed=await v(page,()=>({stack:window.__village.stack,berries:window.__village.stores.berries}));assert.ok(!handed.stack,`handed over, all of it (${JSON.stringify(handed)})`);assert.ok(inStack>=6,`she carried a stackful (${inStack})`);assert.equal(handed.berries,inStack,`the baskets hold it (${handed.berries} of ${inStack})`);
  await page.screenshot({timeout:120000,path:out+'/02e-stack.png'});
  const prayed=await v(page,()=>{const k=window.__village;k.setStore('milk',8);k.setStore('grain',12);k.advance(200-k.tick);for(let i=0;i<20;i++){k.advance(10);if(k.praying().length>0)break;}return {praying:k.praying(),prayer:k.prayer};});assert.ok(prayed.praying.length>0,`supplied, someone prays (${JSON.stringify(prayed)})`);
  // The miracles are actions where she stands (Noah, 2026-09-27): at the thicket the pray button offers a spirit for it and its quickening; each costs its prayer and a channelling on the board, twelve gems of her clarity carried into the place.
