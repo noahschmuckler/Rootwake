@@ -117,3 +117,46 @@ test('S2 (Noah): the watch lights a torch at the fire after supper and strikes o
     gu.want = 'post'; gu.activity = 'guarding'; u.land.goats = 0; advance(u, DAY_TICKS - (u.tick % DAY_TICKS) + WOLF_TICK + 1 - DAY_TICKS); 
   } finally { setDens([]); }
 });
+import { setSearch, setSearchFound, searchers, searchParty, SEARCHERS_MAX, SEARCH_FOOD, FOODS, paceOf } from '../src/villageModel';
+test('S4: the steward names a place heard of; two searchers muster at the green\'s edge, take food for the road, walk out together at the slower pace, look about, walk home, and the place is found for her map', () => {
+  setDens([]); setWarrens([]);
+  try {
+    const v = freshVillage(1), grown = v.hobbits.filter(s => s.stage === 'grown'); let found = '';
+    setSearchFound((_, about) => { found = about; });
+    assert.ok(!setSearch(v, 'ruin-1', 'the old stones', { x: 340, z: 160, r: 30 }), 'nobody to send');
+    assert.ok(assignDuty(v, grown[0].id, 'search')); assert.ok(assignDuty(v, grown[1].id, 'search')); assert.ok(!assignDuty(v, grown[2].id, 'search'), `no more than ${SEARCHERS_MAX}`);
+    assert.ok(setSearch(v, 'ruin-1', 'the old stones', { x: 340, z: 160, r: 30 }));
+    const food0 = FOODS.reduce((n, f) => n + v.stores[f], 0), a = grown[0], b = grown[1];
+    let out = -1, far = 0, apart = 0, died = false;
+    for (let i = 0; i < DAY_TICKS * 3 && v.search; i++) { advance(v, 1); if (v.search?.stage === 'out' && out < 0) out = v.tick; const d = Math.hypot(a.x, a.z); far = Math.max(far, d); if (v.search?.stage === 'out') apart = Math.max(apart, Math.hypot(a.x - b.x, a.z - b.z)); if (!v.hobbits.includes(a)) died = true; }
+    assert.ok(out > 0, 'they set out'); assert.ok(!died);
+    assert.ok(far > 300, `walked out to the place (${far.toFixed(0)} m)`); assert.ok(apart < 12, `together on the road (${apart.toFixed(1)} m apart at most)`);
+    assert.equal(found, 'ruin-1', 'found, told when home'); assert.equal(v.search, null); assert.ok(v.events.some(e => e.text.includes('they found the old stones')));
+    assert.ok(FOODS.reduce((n, f) => n + v.stores[f], 0) <= food0 + 60, 'food taken'); assert.ok(v.events.some(e => e.text.endsWith('set out to look for the old stones')));
+    assert.ok(a.errand !== 'search' && Math.hypot(a.x, a.z) < 60, 'home again');
+  } finally { setSearchFound(() => {}); }
+});
+test('S4: a searcher bitten on the road turns the party for home, limping, never killed; nothing is found', () => {
+  setDens([{ id: 'den-1,1', x: 400, z: 300, pack: 2 }]); setWarrens([]);
+  try {
+    const v = freshVillage(1), grown = v.hobbits.filter(s => s.stage === 'grown'); let found = '';
+    setSearchFound((_, about) => { found = about; }); assignDuty(v, grown[0].id, 'search'); assignDuty(v, grown[1].id, 'search'); v.land.goats = 0; v.stores.grain = 20;
+    setSearch(v, 'ruin-2', 'the far stones', { x: 700, z: 520, r: 30 });
+    const a = grown[0]; for (let i = 0; i < DAY_TICKS && v.search?.stage !== 'out'; i++) advance(v, 1); advance(v, 60);
+    const pace0 = paceOf(a); advance(v, WOLF_TICK - (v.tick % DAY_TICKS) + 30); assert.ok(wolves(v).length, 'the pack is out');
+    const w = wolves(v)[0]; w.x = a.x + 0.5; w.z = a.z; w.prey = a.id; w.state = 'hunting'; w.biteClock = 0; w.ate = 0;
+    for (let i = 0; i < 20 && v.search?.stage !== 'home'; i++) stepRaiders(v, 0.2, null);
+    assert.equal(v.search?.stage, 'home', 'the party turns for home'); assert.ok(v.search!.hurt); assert.ok(paceOf(a) < pace0, 'limping'); assert.equal(thought(a, v.tick + 99), 'limping home');
+    for (let i = 0; i < 20; i++) { w.biteClock = 0; w.ate = 0; w.x = a.x + 0.5; w.z = a.z; w.prey = a.id; stepRaiders(v, 0.2, null); }
+    assert.ok(a.missed < DEATH_MEALS, 'never killed'); for (let i = 0; i < DAY_TICKS * 2 && v.search; i++) advance(v, 1);
+    assert.ok(v.hobbits.includes(a), 'alive'); assert.equal(v.search, null); assert.equal(found, '', 'nothing found'); assert.ok(v.events.some(e => e.text.includes('limp home bitten')));
+  } finally { setDens([]); setSearchFound(() => {}); }
+});
+test('S4: the search saved; no food to spare puts the party off a day; a searcher on the road keeps the duty', () => {
+  const v = freshVillage(1), grown = v.hobbits.filter(s => s.stage === 'grown'); assignDuty(v, grown[0].id, 'search'); setSearch(v, 'ruin-1', 'the old stones', { x: 340, z: 160, r: 30 });
+  for (const f of FOODS) v.stores[f] = 0; for (let i = 0; i < 300; i++) advance(v, 1);
+  assert.equal(v.search?.stage, 'muster', 'not set out'); assert.ok(v.events.some(e => e.text.startsWith('No food to spare')));
+  v.stores.grain = SEARCH_FOOD * 3; for (let i = 0; i < DAY_TICKS && v.search?.stage === 'muster'; i++) advance(v, 1); assert.equal(v.search?.stage, 'out', 'out the next day');
+  assert.ok(!assignDuty(v, grown[0].id, null), 'kept on the road'); assert.equal(searchers(v).length, 1); assert.equal(searchParty(v).length, 1);
+  const back = parseVillage(serializeVillage(v)); assert.equal(back.search?.stage, 'out'); assert.equal(back.hobbits.find(s => s.id === grown[0].id)!.errand, 'search');
+});

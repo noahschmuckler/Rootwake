@@ -9,6 +9,19 @@ Source branch: feat/village (from feat/karst-flow, so it carries the rigged Huld
 
 Read `VILLAGERS.md` first: the brief, the principles, the pass order and Noah's decisions. This file is V0 as built.
 
+## S4a: search parties (2026-09-28, SETTLEMENTS.md's fourth sprint, first part)
+
+Noah's decisions before building: searchers can be hurt and limp home; the steward picks the search's target; the dire pack (S4c) begins when the steward wakes. Built:
+
+- **The search duty** (`villageModel`: `Duty` `search`, `searchers`, `SEARCHERS_MAX` 2): the steward's board cycles **day work → on the watch → hunting → searching**. With searchers, his panel lists **every place she has heard of and not found** (her map's hints, not the dark wood) as "search for … to the …"; a tap names it (`setSearch`, saved in the village as `search`). A search not yet set out can be changed; a searcher on the road keeps the duty until home.
+- **The party** (`stepSearcher`): in the morning (until `SEARCH_LAST`, 420) the searchers muster at the green's edge on the place's bearing; when both are there they take `SEARCH_FOOD` (2 each) from the stores (no food to spare puts them off a day) and **walk out together at the slower one's pace**, side by side, round the dark wood and the pillar (the steward's `routeBetween`). At the place's edge they look about `SEARCH_TICKS` (40) and walk home through the green to the fire. They walk on through the night; the road's food is their meals (no hunger on the road). Home, **the place is found**: `onSearchFound` → the entry `explore`s it on the overworld, as if she had walked there, with a banner.
+- **Hurt, never killed**: a wolf that bites a searcher turns the whole party for home (`search.hurt`), limping (the bite's missed meals slow them, and the party walks at its slowest); nothing is found; "limp home bitten, without finding …". Bites cap short of death as for anyone but a guard at the watch.
+- **On the map**: the party's dots, named, wherever they are.
+- **S3's loose end**: the steward's send list no longer offers the village he stands in.
+- Dev handle: `search()`, `searchParty()`, `searchable()`, `setSearch(about)`, `hearAll()`; tests `S4: …` in `tests/steward.test.ts`; journey: two villagers to searching, a place named from the panel (`02v-search`), the party on the map (`02w-search-map`), home with it found.
+
+**Open, flagged in code:** every number above; whether the party should camp by night rather than walk on; searchers are shown only while she is near their village (the map shows them always).
+
 ## S3: hunting, the larder, and communing with the steward (2026-09-28, SETTLEMENTS.md's third sprint, with Noah's notes on S2)
 
 Noah's notes on S2: every hero's position marked on the map; no steward button (redundant, and it will not scale to six heroes): stand by a hero and commune, which holds what the button did, sending him included; name and look stay for now; the watch carries torches lit from the fire, no weapon but the lit torch at this level. Built:

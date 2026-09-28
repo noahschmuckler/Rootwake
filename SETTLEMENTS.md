@@ -250,6 +250,8 @@ feel organized rather than managed, and does his walking make sending him a deci
 
 ### S4. Parties, search parties, and the first counter
 
+*(Search parties built 2026-09-28; see VILLAGE_HANDOFF.md "S4a". Decided with Noah: searchers can be hurt and limp home, never killed; the steward picks the target from her map's hints; the dire pack begins when the steward wakes.)*
+
 *Question: does sending villagers out in twos and threes make the world beyond the meadow theirs as
 well as hers, and does the dire pack make the steward's gift cost something?*
 
