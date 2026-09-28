@@ -111,7 +111,8 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   for (let i = 0; i < BRANCH_CAP; i++) { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.045, 0.7 + rand() * 0.4, 5), stickMat); const a = rand() * 6.28, r = 0.6 + rand() * 3.0; m.position.set(SITES.copse.x + Math.cos(a) * r, 0.05, SITES.copse.z + Math.sin(a) * r); m.rotation.set(Math.PI / 2, 0, rand() * 6.28); m.rotation.order = 'ZXY'; root.add(m); sticks.push(m); }
   // The stores on the green's edge, each on the side of its place: a rack of baskets, a trough, a woodpile, a bin of sacks, a shelf of pails. Each shows its count.
   const basketMat = new THREE.MeshStandardMaterial({ color: '#a8894f', roughness: 1 }), sackMat = new THREE.MeshStandardMaterial({ color: '#d2b98a', roughness: 1 }), troughMat = new THREE.MeshStandardMaterial({ color: '#6f5a3e', roughness: 1 });
-  const storeItems: Record<Store, THREE.Object3D[]> = { berries: [], water: [], wood: [], grain: [], milk: [], dark: [] };
+  const storeItems: Record<Store, THREE.Object3D[]> = { berries: [], water: [], wood: [], grain: [], milk: [], dark: [], meat: [] };
+  const meatMat = new THREE.MeshStandardMaterial({ color: '#8a6a4e', roughness: 0.95 });
   const storeFrame = (id: Store, w: number, d: number, h: number): THREE.Group => { const st = STORES[id], g = new THREE.Group(); g.position.set(st.x, relief(st.x, st.z), st.z); g.rotation.y = -Math.atan2(st.z, st.x); root.add(g); const base = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), troughMat); base.position.y = h / 2; g.add(base); return g; };
   // Past its cap a store overfills by OVERFILL as a heap on the ground beside it (what she brings when the villagers have already filled it).
   const heapAt = (i: number, w: number): [number, number, number] => [w / 2 + 0.3 + (i % 2) * 0.32, 0, -0.25 + Math.floor(i / 2) * 0.34];
@@ -122,6 +123,11 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   { const g = storeFrame('wood', 1.5, 0.6, 0.05); for (let i = 0; i < STORES.wood.cap; i++) { const log = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.07, 1.3, 7), stickMat); log.rotation.z = Math.PI / 2; const row = Math.floor(i / 4); log.position.set(0, 0.12 + row * 0.13, -0.2 + (i % 4) * 0.15 - row * 0.07); g.add(log); storeItems.wood.push(log); } for (let i = 0; i < OVERFILL; i++) { const log = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 1.0, 7), stickMat); log.rotation.z = Math.PI / 2; log.rotation.y = 0.3 * (i % 2); log.position.set(1.0 + (i % 2) * 0.1, 0.07, -0.3 + i * 0.16); g.add(log); storeItems.wood.push(log); } }
   { const g = storeFrame('grain', 1.2, 0.7, 0.06); for (let i = 0; i < STORES.grain.cap; i++) { const sack = new THREE.Mesh(new THREE.SphereGeometry(0.13, 7, 6), sackMat); sack.scale.set(1, 0.8, 1); const row = Math.floor(i / 6); sack.position.set(-0.5 + (i % 6) * 0.2 + row * 0.1, 0.16 + row * 0.2, -0.12 + row * 0.02); g.add(sack); storeItems.grain.push(sack); } for (let i = 0; i < OVERFILL; i++) { const sack = new THREE.Mesh(new THREE.SphereGeometry(0.13, 7, 6), sackMat); sack.scale.set(1, 0.8, 1); const [x, , z] = heapAt(i, 1.2); sack.position.set(x, 0.1, z); g.add(sack); storeItems.grain.push(sack); } }
   { const g = storeFrame('milk', 1.5, 0.45, 0.35); for (let i = 0; i < STORES.milk.cap; i++) { const p = pail(); p.position.set(-0.6 + (i % 4) * 0.4, i < 4 ? 0.35 : 0.02, i < 4 ? 0 : 0.32); g.add(p); storeItems.milk.push(p); } for (let i = 0; i < OVERFILL; i++) { const p = pail(); p.position.set(...heapAt(i, 1.5)); g.add(p); storeItems.milk.push(p); } }
+  // S3: the larder, a low frame with the rabbits hung along its rail, and the drying rack beside it once built (updateLand).
+  let rackGroup: THREE.Group;
+  { const g = storeFrame('meat', 1.3, 0.4, 0.06); const rail = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.3, 5), stickMat); rail.rotation.z = Math.PI / 2; rail.position.y = 0.75; g.add(rail); for (const x of [-0.62, 0.62]) { const post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.045, 0.8, 5), stickMat); post.position.set(x, 0.4, 0); g.add(post); }
+    for (let i = 0; i < STORES.meat.cap + OVERFILL; i++) { const r = new THREE.Mesh(new THREE.SphereGeometry(0.08, 6, 5), meatMat); r.scale.set(0.8, 1.6, 0.8); if (i < STORES.meat.cap) r.position.set(-0.55 + i * 0.157, 0.58, 0); else r.position.set(...heapAt(i - STORES.meat.cap, 1.3)); g.add(r); storeItems.meat.push(r); }
+    rackGroup = new THREE.Group(); rackGroup.position.set(0, 0, 0.7); g.add(rackGroup); rackGroup.visible = false; for (let i = 0; i < 4; i++) { const st = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.03, 1.1, 5), stickMat); st.position.set(-0.5 + i * 0.33, 0.55, 0); rackGroup.add(st); } for (const y of [0.5, 0.85]) { const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.1, 5), stickMat); bar.rotation.z = Math.PI / 2; bar.position.y = y; rackGroup.add(bar); } }
   // D2: the Dark Young's leavings, a heap of dark lumps on the green's edge by the stone's gap, one a unit; and the blight on a spoiled place, a dark stain that spreads over it while it is spoiled (updateLand).
   const darkMat = new THREE.MeshStandardMaterial({ color: '#241a2e', emissive: '#4a1a5a', emissiveIntensity: 0.35, roughness: 0.4 });
   { const st = STORES.dark, g = new THREE.Group(); g.position.set(st.x, relief(st.x, st.z), st.z); root.add(g); for (let i = 0; i < st.cap; i++) { const lump = new THREE.Mesh(new THREE.SphereGeometry(0.11 + rand() * 0.05, 6, 5), darkMat); lump.scale.set(1, 0.6, 1); const a = i * 2.4, r = 0.15 + Math.sqrt(i) * 0.22; lump.position.set(Math.cos(a) * r, 0.06 + (i % 3) * 0.02, Math.sin(a) * r); g.add(lump); storeItems.dark.push(lump); } }
@@ -139,7 +145,7 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   let activeStation: string | null = null;
   function setStation(id: string | null, t: number): void { activeStation = id; for (const k in ringMats) { const on = k === id; ringMats[k].opacity = on ? 0.75 + Math.sin(t * 0.01) * 0.2 : 0.35; rings[k].scale.setScalar(on ? 1 + Math.sin(t * 0.008) * 0.03 : 1); } }
   // Her stack: what she carries from a place to a store, on her back, one slab a unit, coloured by kind (setStack).
-  const stackMats: Record<Store, THREE.MeshStandardMaterial> = { berries: new THREE.MeshStandardMaterial({ color: '#8a2a4a', roughness: 0.7 }), water: new THREE.MeshStandardMaterial({ color: '#4f93a8', roughness: 0.3 }), wood: new THREE.MeshStandardMaterial({ color: '#6b5238', roughness: 1 }), grain: new THREE.MeshStandardMaterial({ color: '#d2b98a', roughness: 1 }), milk: new THREE.MeshStandardMaterial({ color: '#f4f1e6', roughness: 0.8 }), dark: new THREE.MeshStandardMaterial({ color: '#241a2e', roughness: 0.5 }) };
+  const stackMats: Record<Store, THREE.MeshStandardMaterial> = { berries: new THREE.MeshStandardMaterial({ color: '#8a2a4a', roughness: 0.7 }), water: new THREE.MeshStandardMaterial({ color: '#4f93a8', roughness: 0.3 }), wood: new THREE.MeshStandardMaterial({ color: '#6b5238', roughness: 1 }), grain: new THREE.MeshStandardMaterial({ color: '#d2b98a', roughness: 1 }), milk: new THREE.MeshStandardMaterial({ color: '#f4f1e6', roughness: 0.8 }), dark: new THREE.MeshStandardMaterial({ color: '#241a2e', roughness: 0.5 }), meat: new THREE.MeshStandardMaterial({ color: '#8a6a4e', roughness: 0.95 }) };
   const stack = new THREE.Group(); stack.visible = false; scene.add(stack); const slabs: THREE.Mesh[] = [];
   for (let i = 0; i < STACK_CAP; i++) { const m = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.09, 0.2), stackMats.berries); m.position.y = i * 0.1; m.rotation.y = (i % 2) * 0.12; stack.add(m); slabs.push(m); }
   function setStack(kind: Store | null, n: number): void { stack.visible = !!kind && n > 0; for (let i = 0; i < slabs.length; i++) { slabs[i].visible = i < n; if (kind) slabs[i].material = stackMats[kind]; } }
@@ -179,7 +185,12 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
     grain: (() => { const sack = new THREE.Mesh(new THREE.SphereGeometry(9, 7, 6), sackMat); sack.scale.set(1, 1.2, 1); return sack; })(),
     milk: (() => { const g = new THREE.Group(); const b = new THREE.Mesh(new THREE.CylinderGeometry(6, 5, 10, 8, 1, true), pailMat); b.material = pailMat.clone(); (b.material as THREE.MeshStandardMaterial).side = THREE.DoubleSide; g.add(b); const m = new THREE.Mesh(new THREE.CircleGeometry(5.5, 8), milkMat); m.rotation.x = -Math.PI / 2; m.position.y = 4; g.add(m); return g; })(),
     dark: new THREE.Group(),
-  }; for (const k of STORE_LIST) { items[k].visible = false; anchor.add(items[k]); } return items; };
+    meat: (() => { const g = new THREE.Group(); for (let i = 0; i < 2; i++) { const r = new THREE.Mesh(new THREE.SphereGeometry(5, 6, 5), meatMat); r.scale.set(0.8, 1.7, 0.8); r.position.set((i - 0.5) * 7, -6, 0); g.add(r); } return g; })(),
+  }; for (const k of STORE_LIST) { items[k].visible = false; anchor.add(items[k]); }
+    // S2: the watch's torch, lit from the fire: a stick with a flame at its head, held up.
+    const torch = new THREE.Group(); const stick = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.6, 44, 5), stickMat); stick.position.y = 10; torch.add(stick); const flame = new THREE.Mesh(new THREE.ConeGeometry(4, 12, 6), torchFlame); flame.position.y = 36; flame.name = 'flame'; torch.add(flame); torch.visible = false; anchor.add(torch); torchMap.set(f, torch);
+    return items; };
+  const torchFlame = new THREE.MeshBasicMaterial({ color: '#ffb040' }), torchMap = new Map<Figure, THREE.Object3D>();
   // Her other shapes: the figure of leaves at a crown, and the bulge of grass she is under the meadow.
   const figureMat = spriteMaterial('leaf', '#b9e58a', { emissive: '#4a7a2a', emissiveIntensity: 0.35 });
   const figure = new THREE.Group(); figure.visible = false; scene.add(figure);
@@ -290,6 +301,7 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   function updateLand(v: Village): void {
     const nb = Math.floor(v.land.berries); for (let i = 0; i < berries.length; i++) berries[i].visible = i < nb;
     for (let i = 0; i < sticks.length; i++) sticks[i].visible = i < v.land.branches;
+    rackGroup.visible = v.rack;
     for (let i = 0; i < penPails.length; i++) penPails[i].visible = i < v.land.milk;
     for (let i = 0; i < goats.length; i++) goats[i].visible = i < v.land.goats;
     for (let i = 0; i < strips.length; i++) { const c = v.land.crops[i]; strips[i].scale.y = 0.08 + 0.92 * c; strips[i].visible = c > 0.02; stalkMats[i].color.set(c >= 1 ? '#d9b44a' : c > 0.7 ? '#b9a852' : '#7fa64a'); }
@@ -298,7 +310,7 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
     let anySpoiled = false; for (const k of YIELD_SITES) { const want = isSpoiled(v, k) ? 1 : 0; blightAmt[k] += (want - blightAmt[k]) * 0.03; if (Math.abs(blightAmt[k] - want) < 0.01) blightAmt[k] = want; const m = blights[k]; m.visible = blightAmt[k] > 0.01; m.scale.setScalar(Math.max(0.01, blightAmt[k])); if (blightAmt[k] > 0.01) anySpoiled = true; }
     bushMat.color.set(blightAmt.thicket > 0.5 ? '#3a2438' : '#4f7a3e'); for (const m of stalkMats) if (blightAmt.field > 0.5) m.color.set('#3a2438');
     void anySpoiled;
-    pruneFigures(v); for (const s of v.hobbits) { const c = s.carry, items = carriedMap.get(figureFor(s))!; for (const k of STORE_LIST) items[k].visible = !!c && c.kind === k; }
+    pruneFigures(v); for (const s of v.hobbits) { const c = s.carry, items = carriedMap.get(figureFor(s))!; for (const k of STORE_LIST) items[k].visible = !!c && c.kind === k; { const t = torchMap.get(figureFor(s)); if (t) { t.visible = !!s.torch && !s.inside; if (t.visible) t.getObjectByName('flame')!.scale.setScalar(0.85 + Math.random() * 0.3); } } }
     fireWood = v.fireWood;
     for (let i = 0; i < v.spirits.length; i++) { const f = spiritFigure(i), load = f.getObjectByName('load'); if (load) load.visible = !!v.spirits[i].carry; }
   }

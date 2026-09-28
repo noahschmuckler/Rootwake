@@ -231,6 +231,8 @@ feel organized rather than managed, and does his walking make sending him a deci
 
 *Question: does quarry shared with the wolves make hunting a judgement rather than a faucet?*
 
+*(Built 2026-09-28; see VILLAGE_HANDOFF.md "S3". With Noah's S2 notes: the board and sending live in communing with the steward, no steward button; the watch carries torches lit at the fire; heroes marked on the map. The spear is whittled at the woodpile rather than a session at the copse; the rack is built at the steward's word from four wood; the keeper's thin-warren rumor is not built yet.)*
+
 - **The tool.** A sharpened stick: a hunter takes one wood from the store and spends a session at the
   copse; the spear is carried (the plateau's hand axe recipe is the model; the toolmaker's building
   comes with the smith).

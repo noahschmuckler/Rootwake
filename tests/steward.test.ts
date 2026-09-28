@@ -65,3 +65,44 @@ test('S2: the steward sleeps until woken, walks where he is sent round what he m
   assert.ok(far / PACE < 400, 'at his pace'); assert.deepEqual(parseSteward('junk', { x: 5, z: 6 }), freshSteward({ x: 5, z: 6 }));
 });
 void setLair;
+
+// S3 (SETTLEMENTS.md): hunting, the larder, the rack; and the watch's torches.
+import { hunters, huntingGround, groundRabbits, buildRack, setOwnWarrens, HUNT_TAKE, HUNT_AWAY, RACK_WOOD, MEAT_MEALS, WARREN_CAP, WARREN_REGROW, STORES, mealSlot, setWarrens as setW } from '../src/villageModel';
+import { ownWarrens, OWN_WARREN_R, DEN_REACH } from '../src/overworldModel';
+const dawnOf = (v: Village): void => { advance(v, DAY_TICKS - (v.tick % DAY_TICKS) + 1); };
+test('S3: a village with no den in reach has its own warren; one with a den hunts at the den\'s warren within reach', () => {
+  const own = ownWarrens(1); assert.ok(own.some(w => w.id === 'warren:own:village'), 'the first village has its own'); for (const w of own) assert.equal(w.den, '');
+  const first = own.find(w => w.id === 'warren:own:village')!; assert.ok(Math.abs(Math.hypot(first.x, first.z) - OWN_WARREN_R) < 1.5); assert.ok(!dens(1).some(d => Math.hypot(d.x, d.z) <= DEN_REACH), 'no den in reach of it');
+  setOwnWarrens([{ id: 'warren:own:village', x: 60, z: 50 }]); try { const v = freshVillage(1), g = huntingGround(v)!; assert.equal(g.id, 'warren:own:village'); assert.equal(g.den, null); assert.equal(groundRabbits(v, g), WARREN_CAP); } finally { setOwnWarrens([]); }
+  setDens([{ id: 'den-1,1', x: 300, z: 300, pack: 3 }]); setW([{ id: 'warren:den-1,1', den: 'den-1,1', x: 150, z: 120 }]);
+  try { const v = freshVillage(1), g = huntingGround(v)!; assert.equal(g.id, 'warren:den-1,1'); assert.ok(g.den); } finally { setDens([]); setW([]); }
+});
+test('S3: a hunter sharpens a stick at the woodpile, goes out in the morning, comes back with rabbits from the pool the wolves share, and carries them to the larder; the bare warren sends them home with nothing', () => {
+  setOwnWarrens([{ id: 'warren:own:village', x: 60, z: 50 }]);
+  try {
+    const v = freshVillage(1), h = v.hobbits.find(s => s.stage === 'grown')!; assert.ok(assignDuty(v, h.id, 'hunt')); assert.equal(hunters(v).length, 1); const wood0 = v.stores.wood;
+    dawnOf(v); for (let i = 0; i < 400 && !h.spear; i++) advance(v, 1); assert.ok(h.spear, 'a sharpened stick'); assert.ok(v.stores.wood <= wood0, 'from the woodpile');
+    for (let i = 0; i < 300 && h.errand !== 'hunt'; i++) advance(v, 1); assert.equal(h.errand, 'hunt', 'out hunting'); assert.ok(h.inside, 'gone from sight');
+    const r0 = v.ownRabbits; advance(v, HUNT_AWAY + 1); assert.equal(v.ownRabbits, r0 - HUNT_TAKE, 'rabbits from the pool'); assert.ok(h.carry && h.carry.kind === 'meat' && h.carry.n === HUNT_TAKE);
+    for (let i = 0; i < 300 && h.carry; i++) advance(v, 1); assert.equal(v.stores.meat, HUNT_TAKE, 'in the larder'); assert.ok(v.events.some(e => e.text.includes('back from the hunt with 2 rabbits')));
+    for (let i = 0; i < 400; i++) advance(v, 1); assert.notEqual(h.errand, 'hunt', 'once a morning');
+    dawnOf(v); v.ownRabbits = 0; for (let i = 0; i < 600 && !v.events.some(e => e.text.endsWith('the warren is bare')); i++) advance(v, 1); assert.ok(v.events.some(e => e.text.endsWith('the warren is bare')), 'home with nothing');
+  } finally { setOwnWarrens([]); }
+});
+test('S3: a meal of meat counts for the next meal too; without a rack the larder loses meat at dawn; the rack is built from the woodpile; the own warren regrows', () => {
+  const v = freshVillage(1); v.stores = { berries: 0, milk: 0, grain: 0, wood: 10, water: 5, dark: 0, meat: 6 }; const s = v.hobbits.find(x => x.stage === 'grown')!;
+  advance(v, 200); assert.equal(mealSlot(v.tick), 0); const ateMeat = v.hobbits.filter(x => x.ate === mealSlot(v.tick) + MEAT_MEALS - 1); assert.ok(ateMeat.length >= 1 && v.stores.meat < 6, `a breakfast of meat covers noon too (${v.hobbits.map(x => x.ate)})`); void s;
+  const meat = v.stores.meat; v.ownRabbits = 1; dawnOf(v); assert.ok(v.stores.meat <= Math.floor(meat / 2) + 0.001, 'half lost without a rack'); assert.equal(v.ownRabbits, 1 + WARREN_REGROW, 'the own warren regrows');
+  v.stores.wood = RACK_WOOD - 1; assert.ok(!buildRack(v), 'not without the wood'); v.stores.wood = RACK_WOOD + 1; assert.ok(buildRack(v)); assert.equal(v.stores.wood, 1); assert.ok(!buildRack(v), 'once');
+  v.stores.meat = 6; dawnOf(v); assert.equal(v.stores.meat <= 6 && v.stores.meat >= 6 - 8, true); const kept = v.stores.meat; dawnOf(v); assert.ok(v.stores.meat >= kept - 8, 'kept with the rack (eaten, not rotted)');
+  assert.equal(STORES.meat.cap, 8);
+});
+test('S2 (Noah): the watch lights a torch at the fire after supper and strikes only with it; the fire out, no torch and no strike', () => {
+  setDens([{ id: 'den-1,1', x: 300, z: 300, pack: 1 }]); setW([]);
+  try {
+    const v = freshVillage(1), g = v.hobbits.find(s => s.stage === 'grown' && traitsOf(s.id).bold)!; assignDuty(v, g.id, 'guard'); night(v);
+    assert.ok(g.torch, 'a torch from the fire'); assert.equal(thought(g, v.tick), 'keeping watch');
+    const u = freshVillage(1), gu = u.hobbits.find(s => s.id === g.id)!; assignDuty(u, gu.id, 'guard'); advance(u, 689); u.stores.wood = 0; u.fireWood = 0; advance(u, 900 - 689); assert.ok(!gu.torch, 'the fire out: no torch'); assert.equal(thought(gu, u.tick), 'keeping watch without a torch');
+    gu.want = 'post'; gu.activity = 'guarding'; u.land.goats = 0; advance(u, DAY_TICKS - (u.tick % DAY_TICKS) + WOLF_TICK + 1 - DAY_TICKS); 
+  } finally { setDens([]); }
+});
