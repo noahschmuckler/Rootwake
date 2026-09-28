@@ -14,7 +14,7 @@ import type { Collider } from './player';
 import { spriteMaterial, standees, crownStandees, type Standee } from './sprites';
 import { treeParts, taperedTube } from './flora';
 import { createHulda } from './huldaCharacter';
-import { makeWolf } from './wolfFigure';
+import { makeWolf, setDireLook } from './wolfFigure';
 
 /** The ground's height: the meadow's gentle relief, and beyond the island the chunks' hills (zero within the village). */
 export const relief = createTerrain(1).height;
@@ -228,15 +228,15 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
     else f.group.rotation.z = 0;
   }
   // G3: a wolf, low and grey, four legs, a tail and ears, eyes that catch the light; struck it flashes; dead it lies on its side.
-  const wolfFigures = new Map<number, { group: THREE.Group; legs: THREE.Mesh[]; tail: THREE.Mesh; coil: THREE.Mesh; hide: THREE.MeshStandardMaterial }>();
+  const wolfFigures = new Map<number, { group: THREE.Group; legs: THREE.Mesh[]; tail: THREE.Mesh; coil: THREE.Mesh; hide: THREE.MeshStandardMaterial; eyes: THREE.Mesh[]; dire: boolean }>();
   function wolfFigure(id: number) {
     let f = wolfFigures.get(id); if (f) return f;
-    const { group, legs, tail, hide } = makeWolf();
+    const { group, legs, tail, hide, eyes } = makeWolf();
     const coil = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.05, 6, 20), coilMat); coil.rotation.x = -Math.PI / 2; coil.position.y = 0.08; coil.visible = false; group.add(coil);
-    root.add(group); f = { group, legs, tail, coil, hide }; wolfFigures.set(id, f); return f;
+    root.add(group); f = { group, legs, tail, coil, hide, eyes, dire: false }; wolfFigures.set(id, f); return f;
   }
-  function setWolf(id: number, x: number, z: number, heading: number, t: number, moving: boolean, hurt: number, rooted: number, dead: number): void {
-    const f = wolfFigure(id); f.group.visible = true; f.group.position.set(x, relief(x, z), z); f.group.rotation.y = -heading;
+  function setWolf(id: number, x: number, z: number, heading: number, t: number, moving: boolean, hurt: number, rooted: number, dead: number, dire = false): void {
+    const f = wolfFigure(id); if (f.dire !== dire) { f.dire = dire; setDireLook(f, dire); } f.group.visible = true; f.group.position.set(x, relief(x, z), z); f.group.rotation.y = -heading;
     for (let i = 0; i < f.legs.length; i++) f.legs[i].rotation.z = moving ? Math.sin(t * 0.014 + i * 1.6) * 0.5 : 0;
     f.tail.rotation.x = Math.sin(t * 0.005 + id) * 0.25; f.hide.emissive.set(hurt > 0 ? '#b03030' : '#000000'); f.coil.visible = rooted > 0;
     if (dead > 0) { f.group.rotation.z = Math.min(1.5, dead * 3); f.group.position.y = relief(x, z) - Math.max(0, dead - 4) * 0.2; } else f.group.rotation.z = 0;

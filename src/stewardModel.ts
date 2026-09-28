@@ -5,10 +5,10 @@
 // where he is, then walks on. Pure: no Three.js. Saved under its own key.
 export interface Vec2 { x: number; z: number }
 export interface Circle { x: number; z: number; r: number }
-export interface Steward { woken: boolean; x: number; z: number; route: Vec2[]; to: string | null; at: string | null; hurtUntil: number; bitten: number }
+export interface Steward { woken: boolean; x: number; z: number; route: Vec2[]; to: string | null; at: string | null; hurtUntil: number; bitten: number; /** S4c (SETTLEMENTS.md §6, chaos keeps pace): the den whose pack turned dire when he woke (null once it is slain in its den), and whether one has been chosen. */ dire: string | null; direChosen: boolean }
 /** He walks PACE m a real second; within ARRIVE m of a place he is at it; bitten, he lies up LIE_UP_TICKS (a village day); a route bends round a circle to avoid (the dark forest, the karst's pillar) by MARGIN. WAKE_GEMS: the clarity channelled into the chair to wake him. Tuning. */
 export const PACE = 1.6, ARRIVE = 6, LIE_UP_TICKS = 1440, MARGIN = 25, WAKE_GEMS = 20;
-export const freshSteward = (at: Vec2): Steward => ({ woken: false, x: at.x, z: at.z, route: [], to: null, at: 'moot', hurtUntil: 0, bitten: 0 });
+export const freshSteward = (at: Vec2): Steward => ({ woken: false, x: at.x, z: at.z, route: [], to: null, at: 'moot', hurtUntil: 0, bitten: 0, dire: null, direChosen: false });
 /** A way from `a` to `b` on foot, bending round every circle the straight line would cross. */
 export function routeBetween(a: Vec2, b: Vec2, avoid: Circle[], depth = 0): Vec2[] {
   if (depth > 4) return [b];
@@ -22,6 +22,12 @@ export function routeBetween(a: Vec2, b: Vec2, avoid: Circle[], depth = 0): Vec2
     return [...routeBetween(a, w, avoid, depth + 1), ...routeBetween(w, b, avoid, depth + 1)];
   }
   return [b];
+}
+/** S4c: the den that turns dire when he wakes: of the dens within `reach` of the village he first walks to, the nearest to it; else the den nearest to any village. */
+export function chooseDire(dens: { id: string; x: number; z: number }[], first: Vec2, villages: Vec2[], reach: number): string | null {
+  const d = (a: Vec2, b: Vec2): number => Math.hypot(a.x - b.x, a.z - b.z);
+  const near = dens.filter(x => d(x, first) <= reach).sort((a, b) => d(a, first) - d(b, first))[0]; if (near) return near.id;
+  const best = dens.map(x => ({ x, m: Math.min(...villages.map(v => d(x, v))) })).sort((a, b) => a.m - b.m)[0]; return best ? best.x.id : null;
 }
 /** Wake him (the channelling is the entry's). */
 export function wake(s: Steward): boolean { if (s.woken) return false; s.woken = true; return true; }
@@ -50,6 +56,6 @@ export function parseSteward(raw: string | null, at: Vec2): Steward {
     const num = (x: unknown, d: number): number => (typeof x === 'number' && Number.isFinite(x) ? x : d);
     const route = Array.isArray(p.route) ? p.route.filter((w: unknown) => w && Number.isFinite((w as Vec2).x) && Number.isFinite((w as Vec2).z)).slice(0, 16).map((w: Vec2) => ({ x: w.x, z: w.z })) : [];
     const to = typeof p.to === 'string' && p.to.length <= 40 && route.length ? p.to : null;
-    return { woken: p.woken === true, x: num(p.x, at.x), z: num(p.z, at.z), route: to ? route : [], to, at: to ? null : typeof p.at === 'string' && p.at.length <= 40 ? p.at : 'moot', hurtUntil: Math.max(0, num(p.hurtUntil, 0)), bitten: Math.max(0, Math.floor(num(p.bitten, 0))) };
+    return { woken: p.woken === true, x: num(p.x, at.x), z: num(p.z, at.z), route: to ? route : [], to, at: to ? null : typeof p.at === 'string' && p.at.length <= 40 ? p.at : 'moot', hurtUntil: Math.max(0, num(p.hurtUntil, 0)), bitten: Math.max(0, Math.floor(num(p.bitten, 0))), dire: typeof p.dire === 'string' && p.dire.length <= 40 ? p.dire : null, direChosen: p.direChosen === true };
   } catch { return freshSteward(at); }
 }

@@ -9,7 +9,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { denLayout, floorAt, floorsAt, insideDen, hallLines, FLOOR_DROP, FLOOR_WIDTH, CHAMBER_FLOOR, type DenLayout } from './denModel';
 import { mulberry32 } from './colors';
-import { makeWolf, type WolfBody } from './wolfFigure';
+import { makeWolf, setDireLook, type WolfBody } from './wolfFigure';
 import type { Terrain } from './worldTerrain';
 /** Built within DEN_BUILD_M, dropped beyond DEN_DROP_M; the land's surface is offered over a hall only where it lies DEN_ROOF_CUT above the roof (else the mouth is cut through it). The pack asleep (Noah): its wolves lie in the deepest chamber, SLEEP_RING of its radius out from the centre; a sleeping wolf has SLEEP_HP and is struck within SLEEP_REACH ahead of her. Tuning. */
 export const DEN_BUILD_M = 140, DEN_DROP_M = 260, DEN_ROOF_CUT = 0.8, SLEEP_RING = 0.5, SLEEP_HP = 18, SLEEP_REACH = 2.4;
@@ -42,10 +42,12 @@ export function createDenField(scene: THREE.Scene, terrain: Terrain, dens: { id:
   }
   function drop(id: string): void { const b = built.get(id); if (!b) return; scene.remove(b.group); for (const g of b.geometries) g.dispose(); built.delete(id); }
   /** The pack asleep: `n` wolves lying in the deepest chamber, made or taken away as the count changes; they breathe. */
+  /** S4c: the dire den's pack sleeps black and red-eyed. */
+  let direId: string | null = null;
   function setPack(id: string, n: number, time: number): void {
     const b = built.get(id), d = byId.get(id); if (!b || !d) return; const c = d.chambers.find(ch => ch.deepest)!, fy = c.c.y - c.h * CHAMBER_FLOOR + 0.02;
     while (b.pack.length > n) { const w = b.pack.pop()!; b.group.remove(w.body.group); }
-    while (b.pack.length < n) { const i = b.pack.length, a = i * 2.4 + 0.7, r = c.r * SLEEP_RING * (0.6 + 0.4 * ((i * 7) % 3) / 2), x = c.c.x + Math.cos(a) * r, z = c.c.z + Math.sin(a) * r, body = makeWolf(); body.group.position.set(x, fy, z); body.group.rotation.y = a + 1.2; body.group.rotation.z = 1.35; b.group.add(body.group); b.pack.push({ body, hp: SLEEP_HP, hurt: 0, x, z, y: fy }); }
+    while (b.pack.length < n) { const i = b.pack.length, a = i * 2.4 + 0.7, r = c.r * SLEEP_RING * (0.6 + 0.4 * ((i * 7) % 3) / 2), x = c.c.x + Math.cos(a) * r, z = c.c.z + Math.sin(a) * r, body = makeWolf(); setDireLook(body, id === direId); body.group.position.set(x, fy, z); body.group.rotation.y = a + 1.2; body.group.rotation.z = 1.35; b.group.add(body.group); b.pack.push({ body, hp: SLEEP_HP, hurt: 0, x, z, y: fy }); }
     for (const [i, w] of b.pack.entries()) { w.body.group.scale.set(1, 1 + 0.035 * Math.sin(time * 0.0016 + i * 1.9), 1); w.hurt = Math.max(0, w.hurt - 0.016); w.body.hide.emissive.set(w.hurt > 0 ? '#b03030' : '#000000'); }
   }
   /** Her strike in the den: the nearest sleeping wolf within SLEEP_REACH ahead of her takes `dmg`; returns what it hit and whether it died (the caller tells the model). */
@@ -77,6 +79,8 @@ export function createDenField(scene: THREE.Scene, terrain: Terrain, dens: { id:
     current = near(feet.x, feet.z); inside = !!current && feet.y < terrain.height(feet.x, feet.z) - 0.6 && !!floorAt(current, feet.x, feet.z);
     lantern.position.set(feet.x, feet.y + 1.3, feet.z); lantern.intensity = inside ? 2.2 + 0.2 * Math.sin(time * 0.011) : 0;
   }
-  return { layouts, layout: (id: string) => byId.get(id) ?? null, surfacesAt, canOccupy, cameraClear, update, strikeAsleep, packAt, get inside() { return inside; }, get current() { return current; }, get builtCount() { return built.size; } };
+  /** S4c: which den is dire (null: none); a built pack takes the look at once. */
+  function setDire(id: string | null): void { if (id === direId) return; direId = id; for (const [k, b] of built) for (const w of b.pack) setDireLook(w.body, k === id); }
+  return { setDire, layouts, layout: (id: string) => byId.get(id) ?? null, surfacesAt, canOccupy, cameraClear, update, strikeAsleep, packAt, get inside() { return inside; }, get current() { return current; }, get builtCount() { return built.size; } };
 }
 export type DenField = ReturnType<typeof createDenField>;

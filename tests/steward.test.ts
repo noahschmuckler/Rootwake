@@ -160,3 +160,30 @@ test('S4: the search saved; no food to spare puts the party off a day; a searche
   assert.ok(!assignDuty(v, grown[0].id, null), 'kept on the road'); assert.equal(searchers(v).length, 1); assert.equal(searchParty(v).length, 1);
   const back = parseVillage(serializeVillage(v)); assert.equal(back.search?.stage, 'out'); assert.equal(back.hobbits.find(s => s.id === grown[0].id)!.errand, 'search');
 });
+import { setDire, isDire, DIRE_HP, denState, slayAsleep, packAsleep, WARREN_CAP } from '../src/villageModel';
+import { chooseDire } from '../src/stewardModel';
+test('S4c: the dire pack passes a full warren by, takes a goat and bites without going home fed, can kill anyone out of doors, and is black in the rumor', () => {
+  const den = { id: 'den-1,1', x: 200, z: 150, pack: 2 }; setDens([den]); setWarrens([{ id: 'warren:1', den: den.id, x: 130, z: 100 }]);
+  try {
+    setDire(den.id); const v = freshVillage(1); denState(v, den).rabbits = WARREN_CAP;
+    assert.ok(rumors(v).some(r => r.text.startsWith('black wolves howl')), 'the keeper tells of black wolves');
+    advance(v, WOLF_TICK - (v.tick % DAY_TICKS) + 2); const ws = wolves(v); assert.equal(ws.length, 2); assert.ok(ws.every(w => isDire(w) && w.hp === DIRE_HP));
+    for (let i = 0; i < 600 && v.land.goats === 3; i++) stepRaiders(v, 0.25, null);
+    assert.equal(denState(v, den).rabbits, WARREN_CAP, 'the warren passed by'); assert.ok(v.land.goats < 3, 'a goat taken'); assert.ok(wolves(v).some(w => w.state !== 'leaving' && w.ate >= 1), 'fed, and not gone home');
+    const s = v.hobbits.find(h => h.stage === 'grown')!; s.inside = false; s.missed = 0; v.land.goats = 0; const w = wolves(v)[0]; w.x = s.x + 0.5; w.z = s.z; w.prey = s.id; w.state = 'hunting'; w.biteClock = 0;
+    for (let i = 0; i < 40 && s.missed < DEATH_MEALS; i++) { s.inside = false; stepRaiders(v, 0.3, null); } assert.equal(s.missed, DEATH_MEALS, 'the bite can kill');
+    advance(v, 1); assert.ok(v.events.some(e => e.text === `${hobbitById(s.id).name} is killed by the black wolves`));
+    setDire(null); assert.ok(!isDire(w), 'ordinary once the den is not dire');
+  } finally { setDire(null); setDens([]); setWarrens([]); }
+});
+test('S4c: slain asleep in its den, the dire pack is told back and the next is ordinary; a dire den neither grows nor starves; the den chosen is the one nearest the steward\'s first village', () => {
+  const den = { id: 'den-1,1', x: 200, z: 150, pack: 2 }; setDens([den]); setWarrens([]); let slain = '';
+  try {
+    setDire(den.id, id => { slain = id; }); const v = freshVillage(1);
+    for (let d = 0; d < 5; d++) advance(v, DAY_TICKS); assert.equal(denState(v, den).alive, 2, 'no growth or starving');
+    advance(v, 300 - (v.tick % DAY_TICKS)); assert.equal(packAsleep(v, den), 2); slayAsleep(v, den); slayAsleep(v, den);
+    assert.equal(slain, den.id); assert.ok(v.events.some(e => e.text.startsWith('The black pack is slain in its den')));
+    assert.equal(chooseDire([{ id: 'a', x: 900, z: 0 }, { id: 'b', x: 300, z: 0 }, { id: 'c', x: 0, z: 2000 }], { x: 0, z: 1600 }, [{ x: 0, z: 0 }, { x: 0, z: 1600 }], 500), 'c', 'in reach of his first village');
+    assert.equal(chooseDire([{ id: 'a', x: 900, z: 0 }, { id: 'b', x: 700, z: 0 }], { x: 0, z: 1600 }, [{ x: 0, z: 0 }, { x: 0, z: 1600 }], 500), 'b', 'else the nearest to any village');
+  } finally { setDire(null, () => {}); setDens([]); }
+});

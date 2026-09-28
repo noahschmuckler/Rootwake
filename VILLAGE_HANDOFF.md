@@ -9,6 +9,15 @@ Source branch: feat/village (from feat/karst-flow, so it carries the rigged Huld
 
 Read `VILLAGERS.md` first: the brief, the principles, the pass order and Noah's decisions. This file is V0 as built.
 
+## S4c: the dire pack (2026-09-28, SETTLEMENTS.md §6's first counter; Noah: it begins when the steward wakes)
+
+- **Chosen at his waking** (`stewardModel.chooseDire`, saved with him as `dire`/`direChosen`; an old save with him awake chooses on load): the den nearest the village he first walks to, if one is within `DEN_REACH_M` of it, else the den nearest any village. The waking banner names it: "Far off, a den's wolves turn black, to the … of …". The keeper says "black wolves howl to the …".
+- **Its wolves** (`villageModel`: `setDire`, `isDire`, `DIRE_HP` 30, `DIRE_BITE_MEALS` 3): black and red-eyed (`wolfFigure.setDireLook`, in the field and asleep in the den), labelled "black wolf"; they **pass the warren by**, take goats and bite **without going home fed** (they leave only at `WOLF_END`), and **a bite can kill anyone** out of doors ("… is killed by the black wolves"). The den neither grows nor starves; emptied in the field it lies quiet its peace and fills again, dire still.
+- **The answer**: guards, the hedge and her strike, as for any wolf; **slain asleep in its den** (`slayAsleep` emptying it) the steward's `dire` clears, a banner says so, and the pack that comes to the den after is ordinary.
+- Dev handle: `dire()`; tests `S4c: …` in `tests/steward.test.ts`; journey: a den turned dire at his waking, told in the banner.
+
+**Open, flagged in code:** every number above; "kills game" (§6) is not built: the dire pack passes the warren rather than emptying it; whether a second counter follows each later hero.
+
 ## S4a: search parties (2026-09-28, SETTLEMENTS.md's fourth sprint, first part)
 
 Noah's decisions before building: searchers can be hurt and limp home; the steward picks the search's target; the dire pack (S4c) begins when the steward wakes. Built:
