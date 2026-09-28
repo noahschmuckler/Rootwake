@@ -187,3 +187,32 @@ test('S4c: slain asleep in its den, the dire pack is told back and the next is o
     assert.equal(chooseDire([{ id: 'a', x: 900, z: 0 }, { id: 'b', x: 700, z: 0 }], { x: 0, z: 1600 }, [{ x: 0, z: 0 }, { x: 0, z: 1600 }], 500), 'b', 'else the nearest to any village');
   } finally { setDire(null, () => {}); setDens([]); }
 });
+import { setWallows, wallowOf, setQuarry, BOAR_CAP, BOAR_MEAT, GORE_MEALS } from '../src/villageModel';
+import { wallows, WALLOW_R } from '../src/overworldModel';
+test('S4b: every village has a boar wallow by the seed, clear of the dark wood, the pillar, the warrens and the dens', () => {
+  const ws = wallows(7), ps = places(7); assert.equal(ws.length, 1 + villageSites(7).length);
+  for (const w of ws) { const v = w.village === 'village' ? { x: 0, z: 0 } : villageSites(7).find(s => s.id === w.village)!; assert.ok(Math.abs(Math.hypot(w.x - v.x, w.z - v.z) - WALLOW_R) < 2); assert.ok(Math.hypot(w.x - KARST_AT.x, w.z - KARST_AT.z) > 130); assert.ok(ps.some(p => p.id === w.id && p.kind === 'wallow')); }
+});
+test('S4b: set on boar, the hunters go as one party at the slower pace; three bring a boar home unhurt, to the larder; the wallow regrows', () => {
+  setDens([]); setWarrens([]); setWallows([{ id: 'wallow:village', x: 100, z: 90 }]);
+  try {
+    const v = freshVillage(1), grown = v.hobbits.filter(s => s.stage === 'grown').slice(0, 3); for (const s of grown) { assignDuty(v, s.id, 'hunt'); s.spear = true; }
+    assert.ok(wallowOf(v)); assert.ok(setQuarry(v, 'boar'));
+    let apart = 0, far = 0; const meat0 = v.stores.meat;
+    for (let i = 0; i < DAY_TICKS && !v.events.some(e => e.text.includes('bring home a boar')); i++) { advance(v, 1); if (v.boarHunt?.stage === 'out') { const xs = grown.map(s => s.x), zs = grown.map(s => s.z); apart = Math.max(apart, Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs)); } far = Math.max(far, Math.hypot(grown[0].x, grown[0].z)); }
+    assert.ok(v.events.some(e => e.text.endsWith('go after boar')), 'they set out together'); assert.ok(far > 110, `out to the wallow (${far.toFixed(0)})`); assert.ok(apart < 8, `together (${apart.toFixed(1)})`);
+    assert.ok(v.events.some(e => e.text.includes('bring home a boar') && !e.text.includes('gored'))); assert.equal(v.boars, BOAR_CAP - 1);
+    advance(v, 400); assert.ok(v.stores.meat >= meat0 + BOAR_MEAT - 3, `meat in the larder (${v.stores.meat})`); assert.ok(grown.every(s => s.missed === 0), 'unhurt');
+    setQuarry(v, 'rabbit'); advance(v, DAY_TICKS * 3); assert.ok(v.boars >= BOAR_CAP - 0.01, `regrown (${v.boars})`);
+  } finally { setWallows([]); }
+});
+test('S4b: a lone hunter at the boar is gored and brings nothing, never killed; set back on rabbits they hunt the warren again; saved', () => {
+  setDens([]); setWarrens([]); setWallows([{ id: 'wallow:village', x: 100, z: 90 }]);
+  try {
+    const v = freshVillage(1), s = v.hobbits.find(x => x.stage === 'grown')!; assignDuty(v, s.id, 'hunt'); s.spear = true; setQuarry(v, 'boar');
+    for (let i = 0; i < DAY_TICKS && !v.events.some(e => e.text.includes('gored by a boar, hunting alone')); i++) advance(v, 1);
+    assert.ok(v.events.some(e => e.text.includes('gored by a boar, hunting alone'))); assert.equal(s.missed, GORE_MEALS); assert.equal(v.boars, BOAR_CAP); assert.ok(v.hobbits.includes(s));
+    const back = parseVillage(serializeVillage(v)); assert.equal(back.quarry, 'boar');
+    assert.ok(setQuarry(v, 'rabbit')); assert.ok(!setQuarry(v, 'rabbit'));
+  } finally { setWallows([]); }
+});

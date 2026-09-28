@@ -9,6 +9,14 @@ Source branch: feat/village (from feat/karst-flow, so it carries the rigged Huld
 
 Read `VILLAGERS.md` first: the brief, the principles, the pass order and Noah's decisions. This file is V0 as built.
 
+## S4b: hunting parties and boar (2026-09-28, SETTLEMENTS.md's fourth sprint, second part)
+
+- **The wallow** (`overworldModel.wallows`, a place kind `wallow`, "a boar wallow"): one for every village, `WALLOW_R` (140) m out on a bearing by the seed, clear of the dark wood, the pillar, the warrens and the dens; a muddy hollow with boars on it as many as it holds (`chunkWorld` `setBoars`). The keeper says "boars root to the …"; a search party can find it.
+- **Boar** (`villageModel`: `setWallows`, `wallowOf`, `setQuarry`, `stepBoarHunter`; saved as `quarry`, `boars`, `boarHunt`): the steward's board has **the hunters go for rabbits / boar**. On boar the hunters go **as one party**: a stick whittled first where one lacks it, a muster at the green's edge on the wallow's bearing (a hunter still whittling is waited for until `HUNT_LAST`, then the rest go), out together at the slower pace, `BOAR_TICKS` (90) at the wallow. **The party's size decides**: one alone is **gored** (`GORE_MEALS` 3: hurt, never killed) and brings nothing; two take a boar and one of them may be gored (`PAIR_GORE` 0.35, by the day's lot); three take it unhurt. A boar is `BOAR_MEAT` (6) meat, carried home between them to the larder, then the meal missed. The wallow holds `BOAR_CAP` (2) and regrows `BOAR_REGROW` (a third) a dawn.
+- Dev handle: `quarry()`, `setQuarry()`, `boars()`, `wallow()`, `boarHunt()`; tests `S4b: …`; journey: set on boar from his panel, the wallow shot (`02x-wallow`), a party's hunt.
+
+**Open, flagged in code:** every number above; boars do not fight back beyond the goring, nor raid the fields; the party is the hunters, not a group picked on the board.
+
 ## S4c: the dire pack (2026-09-28, SETTLEMENTS.md §6's first counter; Noah: it begins when the steward wakes)
 
 - **Chosen at his waking** (`stewardModel.chooseDire`, saved with him as `dire`/`direChosen`; an old save with him awake chooses on load): the den nearest the village he first walks to, if one is within `DEN_REACH_M` of it, else the den nearest any village. The waking banner names it: "Far off, a den's wolves turn black, to the … of …". The keeper says "black wolves howl to the …".

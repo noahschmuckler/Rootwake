@@ -18,12 +18,24 @@ interface Chunk { key: string; group: THREE.Group; trees: Tree[]; colliders: Col
 export const RUIN_STONES = 7, RUIN_STONE_R = 2.8;
 /** S2: the moot's stone seats and their ring. Tuning. */
 export const MOOT_SEATS = 7, MOOT_SEAT_R = 4.2;
-export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain = createTerrain(seed), dens: { id?: string; x: number; z: number; tier?: number }[] = [], rings: { x: number; z: number }[] = [], ruinList: { id: string; x: number; z: number }[] = [], warrenList: { id: string; x: number; z: number }[] = [], mootAt: { x: number; z: number } | null = null) {
+export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain = createTerrain(seed), dens: { id?: string; x: number; z: number; tier?: number }[] = [], rings: { x: number; z: number }[] = [], ruinList: { id: string; x: number; z: number }[] = [], warrenList: { id: string; x: number; z: number }[] = [], mootAt: { x: number; z: number } | null = null, wallowList: { id: string; x: number; z: number }[] = []) {
   let sanctified = new Set<string>();
   // S1: a warren: burrows in the grass and rabbits among them, as many as the pool holds (setRabbits gives the count by id; refreshRabbits applies it to the warrens built). Tuning.
   const WARREN_BURROWS = 5, WARREN_RABBITS = 12, burrowMat = new THREE.MeshStandardMaterial({ color: '#2e2418', roughness: 1 }), moundMat = new THREE.MeshStandardMaterial({ color: '#6a5a44', roughness: 1, flatShading: true }), rabbitMat = new THREE.MeshStandardMaterial({ color: '#a89478', roughness: 0.95 }), rabbitEar = new THREE.MeshStandardMaterial({ color: '#c8b09a', roughness: 0.95 });
   let rabbitStock: (id: string) => number = () => WARREN_RABBITS;
   const applyRabbits = (g: THREE.Group): void => { const n = rabbitStock(g.userData.id as string); g.children.forEach(o => { if (o.name.startsWith('rabbit:')) o.visible = Number(o.name.slice(7)) < n; }); };
+  // S4b: a boar wallow: a muddy hollow and boars about it, as many as the wallow holds (setBoars). Tuning.
+  const WALLOW_BOARS = 2, mudMat = new THREE.MeshStandardMaterial({ color: '#3e3226', roughness: 0.6 }), boarMat = new THREE.MeshStandardMaterial({ color: '#3a2c22', roughness: 1, flatShading: true }), tuskMat = new THREE.MeshStandardMaterial({ color: '#e8e0c8', roughness: 0.6 });
+  let boarStock: (id: string) => number = () => WALLOW_BOARS;
+  const applyBoars = (g: THREE.Group): void => { const n = boarStock(g.userData.id as string); g.children.forEach(o => { if (o.name.startsWith('boar:')) o.visible = Number(o.name.slice(5)) < n; }); };
+  function makeBoar(): THREE.Group {
+    const b = new THREE.Group(); const body = new THREE.Mesh(new THREE.SphereGeometry(0.4, 9, 7), boarMat); body.scale.set(1.7, 1, 0.9); body.position.y = 0.55; b.add(body);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.26, 8, 6), boarMat); head.scale.set(1.2, 1, 0.9); head.position.set(0.72, 0.52, 0); b.add(head);
+    const snout = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.12, 0.2, 7), boarMat); snout.rotation.z = Math.PI / 2; snout.position.set(0.98, 0.46, 0); b.add(snout);
+    for (const zz of [-0.09, 0.09]) { const t = new THREE.Mesh(new THREE.ConeGeometry(0.03, 0.17, 5), tuskMat); t.position.set(0.95, 0.4, zz); t.rotation.z = -0.5; b.add(t); const ear = new THREE.Mesh(new THREE.ConeGeometry(0.06, 0.14, 4), boarMat); ear.position.set(0.62, 0.78, zz * 1.6); b.add(ear); }
+    for (let i = 0; i < 4; i++) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.05, 0.36, 5), boarMat); leg.position.set(-0.38 + Math.floor(i / 2) * 0.76, 0.18, (i % 2 ? 1 : -1) * 0.2); b.add(leg); }
+    return b;
+  }
   const oldStone = new THREE.MeshStandardMaterial({ color: '#6e6a60', roughness: 1, flatShading: true }), holyStone = new THREE.MeshStandardMaterial({ color: '#8a8a80', emissive: '#6a8a70', emissiveIntensity: 0.35, roughness: 0.9, flatShading: true }), dryBasin = new THREE.MeshStandardMaterial({ color: '#4a4438', roughness: 1 });
   const applySanctity = (g: THREE.Group): void => { const on = sanctified.has(g.userData.id as string); (g.getObjectByName('living') as THREE.Group).visible = on; (g.getObjectByName('dry') as THREE.Group).visible = !on; (g.getObjectByName('stones') as THREE.Mesh).material = on ? holyStone : oldStone; };
   const relief = terrain.height;
@@ -73,6 +85,13 @@ export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain 
         for (const zz of [-0.03, 0.03]) { const ear = new THREE.Mesh(new THREE.BoxGeometry(0.025, 0.12, 0.04), rabbitEar); ear.position.set(0.13, 0.3, zz); ear.rotation.z = 0.25; rb.add(ear); }
         g.add(rb); }
       applyRabbits(g);
+    }
+    // S4b: the boar wallows of this chunk.
+    for (const w of wallowList.filter(r => Math.floor(r.x / CHUNK) === cx && Math.floor(r.z / CHUNK) === cz)) {
+      const y = relief(w.x, w.z), g = new THREE.Group(); g.name = w.id; g.userData.id = w.id; g.position.set(w.x, y, w.z); group.add(g); const wr = mulberry32((w.x * 31 + w.z * 57 + seed) >>> 0);
+      const mud = new THREE.Mesh(new THREE.CircleGeometry(4.2, 18), mudMat); mud.rotation.x = -Math.PI / 2; mud.position.y = 0.05; mud.scale.set(1, 0.7, 1); g.add(mud); geometries.push(mud.geometry);
+      for (let i = 0; i < WALLOW_BOARS; i++) { const a = wr() * Math.PI * 2, r = 2 + wr() * 3, x = Math.cos(a) * r, z = Math.sin(a) * r, bo = makeBoar(); bo.name = `boar:${i}`; bo.position.set(x, relief(w.x + x, w.z + z) - y, z); bo.rotation.y = wr() * Math.PI * 2; g.add(bo); }
+      applyBoars(g);
     }
     // S2: the old moot: MOOT_SEATS stone seats in a ring round a leaning chair, at whose foot the steward sleeps.
     if (mootAt && Math.floor(mootAt.x / CHUNK) === cx && Math.floor(mootAt.z / CHUNK) === cz) {
@@ -124,5 +143,8 @@ export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain 
   function setRabbits(stock: (id: string) => number): void { rabbitStock = stock; refreshRabbits(); }
   function refreshRabbits(): void { for (const ch of loaded.values()) for (const o of ch.group.children) if (o.name.startsWith('warren:')) applyRabbits(o as THREE.Group); }
   function setSanctified(ids: Set<string>): void { sanctified = new Set(ids); for (const ch of loaded.values()) ch.group.traverse(o => { if (o.name.startsWith('ruin:')) applySanctity(o as THREE.Group); }); }
-  return { setBlight, update, treesNear, colliders, setUnder, setSanctified, setRabbits, refreshRabbits, get count() { return loaded.size; }, get trees() { let n = 0; for (const ch of loaded.values()) n += ch.trees.length; return n; } };
+  /** S4b: how many boars a wallow shows, by its id. */
+  function setBoars(stock: (id: string) => number): void { boarStock = stock; refreshBoars(); }
+  function refreshBoars(): void { for (const ch of loaded.values()) for (const o of ch.group.children) if (o.name.startsWith('wallow:')) applyBoars(o as THREE.Group); }
+  return { setBlight, update, treesNear, colliders, setUnder, setSanctified, setRabbits, refreshRabbits, setBoars, refreshBoars, get count() { return loaded.size; }, get trees() { let n = 0; for (const ch of loaded.values()) n += ch.trees.length; return n; } };
 }

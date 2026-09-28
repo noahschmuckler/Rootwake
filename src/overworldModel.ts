@@ -5,7 +5,7 @@
 // within EXPLORE_RADIUS of her, saved; and the places she knows.
 import { mulberry32 } from './colors';
 
-export type PlaceKind = 'village' | 'karst' | 'lair' | 'den' | 'ruin' | 'warren' | 'moot';
+export type PlaceKind = 'village' | 'karst' | 'lair' | 'den' | 'ruin' | 'warren' | 'moot' | /** S4b */ 'wallow';
 export interface Place { id: string; kind: PlaceKind; name: string; x: number; z: number; radius: number; tier?: number }
 /** The lair's distance and the dark forest's breadth (Noah: 400 m, 150 m across). The karst 330 m north. Tuning. */
 export const LAIR_DISTANCE = 400, FOREST_RADIUS = 75, KARST_AT = { x: -60, z: -330 };
@@ -104,6 +104,20 @@ export function ownWarrens(seed: number): Warren[] {
   }
   ownCache.set(seed, out); return out;
 }
+/** S4b (SETTLEMENTS.md, parties): a boar wallow for every village, WALLOW_R m out on a bearing by the seed, clear of the dark wood, the pillar, its warrens and the dens; WALLOW_RADIUS across. Boar is quarry for a party: a lone hunter is gored. Tuning. */
+export const WALLOW_R = 140, WALLOW_RADIUS = 14;
+export interface Wallow { id: string; village: string; x: number; z: number }
+const wallowCache = new Map<number, Wallow[]>();
+export function wallows(seed: number): Wallow[] {
+  const cached = wallowCache.get(seed); if (cached) return cached;
+  const lair = basePlaces(seed).find(p => p.id === 'lair')!, out: Wallow[] = [], burrows = [...warrens(seed), ...ownWarrens(seed)];
+  for (const v of [{ id: 'village', x: 0, z: 0 }, ...villageSites(seed)]) {
+    const rand = mulberry32((seed * 4721 + Math.round(v.x) * 11 + Math.round(v.z) * 17 + 91) >>> 0); let x = 0, z = 0;
+    for (let i = 0; i < 32; i++) { const a = rand() * Math.PI * 2; x = Math.round(v.x + Math.cos(a) * WALLOW_R); z = Math.round(v.z + Math.sin(a) * WALLOW_R); if (Math.hypot(x - lair.x, z - lair.z) > FOREST_RADIUS + 30 && Math.hypot(x - KARST_AT.x, z - KARST_AT.z) > 130 && !burrows.some(w => Math.hypot(w.x - x, w.z - z) < 40) && !dens(seed).some(d => Math.hypot(d.x - x, d.z - z) < DEN_RADIUS + 20)) break; }
+    out.push({ id: `wallow:${v.id}`, village: v.id, x, z });
+  }
+  wallowCache.set(seed, out); return out;
+}
 /** S2 (SETTLEMENTS.md): the old moot, where the steward sleeps in a fallen chair within a ring of stone seats: MOOT_NEAR to MOOT_FAR m from the first village by the seed, clear of every other place by MOOT_CLEAR, MOOT_RADIUS across. Tuning. */
 export const MOOT_NEAR = 130, MOOT_FAR = 260, MOOT_CLEAR = 60, MOOT_RADIUS = 10;
 const mootCache = new Map<number, { x: number; z: number }>();
@@ -117,7 +131,7 @@ export function moot(seed: number): { id: 'moot'; name: string; x: number; z: nu
     at ??= { x: MOOT_NEAR, z: 0 }; mootCache.set(seed, at); }
   return { id: 'moot', name: 'the old moot', x: at.x, z: at.z };
 }
-export function places(seed: number): Place[] { return [...basePlaces(seed), ...villageSites(seed).map(s => ({ id: s.id, kind: 'village' as const, name: s.name, x: s.x, z: s.z, radius: VILLAGE_RADIUS })), ...dens(seed).map(d => ({ id: d.id, kind: 'den' as const, name: "a wolves' den", x: d.x, z: d.z, radius: DEN_RADIUS, tier: d.tier })), ...ruins(seed).map(r => ({ id: r.id, kind: 'ruin' as const, name: r.name, x: r.x, z: r.z, radius: RUIN_RADIUS })), ...[...warrens(seed), ...ownWarrens(seed)].map(w => ({ id: w.id, kind: 'warren' as const, name: 'a rabbit warren', x: w.x, z: w.z, radius: WARREN_RADIUS })), (() => { const m = moot(seed); return { id: m.id, kind: 'moot' as const, name: m.name, x: m.x, z: m.z, radius: MOOT_RADIUS }; })()]; }
+export function places(seed: number): Place[] { return [...basePlaces(seed), ...villageSites(seed).map(s => ({ id: s.id, kind: 'village' as const, name: s.name, x: s.x, z: s.z, radius: VILLAGE_RADIUS })), ...dens(seed).map(d => ({ id: d.id, kind: 'den' as const, name: "a wolves' den", x: d.x, z: d.z, radius: DEN_RADIUS, tier: d.tier })), ...ruins(seed).map(r => ({ id: r.id, kind: 'ruin' as const, name: r.name, x: r.x, z: r.z, radius: RUIN_RADIUS })), ...[...warrens(seed), ...ownWarrens(seed)].map(w => ({ id: w.id, kind: 'warren' as const, name: 'a rabbit warren', x: w.x, z: w.z, radius: WARREN_RADIUS })), (() => { const m = moot(seed); return { id: m.id, kind: 'moot' as const, name: m.name, x: m.x, z: m.z, radius: MOOT_RADIUS }; })(), ...wallows(seed).map(w => ({ id: w.id, kind: 'wallow' as const, name: 'a boar wallow', x: w.x, z: w.z, radius: WALLOW_RADIUS }))]; }
 /** Exploration: cells of CELL m, revealed within EXPLORE_RADIUS of where she stands. Tuning. */
 export const CELL = 24, EXPLORE_RADIUS = 70;
 /** G2: a hint is what the villagers said of a place she has not found: a bearing from the green and the words, drawn on the map as a fan HINT_REACH m long, HINT_SPREAD either side, until she finds the place. Tuning. */
@@ -147,7 +161,7 @@ export const isRevealed = (o: Overworld, x: number, z: number): boolean => { con
 export const knownPlaces = (o: Overworld): Place[] => places(o.seed).filter(p => o.known.has(p.id));
 export const serializeOverworld = (o: Overworld): string => JSON.stringify({ seed: o.seed, revealed: [...o.revealed], known: [...o.known], hints: o.hints, sanctified: [...o.sanctified] });
 export function parseOverworld(raw: string | null): Overworld {
-  try { const p = JSON.parse(raw ?? 'null'); if (!p || typeof p !== 'object') return freshOverworld(); const o = freshOverworld(Number.isFinite(p.seed) ? p.seed : 1); if (Array.isArray(p.revealed)) for (const k of p.revealed) if (typeof k === 'string' && /^-?\d+,-?\d+$/.test(k)) o.revealed.add(k); if (Array.isArray(p.known)) for (const k of p.known) if (typeof k === 'string' && (['village', 'karst', 'lair', 'moot'].includes(k) || /^warren:(own:)?[\w,-]{1,40}$/.test(k) || /^den--?\d+,-?\d+$/.test(k) || /^village-\d$/.test(k) || /^ruin-\d$/.test(k))) o.known.add(k); if (Array.isArray(p.sanctified)) for (const k of p.sanctified) if (typeof k === 'string' && /^ruin-\d$/.test(k)) o.sanctified.add(k); if (Array.isArray(p.hints)) for (const h of p.hints) if (h && typeof h.about === 'string' && typeof h.text === 'string' && Number.isFinite(h.bearing) && !o.known.has(h.about)) o.hints.push({ about: h.about, bearing: ((h.bearing % 360) + 360) % 360, text: h.text, ...(h.from && Number.isFinite(h.from.x) && Number.isFinite(h.from.z) ? { from: { x: h.from.x, z: h.from.z } } : {}) }); return o; } catch { return freshOverworld(); }
+  try { const p = JSON.parse(raw ?? 'null'); if (!p || typeof p !== 'object') return freshOverworld(); const o = freshOverworld(Number.isFinite(p.seed) ? p.seed : 1); if (Array.isArray(p.revealed)) for (const k of p.revealed) if (typeof k === 'string' && /^-?\d+,-?\d+$/.test(k)) o.revealed.add(k); if (Array.isArray(p.known)) for (const k of p.known) if (typeof k === 'string' && (['village', 'karst', 'lair', 'moot'].includes(k) || /^warren:(own:)?[\w,-]{1,40}$/.test(k) || /^wallow:[\w-]{1,40}$/.test(k) || /^den--?\d+,-?\d+$/.test(k) || /^village-\d$/.test(k) || /^ruin-\d$/.test(k))) o.known.add(k); if (Array.isArray(p.sanctified)) for (const k of p.sanctified) if (typeof k === 'string' && /^ruin-\d$/.test(k)) o.sanctified.add(k); if (Array.isArray(p.hints)) for (const h of p.hints) if (h && typeof h.about === 'string' && typeof h.text === 'string' && Number.isFinite(h.bearing) && !o.known.has(h.about)) o.hints.push({ about: h.about, bearing: ((h.bearing % 360) + 360) % 360, text: h.text, ...(h.from && Number.isFinite(h.from.x) && Number.isFinite(h.from.z) ? { from: { x: h.from.x, z: h.from.z } } : {}) }); return o; } catch { return freshOverworld(); }
 }
 /** The pinch: the camera pulls from ZOOM_MIN m at her shoulder to ZOOM_MAX m overhead, its elevation rising from ELEV_LOW to ELEV_HIGH with the distance; past the end, the map. Tuning. */
 export const ZOOM_MIN = 3, ZOOM_MAX = 40, ELEV_LOW = 0.38, ELEV_HIGH = 1.36;
