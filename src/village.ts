@@ -793,6 +793,7 @@ function renderStewardPanel(): void {
 /** The next duty on the board: day work, the watch, the hunt, and round again (a full duty is passed over). */
 function nextDuty(s: HobbitState): boolean { const order: (Duty | null)[] = [null, 'guard', 'hunt'], i = order.indexOf(s.duty); for (let k = 1; k <= order.length; k++) { const d = order[(i + k) % order.length]; if (assignDuty(village, s.id, d)) return true; } return false; }
 stewardPanel.addEventListener('click', e => {
+  if ((e.target as HTMLElement).closest('[data-close]')) { stewardPanel.hidden = true; return; }
   const t = e.target as HTMLElement, send = t.closest('[data-send]') as HTMLElement | null, duty = t.closest('[data-duty]') as HTMLElement | null, rack = t.closest('[data-rack]');
   if (send && sendTo(send.dataset.send!)) renderStewardPanel();
   if (duty && steward.at === ctx.id) { const s = village.hobbits.find(x => x.id === duty.dataset.duty); if (s) { nextDuty(s); save(); renderStewardPanel(); } }
