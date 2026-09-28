@@ -80,8 +80,10 @@ export const STORES: Record<Store, StoreSpot> = {
 };
 // S2 (SETTLEMENTS.md, the steward): the small differences the steward's board shows, and the duty he gives. A hobbit is bold or timid (by the seed of their name: a bold guard holds the watch, a timid one runs from wolves like anyone) and quick or slow (their walking pace, QUICK_PACE and over). A guard's night is at the watch: GUARD_POST_R m out from the green on the bearing of the nearest threat (the nearest den in reach, the mother of goats for the first village, else the south), spread GUARD_SPREAD radians apart, GUARDS_MAX at most. At the watch a guard strikes a raider within GUARD_REACH for GUARD_DMG every GUARD_HIT_S, and goes to meet one within GUARD_ENGAGE of the watch; bitten, a guard is not spared as the others are (Noah: guards fight and may die). Tuning.
 export type Duty = 'guard' | 'hunt';
-/** S3 (SETTLEMENTS.md, hunting): a hunter goes out once a morning (leaving by HUNT_LAST) to the hunting ground: the warren of a den in reach within HUNT_REACH, else the village's own warren; first they sharpen a stick at the woodpile (a wood, WHITTLE_TICKS) and keep it; out past the houses at HUNT_EDGE they are gone HUNT_AWAY, take HUNT_TAKE rabbits from the same pool the wolves eat from, and carry the meat to the larder. A meal of meat counts MEAT_MEALS meals; without a drying rack (RACK_WOOD from the woodpile, built at the steward's word) the larder loses MEAT_ROT of its meat each dawn. HUNTERS_MAX at most. Tuning. */
-export const HUNT_REACH = 320, HUNT_LAST = 230, HUNT_EDGE = 36, HUNT_AWAY = 140, HUNT_TAKE = 2, WHITTLE_TICKS = 25, MEAT_MEALS = 2, RACK_WOOD = 4, MEAT_ROT = 0.5, HUNTERS_MAX = 3;
+/** S3 (SETTLEMENTS.md, hunting; rebuilt after Noah's play of 2026-09-28, when hunters whittled wherever they stood, vanished at the edge of the village and fell back to their old work mid-walk): the hunt is one errand, begun once a morning by HUNT_LAST and then held to the end whatever the hour: to the woodpile to sharpen a stick if they have none (a wood, WHITTLE_TICKS; kept after), then the whole way on foot, seen, to the hunting ground (the warren of a den in reach within HUNT_REACH, else the village's own warren), HUNT_TICKS at the burrows, HUNT_TAKE rabbits from the same pool the wolves eat from, and the meat home to the larder, with the meal they missed at the fire after. A meal of meat counts MEAT_MEALS meals; without a drying rack (RACK_WOOD from the woodpile, built at the steward's word) the larder loses MEAT_ROT of its meat each dawn. HUNTERS_MAX at most. Tuning. */
+/** Noah (2026-09-28): guards eat in shifts: at GUARD_HUNGRY hunger one goes to the fire while the rest hold. Tuning. */
+export const GUARD_HUNGRY = 0.5;
+export const HUNT_REACH = 200, HUNT_LAST = 230, HUNT_TICKS = 60, HUNT_TAKE = 2, WHITTLE_TICKS = 25, MEAT_MEALS = 2, RACK_WOOD = 4, MEAT_ROT = 0.5, HUNTERS_MAX = 3;
 /** S2 (Noah, 2026-09-28): the watch carries torches lit from the fire, and no other weapon: a guard fetches one at the fire on the way to the watch (when the fire has wood), and without one does not strike. */
 export const QUICK_PACE = 1.1, GUARD_POST_R = 15, GUARD_SPREAD = 0.45, GUARDS_MAX = 3, GUARD_REACH = 1.6, GUARD_DMG = 4, GUARD_HIT_S = 1.5, GUARD_ENGAGE = 7, GUARD_PACE = 1.4;
 const hash01 = (key: string): number => { let h = 2166136261; for (const c of key) h = Math.imul(h ^ c.charCodeAt(0), 16777619); return (h >>> 0) / 4294967296; };
@@ -163,10 +165,10 @@ export function folkOf(k: number): Folk {
 /** Which folk an id belongs to: the `~k` after the name, none for the first village's. */
 export const folkIndex = (id: string): number => { const i = id.indexOf('~'); return i < 0 ? 0 : Number(id.slice(i + 1)) || 0; };
 export type Stage = 'infant' | 'child' | 'grown';
-export type Activity = 'sleeping' | 'walking' | 'working' | 'talking' | 'returning' | 'carrying' | 'eating' | 'praying' | /** S2: a guard at the watch. */ 'guarding';
+export type Activity = 'sleeping' | 'walking' | 'working' | 'talking' | 'returning' | 'carrying' | 'eating' | 'praying' | /** S2: a guard at the watch. */ 'guarding' | /** S3: at the burrows, or sharpening a stick. */ 'hunting';
 export type Want = 'home' | 'place' | 'green' | /** S2: a guard's night, at the watch instead of home. */ 'post';
 /** An errand breaks the rhythm's walk: to a store with an armful ('deliver'), to the fire for a meal on the way out at dawn and on the way home at dusk ('meal'), to the woodpile and back to the fire ('firewood'). */
-export type Errand = 'deliver' | 'meal' | 'firewood' | 'fetch' | 'hut' | 'flee' | /** S2 */ 'torch' | /** S3 */ 'hunt' | null;
+export type Errand = 'deliver' | 'meal' | 'firewood' | 'fetch' | 'hut' | 'flee' | /** S2 */ 'torch' | /** S3 */ 'hunt' | 'whittle' | null;
 /** What a gatherer is doing with the working day: gathering at their place, or praying at the stone because the stores already hold enough for the next meal. */
 export type Job = 'gather' | 'pray' | 'build';
 export interface HobbitState { id: string; x: number; z: number; heading: number; activity: Activity; want: Want; job: Job; path: Vec2[]; speed: number; inside: boolean; bubble: string; bubbleUntil: number; wanderAt: number; faceAt: number; hunger: number; carry: Carry | null; errand: Errand; gatherAt: number; eatUntil: number; jobAt: number; meals: number; ate: number; home: number; stage: Stage; born: number; missed: number; /** S2: the duty the steward gave them (null: the village's own choice). */ duty: Duty | null; /** S2: a guard's strike clock (real seconds), and what killed them if it was not hunger. */ guardClock?: number; slainBy?: 'wolf'; /** S2/S3: a lit torch (a guard's), a sharpened stick (a hunter's), and when the morning's hunt ends. */ torch?: boolean; spear?: boolean; huntUntil?: number }
@@ -567,13 +569,18 @@ export function huntingGround(v: Village): Ground | null {
 }
 export const groundRabbits = (v: Village, g: Ground): number => (g.den ? denState(v, g.den).rabbits : v.ownRabbits);
 function takeRabbits(v: Village, g: Ground, n: number): number { const have = Math.floor(groundRabbits(v, g)), got = Math.min(n, have); if (g.den) denState(v, g.den).rabbits -= got; else v.ownRabbits -= got; return got; }
-/** A hunter's day: to the woodpile for a stick first, then out past the houses toward the ground, once a morning. */
+/** Out hunting already today (huntUntil marks the morning the hunt began). */
 const huntedToday = (v: Village, s: HobbitState): boolean => (s.huntUntil ?? -1) >= v.tick - (v.tick % DAY_TICKS);
-function huntSite(v: Village, s: HobbitState): Site | null {
-  if (s.duty !== 'hunt' || huntedToday(v, s) || v.tick % DAY_TICKS > HUNT_LAST) return null; const g = huntingGround(v); if (!g) return null;
-  if (!s.spear) { const w = storeSpot(STORES.wood); return { id: 'post', x: w.x, z: w.z, radius: 0.5, name: 'the woodpile', verb: 'sharpening a stick' }; }
-  const a = Math.atan2(g.z, g.x); return { id: 'post', x: Math.cos(a) * HUNT_EDGE, z: Math.sin(a) * HUNT_EDGE, radius: 0.6, name: 'the hunting ground', verb: 'off to hunt' };
+/** One tick along a hobbit's path at their pace; the waypoint reached is dropped. */
+function walkOn(s: HobbitState, mult: number): void {
+  const pace = paceOf(s) * mult, step = s.path[0], d = dist(s, step), move = Math.min(d, pace * PACE_TICK);
+  if (d > 1e-6) { s.heading = Math.atan2(step.z - s.z, step.x - s.x); s.x += (step.x - s.x) / d * move; s.z += (step.z - s.z) / d * move; }
+  s.speed = pace; if (d <= move + 1e-6) s.path.shift();
 }
+/** A hunter's morning is still to come: a hunter, grown, not yet out today, before HUNT_LAST, with somewhere to hunt. */
+const huntDue = (v: Village, s: HobbitState): boolean => s.duty === 'hunt' && s.stage === 'grown' && !huntedToday(v, s) && v.tick % DAY_TICKS <= HUNT_LAST && !!huntingGround(v);
+/** Where a hunter stands at the burrows: a step short of them on the way from the green. */
+const burrowSpot = (g: Ground): Vec2 => { const d = Math.hypot(g.x, g.z) || 1; return { x: g.x - g.x / d * 2.5, z: g.z - g.z / d * 2.5 }; };
 /** The steward's word: a drying rack by the larder, for RACK_WOOD from the woodpile. */
 export function buildRack(v: Village): boolean { if (v.rack || v.stores.wood < RACK_WOOD) return false; v.stores.wood -= RACK_WOOD; v.rack = true; event(v, 'A drying rack stands by the larder: the meat will keep', true); return true; }
 /** Where the watch faces: the nearest den in reach, the mother of goats for the first village, else the nearest den, else the south. */
@@ -879,17 +886,30 @@ export function advance(v: Village, ticks: number): void {
       // Starving, they keep to the stone instead of their place (and still come to the fire for meals).
       const base = wants(h, v.tick), want: Want = base === 'home' && s.duty === 'guard' && s.stage === 'grown' ? 'post' : base;
       const say = (text: string): void => { s.bubble = text; s.bubbleUntil = v.tick + BUBBLE_TICKS; };
-      // S3: a hunter out on the land is gone (unseen) until the hunt ends; back, with meat or not, at the edge where they left.
-      if (s.errand === 'hunt' && s.inside) {
-        if (v.tick < (s.huntUntil ?? 0)) { s.activity = 'sleeping'; s.speed = 0; continue; }
-        s.inside = false; s.errand = null; s.want = want; const g = huntingGround(v), n = g ? takeRabbits(v, g, HUNT_TAKE) : 0;
-        if (n > 0) { s.carry = { kind: 'meat', n }; s.errand = 'deliver'; s.path = route(s, storeSpot(STORES.meat)); s.activity = 'carrying'; say(`${n} rabbits`); event(v, `${hobbitById(s.id).name} is back from the hunt with ${n} rabbit${n > 1 ? 's' : ''}`); }
-        else { say('the warren is bare'); event(v, `${hobbitById(s.id).name} is back from the hunt with nothing: the warren is bare`); s.path = route(s, SITES[h.keeps]); s.activity = 'walking'; }
-        continue;
-      }
+      // An old save's hunter, out of sight on the land: back at the burrows to finish the hunt.
+      if (s.errand === 'hunt' && s.inside) { const g = huntingGround(v); s.inside = false; if (g) { const b = burrowSpot(g); s.x = b.x; s.z = b.z; s.path = []; s.gatherAt = 0; } else s.errand = null; }
       // G3: wolves near, and a villager out of doors drops everything and runs for the door.
       if (!s.inside && s.errand !== 'flee' && !(want === 'post' && traitsOf(s.id).bold) && wolfPack.some(w => Math.hypot(w.x - s.x, w.z - s.z) < WOLF_SCARE)) { s.errand = 'flee'; s.path = [{ ...house.door }]; s.activity = 'returning'; s.eatUntil = 0; say('wolves!'); }
-      const hunt = want === 'place' ? huntSite(v, s) : null, site = want === 'home' ? null : want === 'post' ? guardPost(v, s) : hunt ? hunt : want === 'green' ? SITES.fire : s.job === 'build' && kind && hutSite ? hutSite : s.job === 'pray' && kind ? SITES.shrine : SITES[h.keeps];
+      // S3: the hunt, one errand held from the woodpile to the larder: begun at their place in the morning, it keeps the hunter whatever the hour until the meat is carried home.
+      if (!s.inside && s.errand !== 'flee' && (s.errand === 'whittle' || s.errand === 'hunt' || (want === 'place' && s.want === 'place' && !s.errand && !s.carry && s.eatUntil <= v.tick && huntDue(v, s)))) {
+        if (!s.errand) { if (!s.spear) { s.errand = 'whittle'; s.gatherAt = 0; s.path = route(s, storeSpot(STORES.wood)); say('to the woodpile for a stick'); } else { const g = huntingGround(v)!; s.errand = 'hunt'; s.huntUntil = v.tick; s.gatherAt = 0; s.path = route(s, burrowSpot(g)); say('off to hunt'); } s.activity = 'walking'; }
+        if (s.path.length) { walkOn(s, 1); continue; }
+        s.speed = 0; s.activity = 'hunting';
+        if (s.errand === 'whittle') {
+          const st = STORES.wood; s.heading = Math.atan2(st.z - s.z, st.x - s.x);
+          if (!s.gatherAt) { if (v.stores.wood < 1) { say('no wood for a spear'); s.errand = null; s.huntUntil = v.tick; s.path = route(s, spotAt(SITES[h.keeps], rand)); s.activity = 'walking'; continue; } v.stores.wood -= 1; s.gatherAt = v.tick + WHITTLE_TICKS; say('sharpening a stick'); }
+          else if (v.tick >= s.gatherAt) { s.spear = true; s.gatherAt = 0; const g = huntingGround(v); if (g) { s.errand = 'hunt'; s.huntUntil = v.tick; s.path = route(s, burrowSpot(g)); s.activity = 'walking'; say('a sharpened stick: off to hunt'); } else { s.errand = null; say('a sharpened stick'); } }
+          continue;
+        }
+        const g = huntingGround(v); if (g) s.heading = Math.atan2(g.z - s.z, g.x - s.x);
+        if (!s.gatherAt) { s.gatherAt = v.tick + HUNT_TICKS; say('hunting at the warren'); continue; }
+        if (v.tick < s.gatherAt) continue;
+        s.gatherAt = 0; const n = g ? takeRabbits(v, g, HUNT_TAKE) : 0;
+        if (n > 0) { s.carry = { kind: 'meat', n }; s.errand = 'deliver'; s.path = route(s, storeSpot(STORES.meat)); s.activity = 'carrying'; say(`${n} rabbits`); event(v, `${hobbitById(s.id).name} is back from the hunt with ${n} rabbit${n > 1 ? 's' : ''}`); }
+        else { s.errand = null; s.path = route(s, spotAt(SITES[h.keeps], rand)); s.activity = 'walking'; say('the warren is bare'); event(v, `${hobbitById(s.id).name} comes home from the hunt with nothing: the warren is bare`); }
+        continue;
+      }
+      const site = want === 'home' ? null : want === 'post' ? guardPost(v, s) : want === 'green' ? SITES.fire : s.job === 'build' && kind && hutSite ? hutSite : s.job === 'pray' && kind ? SITES.shrine : SITES[h.keeps];
       const goal = (): Vec2 => (site ? spotAt(site, rand) : house.door);
       const mealSpot = (): Vec2 => spotAt(SITES.fire, rand, 0.4);
       s.hunger = Math.min(1, s.hunger + HUNGER_PER_TICK * (s.inside ? 0.5 : 1));
@@ -921,8 +941,8 @@ export function advance(v: Village, ticks: number): void {
           if (s.path.length === 0) {
             if (s.errand === 'deliver' && s.carry) {
               // Handing over: the armful goes into its store, and the rhythm's walk resumes from here (by way of the meal when one is due).
-              const st = STORES[s.carry.kind]; v.stores[st.id] = Math.min(st.cap, v.stores[st.id] + s.carry.n); s.carry = null; s.errand = null; s.heading = Math.atan2(st.z - s.z, st.x - s.x);
-              if ((want === 'home' || want === 'post' || (want === 'place' && phase === 'dawn')) && s.ate < mealSlot(v.tick)) { s.errand = 'meal'; s.path = route(s, mealSpot()); s.activity = want === 'home' ? 'returning' : 'walking'; }
+              const st = STORES[s.carry.kind], hunted = s.carry.kind === 'meat'; v.stores[st.id] = Math.min(st.cap, v.stores[st.id] + s.carry.n); s.carry = null; s.errand = null; s.heading = Math.atan2(st.z - s.z, st.x - s.x);
+              if ((want === 'home' || want === 'post' || hunted || (want === 'place' && phase === 'dawn')) && s.ate < mealSlot(v.tick)) { s.errand = 'meal'; s.path = route(s, mealSpot()); s.activity = want === 'home' ? 'returning' : 'walking'; }
               else { s.path = route(s, goal()); s.activity = 'walking'; }
             } else if (s.errand === 'meal') {
               // A meal at the fire, then on: out to the place, or home to bed.
@@ -950,10 +970,10 @@ export function advance(v: Village, ticks: number): void {
       // At their place: stand, turn to face one thing then another, and now and then take a step to a new spot; on the green, face the fire, eat the noon meal and talk; at the stone, pray.
       s.speed = 0;
       // S2: at the watch: face out along the threat's bearing, still; the fighting is in real seconds (stepGuards).
-      if (want === 'post') { s.activity = 'guarding'; s.heading = threatBearing(v); continue; }
-      if (hunt && site === hunt) {
-        if (!s.spear) { s.activity = 'working'; if (!s.gatherAt || s.gatherAt < v.tick - WHITTLE_TICKS) { if (v.stores.wood < 1) { say('no wood for a spear'); s.huntUntil = v.tick; s.path = route(s, SITES[h.keeps]); s.activity = 'walking'; continue; } v.stores.wood -= 1; s.gatherAt = v.tick + WHITTLE_TICKS; say('sharpening a stick'); } else if (v.tick >= s.gatherAt) { s.spear = true; s.gatherAt = 0; say('a sharpened stick'); s.path = route(s, goal()); s.activity = 'walking'; } continue; }
-        s.inside = true; s.errand = 'hunt'; s.huntUntil = v.tick + HUNT_AWAY; say(''); continue;
+      if (want === 'post') {
+        // Noah (2026-09-28): a hungry guard eats in shifts: to the fire for a meal while no other guard is away eating, then back to the post, torch relit.
+        if (s.hunger >= GUARD_HUNGRY && mealFood(v) && !v.hobbits.some(o => o !== s && o.errand === 'meal' && o.want === 'post')) { s.errand = 'meal'; s.path = route(s, mealSpot()); s.activity = 'walking'; say('to the fire for a bite'); continue; }
+        s.activity = 'guarding'; s.heading = threatBearing(v); continue;
       }
       if (want === 'green' || h.keeps === 'fire') {
         s.activity = 'talking'; s.heading = Math.atan2(SITES.fire.z - s.z, SITES.fire.x - s.x);
@@ -1055,13 +1075,14 @@ export function thought(s: HobbitState, tick: number): string {
   if (s.missed >= REST_MEALS) return 'starving';
   if (s.hunger > 0.85) return 'hungry';
   if (s.errand === 'deliver' && s.carry) return `carrying ${STORES[s.carry.kind].unit} to ${STORES[s.carry.kind].name}`;
-  if (s.errand === 'meal') return s.want === 'home' ? 'supper first' : 'breakfast first';
+  if (s.errand === 'meal') return s.want === 'post' ? 'to the fire for a bite' : s.want === 'home' ? 'supper first' : phaseAt(tick) === 'dawn' ? 'breakfast first' : 'a meal at the fire';
   if (s.errand === 'firewood') return s.carry ? 'wood for the fire' : 'to the woodpile';
   if (s.errand === 'flee') return 'wolves!';
   if (s.activity === 'guarding') return s.torch ? 'keeping watch' : 'keeping watch without a torch';
   if (s.errand === 'torch') return 'to the fire for a torch';
-  if (s.duty === 'hunt' && s.want === 'place' && s.path.length && !s.carry) return s.spear ? 'off to hunt' : 'to the woodpile for a stick';
-  if (s.want === 'post' && s.path.length) return 'to the watch';
+  if (s.errand === 'whittle') return s.path.length ? 'to the woodpile for a stick' : 'sharpening a stick';
+  if (s.errand === 'hunt') return s.path.length ? 'off to hunt' : 'hunting at the warren';
+  if (s.want === 'post' && (s.path.length || s.activity === 'walking')) return 'to the watch';
   if (s.errand === 'fetch') return 'to the stores for the hut';
   if (s.errand === 'hut' && s.carry) return `carrying ${STORES[s.carry.kind].unit} to the new hut`;
   if (s.job === 'build' && s.activity === 'walking' && s.path.length && s.want === 'place') return 'to the new hut';
@@ -1069,14 +1090,14 @@ export function thought(s: HobbitState, tick: number): string {
   if (s.activity === 'praying') return 'praying';
   if (s.activity === 'returning') return 'going home';
   if (s.activity === 'walking' && s.path.length && s.want !== 'place') return s.want === 'green' ? 'walking to the fire' : 'going home';
-  if (s.activity === 'walking' && s.path.length > 1) return s.job === 'pray' ? 'to the stone' : `walking to ${SITES[h.keeps].name}`;
+  if (s.activity === 'walking' && s.path.length) return s.job === 'pray' ? 'to the stone' : s.path.length > 1 ? `walking to ${SITES[h.keeps].name}` : SITES[h.keeps].verb;
   if (s.want === 'green' || (s.activity === 'talking' && h.keeps === 'fire')) return h.keeps === 'fire' && s.want !== 'green' ? SITES.fire.verb : 'talking by the fire';
   if (h.keeps === 'field' && s.activity === 'working') return s.carry ? 'harvesting' : SITES.field.verb;
   return SITES[h.keeps].verb;
 }
 export const everyone = (v: Village, where: 'inside' | 'green' | 'out' | 'praying'): number => v.hobbits.filter(s => where === 'inside' ? s.inside : where === 'green' ? !s.inside && dist(s, SITES.fire) <= SITES.fire.radius + 0.3 : where === 'praying' ? s.activity === 'praying' : !s.inside).length;
 export const inHouse = (p: Vec2, v?: { huts: number }): House | null => { if (v) return housesOf(v).find(h => dist(p, h) < HOUSE_RADIUS - 0.05) ?? null; for (const l of layouts) { const h = housesOf(l).find(h => Math.hypot(p.x - l.x - h.x, p.z - l.z - h.z) < HOUSE_RADIUS - 0.05); if (h) return h; } return null; };
-const ACTIVITIES: Activity[] = ['sleeping', 'walking', 'working', 'talking', 'returning', 'carrying', 'eating', 'praying', 'guarding'];
+const ACTIVITIES: Activity[] = ['sleeping', 'walking', 'working', 'talking', 'returning', 'carrying', 'eating', 'praying', 'guarding', 'hunting'];
 export function parseVillage(raw: string | null): Village {
   try {
     const p = JSON.parse(raw ?? 'null'); if (!p || typeof p !== 'object' || !Array.isArray(p.hobbits) || p.hobbits.length < 1 || p.hobbits.length > ALL_HOBBITS.length) return freshVillage();
@@ -1125,7 +1146,7 @@ export function parseVillage(raw: string | null): Village {
       if (Number.isFinite(s.ate)) t.ate = s.ate;
       t.hunger = num(s.hunger, 0, 1, t.hunger);
       t.inside = s.inside === true; t.activity = ACTIVITIES.includes(s.activity) ? s.activity : 'sleeping'; t.want = ['home', 'place', 'green'].includes(s.want) ? s.want : 'home'; t.job = s.job === 'pray' ? 'pray' : s.job === 'build' ? 'build' : 'gather';
-      t.errand = ['deliver', 'meal', 'firewood', 'fetch', 'hut', 'flee', 'torch', 'hunt'].includes(s.errand) ? s.errand : null; if (s.torch === true) t.torch = true; if (s.spear === true) t.spear = true; if (Number.isFinite(s.huntUntil)) t.huntUntil = s.huntUntil;
+      t.errand = ['deliver', 'meal', 'firewood', 'fetch', 'hut', 'flee', 'torch', 'hunt', 'whittle'].includes(s.errand) ? s.errand : null; if (s.torch === true) t.torch = true; if (s.spear === true) t.spear = true; if (Number.isFinite(s.huntUntil)) t.huntUntil = s.huntUntil;
       t.carry = carryOf(s.carry); if (t.errand === 'deliver' && !t.carry) t.errand = null;
       t.path = pathOf(s.path); t.bubble = typeof s.bubble === 'string' ? s.bubble.slice(0, 40) : '';
     }
