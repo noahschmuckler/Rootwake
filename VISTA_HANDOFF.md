@@ -74,3 +74,51 @@ On desktop node: land 1.2 s (shape 0.2 s, erosion 0.75 s, AO 0.2 s), trees and r
 - `npm run build`.
 - `node scripts/browser-vista.mjs`: SwiftShader. No console or shader errors at every postcard × hour; screenshots land in `artifacts/vista/`.
 - `.github/workflows/deploy-vista.yml` runs all of these on push to `feat/vista` and publishes to `/Rootwake/vista/` only.
+
+# V1: the village in the vista
+
+`/vista/village/` (entry `village-vista.html`, or `?look=vista` on the village) runs **the village unchanged** under the vista's look. The designer's call (2026-10-13) was to keep the layout: every place, rule, figure and save is the village's own. Only the land and the light change. Everything lives in `src/villageVista.ts`, plus small hooks:
+
+- `village.ts`: the `LOOK` switch, the land, `look.frame` and `look.render` at the end of the frame, and refreshes on blight and new huts.
+- `chunkWorld.ts`: `setLook` and `treesOf`.
+- `villageWorld.ts`: its tree meshes are named.
+
+## What it does
+
+- **Land.** `villageLand` wraps the village's own `createTerrain`: the same gentle hills inside, with eroded mountains rising past the farthest place. "Farthest" is measured over every den, ruin, warren, wallow, moot, village and convergence, plus `MOUNTAIN_CLEAR` (260 m), using a rounded-square norm because the dens lie on a square grid.
+  - The result is one `Terrain`. Every height the game reads (relief, feet, figures, dens) comes from it, and the vista draws exactly that surface. The near mesh samples the village's 2 m triangulated relief at half a cell (3.4 m).
+  - Only the mountain belt erodes, gets AO and records stream beds. The map is 7 km at 1025² (6.9 m cells).
+- **Trees.** Every chunk tree, built or not (`chunks.treesOf`), plus each village's own wood, is drawn as the vista's instanced trees:
+  - kind 5 is sized as `flora.treeParts` at size 1, so her trunk climb and crown points meet it;
+  - kind 6 is the dark forest's tree;
+  - kind 7 is blighted, redrawn when the blight moves.
+
+  The chunks keep their trees' colliders, roots and climbing, and draw neither ground nor trees.
+- **Ground tint.** `groundTint` lays colours over the vista's grass: the meadows lush (whatever pale patch of the grass noise they fall in), the woods mossy, the dark forest and the blight near black.
+- **Clearings.** Grass gives way where the village stands. Each village root is drawn from above into a mask (`CLEAR_SIDE` 220 m, 512²), redrawn when a hut is built.
+  - Grass is `BLADE_H` 0.22 m tall, so hobbits stand above it.
+  - Blades stand on a fine 96 m window of the exact relief.
+- **The clock's sky.** `hourAtClock` blends seven keys across the village's day. The sun rises in the east at 05:30 and sets in the west at 19:30, then the moon and stars take over.
+  - Mountain shadows rebake a few rows a frame into a back buffer while the sun moves, at half resolution on this map.
+  - Hulda, the hobbits and the houses take the same sun, which dims in a mountain's shadow, plus the near shadow map and fog of the hour's horizon.
+- **Kept behaviours.**
+  - The view through soil during root travel (the vista terrain thins to glass around her).
+  - The dark forest's gloom (`uGloom`).
+  - Interiors (the deep, a den, the karst's cavern) hide the land and keep the village's own dark fog.
+- **Cost readout.** `?hud=1` shows frame rate, triangles and draw calls; `?q=` picks the tier.
+
+## Known gaps (next)
+
+- **Load time.** About 2 s on desktop (shape 0.6 s, erosion 0.9 s, AO 0.6 s); expect 5–7 s on a phone. Move it to a worker, or bake the land at build time.
+- **The karst's forest and plants** are still the free-flow study's standees.
+- **The village's paths and green** are still its own decals, not painted into the ground.
+- **No rocks** in the village land yet.
+- **Mountains are scenery:** they are walkable but nothing is placed in them.
+- **Cost at the green, at noon (headless).** Low: about 0.62M triangles. Medium: about 0.86M (vista trees about 0.25M within `TREE_REACH` 850 m, the land and grass about 0.3M, the village's own figures and houses about 0.3M).
+- **Draw calls are about 750.** Most are the village's own scene (its figures, houses and chunk groups), which predates the look. Batching them is the next win if a phone struggles.
+
+## Checks
+
+- `node scripts/test-village.mjs` and `node scripts/test-world.mjs` (unchanged mechanics).
+- `node scripts/browser-village.mjs`: passes against the default look. Under the vista look (with `dist/village-vista.html` copied over `dist/village.html`), it stops at the gathering check, because SwiftShader draws the heavier scene at about 2 fps and the village's clamped frame time slows its clock. Given more time she gathers 8 berries, so the mechanic holds; the test's timing is SwiftShader's.
+- `node scripts/browser-village-vista.mjs`: the land drawn, the chunks' ground and trees not, mountains in `relief`, the sky following the clock, the cost readout, no shader errors; screenshots in `artifacts/village-vista/`.

@@ -5,11 +5,11 @@
 import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { CircleCollider } from './player';
-import { N, CELL, HALF, SIZE, WATER_Y, SNOW_Y, heightAt, normalAt, bakeSun, rng, type Land, type Tree, type Rock } from './vistaTerrain';
+import { surfaceAt, normalAt, bakeSun, rng, type Land, type Tree, type Rock } from './vistaTerrain';
 import { terrainVert, terrainFrag, grassVert, grassFrag, solidVert, solidFrag, waterVert, waterFrag, skyVert, skyFrag } from './vistaShaders';
 
 // ── the hour ────────────────────────────────────────────────────────────
-export interface Hour { name: string; elevation: number; azimuth: number; sun: string; sunI: number; zenith: string; horizon: string; ambSky: string; ambGround: string; ambI: number; haze: number; hazeFall: number; cloud: number; exposure: number }
+export interface Hour { name: string; elevation: number; azimuth: number; sun: string; sunI: number; zenith: string; horizon: string; ambSky: string; ambGround: string; ambI: number; haze: number; hazeFall: number; cloud: number; exposure: number; stars?: number }
 /** Tuning: the four hours offered. Elevation and azimuth in degrees (azimuth 0 = from −z, 90 = from +x). */
 export const HOURS: Hour[] = [
   { name: 'Morning', elevation: 14, azimuth: 70, sun: '#ffd9a8', sunI: 2.3, zenith: '#5d8fd0', horizon: '#d8dde0', ambSky: '#b4cbea', ambGround: '#7a7658', ambI: 0.85, haze: 0.0011, hazeFall: 1 / 90, cloud: 0.4, exposure: 1.0 },
@@ -36,8 +36,32 @@ const color = (hex: string, k = 1) => new THREE.Color(hex).multiplyScalar(k);
 /** The layer the shadow-only tree copies live on; the entry enables it on the sun's shadow camera. */
 export const CASTER_LAYER = 1;
 
+export interface VistaOptions {
+  /** The haze's base height (the lake for the vista; the meadow for the village). */
+  hazeBase: number;
+  /** The ground tint (rgb colour, a amount) per map sample, as bytes n×n×4: the village's woods and dark forest. */
+  ground: Uint8Array;
+  /** The exact surface near her, sampled into a fine window the grass stands on. */
+  fine: (x: number, z: number) => number;
+  /** Grass height (m). */
+  bladeH: number;
+  /** Trees: the full-tree radius as a share of the tier's, and the reach past which none is drawn (m). A dense wood wants less of both. */
+  nearTreesScale: number; treeReach: number;
+  /** A finer LOD 0 (half a cell) near her where the land has an exact surface. */
+  fineLod: boolean;
+}
 export interface VistaWorld {
-  setHour(h: Hour): void;
+  root: THREE.Group;
+  /** The hour; `bake: false` rebakes the mountains' shadows over the next frames instead of at once (a moving sun). */
+  setHour(h: Hour, bake?: boolean): void;
+  setTrees(trees: Tree[]): void;
+  setGround(bytes: Uint8Array): void;
+  /** The view through soil while she is beneath it (groundVision's rule). */
+  setSoil(amount: number, x: number, z: number): void;
+  /** A dark fog over everything (the dark forest). */
+  setGloom(colour: THREE.Color, amount: number, density: number): void;
+  /** Mask i (0..2): where no grass grows, a texture laid on the square at (x0, z0) of the given side. */
+  setClear(i: number, texture: THREE.Texture | null, x0: number, z0: number, side: number): void;
   setQuality(q: Quality): void;
   update(camera: THREE.Camera, timeS: number): void;
   colliders(): CircleCollider[];
@@ -46,16 +70,30 @@ export interface VistaWorld {
   stats(): { tiles: number; nearTrees: number };
 }
 
-export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks: Rock[], quality: Quality): VistaWorld {
+export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks: Rock[], quality: Quality, opts: Partial<VistaOptions> = {}): VistaWorld {
+  const { n: N, cell: CELL, half: HALF, size: SIZE } = land;
+  const root = new THREE.Group(); root.name = 'vista'; scene.add(root); scene = root as unknown as THREE.Scene;
   // ── shared uniforms and textures ──
-  const mapBytes = new Uint8Array(N * N * 4), sun = new Uint8Array(N * N);
+  // The sun's visibility is baked at half the map's resolution on a big map (the village's): a moving sun rebakes it every few seconds.
+  const STRIDE = N > 600 ? 2 : 1, SN = (N - 1) / STRIDE + 1;
+  const mapBytes = new Uint8Array(N * N * 4), sun = new Uint8Array(SN * SN), sunBack = new Uint8Array(SN * SN);
+  const sunLand: Land = STRIDE === 1 ? land : { ...land, n: SN, cell: CELL * STRIDE, h: (() => { const h = new Float32Array(SN * SN); for (let j = 0; j < SN; j++) for (let i = 0; i < SN; i++) h[j * SN + i] = land.h[j * STRIDE * N + i * STRIDE]; return h; })() };
+  const sunTex = new THREE.DataTexture(sun, SN, SN, THREE.RedFormat, THREE.UnsignedByteType); sunTex.magFilter = sunTex.minFilter = THREE.LinearFilter; sunTex.wrapS = sunTex.wrapT = THREE.ClampToEdgeWrapping;
+  const groundBytes = new Uint8Array(N * N * 4); if (opts.ground) groundBytes.set(opts.ground);
+  const groundTex = new THREE.DataTexture(groundBytes, N, N, THREE.RGBAFormat, THREE.UnsignedByteType); groundTex.magFilter = groundTex.minFilter = THREE.LinearFilter; groundTex.needsUpdate = true;
+  const blank = new THREE.DataTexture(new Uint8Array(4), 1, 1); blank.needsUpdate = true;
+  /** Tuning: the fine window's side (m) and texels: blades stand on the walked surface within it. */
+  const FINE_SIDE = 96, FINE_T = 97, fineData = new Float32Array(FINE_T * FINE_T), fineTex = new THREE.DataTexture(fineData, FINE_T, FINE_T, THREE.RedFormat, THREE.FloatType); fineTex.magFilter = fineTex.minFilter = THREE.NearestFilter;
+  let fineAt = new THREE.Vector2(1e9, 1e9);
   for (let k = 0; k < N * N; k++) { mapBytes[k * 4 + 1] = Math.round(land.ao[k] * 255); mapBytes[k * 4 + 2] = Math.round(land.flow[k] * 255); mapBytes[k * 4 + 3] = Math.round(land.sediment[k] * 255); }
   const mapTex = new THREE.DataTexture(mapBytes, N, N, THREE.RGBAFormat, THREE.UnsignedByteType); mapTex.magFilter = mapTex.minFilter = THREE.LinearFilter; mapTex.wrapS = mapTex.wrapT = THREE.ClampToEdgeWrapping;
   const heightTex = new THREE.DataTexture(new Float32Array(land.h), N, N, THREE.RedFormat, THREE.FloatType); heightTex.magFilter = heightTex.minFilter = THREE.NearestFilter; heightTex.needsUpdate = true;
   const shared = {
     uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color() }, uZenith: { value: new THREE.Color() }, uHorizon: { value: new THREE.Color() },
-    uAmbSky: { value: new THREE.Color() }, uAmbGround: { value: new THREE.Color() }, uHaze: { value: 0.0005 }, uHazeFall: { value: 1 / 200 }, uHazeBase: { value: WATER_Y }, uTime: { value: 0 },
-    uMapData: { value: mapTex }, uHeight: { value: heightTex }, uMapHalf: { value: HALF }, uCell: { value: CELL }, uN: { value: N }, uWaterY: { value: WATER_Y }, uSnowY: { value: SNOW_Y },
+    uAmbSky: { value: new THREE.Color() }, uAmbGround: { value: new THREE.Color() }, uHaze: { value: 0.0005 }, uHazeFall: { value: 1 / 200 }, uHazeBase: { value: opts.hazeBase ?? land.waterY }, uTime: { value: 0 },
+    uMapData: { value: mapTex }, uSunTex: { value: sunTex }, uGround: { value: groundTex }, uHeight: { value: heightTex }, uMapHalf: { value: HALF }, uCell: { value: CELL }, uN: { value: N }, uSunN: { value: SN },
+    uWaterY: { value: Number.isFinite(land.waterY) ? land.waterY : -1e4 }, uSnowY: { value: land.snowY },
+    uGloom: { value: new THREE.Vector4(0, 0, 0, 0) }, uGloomD: { value: 0.03 }, uStars: { value: 0 },
   };
   const lit = (vertexShader: string, fragmentShader: string, own: Record<string, THREE.IUniform> = {}, defines: Record<string, string> = {}): THREE.ShaderMaterial => {
     const uniforms = { ...THREE.UniformsUtils.merge([THREE.UniformsLib.lights]), ...shared, ...own };
@@ -64,8 +102,10 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
 
   // ── terrain tiles ──
   /** Tuning: tile side (m); LOD steps in samples. */
-  const TILE = 128, CELLS = TILE / CELL, TILES = SIZE / TILE, STEPS = [1, 2, 4, 8];
-  const terrainMat = lit(terrainVert, terrainFrag); terrainMat.side = THREE.DoubleSide;
+  // 16×16 tiles whatever the map; where the land has an exact surface (the village's), a finer LOD 0 within FINE_NEAR draws it at half a cell.
+  const TILES = 16, CELLS = (N - 1) / TILES, TILE = CELLS * CELL, FINE_NEAR = 110, STEPS = land.surface && opts.fineLod ? [0.5, 1, 2, 4, 8] : [1, 2, 4, 8];
+  const terrainMat = lit(terrainVert, terrainFrag, { uSoil: { value: new THREE.Vector4(0, 0, 0, 0) } }); terrainMat.side = THREE.DoubleSide;
+  const at = (x: number, z: number) => surfaceAt(land, x, z);
   const tileGroup = new THREE.Group(); tileGroup.name = 'terrain'; scene.add(tileGroup);
   interface Tile { mesh: THREE.Mesh; lod: number; geos: (THREE.BufferGeometry | undefined)[]; cx: number; cz: number }
   const tiles: Tile[] = [];
@@ -73,8 +113,8 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
     const n = CELLS / step, x0 = ti * TILE - HALF, z0 = tj * TILE - HALF, sp = step * CELL, skirt = 4 + step * 3;
     const verts = (n + 1) * (n + 1), pos = new Float32Array((verts + 4 * n) * 3), nor = new Float32Array((verts + 4 * n) * 3), idx: number[] = [];
     for (let j = 0; j <= n; j++) for (let i = 0; i <= n; i++) {
-      const x = x0 + i * sp, z = z0 + j * sp, k = (j * (n + 1) + i) * 3, nn = normalAt(land, x, z, Math.max(CELL, sp * 0.75));
-      pos[k] = x; pos[k + 1] = heightAt(land, x, z); pos[k + 2] = z; nor[k] = nn[0]; nor[k + 1] = nn[1]; nor[k + 2] = nn[2];
+      const x = x0 + i * sp, z = z0 + j * sp, k = (j * (n + 1) + i) * 3, nn = normalAt(land, x, z, Math.max(land.surface ? 1 : CELL, sp * 0.75), at);
+      pos[k] = x; pos[k + 1] = at(x, z); pos[k + 2] = z; nor[k] = nn[0]; nor[k + 1] = nn[1]; nor[k + 2] = nn[2];
     }
     for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const a = j * (n + 1) + i, b = a + 1, c = a + n + 1, d = c + 1; idx.push(a, c, b, b, c, d); }
     // Skirts hang below every edge so a coarser neighbour never shows a crack.
@@ -89,20 +129,20 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
     t.mesh.receiveShadow = true; t.mesh.matrixAutoUpdate = false; t.mesh.userData = { ti, tj }; tileGroup.add(t.mesh); tiles.push(t);
   }
   function setTileLods(cam: THREE.Vector3): void {
-    const [l1, l2, l3] = q.lod;
+    const [l1, l2, l3] = q.lod, fine = STEPS.length > 4 ? 1 : 0;
     for (const t of tiles) {
-      const d = Math.max(0, Math.hypot(t.cx - cam.x, t.cz - cam.z) - TILE * 0.7), lod = d < l1 ? 0 : d < l2 ? 1 : d < l3 ? 2 : 3;
+      const d = Math.max(0, Math.hypot(t.cx - cam.x, t.cz - cam.z) - TILE * 0.7), lod = (fine && d < FINE_NEAR ? -1 : d < l1 ? 0 : d < l2 ? 1 : d < l3 ? 2 : 3) + fine;
       if (lod === t.lod) continue;
       t.lod = lod; t.geos[lod] ??= tileGeometry(t.mesh.userData.ti, t.mesh.userData.tj, STEPS[lod]); t.mesh.geometry = t.geos[lod]!;
       // Drop the finest geometry once well away, to bound memory.
-      if (lod >= 2 && t.geos[0]) { t.geos[0].dispose(); t.geos[0] = undefined; }
+      for (let k = 0; k < lod - 1; k++) if (t.geos[k]) { t.geos[k]!.dispose(); t.geos[k] = undefined; }
     }
   }
 
   // ── the far ring: the unaroded shape out to the horizon ──
   {
     /** Tuning: reach and spacing of the ring (m). It overlaps the map's outer cells, sunk a little, so no seam opens. */
-    const R = 7000, S = 80, n = Math.round(2 * R / S), pos: number[] = [], nor: number[] = [], idx: number[] = [], inner = HALF - S;
+    const R = Math.max(7000, HALF + 4500), S = 80, n = Math.round(2 * R / S), pos: number[] = [], nor: number[] = [], idx: number[] = [], inner = HALF - S;
     const id = new Int32Array((n + 1) * (n + 1)).fill(-1);
     const need = (i: number, j: number) => { const x0 = -R + i * S, z0 = -R + j * S; return !(x0 >= -inner && x0 + S <= inner && z0 >= -inner && z0 + S <= inner); };
     const vert = (i: number, j: number): number => {
@@ -122,10 +162,12 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
   const sky = new THREE.Mesh(new THREE.SphereGeometry(8000, 48, 24), skyMat); sky.name = 'sky'; sky.frustumCulled = false; sky.renderOrder = -10; scene.add(sky);
   const waterMat = new THREE.ShaderMaterial({ uniforms: { ...shared }, vertexShader: waterVert, fragmentShader: waterFrag, transparent: true, depthWrite: false });
   const waterGeo = new THREE.PlaneGeometry(SIZE, SIZE, 8, 8); waterGeo.rotateX(-Math.PI / 2);
-  const water = new THREE.Mesh(waterGeo, waterMat); water.position.y = WATER_Y; water.name = 'lake'; scene.add(water);
+  const water = new THREE.Mesh(waterGeo, waterMat); water.position.y = land.waterY; water.name = 'lake'; water.visible = Number.isFinite(land.waterY); scene.add(water);
 
   // ── grass ──
-  const grassMat = lit(grassVert, grassFrag, { uCenter: { value: new THREE.Vector2() }, uPatch: { value: 60 }, uBladeH: { value: 0.34 }, uBladeW: { value: 0.045 }, uWind: { value: new THREE.Vector2(0.94, 0.34) } }); grassMat.side = THREE.DoubleSide;
+  const grassMat = lit(grassVert, grassFrag, { uCenter: { value: new THREE.Vector2() }, uPatch: { value: 60 }, uBladeH: { value: opts.bladeH ?? 0.34 }, uBladeW: { value: 0.045 }, uWind: { value: new THREE.Vector2(0.94, 0.34) },
+    uClear0: { value: blank }, uClear1: { value: blank }, uClear2: { value: blank }, uClearAt: { value: [new THREE.Vector3(0, 0, 1e-3), new THREE.Vector3(0, 0, 1e-3), new THREE.Vector3(0, 0, 1e-3)] },
+    uFine: { value: fineTex }, uFineAt: { value: new THREE.Vector4(0, 0, 1, 0) } }); grassMat.side = THREE.DoubleSide;
   /** Tuning: blades per tuft (each instance is a tuft). */
   const TUFT = 3, bladeGeo = new THREE.BufferGeometry();
   { // A tuft of three blades, each three segments and a point: x across (−0.5..0.5), y up (0..1); aTuft = angle, offset x, offset z, height.
@@ -151,29 +193,38 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
 
   // ── trees ──
   const solid = (hex: string | null, defines: Record<string, string>) => lit(solidVert, solidFrag, { uColor: { value: hex ? color(hex) : new THREE.Color() } }, defines);
-  const bark = solid('#8a7058', {}), rockMat = solid(null, { ROCK: '' });
-  const LEAVES = ['#5c9a34', '#4f8a32', '#7aa83a', '#2f6a4a', '#3c7440'];
-  const foliage = LEAVES.map(c => solid(c, { USE_SWAY: '' }));
-  const farFoliage = LEAVES.map(c => solid(c, {}));
+  const rockMat = solid(null, { ROCK: '' });
+  /** Per kind: the vista's three broadleaves and two conifers, then the village's tree (sized as flora.treeParts at size 1, so her climb meets its crown), dark and blighted. */
+  const LEAVES = ['#5c9a34', '#4f8a32', '#7aa83a', '#2f6a4a', '#3c7440', '#5f9a3a', '#3a2c4a', '#24162c'];
+  const BARK = ['#8a7058', '#8a7058', '#8a7058', '#8a7058', '#8a7058', '#87705a', '#3a3040', '#1a1218'];
+  const foliage = LEAVES.map(c => solid(c, { USE_SWAY: '' })), farFoliage = LEAVES.map(c => solid(c, {})), barks = BARK.map(c => solid(c, {}));
   interface Kind { trunk: THREE.BufferGeometry; crown: THREE.BufferGeometry; far: THREE.BufferGeometry; radius: number }
-  const kinds: Kind[] = [0, 1, 2, 3, 4].map(k => treeKind(k));
-  const byKind = kinds.map((_, k) => trees.filter(t => t.kind === k));
+  const kinds: Kind[] = LEAVES.map((_, k) => treeKind(k));
   const mk = (geo: THREE.BufferGeometry, mat: THREE.Material, n: number, cast: boolean) => { const m = new THREE.InstancedMesh(geo, mat, Math.max(1, n)); m.count = 0; m.frustumCulled = false; m.castShadow = cast; m.receiveShadow = true; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(m); return m; };
-  const nearTrunk = kinds.map((k, i) => mk(k.trunk, bark, byKind[i].length, false));
-  const nearCrown = kinds.map((k, i) => mk(k.crown, foliage[i], byKind[i].length, false));
-  // Only the trees inside the shadow box cast: copies on CASTER_LAYER, which the sun's shadow camera sees and the view does not.
-  const casters = kinds.flatMap((k, i) => [mk(k.trunk, bark, byKind[i].length, true), mk(k.crown, foliage[i], byKind[i].length, true)]);
-  for (const c of casters) c.layers.set(CASTER_LAYER);
-  const farCrown = kinds.map((k, i) => mk(k.far, farFoliage[i], byKind[i].length, false));
+  let byKind: Tree[][] = [], nearTrunk: THREE.InstancedMesh[] = [], nearCrown: THREE.InstancedMesh[] = [], casters: THREE.InstancedMesh[] = [], farCrown: THREE.InstancedMesh[] = [];
+  function setTrees(list: Tree[]): void {
+    for (const m of [...nearTrunk, ...nearCrown, ...casters, ...farCrown]) { scene.remove(m); m.dispose(); }
+    byKind = kinds.map((_, k) => list.filter(t => t.kind === k));
+    nearTrunk = kinds.map((k, i) => mk(k.trunk, barks[i], byKind[i].length, false));
+    nearCrown = kinds.map((k, i) => mk(k.crown, foliage[i], byKind[i].length, false));
+    // Only the trees inside the shadow box cast: copies on CASTER_LAYER, which the sun's shadow camera sees and the view does not.
+    casters = kinds.flatMap((k, i) => [mk(k.trunk, barks[i], byKind[i].length, true), mk(k.crown, foliage[i], byKind[i].length, true)]);
+    for (const c of casters) c.layers.set(CASTER_LAYER);
+    farCrown = kinds.map((k, i) => mk(k.far, farFoliage[i], byKind[i].length, false));
+    partitionAt.set(1e9, 0, 0);
+  }
   const matrixOf = (t: Tree, m: THREE.Matrix4) => m.compose(new THREE.Vector3(t.x, t.y - 0.15, t.z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), t.rot), new THREE.Vector3(t.scale, t.scale, t.scale));
   let partitionAt = new THREE.Vector3(1e9, 0, 0), nearCount = 0, near: Tree[] = [];
+  /** Tuning: past this a tree is not drawn at all (the haze has it). */
+  const TREE_REACH = opts.treeReach ?? 1400;
   function partitionTrees(cam: THREE.Vector3): void {
-    const m = new THREE.Matrix4(), r2 = q.nearTrees ** 2, s2 = (q.shadow ? q.shadowBox * 1.6 + 15 : 0) ** 2; near = []; nearCount = 0;
+    const m = new THREE.Matrix4(), r2 = (q.nearTrees * (opts.nearTreesScale ?? 1)) ** 2, s2 = (q.shadow ? q.shadowBox * 1.6 + 15 : 0) ** 2, f2 = TREE_REACH ** 2; near = []; nearCount = 0;
     byKind.forEach((list, k) => {
       let a = 0, b = 0, c = 0;
       const [ct, cc] = [casters[k * 2], casters[k * 2 + 1]];
       for (const t of list) {
-        matrixOf(t, m); const d2 = (t.x - cam.x) ** 2 + (t.z - cam.z) ** 2;
+        const d2 = (t.x - cam.x) ** 2 + (t.z - cam.z) ** 2; if (d2 > f2) continue;
+        matrixOf(t, m);
         if (d2 < r2) { nearTrunk[k].setMatrixAt(a, m); nearCrown[k].setMatrixAt(a, m); a++; near.push(t); }
         else farCrown[k].setMatrixAt(b++, m);
         if (d2 < s2) { ct.setMatrixAt(c, m); cc.setMatrixAt(c, m); c++; }
@@ -183,32 +234,58 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
     });
     partitionAt.copy(cam);
   }
+  setTrees(trees);
 
   // ── rocks: only those within ROCK_REACH are drawn, refreshed with the trees ──
   /** Tuning: past this a boulder is a few pixels under the haze. */
   const ROCK_REACH = 650;
-  const rockMesh = new THREE.InstancedMesh(rockGeometry(), rockMat, rocks.length), rockMats = rocks.map(r => new THREE.Matrix4().compose(new THREE.Vector3(r.x, r.y - r.scale * 0.25, r.z), new THREE.Quaternion().setFromEuler(new THREE.Euler(r.tilt, r.rot, r.tilt * 0.5)), new THREE.Vector3(r.scale, r.scale * 0.7, r.scale * 0.9)));
-  rockMesh.castShadow = true; rockMesh.receiveShadow = true; rockMesh.frustumCulled = false; rockMesh.name = 'rocks'; rockMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(rockMesh);
+  const rockMesh = new THREE.InstancedMesh(rockGeometry(), rockMat, Math.max(1, rocks.length)), rockMats = rocks.map(r => new THREE.Matrix4().compose(new THREE.Vector3(r.x, r.y - r.scale * 0.25, r.z), new THREE.Quaternion().setFromEuler(new THREE.Euler(r.tilt, r.rot, r.tilt * 0.5)), new THREE.Vector3(r.scale, r.scale * 0.7, r.scale * 0.9)));
+  rockMesh.castShadow = true; rockMesh.receiveShadow = true; rockMesh.frustumCulled = false; rockMesh.name = 'rocks'; rockMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); rockMesh.count = 0; scene.add(rockMesh);
   function partitionRocks(cam: THREE.Vector3): void { let n = 0; rocks.forEach((r, i) => { if ((r.x - cam.x) ** 2 + (r.z - cam.z) ** 2 < ROCK_REACH ** 2) rockMesh.setMatrixAt(n++, rockMats[i]); }); rockMesh.count = n; rockMesh.instanceMatrix.needsUpdate = true; }
 
   // ── quality and hour ──
   let q = quality;
   function setQuality(next: Quality): void { q = next; buildGrass(q.grass, q.patch); for (const t of tiles) t.lod = -1; partitionAt.set(1e9, 0, 0); }
   setQuality(quality);
-  function setHour(h: Hour): void {
+  // The sun's shadows: baked at once, or a few rows a frame into a back buffer that swaps in when done.
+  let bakeDir: [number, number, number] | null = null, bakeRow = 0, bakedDir = new THREE.Vector3(0, -1, 0);
+  /** Tuning: rows of the sun bake per frame while the sun moves. */
+  const BAKE_ROWS = Math.ceil(SN / 90);
+  function setHour(h: Hour, bakeNow = true): void {
     const dir = sunDirection(h);
+    shared.uStars.value = h.stars ?? 0;
     shared.uSunDir.value.copy(dir); shared.uSunCol.value.copy(color(h.sun).multiplyScalar(h.sunI)); shared.uZenith.value.copy(color(h.zenith)); shared.uHorizon.value.copy(color(h.horizon));
     shared.uAmbSky.value.copy(color(h.ambSky).multiplyScalar(h.ambI)); shared.uAmbGround.value.copy(color(h.ambGround).multiplyScalar(h.ambI)); shared.uHaze.value = h.haze; shared.uHazeFall.value = h.hazeFall;
     skyMat.uniforms.uCloud.value = h.cloud;
-    bakeSun(land, [dir.x, dir.y, dir.z], sun);
-    for (let k = 0; k < N * N; k++) mapBytes[k * 4] = sun[k];
-    mapTex.needsUpdate = true;
+    if (bakeNow) { bakeSun(sunLand, [dir.x, dir.y, dir.z], sun); sunTex.needsUpdate = true; bakedDir.copy(dir); bakeDir = null; }
+    else if (bakedDir.angleTo(dir) > THREE.MathUtils.degToRad(0.8) && !bakeDir) { bakeDir = [dir.x, dir.y, dir.z]; bakeRow = 0; }
+  }
+  function stepBake(): void {
+    if (!bakeDir) return;
+    const end = Math.min(SN, bakeRow + BAKE_ROWS); bakeSun(sunLand, bakeDir, sunBack, [bakeRow, end]); bakeRow = end;
+    if (bakeRow >= SN) { sun.set(sunBack); sunTex.needsUpdate = true; bakedDir.set(...bakeDir); bakeDir = null; }
+  }
+  function refreshFine(x: number, z: number): void {
+    if (!opts.fine) return;
+    const x0 = Math.round(x - FINE_SIDE / 2), z0 = Math.round(z - FINE_SIDE / 2), st = FINE_SIDE / (FINE_T - 1);
+    for (let j = 0; j < FINE_T; j++) for (let i = 0; i < FINE_T; i++) fineData[j * FINE_T + i] = opts.fine(x0 + i * st, z0 + j * st);
+    fineTex.needsUpdate = true; fineAt.set(x, z); grassMat.uniforms.uFineAt.value.set(x0, z0, FINE_SIDE, FINE_T);
   }
 
   return {
-    setHour, setQuality,
+    root, setHour, setQuality, setTrees,
+    setGround(bytes) { groundBytes.set(bytes); groundTex.needsUpdate = true; },
+    setSoil(amount, x, z) {
+      terrainMat.uniforms.uSoil.value.set(x, z, amount, 0);
+      const glass = amount > 0.01; if (terrainMat.transparent !== glass) { terrainMat.transparent = glass; terrainMat.needsUpdate = true; }
+      terrainMat.depthWrite = amount < 0.5; if (grass) grass.visible = amount < 0.05;
+    },
+    setGloom(colour, amount, density) { shared.uGloom.value.set(colour.r, colour.g, colour.b, amount); shared.uGloomD.value = density; },
+    setClear(i, texture, x0, z0, side) { grassMat.uniforms[`uClear${i}`].value = texture ?? blank; grassMat.uniforms.uClearAt.value[i].set(x0, z0, texture ? side : 1e-3); },
     update(camera, timeS) {
       const p = camera.position; shared.uTime.value = timeS;
+      stepBake();
+      if (opts.fine && Math.hypot(p.x - fineAt.x, p.z - fineAt.y) > FINE_SIDE * 0.22) refreshFine(p.x, p.z);
       sky.position.copy(p);
       setTileLods(p);
       grassMat.uniforms.uCenter.value.set(p.x, p.z);
@@ -217,7 +294,7 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
     colliders() {
       return near.map(t => ({ x: t.x, z: t.z, radius: kinds[t.kind].radius * t.scale, cameraClearance: kinds[t.kind].radius * t.scale + 0.3 }));
     },
-    sunAt(x, z) { const i = Math.round((x + HALF) / CELL), j = Math.round((z + HALF) / CELL); return i < 0 || j < 0 || i >= N || j >= N ? 1 : sun[j * N + i] / 255; },
+    sunAt(x, z) { const c = CELL * STRIDE, i = Math.round((x + HALF) / c), j = Math.round((z + HALF) / c); return i < 0 || j < 0 || i >= SN || j >= SN ? 1 : sun[j * SN + i] / 255; },
     stats: () => ({ tiles: tiles.length, nearTrees: nearCount }),
   };
 }
@@ -245,22 +322,23 @@ function blob(r: number, at: THREE.Vector3, centre: THREE.Vector3, seed: number,
 }
 function treeKind(kind: number): { trunk: THREE.BufferGeometry; crown: THREE.BufferGeometry; far: THREE.BufferGeometry; radius: number } {
   const r = rng(kind * 101 + 9), Y = new THREE.Vector3(0, 1, 0);
-  if (kind < 3) {
-    // Broadleaf: a trunk that forks into two limbs under a crown of 7–9 lumps.
-    const H = [8.5, 10.5, 7.5][kind], crownY = H * 0.66, spread = [2.6, 2.1, 3.2][kind], tall = [1.7, 2.4, 1.3][kind];
-    const trunk = new THREE.CylinderGeometry(0.16, 0.3, crownY, 8, 3); trunk.translate(0, crownY / 2, 0);
+  if (kind < 3 || kind >= 5) {
+    // Broadleaf: a trunk that forks into limbs under a crown of 7–9 lumps. The village's (5–7) is flora.treeParts' at size 1: trunk 3.2 m, 0.15–0.42 m thick, the crown about 3.5 m up, 1.7 m out and 1.2 m tall.
+    const v = kind >= 5, H = v ? 4.85 : [8.5, 10.5, 7.5][kind], crownY = v ? 2.75 : H * 0.66, spread = v ? 1.25 : [2.6, 2.1, 3.2][kind], tall = v ? 1.2 : [1.7, 2.4, 1.3][kind];
+    const lump = v ? 0.55 : 1, trunkR: [number, number] = v ? [0.15, 0.42] : [0.16, 0.3];
+    const trunk = new THREE.CylinderGeometry(trunkR[0], trunkR[1], crownY + (v ? 0.45 : 0), 8, 3); trunk.translate(0, (crownY + (v ? 0.45 : 0)) / 2, 0);
     const limbs = [0, 1, 2].map(i => { const a = i / 3 * Math.PI * 2 + r(), l = new THREE.CylinderGeometry(0.07, 0.13, spread * 1.1, 6); l.translate(0, spread * 0.55, 0); l.applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(Math.cos(a) * 0.8, 0, Math.sin(a) * 0.8))); l.translate(0, crownY * 0.8, 0); return l; });
     const trunkGeo = shaded(mergeGeometries([trunk, ...limbs].map(g => { g.deleteAttribute('uv'); return g; }))!, p => 0.55 + 0.45 * Math.min(1, p.y / crownY));
     const centre = new THREE.Vector3(0, crownY + tall * 0.6, 0), lumps: THREE.BufferGeometry[] = [];
     const count = 7 + Math.floor(r() * 3);
     for (let i = 0; i < count; i++) {
       const a = i / count * Math.PI * 2 + r() * 0.5, up = (r() - 0.35) * tall, out = spread * (0.55 + r() * 0.35);
-      lumps.push(blob(1.5 + r() * 0.9, new THREE.Vector3(Math.cos(a) * out, centre.y + up, Math.sin(a) * out), centre, kind * 31 + i));
+      lumps.push(blob((1.5 + r() * 0.9) * lump, new THREE.Vector3(Math.cos(a) * out, centre.y + up, Math.sin(a) * out), centre, kind * 31 + i));
     }
-    lumps.push(blob(2.2, new THREE.Vector3(0, centre.y + tall * 0.75, 0), centre, kind * 31 + 99));
+    lumps.push(blob(2.2 * lump, new THREE.Vector3(0, centre.y + tall * 0.75, 0), centre, kind * 31 + 99));
     const crown = shaded(mergeGeometries(lumps)!, p => { const d = p.clone().sub(centre); return Math.min(1, 0.5 + 0.35 * (d.y / (tall + 2) + 0.6) + 0.25 * Math.hypot(d.x, d.z) / (spread + 2)); });
-    const farGeo = shaded(mergeGeometries([blob(spread + 1.3, centre.clone(), centre.clone().setY(centre.y - 1), kind + 500, 0, (tall + 2) / (spread + 1.3))])!, p => 0.6 + 0.4 * Math.min(1, Math.max(0, (p.y - centre.y + 2) / 4)));
-    return { trunk: trunkGeo, crown, far: farGeo, radius: 0.3 };
+    const farGeo = shaded(mergeGeometries([blob(spread + 1.3 * lump, centre.clone(), centre.clone().setY(centre.y - 1), kind + 500, 0, (tall + 2 * lump) / (spread + 1.3 * lump))])!, p => 0.6 + 0.4 * Math.min(1, Math.max(0, (p.y - centre.y + 2) / 4)));
+    return { trunk: trunkGeo, crown, far: farGeo, radius: v ? 0.32 : 0.3 };
   }
   // Conifer: a straight trunk and five tiers, each a cone with normals that lean out and up.
   const H = kind === 3 ? 13 : 10, tiers: THREE.BufferGeometry[] = [];

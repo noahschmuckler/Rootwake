@@ -69,7 +69,15 @@ export function shape(seed: number): Shape {
 // ── the eroded map ──────────────────────────────────────────────────────
 export interface Land {
   seed: number; shape: Shape;
-  /** Heights, N×N, row z then column x. */
+  /** The map's side (m), samples per side, metres per sample, half side; the vista's are SIZE, N, CELL, HALF. */
+  size: number; n: number; cell: number; half: number;
+  /** The water surface (−Infinity: no lake) and the snow line. */
+  waterY: number; snowY: number;
+  /** Above every sample: where a sun ray may stop marching. */
+  ceiling: number;
+  /** The exact walkable surface where the land has one finer than the grid (the village's relief); the near mesh draws it. */
+  surface?: (x: number, z: number) => number;
+  /** Heights, n×n, row z then column x. */
   h: Float32Array;
   /** Water that ran through each sample (normalised 0..1, log scale) and sediment laid there (0..1). */
   flow: Float32Array; sediment: Float32Array;
@@ -81,30 +89,40 @@ export interface ErosionParams { droplets: number; steps: number; radius: number
 /** Tuning: droplets is the main cost (≈ linear). `scale` divides metres into erosion units (a 4 m cell rising 20 m is unit slope: below that, droplets pit the slopes instead of cutting gullies). */
 export const EROSION: ErosionParams = { droplets: 70000, steps: 64, radius: 2, inertia: 0.06, capacity: 6, minSlope: 0.01, erode: 0.35, deposit: 0.25, evaporate: 0.018, gravity: 6, scale: 20 };
 
-export function generate(seed = 1, erosion: Partial<ErosionParams> = {}): Land {
-  const t0 = now(), sh = shape(seed), h = new Float32Array(N * N);
-  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) h[j * N + i] = sh.base(i * CELL - HALF, j * CELL - HALF);
-  const t1 = now(), flow = new Float32Array(N * N), sediment = new Float32Array(N * N);
-  erode(h, flow, sediment, seed, { ...EROSION, ...erosion });
+export interface LandOptions {
+  size: number; n: number; shape: Shape; waterY: number; snowY: number;
+  /** Where erosion may work, 0..1 by position (the village keeps its walkable land as it is). */
+  erodeMask: (x: number, z: number) => number;
+  surface: (x: number, z: number) => number;
+}
+export function generate(seed = 1, erosion: Partial<ErosionParams> = {}, opts: Partial<LandOptions> = {}): Land {
+  const size = opts.size ?? SIZE, n = opts.n ?? N, cell = size / (n - 1), half = size / 2;
+  const t0 = now(), sh = opts.shape ?? shape(seed), h = new Float32Array(n * n);
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) h[j * n + i] = sh.base(i * cell - half, j * cell - half);
+  const t1 = now(), flow = new Float32Array(n * n), sediment = new Float32Array(n * n);
+  const ep = { ...EROSION, ...erosion }; ep.scale *= cell / CELL; // the same slope per metre erodes alike on a coarser map
+  erode(h, flow, sediment, seed, ep, n, cell, opts.erodeMask ? (i, j) => opts.erodeMask!(i * cell - half, j * cell - half) : null);
   // Water runs to sample counts in the thousands down the gullies and one or two on open slopes: log scale, then a light blur.
   let max = 0; for (let k = 0; k < flow.length; k++) { flow[k] = Math.log1p(flow[k]); if (flow[k] > max) max = flow[k]; }
   for (let k = 0; k < flow.length; k++) flow[k] /= max || 1;
-  blur(flow, 1); blur(sediment, 1); let smax = 0; for (const s of sediment) smax = Math.max(smax, s); for (let k = 0; k < sediment.length; k++) sediment[k] = Math.min(1, sediment[k] / (smax * 0.25 || 1));
-  const t2 = now(), ao = cavity(h);
-  return { seed, shape: sh, h, flow, sediment, ao, ms: { shape: t1 - t0, erosion: t2 - t1, ao: now() - t2 } };
+  blur(flow, 1, n); blur(sediment, 1, n); let smax = 0; for (const s of sediment) smax = Math.max(smax, s); for (let k = 0; k < sediment.length; k++) sediment[k] = Math.min(1, sediment[k] / (smax * 0.25 || 1));
+  const t2 = now(), ao = cavity(h, n, cell, opts.erodeMask ? (i, j) => opts.erodeMask!(i * cell - half, j * cell - half) > 0.005 : null); let top = -Infinity; for (const v of h) if (v > top) top = v;
+  return { seed, shape: sh, size, n, cell, half, ceiling: top + 30, waterY: opts.waterY ?? WATER_Y, snowY: opts.snowY ?? SNOW_Y, surface: opts.surface, h, flow, sediment, ao, ms: { shape: t1 - t0, erosion: t2 - t1, ao: now() - t2 } };
 }
 function now(): number { return typeof performance !== 'undefined' ? performance.now() : Date.now(); }
 
 /** Droplet hydraulic erosion (after Hans Beyer / Sebastian Lague), on heights in metres / p.scale. */
-function erode(h: Float32Array, flow: Float32Array, sed: Float32Array, seed: number, p: ErosionParams): void {
+function erode(h: Float32Array, flow: Float32Array, sed: Float32Array, seed: number, p: ErosionParams, N: number, CELL: number, where: ((i: number, j: number) => number) | null): void {
   const r = rng(seed * 131 + 7), s = p.scale, rad = p.radius;
   const offs: number[] = [], wts: number[] = []; let wsum = 0;
   for (let dz = -rad; dz <= rad; dz++) for (let dx = -rad; dx <= rad; dx++) { const d = Math.hypot(dx, dz); if (d <= rad) { offs.push(dx, dz); const w = 1 - d / rad; wts.push(w); wsum += w; } }
   for (let k = 0; k < wts.length; k++) wts[k] /= wsum;
-  const edge = EROSION_EDGE / CELL, mask = (i: number, j: number) => smooth(0, edge, Math.min(i, j, N - 1 - i, N - 1 - j) - rad);
+  const edge = EROSION_EDGE / CELL, mask = (i: number, j: number) => smooth(0, edge, Math.min(i, j, N - 1 - i, N - 1 - j) - rad) * (where ? where(i, j) : 1);
   const hs = (k: number) => h[k] / s;
   for (let d = 0; d < p.droplets; d++) {
     let x = r() * (N - 3) + 1, z = r() * (N - 3) + 1, dx = 0, dz = 0, speed = 1, water = 1, load = 0;
+    // Where only part of the map erodes, drops start there (a few tries, then anywhere).
+    for (let t = 0; where && t < 12 && where(Math.floor(x), Math.floor(z)) < 0.05; t++) { x = r() * (N - 3) + 1; z = r() * (N - 3) + 1; }
     for (let step = 0; step < p.steps; step++) {
       const i = Math.floor(x), j = Math.floor(z), u = x - i, v = z - j, k = j * N + i;
       const a = hs(k), b = hs(k + 1), c = hs(k + N), e = hs(k + N + 1);
@@ -116,7 +134,7 @@ function erode(h: Float32Array, flow: Float32Array, sed: Float32Array, seed: num
       const i2 = Math.floor(x), j2 = Math.floor(z), u2 = x - i2, v2 = z - j2, k2 = j2 * N + i2;
       const there = hs(k2) * (1 - u2) * (1 - v2) + hs(k2 + 1) * u2 * (1 - v2) + hs(k2 + N) * (1 - u2) * v2 + hs(k2 + N + 1) * u2 * v2;
       const dh = there - here, m = mask(i, j);
-      flow[k] += water;
+      flow[k] += water * m; // only where the land may change: a drop wandering the village's meadow leaves no stream bed
       const cap = Math.max(-dh, p.minSlope) * speed * water * p.capacity;
       if (load > cap || dh > 0) {
         // Uphill: fill the pit it came from (no more than the rise); else drop a share of the excess.
@@ -137,7 +155,7 @@ function erode(h: Float32Array, flow: Float32Array, sed: Float32Array, seed: num
     }
   }
 }
-function blur(a: Float32Array, passes: number): void {
+function blur(a: Float32Array, passes: number, N: number): void {
   const t = new Float32Array(a.length);
   for (let p = 0; p < passes; p++) {
     for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { const k = j * N + i; t[k] = (a[k] * 2 + a[j * N + Math.max(0, i - 1)] + a[j * N + Math.min(N - 1, i + 1)]) / 4; }
@@ -145,10 +163,12 @@ function blur(a: Float32Array, passes: number): void {
   }
 }
 /** Cavity AO: how far a sample sits below the mean of rings of its neighbours (8 m, 24 m, 64 m). */
-function cavity(h: Float32Array): Float32Array {
+function cavity(h: Float32Array, N: number, CELL: number, where: ((i: number, j: number) => boolean) | null): Float32Array {
   const ao = new Float32Array(N * N), rings = [2, 6, 16], dirs = 8;
   for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
     const k = j * N + i; let occ = 0;
+    // Ground left as it was (the village's hills) is open: only the eroded land has creases worth the cost.
+    if (where && !where(i, j)) { ao[k] = 1; continue; }
     for (const r of rings) {
       let s = 0;
       for (let d = 0; d < dirs; d++) { const a = d / dirs * Math.PI * 2, ii = Math.min(N - 1, Math.max(0, Math.round(i + Math.cos(a) * r))), jj = Math.min(N - 1, Math.max(0, Math.round(j + Math.sin(a) * r))); s += Math.max(0, h[jj * N + ii] - h[k]) / (r * CELL); }
@@ -162,29 +182,31 @@ function cavity(h: Float32Array): Float32Array {
 // ── sampling ────────────────────────────────────────────────────────────
 /** Height anywhere: bilinear on the map (what the near mesh draws), the unaroded shape past it. */
 export function heightAt(land: Land, x: number, z: number): number {
-  const fx = (x + HALF) / CELL, fz = (z + HALF) / CELL;
+  const { n: N, cell: CELL, half: HALF } = land, fx = (x + HALF) / CELL, fz = (z + HALF) / CELL;
   if (fx < 0 || fz < 0 || fx >= N - 1 || fz >= N - 1) return land.shape.base(x, z);
   const i = Math.floor(fx), j = Math.floor(fz), u = fx - i, v = fz - j, k = j * N + i, h = land.h;
   return h[k] * (1 - u) * (1 - v) + h[k + 1] * u * (1 - v) + h[k + N] * (1 - u) * v + h[k + N + 1] * u * v;
 }
-export function sampleAt(_land: Land, a: Float32Array, x: number, z: number): number {
-  const i = Math.min(N - 1, Math.max(0, Math.round((x + HALF) / CELL))), j = Math.min(N - 1, Math.max(0, Math.round((z + HALF) / CELL)));
+export function sampleAt(land: Land, a: Float32Array, x: number, z: number): number {
+  const { n: N, cell: CELL, half: HALF } = land, i = Math.min(N - 1, Math.max(0, Math.round((x + HALF) / CELL))), j = Math.min(N - 1, Math.max(0, Math.round((z + HALF) / CELL)));
   return a[j * N + i];
 }
 /** Unit normal (x, y, z) by central differences over `d` metres. */
-export function normalAt(land: Land, x: number, z: number, d = CELL): [number, number, number] {
-  const hx = heightAt(land, x + d, z) - heightAt(land, x - d, z), hz = heightAt(land, x, z + d) - heightAt(land, x, z - d);
+export function normalAt(land: Land, x: number, z: number, d = land.cell, at: (x: number, z: number) => number = (x, z) => heightAt(land, x, z)): [number, number, number] {
+  const hx = at(x + d, z) - at(x - d, z), hz = at(x, z + d) - at(x, z - d);
   const nx = -hx, ny = 2 * d, nz = -hz, l = Math.hypot(nx, ny, nz); return [nx / l, ny / l, nz / l];
 }
+/** What the near mesh draws: the exact surface where the land has one, else the grid. */
+export function surfaceAt(land: Land, x: number, z: number): number { return land.surface ? land.surface(x, z) : heightAt(land, x, z); }
 /** 1 − normal.y: 0 flat, ~0.3 at 45°. */
 export function slopeAt(land: Land, x: number, z: number): number { return 1 - normalAt(land, x, z)[1]; }
 
 // ── the hour ────────────────────────────────────────────────────────────
 /** Sun visibility per sample for a sun direction (unit, y up): a soft-shadow march along the heightfield. 0..255. */
-export function bakeSun(land: Land, sun: [number, number, number], out = new Uint8Array(N * N)): Uint8Array {
-  const [sx, sy, sz] = sun, horiz = Math.hypot(sx, sz) || 1e-6, rise = sy / horiz, ux = sx / horiz, uz = sz / horiz, h = land.h;
-  if (sy <= 0) { out.fill(0); return out; }
-  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) {
+export function bakeSun(land: Land, sun: [number, number, number], out = new Uint8Array(land.n * land.n), rows: [number, number] = [0, land.n]): Uint8Array {
+  const { n: N, cell: CELL } = land, [sx, sy, sz] = sun, horiz = Math.hypot(sx, sz) || 1e-6, rise = sy / horiz, ux = sx / horiz, uz = sz / horiz, h = land.h;
+  if (sy <= 0) { out.fill(0, rows[0] * N, rows[1] * N); return out; }
+  for (let j = rows[0]; j < rows[1]; j++) for (let i = 0; i < N; i++) {
     const h0 = h[j * N + i] + 0.5; let vis = 1, t = CELL * 0.75;
     for (let s = 0; s < 120 && vis > 0; s++) {
       const x = i + ux * t / CELL, z = j + uz * t / CELL;
@@ -194,7 +216,7 @@ export function bakeSun(land: Land, sun: [number, number, number], out = new Uin
       const ray = h0 + t * rise;
       // Penumbra widening with distance: within 1.5 m + 2% of t above the ground is half shade.
       vis = Math.min(vis, (ray - ht) / (1.5 + t * 0.02) * 0.5 + 0.5);
-      if (ray > 700) break;
+      if (ray > land.ceiling) break;
       t += Math.max(CELL * 0.75, t * 0.06);
     }
     out[j * N + i] = Math.round(Math.min(1, Math.max(0, vis)) * 255);
@@ -203,7 +225,7 @@ export function bakeSun(land: Land, sun: [number, number, number], out = new Uin
 }
 
 // ── what stands on it ───────────────────────────────────────────────────
-export type TreeKind = 0 | 1 | 2 | 3 | 4; // 0–2 broadleaf, 3–4 conifer
+export type TreeKind = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7; // 0–2 broadleaf, 3–4 conifer; 5–7 the village tree, dark, blighted
 export interface Tree { x: number; z: number; y: number; kind: TreeKind; scale: number; rot: number }
 export interface Rock { x: number; z: number; y: number; scale: number; rot: number; tilt: number }
 export const TREE_SPACING = 7;

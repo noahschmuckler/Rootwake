@@ -153,7 +153,7 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   const bark = new THREE.MeshStandardMaterial({ color: '#6d5f48', roughness: 1 }), leafMat = spriteMaterial('leaf', '#5f8657'), rootBark = new THREE.MeshStandardMaterial({ color: '#8a6f4e', roughness: 0.95 });
   const wood: THREE.BufferGeometry[] = [], cards: Standee[] = [], collars: THREE.BufferGeometry[] = [];
   for (const t of TREES) { const parts = treeParts(rand, t.x, relief(t.x, t.z), t.z, t.size); wood.push(...parts.wood); cards.push(...parts.cards); collars.push(...parts.roots); colliders.push({ x: t.x + ox, z: t.z + oz, radius: trunkRadius(t), minY: -0.2, maxY: crownHeight(t) }); }
-  root.add(new THREE.Mesh(mergeGeometries(wood)!, bark), new THREE.Mesh(standees(cards), leafMat), new THREE.Mesh(mergeGeometries(collars)!, rootBark));
+  { const w = new THREE.Mesh(mergeGeometries(wood)!, bark), l = new THREE.Mesh(standees(cards), leafMat), c = new THREE.Mesh(mergeGeometries(collars)!, rootBark); w.name = 'tree-wood'; l.name = 'tree-leaves'; c.name = 'tree-collar'; root.add(w, l, c); }
   // The tree roots under the soil: her fast lanes, seen when the meadow goes glassy.
   const laneMat = new THREE.MeshStandardMaterial({ color: '#8a6f4e', emissive: '#c9a24a', emissiveIntensity: 0.05, roughness: 0.95 });
   const lanes: THREE.BufferGeometry[] = [];

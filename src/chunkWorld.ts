@@ -51,13 +51,18 @@ export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain 
   const vision = groundVision(), ground = vision.material;
   const setUnder = (under: number, x = 0, z = 0) => vision.update(under, x, z);
   const colourOf = terrain.colour;
+  /** A chunk's trees as built: its own, less any too near a den, ring, ruin, warren or the moot. */
+  const treesFor = (cx: number, cz: number): Tree[] => chunkTrees(cx, cz, seed).filter(t => !dens.some(d => Math.hypot(t.x - d.x, t.z - d.z) < 14) && !rings.some(r => Math.hypot(t.x - r.x, t.z - r.z) < 5) && !ruinList.some(r => Math.hypot(t.x - r.x, t.z - r.z) < 7) && !warrenList.some(w => Math.hypot(t.x - w.x, t.z - w.z) < 9) && !(mootAt && Math.hypot(t.x - mootAt.x, t.z - mootAt.z) < 9));
+  /** Another renderer (the vista look) may draw the ground and the trees itself: the chunks keep their trees, colliders and the rest, unseen. */
+  const look = { ground: true, trees: true };
+  const applyLook = (o: THREE.Object3D): void => { o.traverse(m => { if (m.name === 'world-ground' || m.name === 'far-ground') m.visible = look.ground; else if (m.name === 'tree-wood' || m.name === 'tree-leaves') m.visible = look.trees; }); };
   function build(cx: number, cz: number): Chunk {
     const group = new THREE.Group(), geometries: THREE.BufferGeometry[] = [], n = CHUNK / TERRAIN_STEP;
     const geo = new THREE.PlaneGeometry(CHUNK, CHUNK, n, n); geo.rotateX(-Math.PI / 2); geo.translate((cx + 0.5) * CHUNK, 0, (cz + 0.5) * CHUNK);
     { const pos = geo.attributes.position as THREE.BufferAttribute, col: number[] = []; for (let i = 0; i < pos.count; i++) { const x = pos.getX(i), z = pos.getZ(i); pos.setY(i, terrain.vertex(x, z)); const c = colourOf(x, z); col.push(...(blighted(x, z) ? [c[0] * 0.35 + 0.05, c[1] * 0.2, c[2] * 0.35 + 0.06] as [number, number, number] : c)); } geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); const normals = geo.attributes.normal as THREE.BufferAttribute; for (let i = 0; i < pos.count; i++) normals.setXYZ(i, ...terrain.normal(pos.getX(i), pos.getZ(i))); }
     const surface = new THREE.Mesh(geo, ground); surface.name = "world-ground"; group.add(surface); geometries.push(geo);
     const here = dens.filter(d => Math.floor(d.x / CHUNK) === cx && Math.floor(d.z / CHUNK) === cz);
-    const trees = chunkTrees(cx, cz, seed).filter(t => !dens.some(d => Math.hypot(t.x - d.x, t.z - d.z) < 14) && !rings.some(r => Math.hypot(t.x - r.x, t.z - r.z) < 5) && !ruinList.some(r => Math.hypot(t.x - r.x, t.z - r.z) < 7) && !warrenList.some(w => Math.hypot(t.x - w.x, t.z - w.z) < 9) && !(mootAt && Math.hypot(t.x - mootAt.x, t.z - mootAt.z) < 9)), rand = mulberry32((cx * 31 + cz * 17 + seed) >>> 0), colliders: Collider[] = [];
+    const trees = treesFor(cx, cz), rand = mulberry32((cx * 31 + cz * 17 + seed) >>> 0), colliders: Collider[] = [];
     // G3: a den: a mound of dark rocks round a low mouth, bones about it. The rocks are colliders.
     for (const d of here) { const y = relief(d.x, d.z), rocks: THREE.BufferGeometry[] = [], bones: THREE.BufferGeometry[] = [], mouthDir = d.id ? denLayout({ id: d.id, x: d.x, z: d.z, tier: d.tier }, seed, relief).dir : null;
       // The ring of rocks leaves a gap where the hall's mouth is (denModel: the den is walked into there); the cap rock sits back from it.
@@ -111,9 +116,9 @@ export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain 
     }
     const wood: THREE.BufferGeometry[] = [], cards: Standee[] = [], collars: THREE.BufferGeometry[] = [], dwood: THREE.BufferGeometry[] = [], dcards: Standee[] = [], bwood: THREE.BufferGeometry[] = [], bcards: Standee[] = [];
     for (const t of trees) { const dark = biomeAt(t.x, t.z, seed) === 'dark', blight = blighted(t.x, t.z), parts = treeParts(rand, t.x, relief(t.x, t.z), t.z, t.size); (blight ? bwood : dark ? dwood : wood).push(...parts.wood); (blight ? bcards : dark ? dcards : cards).push(...parts.cards.filter((_, i) => !blight || i % 3 === 0)); collars.push(...parts.roots); colliders.push({ x: t.x, z: t.z, radius: trunkRadius(t), minY: relief(t.x, t.z) - 0.2, maxY: relief(t.x, t.z) + crownHeight(t) }); }
-    const add = (gs: THREE.BufferGeometry[], st: Standee[], b: THREE.Material, l: THREE.Material): void => { if (gs.length) { const g = mergeGeometries(gs)!; group.add(new THREE.Mesh(g, b)); geometries.push(g); } if (st.length) { const g = standees(st); group.add(new THREE.Mesh(g, l)); geometries.push(g); } };
+    const add = (gs: THREE.BufferGeometry[], st: Standee[], b: THREE.Material, l: THREE.Material): void => { if (gs.length) { const g = mergeGeometries(gs)!, m = new THREE.Mesh(g, b); m.name = 'tree-wood'; group.add(m); geometries.push(g); } if (st.length) { const g = standees(st), m = new THREE.Mesh(g, l); m.name = 'tree-leaves'; group.add(m); geometries.push(g); } };
     add(wood, cards, bark, leaf); add(dwood, dcards, darkBark, darkLeaf); add(bwood, bcards, blightBark, blightLeaf); if (collars.length) { const g = mergeGeometries(collars)!; group.add(new THREE.Mesh(g, collar)); geometries.push(g); }
-    scene.add(group); return { key: chunkKey(cx, cz), group, trees, colliders, geometries };
+    applyLook(group); scene.add(group); return { key: chunkKey(cx, cz), group, trees, colliders, geometries };
   }
   /** The far land: past the loaded ring, ground alone out to FAR_RING chunks at FAR_STEP m, one merged mesh rebuilt when she crosses into another chunk, so that from a height the land goes on to the horizon instead of ending at the loaded ring (the summit had no view: Noah's playtest). No trees, no blight out there. Tuning. */
   const FAR_RING = 7, FAR_STEP = 16;
@@ -124,7 +129,7 @@ export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain 
       const geo = new THREE.PlaneGeometry(CHUNK, CHUNK, n, n); geo.rotateX(-Math.PI / 2); geo.translate((c.cx + 0.5) * CHUNK, 0, (c.cz + 0.5) * CHUNK);
       const pos = geo.attributes.position as THREE.BufferAttribute, col: number[] = []; for (let i = 0; i < pos.count; i++) { const px = pos.getX(i), pz = pos.getZ(i); pos.setY(i, terrain.vertex(px, pz)); col.push(...colourOf(px, pz)); } geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); geo.computeVertexNormals(); parts.push(geo); }
     if (far) { scene.remove(far); far.geometry.dispose(); far = null; }
-    if (parts.length) { const g = mergeGeometries(parts)!; for (const p of parts) p.dispose(); far = new THREE.Mesh(g, ground); far.name = 'far-ground'; scene.add(far); }
+    if (parts.length) { const g = mergeGeometries(parts)!; for (const p of parts) p.dispose(); far = new THREE.Mesh(g, ground); far.name = 'far-ground'; far.visible = look.ground; scene.add(far); }
   }
   /** Keep the ring round (x, z) loaded and nothing else. Returns how many chunks were built. */
   function update(x: number, z: number): number {
@@ -146,5 +151,6 @@ export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain 
   /** S4b: how many boars a wallow shows, by its id. */
   function setBoars(stock: (id: string) => number): void { boarStock = stock; refreshBoars(); }
   function refreshBoars(): void { for (const ch of loaded.values()) for (const o of ch.group.children) if (o.name.startsWith('wallow:')) applyBoars(o as THREE.Group); }
-  return { setBlight, update, treesNear, colliders, setUnder, setSanctified, setRabbits, refreshRabbits, setBoars, refreshBoars, get count() { return loaded.size; }, get trees() { let n = 0; for (const ch of loaded.values()) n += ch.trees.length; return n; } };
+  function setLook(next: { ground: boolean; trees: boolean }): void { Object.assign(look, next); for (const ch of loaded.values()) applyLook(ch.group); if (far) applyLook(far); }
+  return { setLook, treesOf: treesFor, setBlight, update, treesNear, colliders, setUnder, setSanctified, setRabbits, refreshRabbits, setBoars, refreshBoars, get count() { return loaded.size; }, get trees() { let n = 0; for (const ch of loaded.values()) n += ch.trees.length; return n; } };
 }

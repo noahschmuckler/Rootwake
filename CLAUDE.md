@@ -2,7 +2,7 @@
 
 # Graphics study: The Vista
 
-On branch `feat/vista`, read **VISTA_HANDOFF.md**: how far the look can go on a phone's browser, after Breath of the Wild — an eroded 2 km valley (`vistaTerrain.ts`), shared cel/haze shaders (`vistaShaders.ts`), terrain LOD, far ring, lake, wind grass, instanced trees and rocks, painted sky (`vistaWorld.ts`), bloom and grade, quality tiers with dynamic render scale and a cost readout (`vista.ts`). Live: https://noahschmuckler.github.io/Rootwake/vista/ .
+On branch `feat/vista`, read **VISTA_HANDOFF.md**: how far the look can go on a phone's browser, after Breath of the Wild — an eroded 2 km valley (`vistaTerrain.ts`), shared cel/haze shaders (`vistaShaders.ts`), terrain LOD, far ring, lake, wind grass, instanced trees and rocks, painted sky (`vistaWorld.ts`), bloom and grade, quality tiers with dynamic render scale and a cost readout (`vista.ts`). Live: https://noahschmuckler.github.io/Rootwake/vista/ . V1 (same handoff): the village unchanged under that look at `/vista/village/` (`village-vista.html`, or `?look=vista`), its land ringed by eroded mountains past the farthest den (`villageVista.ts`).
 
 # Active phone study: The Village (E1)
 

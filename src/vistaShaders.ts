@@ -17,6 +17,8 @@ vec3 srgb(vec3 c){ return pow(c, vec3(2.2)); }
 export const ATMOS = /* glsl */`
 uniform vec3 uSunDir; uniform vec3 uSunCol; uniform vec3 uZenith; uniform vec3 uHorizon;
 uniform vec3 uAmbSky; uniform vec3 uAmbGround; uniform float uHaze; uniform float uHazeFall; uniform float uHazeBase; uniform float uTime;
+uniform vec4 uGloom; // a dark fog over everything (rgb, amount): the dark forest; its density is uGloomD
+uniform float uGloomD; uniform float uStars;
 vec3 skyColour(vec3 d){
   float y = max(d.y, 0.0);
   vec3 c = mix(uHorizon, uZenith, pow(y, 0.5));
@@ -31,7 +33,8 @@ vec3 applyHaze(vec3 col, vec3 wp){
   float integ = abs(dy) > 0.5 ? (e0 - exp(-max(h0 + dy, 0.0) * uHazeFall)) / (uHazeFall * dy) : e0;
   float amount = 1.0 - exp(-uHaze * dist * max(integ, 0.0));
   vec3 hc = skyColour(normalize(vec3(d.x, clamp(d.y, 0.0, 1.0) * 0.35 + 0.03, d.z)));
-  return mix(col, hc, clamp(amount, 0.0, 1.0));
+  col = mix(col, hc, clamp(amount, 0.0, 1.0));
+  return mix(col, uGloom.rgb, uGloom.a * (1.0 - exp(-dist * uGloomD)));
 }
 /** The cel light: a soft terminator, sun only on the lit side, blue sky ambient everywhere. */
 vec3 toon(vec3 albedo, vec3 n, float vis, float ao){
@@ -42,12 +45,18 @@ vec3 toon(vec3 albedo, vec3 n, float vis, float ao){
 }
 `;
 
-/** The map's data texture (R sun visibility for the hour, G cavity AO, B water flow, A sediment) and the height texture. */
+/** The map's data (G cavity AO, B water flow, A sediment; R is filled with the sun's visibility for the hour from uSunTex, baked at its own resolution),
+ * the height texture, and the ground tint (rgb a colour laid over the land, a how much: the village's woods and dark forest). */
 export const MAP = /* glsl */`
-uniform sampler2D uMapData; uniform highp sampler2D uHeight; uniform float uMapHalf; uniform float uCell; uniform float uN; uniform float uWaterY; uniform float uSnowY;
+uniform sampler2D uMapData; uniform sampler2D uSunTex; uniform sampler2D uGround; uniform highp sampler2D uHeight; uniform float uMapHalf; uniform float uCell; uniform float uN; uniform float uSunN; uniform float uWaterY; uniform float uSnowY;
 vec2 mapUV(vec2 xz){ return ((xz + uMapHalf) / uCell + 0.5) / uN; }
 bool onMap(vec2 xz){ vec2 f = (xz + uMapHalf) / uCell; return f.x >= 0.0 && f.y >= 0.0 && f.x <= uN - 1.0 && f.y <= uN - 1.0; }
-vec4 mapData(vec2 xz){ return onMap(xz) ? texture2D(uMapData, mapUV(xz)) : vec4(1.0, 1.0, 0.0, 0.0); }
+vec4 mapData(vec2 xz){
+  if (!onMap(xz)) return vec4(1.0, 1.0, 0.0, 0.0);
+  vec4 m = texture2D(uMapData, mapUV(xz)); float sc = (uN - 1.0) / (uSunN - 1.0);
+  m.r = texture2D(uSunTex, ((xz + uMapHalf) / (uCell * sc) + 0.5) / uSunN).r; return m;
+}
+vec4 groundTint(vec2 xz){ return onMap(xz) ? texture2D(uGround, mapUV(xz)) : vec4(0.0); }
 /** The same bilinear the near mesh and the walking use (vistaTerrain heightAt). */
 float heightAt(vec2 xz){
   vec2 f = clamp((xz + uMapHalf) / uCell, vec2(0.0), vec2(uN - 1.001)); ivec2 i = ivec2(floor(f)); vec2 t = f - vec2(i);
@@ -93,6 +102,9 @@ vec3 terrainAlbedo(vec3 wp, vec3 n, vec4 md, out float grass){
   float snow = smoothstep(uSnowY - 25.0, uSnowY + 25.0, wp.y + (n1 - 0.5) * 90.0) * (1.0 - smoothstep(0.32, 0.48, slope + (n3 - 0.5) * 0.1));
   col = mix(col, srgb(vec3(0.86, 0.89, 0.95)) * (0.9 + 0.1 * n2 + 0.05 * n3), snow);
   grass = (1.0 - rockAmt) * (1.0 - screeAmt) * (1.0 - shore) * (1.0 - snow) * (1.0 - bed * 0.8);
+  vec4 gt = groundTint(p);
+  col = mix(col, gt.rgb * (0.85 + 0.3 * n3), gt.a * (1.0 - rockAmt));
+  grass *= 1.0 - gt.a * 0.45;
   return col;
 }
 `;
@@ -129,6 +141,7 @@ export const terrainFrag = /* glsl */`
 ${SHADOW_FRAG}
 ${NOISE}${ATMOS}${MAP}${TERRAIN_ALBEDO}
 varying vec3 vWorld; varying vec3 vNormal;
+uniform vec4 uSoil; // x, z, amount: within reach of her the ground thins to glass while she is beneath it (groundVision)
 void main(){
   vec3 n = normalize(vNormal);
   // A painterly bump: the normal leans with two scales of noise, so flat ground is not flat-lit.
@@ -139,7 +152,8 @@ void main(){
   float g; vec3 albedo = terrainAlbedo(vWorld, n, md, g);
   float vis = min(md.r, getShadowMask());
   vec3 col = toon(albedo, n, vis, mix(0.55, 1.0, md.g));
-  gl_FragColor = vec4(applyHaze(col, vWorld), 1.0);
+  float soil = 1.0 - 0.78 * uSoil.z * (1.0 - smoothstep(14.0, 28.0, distance(vWorld.xz, uSoil.xy)));
+  gl_FragColor = vec4(applyHaze(col, vWorld), soil);
   ${FINISH}
 }`;
 
@@ -151,6 +165,24 @@ ${NOISE}${ATMOS}${MAP}${TERRAIN_ALBEDO}
 attribute vec4 aBlade; // x, z in the patch; size; rotation
 attribute vec4 aTuft; // the blade within its tuft: angle, offset x, offset z, height
 uniform vec2 uCenter; uniform float uPatch; uniform float uBladeH; uniform float uBladeW; uniform vec2 uWind;
+// Where nothing grows (paths, floors, the green): up to three masks, each a square (x0, z0, side) drawn from above (north up, so v runs against z).
+uniform sampler2D uClear0; uniform sampler2D uClear1; uniform sampler2D uClear2; uniform vec3 uClearAt[3];
+// The ground near her at a finer step than the map (x0, z0, side, texels): blades stand on the walked surface.
+uniform highp sampler2D uFine; uniform vec4 uFineAt;
+float cleared(vec2 xz){
+  float c = 0.0; vec2 u;
+  u = (xz - uClearAt[0].xy) / uClearAt[0].z; u.y = 1.0 - u.y; if (all(greaterThan(u, vec2(0.0))) && all(lessThan(u, vec2(1.0)))) c = max(c, texture2D(uClear0, u).r);
+  u = (xz - uClearAt[1].xy) / uClearAt[1].z; u.y = 1.0 - u.y; if (all(greaterThan(u, vec2(0.0))) && all(lessThan(u, vec2(1.0)))) c = max(c, texture2D(uClear1, u).r);
+  u = (xz - uClearAt[2].xy) / uClearAt[2].z; u.y = 1.0 - u.y; if (all(greaterThan(u, vec2(0.0))) && all(lessThan(u, vec2(1.0)))) c = max(c, texture2D(uClear2, u).r);
+  return c;
+}
+float fineHeight(vec2 xz, float coarse){
+  vec2 f = (xz - uFineAt.xy) / uFineAt.z * (uFineAt.w - 1.0);
+  if (uFineAt.w < 2.0 || any(lessThan(f, vec2(0.0))) || any(greaterThanEqual(f, vec2(uFineAt.w - 1.0)))) return coarse;
+  ivec2 i = ivec2(floor(f)); vec2 t = f - vec2(i);
+  float a = texelFetch(uFine, i, 0).r, b = texelFetch(uFine, i + ivec2(1, 0), 0).r, c = texelFetch(uFine, i + ivec2(0, 1), 0).r, d = texelFetch(uFine, i + ivec2(1, 1), 0).r;
+  return mix(mix(a, b, t.x), mix(c, d, t.x), t.y);
+}
 varying vec3 vWorld; varying vec3 vCol; varying vec3 vN; varying float vY; varying float vGust; varying vec2 vMd;
 void main(){
   vec2 rel = mod(aBlade.xy - uCenter + 0.5 * uPatch, uPatch) - 0.5 * uPatch, xz = uCenter + rel;
@@ -158,7 +190,8 @@ void main(){
   vec4 md = mapData(xz); vec3 n; float h = heightNormalAt(xz, n), g;
   vec3 base = terrainAlbedo(vec3(xz.x, h, xz.y), n, md, g);
   float fade = 1.0 - smoothstep(uPatch * 0.3, uPatch * 0.5, dist);
-  float hgt = uBladeH * (0.45 + 0.55 * aBlade.z) * smoothstep(0.3, 0.7, g) * fade * (1.0 + md.b * 0.8) * (0.7 + 0.6 * vnoise(xz * 0.08));
+  h = fineHeight(xz, h);
+  float hgt = uBladeH * (0.45 + 0.55 * aBlade.z) * smoothstep(0.3, 0.7, g) * fade * (1.0 + md.b * 0.8) * (0.7 + 0.6 * vnoise(xz * 0.08)) * (1.0 - smoothstep(0.2, 0.5, cleared(xz)));
   if (hgt < 0.015 || h < uWaterY + 0.2) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
   float y = position.y, ang = aBlade.w + aTuft.x, c = cos(ang), s = sin(ang), cr = cos(aBlade.w), sr = sin(aBlade.w);
   hgt *= aTuft.w;
@@ -303,6 +336,9 @@ void main(){
     cloud += uSunCol * pow(max(s, 0.0), 8.0) * 0.4 * (1.0 - cov);
     col = mix(col, cloud, cov * 0.92);
   }
+  // Stars at night: a hashed field on the dome, twinkling a little.
+  if (uStars > 0.0 && d.y > 0.0) { vec2 sp = vec2(atan(d.z, d.x) * 120.0, d.y * 160.0); vec2 cell = floor(sp); float h = hash12(cell); float st = step(0.985, h) * smoothstep(0.35, 0.0, length(fract(sp) - 0.5)) * (0.6 + 0.4 * sin(uTime * 2.0 + h * 40.0)); col += vec3(st * 1.4 * uStars) * smoothstep(0.0, 0.25, d.y); }
+  col = mix(col, uGloom.rgb, uGloom.a * 0.85);
   gl_FragColor = vec4(col, 1.0);
   ${FINISH}
 }`;
