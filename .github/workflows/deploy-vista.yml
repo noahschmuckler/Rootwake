@@ -31,12 +31,16 @@ jobs:
       - run: npm run build -- --base=/Rootwake/vista/
       - run: npm install --no-save --package-lock=false playwright@1.58.2
       - run: npx playwright install --with-deps chromium
+      # The runner draws with SwiftShader at a frame or two a second: the low tier keeps each screenshot within its time.
       - run: node scripts/browser-vista.mjs
         env:
           STUDY_BASE: /Rootwake/vista/
+          VISTA_Q: low
+          VISTA_SHOTS: card0-hour0,card1-hour1,card2-hour2,card3-hour3
       - run: node scripts/browser-village-vista.mjs
         env:
           STUDY_BASE: /Rootwake/vista/
+          VILLAGE_VISTA_Q: low
       - uses: actions/upload-artifact@v4
         if: always()
         with:

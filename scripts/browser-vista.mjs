@@ -26,7 +26,7 @@ try{
     const name=`card${c}-hour${h}`;if(only&&!only.includes(name))continue;
     await page.evaluate(([c,h])=>{window.__rootwake.setHour(h);window.__rootwake.goCard(c);},[c,h]);
     await page.waitForTimeout(1500);
-    await page.screenshot({path:`${out}/${name}.png`});
+    await page.screenshot({path:`${out}/${name}.png`,timeout:180000});
     report.push({name,card:cards[c]});
   }
   const hud=await page.evaluate(()=>document.getElementById('hud').textContent);
