@@ -1,1 +1,0 @@
-import"./mobilityControls-shg0xTkk.js";import{e as t,C as i}from"./underworld-2ZGj5_qa.js";import"./projectiles-A10gmlum.js";import"./colors-BKJfVazC.js";import"./board3d-C9RZEQyN.js";import"./BufferGeometryUtils-CGxKLXh6.js";t({world:(r,o)=>new i(r,o),greblins:!0});
