@@ -30,3 +30,28 @@ Smaller details are optional at game scale: the leaf-strap bodice, pointed ears,
 - **Hair, leaves and bark:** built in code on that body, sharing the world's leaf and bark materials and the vista's cel shading, so they can fold into her burl, knot, leaf and ivy forms.
 - **The braid:** a chain of a few segments that sways with her gait (spring physics), not a sculpted mass.
 - **Budget:** about 10–15k triangles in all, two or three materials.
+
+## Built: v1 in code (2026-10-14)
+
+Preview at `/vista/hulda/` (`hulda.html`, `src/huldaPreview.ts`). Turn her, zoom, see her idle, walk and run on her Mixamo clips, stand her beside a hobbit, or show the old figure (`?figure=old`). The game uses her everywhere `createHulda()` is called without colours; hobbits and the steward keep the jointed figure.
+
+- **`src/huldaSculpt.ts`: the body.**
+  - About 45 smooth primitives (ellipsoids and tapering capsules) along the X Bot bones in the T-pose bind, in the proportions of `body-v1.png`.
+  - Each limb blends into the torso, and limbs only meet each other by a hard minimum, so the thighs keep their crease.
+  - Meshed by surface nets at 1.9 cm, about 14k triangles.
+  - Skinned by nearness to each bone's primitives (`WEIGHT_TAU`).
+  - An outline hull pushed out 1.1 cm and drawn back-faced.
+  - Builds in about 0.6 s on desktop. Baking it at build time is the next saving.
+- **`src/huldaDress.ts`: the dress.**
+  - The leaf skirt: three rows, longer behind, slit in front, skinned to blend from the hips into each thigh.
+  - The bodice, birch sleeves and greaves (a generated bark texture) with crossed vine wraps, vine armlets, the violet sash with its tails and lavender.
+  - The hair cap with loose locks, temple tendrils, pointed ears, eyes and brows, blossoms.
+  - The braid: a 16-point verlet chain in world space, kept behind her back and over the skirt by a level push that takes no energy, with leaves along it.
+- **Shading.** Cel shading (`MeshToonMaterial`, a three-step ramp) with a dark outline. The palette is the table above.
+
+Next candidates:
+- Bake the body.
+- A face with more character: painted eyes with whites, lips.
+- More leaves on the bodice.
+- The braid's leaves larger.
+- Her forms (bark, knot, leaf, ivy) in the same palette.

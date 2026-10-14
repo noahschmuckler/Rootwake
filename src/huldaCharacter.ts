@@ -6,6 +6,8 @@ import * as THREE from 'three';
 import { HuldaMotion } from './huldaMotion';
 import { installGait, MODEL_HEIGHT, type Gait } from './huldaRig';
 import skeletonData from './huldaSkeleton.json';
+import { sculptBody } from './huldaSculpt';
+import { leafSkirt, dressRigid, toonRamp, birchTexture, leafShape, Braid, HULDA_PALETTE } from './huldaDress';
 
 interface BoneData { name: string; parent: string | null; position: number[]; quaternion: number[]; scale: number[] }
 const SKELETON: { root: string; bones: BoneData[] } = skeletonData;
@@ -15,10 +17,12 @@ export const HULDA_HEIGHT = MODEL_HEIGHT;
 const bone = (short: string): string => BONE_PREFIX + short;
 
 /** How a figure on this skeleton is dressed: Hulda by default; a hobbit is shorter, in cloth, without her leaves and vines. */
-export interface FigureOptions { name: string; height: number; skin: string; cloth: string; clothLight: string; hair: string; feet: string; locks: boolean; leaves: boolean; skirt: boolean }
-export const HULDA_FIGURE: FigureOptions = { name: 'Hulda', height: MODEL_HEIGHT, skin: '#b9cca0', cloth: '#326b42', clothLight: '#78a44c', hair: '#93462e', feet: '#514838', locks: true, leaves: true, skirt: true };
+/** `style`: 'sculpted' is Hulda after design/hulda (one skinned body, the leaf dress, the braid, cel-shaded); 'rigid' the jointed figure the hobbits wear. */
+export interface FigureOptions { name: string; height: number; skin: string; cloth: string; clothLight: string; hair: string; feet: string; locks: boolean; leaves: boolean; skirt: boolean; style: 'rigid' | 'sculpted' }
+export const HULDA_FIGURE: FigureOptions = { name: 'Hulda', height: MODEL_HEIGHT, skin: '#b9cca0', cloth: '#326b42', clothLight: '#78a44c', hair: '#93462e', feet: '#514838', locks: true, leaves: true, skirt: true, style: 'sculpted' };
 export function createHulda(options: Partial<FigureOptions> = {}) {
-  const o: FigureOptions = { ...HULDA_FIGURE, ...options };
+  // A figure dressed in its own colours (a hobbit, the steward) is the jointed kind unless it asks otherwise.
+  const o: FigureOptions = { ...HULDA_FIGURE, ...(Object.keys(options).some(k => k !== 'name' && k !== 'style') ? { style: 'rigid' as const } : {}), ...options };
   const group = new THREE.Group(); group.name = o.name;
   const motion = new HuldaMotion();
   const skin = new THREE.MeshStandardMaterial({ color: o.skin, roughness: 0.83 });
@@ -36,18 +40,20 @@ export function createHulda(options: Partial<FigureOptions> = {}) {
     0,0,0, 0,1,0, -.5,.4,0, 0,0,0, .5,.4,0, 0,1,0,
   ], 3)); leafGeo.computeVertexNormals();
   // The skeleton, bone for bone from the file: the rig faces +Z in file units, so the rig group turns and scales it.
-  const bones = new Map<string, THREE.Bone>(), bindLocal = new Map<string, THREE.Quaternion>(), bindWorld = new Map<string, THREE.Quaternion>();
+  const boneList: THREE.Bone[] = [], bones = new Map<string, THREE.Bone>(), bindLocal = new Map<string, THREE.Quaternion>(), bindWorld = new Map<string, THREE.Quaternion>();
   const rig = new THREE.Group(); rig.name = 'HuldaRig'; group.add(rig);
   for (const b of SKELETON.bones) {
     const j = new THREE.Bone(); j.name = b.name; j.position.fromArray(b.position); j.quaternion.fromArray(b.quaternion).normalize(); j.scale.fromArray(b.scale);
-    (b.parent ? bones.get(b.parent)! : rig).add(j); bones.set(b.name, j);
+    (b.parent ? bones.get(b.parent)! : rig).add(j); bones.set(b.name, j); boneList.push(j);
     bindLocal.set(b.name, j.quaternion.clone()); bindWorld.set(b.name, (b.parent ? bindWorld.get(b.parent)!.clone() : new THREE.Quaternion()).multiply(j.quaternion));
   }
   rig.updateMatrixWorld(true);
+  const J = (short: string): THREE.Bone => { const j = bones.get(bone(short)); if (!j) throw new Error(`no bone ${short}`); return j; };
+  const sculpted = o.style === 'sculpted' ? buildSculpted() : null;
   const top = new THREE.Vector3(); bones.get(bone('HeadTop_End'))!.getWorldPosition(top);
   const skeletonHeight = top.y, s = skeletonHeight / 1.9; // s: her authored sizes (a 1.9-tall figure) in the file's units.
   rig.scale.setScalar(o.height / skeletonHeight); rig.rotation.y = Math.PI;
-  const J = (short: string): THREE.Bone => { const j = bones.get(bone(short)); if (!j) throw new Error(`no bone ${short}`); return j; };
+  if (sculpted) { rig.updateMatrixWorld(true); const skeleton = new THREE.Skeleton(boneList); for (const m of sculpted.skinned) { m.bind(skeleton); m.frustumCulled = false; } }
   const childOf = (child: string): THREE.Vector3 => J(child).position.clone();
   /** An ellipsoid along a bone toward its child: the limb segment, sized by the bone's length. */
   function segment(parent: string, child: string, material: THREE.Material, rx: number, rz = rx, along = 1): THREE.Mesh {
@@ -61,41 +67,71 @@ export function createHulda(options: Partial<FigureOptions> = {}) {
   function blade(parent: THREE.Object3D, x: number, y: number, z: number, w: number, h: number, angle = 0, material = leaf): THREE.Mesh {
     const m = new THREE.Mesh(leafGeo, material); m.position.set(x, y, z); m.scale.set(w, h, w); m.rotation.z = angle; parent.add(m); return m;
   }
-  // Torso: pelvis, belly, chest along the spine bones; the leaf skirt hangs from the hips (forward is +Z in the rig).
-  const hips = J('Hips');
-  ellipsoid(hips, leaf, 0, -0.02 * s, 0, 0.21 * s, 0.15 * s, 0.135 * s);
-  // One torso along the whole spine (the three spine bones are short), and the chest over it.
-  segment('Spine', 'Spine1', leaf, 0.16 * s, 0.12 * s, 3.4); segment('Spine2', 'Neck', leaf, 0.215 * s, 0.14 * s, 0.9);
-  for (let i = 0; i < (o.skirt ? 9 : 0); i++) {
-    const a = i * Math.PI * 2 / 9, panel = new THREE.Group(); panel.name = 'skirtLeaf' + i; panel.position.set(Math.sin(a) * 0.17 * s, -0.04 * s, -Math.cos(a) * 0.12 * s); panel.rotation.y = a + Math.PI; hips.add(panel);
-    blade(panel, 0, 0, 0, 0.22 * s, 0.36 * s, Math.PI, i % 3 === 0 ? lightLeaf : leaf); panel.rotation.x = 0.22;
+  const hips = J('Hips'), head = J('Head'), locks: THREE.Group[] = [];
+  const limbs = [-1, 1].map(side => { const P = side < 0 ? 'Left' : 'Right'; return { side, shoulder: J(P + 'Arm'), elbow: J(P + 'ForeArm'), hand: J(P + 'Hand'), hip: J(P + 'UpLeg'), knee: J(P + 'Leg'), ankle: J(P + 'Foot') }; });
+  if (!sculpted) dressRigidFigure();
+  else {
+    // The nose rides the head as its own small part (the figure faces −Z by it).
+    const headTop = childOf('HeadTop_End'), nose = ellipsoid(head, sculpted.skin, 0, headTop.y * 0.5 - 0.012 * s, 0.02 * s + 0.1 * s * 0.98, 0.016 * s, 0.022 * s, 0.024 * s); nose.name = 'nose';
+    head.children.splice(head.children.indexOf(nose), 1); head.children.unshift(nose); // first among the head's small parts
   }
-  const chest = J('Spine2');
-  if (o.leaves) for (const side of [-1, 1]) { blade(chest, side * 0.12 * s, 0.03 * s, 0.11 * s, 0.17 * s, 0.30 * s, side * -0.35, lightLeaf); blade(chest, side * 0.19 * s, 0.14 * s, -0.01 * s, 0.19 * s, 0.24 * s, side * -0.95); }
-  segment('Neck', 'Head', skin, 0.062 * s, 0.063 * s);
-  // The head, sized to the rig rather than her old big-headed self; the face is at +Z, the vine locks behind.
-  const head = J('Head'), hx = 0.105 * s, hy = 0.14 * s, hz = 0.1 * s, headTop = childOf('HeadTop_End');
-  const headCentre = new THREE.Vector3(0, headTop.y * 0.5, 0.02 * s);
-  ellipsoid(head, skin, headCentre.x, headCentre.y, headCentre.z, hx, hy, hz);
-  ellipsoid(head, skin, 0, headCentre.y - 0.012 * s, headCentre.z + hz * 0.98, 0.025 * s, 0.038 * s, 0.039 * s);
-  for (const x of [-0.42, 0.42]) ellipsoid(head, eyes, x * hx, headCentre.y + 0.2 * hy, headCentre.z + hz * 0.9, 0.027 * s, 0.014 * s, 0.016 * s);
-  ellipsoid(head, hair, 0, headCentre.y + 0.3 * hy, headCentre.z - 0.38 * hz, hx * 1.1, hy * 0.92, hz * 1.06);
-  const locks: THREE.Group[] = [];
-  for (let i = 0; i < (o.locks ? 5 : 0); i++) { const lock = new THREE.Group(); lock.name = 'vineHair' + i; lock.position.set((i - 2) * 0.05 * s, headCentre.y + 0.35 * hy, headCentre.z - 0.7 * hz); head.add(lock); ellipsoid(lock, hair, 0, -0.19 * s, -0.03 * s, 0.045 * s, 0.26 * s, 0.05 * s); locks.push(lock); }
-  if (o.leaves) for (let i = 0; i < 3; i++) blade(head, (-0.13 + i * 0.045) * s, headCentre.y + 0.5 * hy, headCentre.z + 0.4 * hz, 0.09 * s, 0.14 * s, -0.6 + i * 0.3, lightLeaf);
-  // Limbs along the bones; fingers too, so a hand clip reads. Bark feet.
-  const limbs = [-1, 1].map(side => {
-    const P = side < 0 ? 'Left' : 'Right';
-    segment(P + 'Shoulder', P + 'Arm', leaf, 0.075 * s, 0.065 * s);
-    segment(P + 'Arm', P + 'ForeArm', skin, 0.066 * s, 0.065 * s); segment(P + 'ForeArm', P + 'Hand', skin, 0.05 * s);
-    const forearm = J(P + 'ForeArm'), fd = childOf(P + 'Hand'); if (o.leaves) blade(forearm, 0, fd.y * 0.85, -0.045 * s, 0.095 * s, 0.21 * s, Math.PI + 0.12 * side); // points back up the forearm
-    segment(P + 'Hand', P + 'HandMiddle1', skin, 0.045 * s, 0.03 * s);
-    for (const f of ['Thumb', 'Index', 'Middle', 'Ring', 'Pinky']) for (let k = 1; k <= 3; k++) segment(`${P}Hand${f}${k}`, `${P}Hand${f}${k + 1}`, skin, 0.012 * s);
-    segment(P + 'UpLeg', P + 'Leg', skin, 0.09 * s); segment(P + 'Leg', P + 'Foot', skin, 0.061 * s);
-    const shin = J(P + 'Leg'), sd = childOf(P + 'Foot'); if (o.leaves) blade(shin, 0, sd.y * 0.9, -0.054 * s, 0.11 * s, 0.29 * s, Math.PI); // points up the shin
-    segment(P + 'Foot', P + 'ToeBase', bark, 0.045 * s, 0.032 * s, 1.15); segment(P + 'ToeBase', P + 'Toe_End', bark, 0.04 * s, 0.02 * s, 1.3);
-    return { side, shoulder: J(P + 'Arm'), elbow: J(P + 'ForeArm'), hand: J(P + 'Hand'), hip: J(P + 'UpLeg'), knee: J(P + 'Leg'), ankle: J(P + 'Foot') };
-  });
+  /** The jointed figure: rigid parts on the bones, as the hobbits wear it. */
+  function dressRigidFigure(): void {
+    // Torso: pelvis, belly, chest along the spine bones; the leaf skirt hangs from the hips (forward is +Z in the rig).
+    ellipsoid(hips, leaf, 0, -0.02 * s, 0, 0.21 * s, 0.15 * s, 0.135 * s);
+    // One torso along the whole spine (the three spine bones are short), and the chest over it.
+    segment('Spine', 'Spine1', leaf, 0.16 * s, 0.12 * s, 3.4); segment('Spine2', 'Neck', leaf, 0.215 * s, 0.14 * s, 0.9);
+    for (let i = 0; i < (o.skirt ? 9 : 0); i++) {
+      const a = i * Math.PI * 2 / 9, panel = new THREE.Group(); panel.name = 'skirtLeaf' + i; panel.position.set(Math.sin(a) * 0.17 * s, -0.04 * s, -Math.cos(a) * 0.12 * s); panel.rotation.y = a + Math.PI; hips.add(panel);
+      blade(panel, 0, 0, 0, 0.22 * s, 0.36 * s, Math.PI, i % 3 === 0 ? lightLeaf : leaf); panel.rotation.x = 0.22;
+    }
+    const chest = J('Spine2');
+    if (o.leaves) for (const side of [-1, 1]) { blade(chest, side * 0.12 * s, 0.03 * s, 0.11 * s, 0.17 * s, 0.30 * s, side * -0.35, lightLeaf); blade(chest, side * 0.19 * s, 0.14 * s, -0.01 * s, 0.19 * s, 0.24 * s, side * -0.95); }
+    segment('Neck', 'Head', skin, 0.062 * s, 0.063 * s);
+    // The head, sized to the rig rather than her old big-headed self; the face is at +Z, the vine locks behind.
+    const hx = 0.105 * s, hy = 0.14 * s, hz = 0.1 * s, headTop = childOf('HeadTop_End');
+    const headCentre = new THREE.Vector3(0, headTop.y * 0.5, 0.02 * s);
+    ellipsoid(head, skin, headCentre.x, headCentre.y, headCentre.z, hx, hy, hz);
+    ellipsoid(head, skin, 0, headCentre.y - 0.012 * s, headCentre.z + hz * 0.98, 0.025 * s, 0.038 * s, 0.039 * s);
+    for (const x of [-0.42, 0.42]) ellipsoid(head, eyes, x * hx, headCentre.y + 0.2 * hy, headCentre.z + hz * 0.9, 0.027 * s, 0.014 * s, 0.016 * s);
+    ellipsoid(head, hair, 0, headCentre.y + 0.3 * hy, headCentre.z - 0.38 * hz, hx * 1.1, hy * 0.92, hz * 1.06);
+    for (let i = 0; i < (o.locks ? 5 : 0); i++) { const lock = new THREE.Group(); lock.name = 'vineHair' + i; lock.position.set((i - 2) * 0.05 * s, headCentre.y + 0.35 * hy, headCentre.z - 0.7 * hz); head.add(lock); ellipsoid(lock, hair, 0, -0.19 * s, -0.03 * s, 0.045 * s, 0.26 * s, 0.05 * s); locks.push(lock); }
+    if (o.leaves) for (let i = 0; i < 3; i++) blade(head, (-0.13 + i * 0.045) * s, headCentre.y + 0.5 * hy, headCentre.z + 0.4 * hz, 0.09 * s, 0.14 * s, -0.6 + i * 0.3, lightLeaf);
+    // Limbs along the bones; fingers too, so a hand clip reads. Bark feet.
+    [-1, 1].forEach(side => {
+      const P = side < 0 ? 'Left' : 'Right';
+      segment(P + 'Shoulder', P + 'Arm', leaf, 0.075 * s, 0.065 * s);
+      segment(P + 'Arm', P + 'ForeArm', skin, 0.066 * s, 0.065 * s); segment(P + 'ForeArm', P + 'Hand', skin, 0.05 * s);
+      const forearm = J(P + 'ForeArm'), fd = childOf(P + 'Hand'); if (o.leaves) blade(forearm, 0, fd.y * 0.85, -0.045 * s, 0.095 * s, 0.21 * s, Math.PI + 0.12 * side); // points back up the forearm
+      segment(P + 'Hand', P + 'HandMiddle1', skin, 0.045 * s, 0.03 * s);
+      for (const f of ['Thumb', 'Index', 'Middle', 'Ring', 'Pinky']) for (let k = 1; k <= 3; k++) segment(`${P}Hand${f}${k}`, `${P}Hand${f}${k + 1}`, skin, 0.012 * s);
+      segment(P + 'UpLeg', P + 'Leg', skin, 0.09 * s); segment(P + 'Leg', P + 'Foot', skin, 0.061 * s);
+      const shin = J(P + 'Leg'), sd = childOf(P + 'Foot'); if (o.leaves) blade(shin, 0, sd.y * 0.9, -0.054 * s, 0.11 * s, 0.29 * s, Math.PI); // points up the shin
+      segment(P + 'Foot', P + 'ToeBase', bark, 0.045 * s, 0.032 * s, 1.15); segment(P + 'ToeBase', P + 'Toe_End', bark, 0.04 * s, 0.02 * s, 1.3);
+    });
+
+  }
+  /** Hulda after design/hulda: one sculpted body skinned to these bones with an outline hull, the leaf dress, the braid. Built in the bind pose, before the rig is scaled. */
+  function buildSculpted() {
+    const ramp = toonRamp(), toon = (color: string, extra: THREE.MeshToonMaterialParameters = {}) => new THREE.MeshToonMaterial({ color, gradientMap: ramp, ...extra });
+    const P = HULDA_PALETTE;
+    const skin = toon(P.skin), hairMat = toon(P.hair), braidMat = toon('#ffffff', { vertexColors: true }), leafMat = toon('#ffffff', { vertexColors: true, side: THREE.DoubleSide });
+    const barkMat = toon('#ffffff', { map: birchTexture() }), vine = toon(P.moss), sashMat = toon(P.sash, { side: THREE.DoubleSide }), blossom = toon(P.blossom), eye = new THREE.MeshBasicMaterial({ color: P.eye });
+    const outline = new THREE.MeshBasicMaterial({ color: '#1d120c', side: THREE.BackSide });
+    const at = (short: string) => { const p = new THREE.Vector3(); J(short).getWorldPosition(p); return p; };
+    const index = (short: string) => { const i = boneList.findIndex(b => b.name === bone(short)); if (i < 0) throw new Error(`no bone ${short}`); return i; };
+    const { body, hull } = sculptBody(at, index), skirt = leafSkirt(at('Hips').y, index);
+    const skinned = [new THREE.SkinnedMesh(body, skin), new THREE.SkinnedMesh(hull, outline), new THREE.SkinnedMesh(skirt, leafMat)];
+    skinned[0].name = 'body'; skinned[1].name = 'outline'; skinned[2].name = 'skirt'; for (const m of skinned) rig.add(m);
+    const attach = (mesh: THREE.Object3D, short: string) => { const b = J(short), inv = b.matrixWorld.clone().invert(); (mesh as THREE.Mesh).geometry.applyMatrix4(inv); b.add(mesh); };
+    dressRigid(at, { leaf: leafMat, bark: barkMat, vine, sash: sashMat, hair: hairMat, skin, blossom, eye }, attach);
+    const headBone = J('Head'), anchor = at('Head').add(new THREE.Vector3(0, 11, -9.5)).applyMatrix4(headBone.matrixWorld.clone().invert());
+    const braidLeaf = leafShape(4, 6); { const n = braidLeaf.attributes.position.count, c = new Float32Array(n * 3), col = new THREE.Color(P.leaf); for (let i = 0; i < n; i++) col.toArray(c, i * 3); braidLeaf.setAttribute('color', new THREE.BufferAttribute(c, 3)); }
+    const braid = new Braid(headBone, anchor, { top: J('Spine2'), bottom: J('Hips'), radius: 13.5, hips: 22 }, braidMat, leafMat, braidLeaf);
+    group.add(braid.mesh, braid.leaves);
+    const materials = [skin, hairMat, braidMat, leafMat, barkMat, vine, sashMat, blossom, eye, outline];
+    return { skinned, braid, skin, materials, textures: [ramp, (barkMat.map as THREE.Texture)], geometries: [body, hull, skirt, braidLeaf] };
+  }
   const joints = { hips, spine: J('Spine1'), neck: J('Neck'), head, limbs };
   const hipsRestY = hips.position.y;
   const tmpQ = new THREE.Quaternion(), tmpQ2 = new THREE.Quaternion(), X = new THREE.Vector3(-1, 0, 0), Z = new THREE.Vector3(0, 0, 1);
@@ -145,6 +181,7 @@ export function createHulda(options: Partial<FigureOptions> = {}) {
     const k = THREE.MathUtils.clamp(foldAmount, 0, 1);
     if (gait) gait.update(dt, speed, heading, grounded, k); else procedural(dt, speed, heading, grounded);
     applyFold(k);
+    if (sculpted) { group.updateMatrixWorld(true); sculpted.braid.update(dt, rig.scale.x); }
   }
   /** Prefab clips (Mixamo's, on these bone names) take over from the procedural gait; null returns to it. */
   function setClips(clips: THREE.AnimationClip[] | null): void {
@@ -154,7 +191,8 @@ export function createHulda(options: Partial<FigureOptions> = {}) {
   }
   function dispose() {
     setClips(null); group.removeFromParent(); sphere.dispose(); leafGeo.dispose();
+    if (sculpted) { for (const m of sculpted.materials) m.dispose(); for (const t of sculpted.textures) t.dispose(); for (const g of sculpted.geometries) g.dispose(); sculpted.braid.mesh.geometry.dispose(); }
     for (const material of [skin, leaf, lightLeaf, hair, bark, eyes]) material.dispose();
   }
-  return { group, rig, motion, joints, bones, bindLocal, skeletonHeight, height: o.height, update, setClips, get gait() { return gait; }, dispose };
+  return { group, rig, motion, joints, bones, bindLocal, skeletonHeight, height: o.height, update, setClips, get gait() { return gait; }, get braid() { return sculpted?.braid ?? null; }, dispose };
 }
