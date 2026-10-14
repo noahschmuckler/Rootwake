@@ -11,11 +11,11 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { TERRAIN_STEP, type Terrain } from './worldTerrain';
-import { generate, heightAt, gradientNoise, ridged, fbm, type Land, type Tree as VTree } from './vistaTerrain';
+import { generate, heightAt, gradientNoise, ridged, fbm, rng, type Land, type Tree as VTree, type Rock } from './vistaTerrain';
 import { buildVista, QUALITIES, CASTER_LAYER, sunDirection, type Hour, type Quality, type VistaWorld } from './vistaWorld';
 import { places, dens, ruins, warrens, wallows, ownWarrens, moot, FOREST_RADIUS as DARK_RADIUS, KARST_AT } from './overworldModel';
 import { convergences, beyond, noise, CHUNK } from './chunkModel';
-import { FOREST_RADIUS as KARST_FOREST } from './karstFlowModel';
+import { FOREST_RADIUS as KARST_FOREST, NODES as KARST_NODES, nodeFrame } from './karstFlowModel';
 import { TREES, type Tree } from './villageModel';
 
 // ── the land ─────────────────────────────────────────────────────────────
@@ -85,7 +85,30 @@ export function villageTrees(land: Land, edge: number, terrain: Terrain, treesOf
   const add = (x: number, z: number, size: number, id: number) => out.push({ x, z, y: terrain.height(x, z), kind: blighted(x, z) ? 7 : dark(x, z) ? 6 : 5, scale: size, rot: (id * 2.399963) % (Math.PI * 2) });
   for (let cz = -reach; cz <= reach; cz++) for (let cx = -reach; cx <= reach; cx++) for (const t of treesOf(cx, cz)) if (norm4(t.x, t.z) < edge - 40) add(t.x, t.z, t.size, t.id);
   for (const o of origins) for (const t of TREES) add(t.x + o.x, t.z + o.z, t.size, t.id + o.x * 7 + o.z * 13);
+  // The karst's own trees (its forest floor, its ledges, the helix on its faces): framed as the free flow frames them, so a trunk climb meets its crown; pines as the vista's conifer (a tenth of its height per size: the karst's pine is 5 m at size 1); ferns stay the karst's.
+  const at = new THREE.Matrix4().makeTranslation(KARST_AT.x, 0, KARST_AT.z), m = new THREE.Matrix4();
+  for (const n of Object.values(KARST_NODES)) {
+    if (n.kind === 'fern') continue;
+    const pine = n.kind === 'pine', s = pine ? n.size * 0.38 : n.size;
+    m.copy(at).multiply(nodeFrame(n)).multiply(new THREE.Matrix4().makeScale(s, s, s));
+    out.push({ x: n.at.x + KARST_AT.x, z: n.at.z + KARST_AT.z, y: n.at.y, kind: pine ? 3 : n.leaf === 'maple' ? 8 : 5, scale: s, rot: 0, frame: m.toArray() });
+  }
   void land; return out;
+}
+
+// ── rocks ────────────────────────────────────────────────────────────────
+/** Tuning: boulders, few and small where she walks (no collider: none is taller than her knee), many and big on the foothills. */
+const ROCKS_LAND = 900, ROCKS_HILLS = 900, ROCK_CLEAR = 16;
+export function villageRocks(vl: VillageLand, seed: number): Rock[] {
+  const r = rng(seed * 577 + 3), out: Rock[] = [], half = vl.edge + 650;
+  const keep = [...places(seed), ...dens(seed), ...ruins(seed), ...warrens(seed), ...wallows(seed), ...ownWarrens(seed), moot(seed), ...convergences(seed)];
+  const clear = (x: number, z: number) => beyond(x, z, seed) > 0.8 && Math.hypot(x - KARST_AT.x, z - KARST_AT.z) > KARST_FOREST + 40 && !keep.some(p => Math.hypot(x - p.x, z - p.z) < ROCK_CLEAR + ((p as { radius?: number }).radius ?? 0));
+  for (let k = 0, land = 0, hills = 0; k < 60000 && (land < ROCKS_LAND || hills < ROCKS_HILLS); k++) {
+    const x = (r() - 0.5) * 2 * half, z = (r() - 0.5) * 2 * half, d = norm4(x, z) - vl.edge;
+    if (d < -40) { if (land >= ROCKS_LAND || !clear(x, z)) continue; out.push({ x, z, y: vl.terrain.height(x, z), scale: 0.25 + r() ** 2 * 0.65, rot: r() * 6.28, tilt: (r() - 0.5) * 0.4 }); land++; }
+    else if (d < 600) { if (hills >= ROCKS_HILLS) continue; out.push({ x, z, y: vl.terrain.height(x, z), scale: 0.8 + r() ** 3 * 5, rot: r() * 6.28, tilt: (r() - 0.5) * 0.6 }); hills++; }
+  }
+  return out;
 }
 
 // ── the village's day as the vista's hours ──────────────────────────────
@@ -138,13 +161,13 @@ const CLEAR_SIDE = 220, CLEAR_T = 512;
 /** Tuning: grass height (m): lower than the vista's, so a hobbit (about half a metre) stands above it. */
 const BLADE_H = 0.22;
 /** Tuning: the village's woods are dense: full trees within this share of the tier's radius, none drawn past TREE_REACH m (the haze has them). */
-const NEAR_TREES = 0.5, TREE_REACH = 850;
+const NEAR_TREES = 0.35, TREE_REACH = 850;
 export function createVillageLook(inp: LookInputs): VillageLook {
   const { renderer, scene, camera, sun, hemi, vl, seed } = inp;
   const coarse = matchMedia('(pointer: coarse)').matches, qName = new URLSearchParams(location.search).get('q')?.toLowerCase();
   let quality = inp.quality ?? QUALITIES.find(q => q.name.toLowerCase() === qName) ?? QUALITIES[coarse ? 1 : 2];
   const trees = () => villageTrees(vl.land, vl.edge, vl.terrain, inp.treesOf, inp.villages().map(v => ({ x: v.x, z: v.z })), inp.dark, inp.blighted);
-  const world = buildVista(scene, vl.land, trees(), [], quality, { hazeBase: 0, ground: groundTint(vl.land, seed, inp.blighted), fine: vl.terrain.height, bladeH: BLADE_H, nearTreesScale: NEAR_TREES, treeReach: TREE_REACH });
+  const world = buildVista(scene, vl.land, trees(), villageRocks(vl, seed), quality, { hazeBase: 0, ground: groundTint(vl.land, seed, inp.blighted), fine: vl.terrain.height, bladeH: BLADE_H, nearTreesScale: NEAR_TREES, treeReach: TREE_REACH });
   renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.toneMapping = THREE.ACESFilmicToneMapping;
   sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.05; sun.shadow.camera.near = 1; sun.shadow.camera.far = 900; sun.shadow.camera.layers.enable(CASTER_LAYER); scene.add(sun.target);
 
@@ -161,25 +184,33 @@ export function createVillageLook(inp: LookInputs): VillageLook {
   }));
   // ?hud=1: what it costs, top centre (frame rate, triangles and draw calls over every pass).
   const hud = new URLSearchParams(location.search).get('hud') === '1' ? document.body.appendChild(Object.assign(document.createElement('div'), { id: 'look-hud' })) : null;
-  if (hud) { hud.style.cssText = 'position:fixed;z-index:40;top:calc(env(safe-area-inset-top,0px) + 44px);left:50%;transform:translateX(-50%);padding:4px 8px;border-radius:6px;background:#0b1918aa;color:#eef6f0;font:11px/1.3 ui-monospace,Menlo,monospace;white-space:pre;pointer-events:none'; renderer.info.autoReset = false; }
+  if (hud) { hud.style.cssText = 'position:fixed;z-index:40;bottom:calc(env(safe-area-inset-bottom,0px) + 12px);left:50%;transform:translateX(-50%);padding:4px 8px;border-radius:6px;background:#0b1918aa;color:#eef6f0;font:11px/1.3 ui-monospace,Menlo,monospace;white-space:pre;pointer-events:none'; renderer.info.autoReset = false; }
   let hudFrames = 0, hudMs = 0, hudLast = performance.now(), hudClock = 0;
   const resize = () => { composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(innerWidth, innerHeight); };
   addEventListener('resize', resize); resize();
 
   // ── the clearing masks ──
-  const clearRTs: THREE.WebGLRenderTarget[] = [], white = new THREE.MeshBasicMaterial({ color: '#ffffff', side: THREE.DoubleSide });
+  const clearRTs: THREE.WebGLRenderTarget[] = [], red = new THREE.MeshBasicMaterial({ color: '#ff0000', side: THREE.DoubleSide }), green = new THREE.MeshBasicMaterial({ color: '#00ff00', side: THREE.DoubleSide });
   function refreshClearing(): void {
-    const vs = inp.villages().slice(0, 3), saved = scene.children.map(o => o.visible), bg = scene.background, fog = scene.fog, cc = renderer.getClearColor(new THREE.Color()), ca = renderer.getClearAlpha();
+    const vs = inp.villages().slice(0, 3), saved = scene.children.map(o => o.visible), bg = scene.background, fog = scene.fog, cc = renderer.getClearColor(new THREE.Color()), ca = renderer.getClearAlpha(), ac = renderer.autoClear;
     const cam = new THREE.OrthographicCamera(-CLEAR_SIDE / 2, CLEAR_SIDE / 2, CLEAR_SIDE / 2, -CLEAR_SIDE / 2, 1, 600); cam.up.set(0, 0, -1);
-    scene.background = null; scene.fog = null; scene.overrideMaterial = white; renderer.setClearColor('#000000', 1);
+    scene.background = null; scene.fog = null; renderer.setClearColor('#000000', 1); renderer.autoClear = false;
     vs.forEach((v, i) => {
       const rt = clearRTs[i] ??= new THREE.WebGLRenderTarget(CLEAR_T, CLEAR_T);
       scene.children.forEach(o => { o.visible = o === v.root; });
       cam.position.set(v.x, 300, v.z); cam.lookAt(v.x, 0, v.z); cam.updateMatrixWorld();
-      renderer.setRenderTarget(rt); renderer.clear(); renderer.render(scene, cam);
+      // R: everything the village has built; then G over it: only its worn paths and green, which the land paints as a trail.
+      const worn: THREE.Object3D[] = [], others: THREE.Object3D[] = [];
+      v.root.traverse(o => { if (!(o as THREE.Mesh).isMesh) return; if (o.name.startsWith('worn-')) { worn.push(o); o.visible = true; } else if (o.visible) others.push(o); });
+      renderer.setRenderTarget(rt); renderer.clear();
+      scene.overrideMaterial = red; renderer.render(scene, cam);
+      for (const o of others) o.visible = false;
+      scene.overrideMaterial = green; renderer.render(scene, cam);
+      for (const o of others) o.visible = true;
+      for (const o of worn) o.visible = false;
       world.setClear(i, rt.texture, v.x - CLEAR_SIDE / 2, v.z - CLEAR_SIDE / 2, CLEAR_SIDE);
     });
-    renderer.setRenderTarget(null); scene.overrideMaterial = null; scene.children.forEach((o, i) => { o.visible = saved[i]; }); scene.background = bg; scene.fog = fog; renderer.setClearColor(cc, ca);
+    renderer.setRenderTarget(null); renderer.autoClear = ac; scene.overrideMaterial = null; scene.children.forEach((o, i) => { o.visible = saved[i]; }); scene.background = bg; scene.fog = fog; renderer.setClearColor(cc, ca);
   }
 
   // ── each frame ──

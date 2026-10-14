@@ -30,12 +30,12 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   // The decals on the ground (the green, the paths, the stream) follow the meadow's relief vertex by vertex (it undulates five centimetres, so a flat decal sank under it in places) and draw after the ground tiles (renderOrder 1: the tiles are transparent for the view through the soil, and a transparent tile drawn after a decal that writes no depth covered it, from some angles and not others).
   const onGround = (geo: THREE.BufferGeometry, lift: number): THREE.BufferGeometry => { const pos = geo.attributes.position as THREE.BufferAttribute; for (let i = 0; i < pos.count; i++) pos.setY(i, relief(pos.getX(i), pos.getZ(i)) + lift); geo.computeVertexNormals(); return geo; };
   const DECAL_ORDER = 1;
-  { const geo = new THREE.CircleGeometry(5.2, 40, 0, Math.PI * 2); geo.rotateX(-Math.PI / 2); geo.translate(GREEN.x, 0, GREEN.z); const green = new THREE.Mesh(onGround(geo, 0.04), worn); green.renderOrder = DECAL_ORDER; root.add(green); }
+  { const geo = new THREE.CircleGeometry(5.2, 40, 0, Math.PI * 2); geo.rotateX(-Math.PI / 2); geo.translate(GREEN.x, 0, GREEN.z); const green = new THREE.Mesh(onGround(geo, 0.04), worn); green.name = 'worn-green'; green.renderOrder = DECAL_ORDER; root.add(green); }
   const pathGeos: THREE.BufferGeometry[] = [];
   const path = (a: { x: number; z: number }, b: { x: number; z: number }, w: number): void => { const dx = b.x - a.x, dz = b.z - a.z, L = Math.hypot(dx, dz); const g = new THREE.PlaneGeometry(w, L, 1, Math.max(2, Math.ceil(L / 1.2))); g.rotateX(-Math.PI / 2); g.rotateY(-Math.atan2(dz, dx) - Math.PI / 2); g.translate((a.x + b.x) / 2, 0, (a.z + b.z) / 2); pathGeos.push(onGround(g, 0.035)); };
   for (const h of HOUSES) path(GREEN, h.door, 1.0);
   for (const s of Object.values(SITES)) if (s.id !== 'fire') path(GREEN, s, 1.1);
-  { const paths = new THREE.Mesh(mergeGeometries(pathGeos)!, worn); paths.renderOrder = DECAL_ORDER; root.add(paths); }
+  { const paths = new THREE.Mesh(mergeGeometries(pathGeos)!, worn); paths.name = 'worn-path'; paths.renderOrder = DECAL_ORDER; root.add(paths); }
   // The stream: a ribbon of water along the north edge, banks of dark earth, past the stream site.
   const water = new THREE.MeshStandardMaterial({ color: '#4f93a8', emissive: '#1a4a58', emissiveIntensity: 0.4, roughness: 0.2, metalness: 0.2, transparent: true, opacity: 0.85 });
   const stream = new THREE.CatmullRomCurve3(Array.from({ length: 14 }, (_, i) => { const x = -70 + i * 10.8; return new THREE.Vector3(x, 0.02, STREAM_Z(x)); }));
@@ -60,7 +60,7 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   // G1: the huts built since, on the second ring, each with a worn path to the green; shown as the model says how many stand (setHouses), hidden again when the village starts over.
   const huts = new Map<number, THREE.Group>(), hutPaths = new Map<number, THREE.Mesh>();
   function setHouses(v: Village): void {
-    for (let id = 6; id < 6 + v.huts; id++) if (!huts.has(id)) { const h = housePlace(id), g = houseGroup(h); const pg = new THREE.PlaneGeometry(1.0, Math.hypot(h.door.x - GREEN.x, h.door.z - GREEN.z), 1, 12); pg.rotateX(-Math.PI / 2); pg.rotateY(-Math.atan2(h.door.z - GREEN.z, h.door.x - GREEN.x) - Math.PI / 2); pg.translate((GREEN.x + h.door.x) / 2, 0, (GREEN.z + h.door.z) / 2); const path = new THREE.Mesh(onGround(pg, 0.035), worn); path.renderOrder = DECAL_ORDER; root.add(path); hutPaths.set(id, path); huts.set(id, g); }
+    for (let id = 6; id < 6 + v.huts; id++) if (!huts.has(id)) { const h = housePlace(id), g = houseGroup(h); const pg = new THREE.PlaneGeometry(1.0, Math.hypot(h.door.x - GREEN.x, h.door.z - GREEN.z), 1, 12); pg.rotateX(-Math.PI / 2); pg.rotateY(-Math.atan2(h.door.z - GREEN.z, h.door.x - GREEN.x) - Math.PI / 2); pg.translate((GREEN.x + h.door.x) / 2, 0, (GREEN.z + h.door.z) / 2); const path = new THREE.Mesh(onGround(pg, 0.035), worn); path.name = 'worn-path'; path.renderOrder = DECAL_ORDER; root.add(path); hutPaths.set(id, path); huts.set(id, g); }
     colliders.length = baseColliders;
     for (const [id, g] of huts) { g.visible = id < 6 + v.huts; hutPaths.get(id)!.visible = g.visible; if (g.visible) { const h = housePlace(id); colliders.push({ x: h.x + ox, z: h.z + oz, radius: HOUSE_RADIUS + 0.05, minY: -0.2, maxY: 2 }); } }
   }

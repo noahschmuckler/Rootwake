@@ -225,8 +225,8 @@ export function bakeSun(land: Land, sun: [number, number, number], out = new Uin
 }
 
 // ── what stands on it ───────────────────────────────────────────────────
-export type TreeKind = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7; // 0–2 broadleaf, 3–4 conifer; 5–7 the village tree, dark, blighted
-export interface Tree { x: number; z: number; y: number; kind: TreeKind; scale: number; rot: number }
+export type TreeKind = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8; // 0–2 broadleaf, 3–4 conifer; 5–7 the village tree, dark, blighted; 8 the village tree as a maple
+export interface Tree { x: number; z: number; y: number; kind: TreeKind; scale: number; rot: number; /** A whole placement (column-major 4×4, scale included) for a tree that leans, as on a pillar's face. */ frame?: number[] }
 export interface Rock { x: number; z: number; y: number; scale: number; rot: number; tilt: number }
 export const TREE_SPACING = 7;
 /** Groves where the forest noise is high and the ground suits a tree: not steep, not wet, not snowy; conifers above CONIFER_Y. Tuning. */

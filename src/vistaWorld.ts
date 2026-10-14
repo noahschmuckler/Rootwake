@@ -104,7 +104,9 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
   /** Tuning: tile side (m); LOD steps in samples. */
   // 16×16 tiles whatever the map; where the land has an exact surface (the village's), a finer LOD 0 within FINE_NEAR draws it at half a cell.
   const TILES = 16, CELLS = (N - 1) / TILES, TILE = CELLS * CELL, FINE_NEAR = 110, STEPS = land.surface && opts.fineLod ? [0.5, 1, 2, 4, 8] : [1, 2, 4, 8];
-  const terrainMat = lit(terrainVert, terrainFrag, { uSoil: { value: new THREE.Vector4(0, 0, 0, 0) } }); terrainMat.side = THREE.DoubleSide;
+  // The clearing masks, shared by the grass (none grows there) and the land (a trail is painted on it).
+  const clearU = { uClear0: { value: blank as THREE.Texture }, uClear1: { value: blank as THREE.Texture }, uClear2: { value: blank as THREE.Texture }, uClearAt: { value: [new THREE.Vector3(0, 0, 1e-3), new THREE.Vector3(0, 0, 1e-3), new THREE.Vector3(0, 0, 1e-3)] } };
+  const terrainMat = lit(terrainVert, terrainFrag, { uSoil: { value: new THREE.Vector4(0, 0, 0, 0) }, ...clearU }); terrainMat.side = THREE.DoubleSide;
   const at = (x: number, z: number) => surfaceAt(land, x, z);
   const tileGroup = new THREE.Group(); tileGroup.name = 'terrain'; scene.add(tileGroup);
   interface Tile { mesh: THREE.Mesh; lod: number; geos: (THREE.BufferGeometry | undefined)[]; cx: number; cz: number }
@@ -166,7 +168,7 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
 
   // ── grass ──
   const grassMat = lit(grassVert, grassFrag, { uCenter: { value: new THREE.Vector2() }, uPatch: { value: 60 }, uBladeH: { value: opts.bladeH ?? 0.34 }, uBladeW: { value: 0.045 }, uWind: { value: new THREE.Vector2(0.94, 0.34) },
-    uClear0: { value: blank }, uClear1: { value: blank }, uClear2: { value: blank }, uClearAt: { value: [new THREE.Vector3(0, 0, 1e-3), new THREE.Vector3(0, 0, 1e-3), new THREE.Vector3(0, 0, 1e-3)] },
+    ...clearU,
     uFine: { value: fineTex }, uFineAt: { value: new THREE.Vector4(0, 0, 1, 0) } }); grassMat.side = THREE.DoubleSide;
   /** Tuning: blades per tuft (each instance is a tuft). */
   const TUFT = 3, bladeGeo = new THREE.BufferGeometry();
@@ -179,7 +181,9 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
     }
     bladeGeo.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); bladeGeo.setAttribute('aTuft', new THREE.Float32BufferAttribute(tuft, 4)); bladeGeo.setIndex(idx);
   }
-  let grass: THREE.Mesh | null = null;
+  let grass: THREE.Mesh | null = null, soilClear = true;
+  /** Tuning: the camera's height above the ground past which no grass is drawn (m). */
+  const GRASS_CEILING = 14;
   function buildGrass(count: number, patch: number): void {
     if (grass) { grass.geometry.dispose(); scene.remove(grass); grass = null; }
     if (!count) return;
@@ -195,9 +199,10 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
   const solid = (hex: string | null, defines: Record<string, string>) => lit(solidVert, solidFrag, { uColor: { value: hex ? color(hex) : new THREE.Color() } }, defines);
   const rockMat = solid(null, { ROCK: '' });
   /** Per kind: the vista's three broadleaves and two conifers, then the village's tree (sized as flora.treeParts at size 1, so her climb meets its crown), dark and blighted. */
-  const LEAVES = ['#5c9a34', '#4f8a32', '#7aa83a', '#2f6a4a', '#3c7440', '#5f9a3a', '#3a2c4a', '#24162c'];
-  const BARK = ['#8a7058', '#8a7058', '#8a7058', '#8a7058', '#8a7058', '#87705a', '#3a3040', '#1a1218'];
-  const foliage = LEAVES.map(c => solid(c, { USE_SWAY: '' })), farFoliage = LEAVES.map(c => solid(c, {})), barks = BARK.map(c => solid(c, {}));
+  const LEAVES = ['#5c9a34', '#4f8a32', '#7aa83a', '#2f6a4a', '#3c7440', '#5f9a3a', '#3a2c4a', '#24162c', '#c97a3e'];
+  const BARK = ['#8a7058', '#8a7058', '#8a7058', '#8a7058', '#8a7058', '#87705a', '#3a3040', '#1a1218', '#87705a'];
+  const varied = (k: number): Record<string, string> => (k >= 5 ? { VARIED: '' } : {});
+  const foliage = LEAVES.map((c, k) => solid(c, { USE_SWAY: '', ...varied(k) })), farFoliage = LEAVES.map((c, k) => solid(c, varied(k))), barks = BARK.map(c => solid(c, {}));
   interface Kind { trunk: THREE.BufferGeometry; crown: THREE.BufferGeometry; far: THREE.BufferGeometry; radius: number }
   const kinds: Kind[] = LEAVES.map((_, k) => treeKind(k));
   const mk = (geo: THREE.BufferGeometry, mat: THREE.Material, n: number, cast: boolean) => { const m = new THREE.InstancedMesh(geo, mat, Math.max(1, n)); m.count = 0; m.frustumCulled = false; m.castShadow = cast; m.receiveShadow = true; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(m); return m; };
@@ -213,12 +218,12 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
     farCrown = kinds.map((k, i) => mk(k.far, farFoliage[i], byKind[i].length, false));
     partitionAt.set(1e9, 0, 0);
   }
-  const matrixOf = (t: Tree, m: THREE.Matrix4) => m.compose(new THREE.Vector3(t.x, t.y - 0.15, t.z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), t.rot), new THREE.Vector3(t.scale, t.scale, t.scale));
+  const matrixOf = (t: Tree, m: THREE.Matrix4) => t.frame ? m.fromArray(t.frame) : m.compose(new THREE.Vector3(t.x, t.y - 0.15, t.z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), t.rot), new THREE.Vector3(t.scale, t.scale, t.scale));
   let partitionAt = new THREE.Vector3(1e9, 0, 0), nearCount = 0, near: Tree[] = [];
   /** Tuning: past this a tree is not drawn at all (the haze has it). */
   const TREE_REACH = opts.treeReach ?? 1400;
   function partitionTrees(cam: THREE.Vector3): void {
-    const m = new THREE.Matrix4(), r2 = (q.nearTrees * (opts.nearTreesScale ?? 1)) ** 2, s2 = (q.shadow ? q.shadowBox * 1.6 + 15 : 0) ** 2, f2 = TREE_REACH ** 2; near = []; nearCount = 0;
+    const m = new THREE.Matrix4(), r2 = (q.nearTrees * (opts.nearTreesScale ?? 1)) ** 2, s2 = (q.shadow ? q.shadowBox * 1.25 + 8 : 0) ** 2, f2 = TREE_REACH ** 2; near = []; nearCount = 0;
     byKind.forEach((list, k) => {
       let a = 0, b = 0, c = 0;
       const [ct, cc] = [casters[k * 2], casters[k * 2 + 1]];
@@ -278,10 +283,10 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
     setSoil(amount, x, z) {
       terrainMat.uniforms.uSoil.value.set(x, z, amount, 0);
       const glass = amount > 0.01; if (terrainMat.transparent !== glass) { terrainMat.transparent = glass; terrainMat.needsUpdate = true; }
-      terrainMat.depthWrite = amount < 0.5; if (grass) grass.visible = amount < 0.05;
+      terrainMat.depthWrite = amount < 0.5; soilClear = amount < 0.05;
     },
     setGloom(colour, amount, density) { shared.uGloom.value.set(colour.r, colour.g, colour.b, amount); shared.uGloomD.value = density; },
-    setClear(i, texture, x0, z0, side) { grassMat.uniforms[`uClear${i}`].value = texture ?? blank; grassMat.uniforms.uClearAt.value[i].set(x0, z0, texture ? side : 1e-3); },
+    setClear(i, texture, x0, z0, side) { (clearU as Record<string, THREE.IUniform>)[`uClear${i}`].value = texture ?? blank; clearU.uClearAt.value[i].set(x0, z0, texture ? side : 1e-3); },
     update(camera, timeS) {
       const p = camera.position; shared.uTime.value = timeS;
       stepBake();
@@ -289,6 +294,8 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
       sky.position.copy(p);
       setTileLods(p);
       grassMat.uniforms.uCenter.value.set(p.x, p.z);
+      // Grass is drawn only near the ground: from a summit or a crown its blades are a few pixels and cost a full field of vertices.
+      if (grass) grass.visible = soilClear && p.y - at(p.x, p.z) < GRASS_CEILING;
       if (Math.hypot(p.x - partitionAt.x, p.z - partitionAt.z) > 12) { partitionTrees(p); partitionRocks(p); }
     },
     colliders() {
@@ -330,10 +337,11 @@ function treeKind(kind: number): { trunk: THREE.BufferGeometry; crown: THREE.Buf
     const limbs = [0, 1, 2].map(i => { const a = i / 3 * Math.PI * 2 + r(), l = new THREE.CylinderGeometry(0.07, 0.13, spread * 1.1, 6); l.translate(0, spread * 0.55, 0); l.applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(Math.cos(a) * 0.8, 0, Math.sin(a) * 0.8))); l.translate(0, crownY * 0.8, 0); return l; });
     const trunkGeo = shaded(mergeGeometries([trunk, ...limbs].map(g => { g.deleteAttribute('uv'); return g; }))!, p => 0.55 + 0.45 * Math.min(1, p.y / crownY));
     const centre = new THREE.Vector3(0, crownY + tall * 0.6, 0), lumps: THREE.BufferGeometry[] = [];
-    const count = 7 + Math.floor(r() * 3);
+    // The village's tree stands by the hundred in a wood: fewer, larger lumps (a third of the triangles) keep a dense wood affordable.
+    const count = v ? 5 : 7 + Math.floor(r() * 3);
     for (let i = 0; i < count; i++) {
       const a = i / count * Math.PI * 2 + r() * 0.5, up = (r() - 0.35) * tall, out = spread * (0.55 + r() * 0.35);
-      lumps.push(blob((1.5 + r() * 0.9) * lump, new THREE.Vector3(Math.cos(a) * out, centre.y + up, Math.sin(a) * out), centre, kind * 31 + i));
+      lumps.push(blob((1.5 + r() * 0.9) * lump * (v ? 1.2 : 1), new THREE.Vector3(Math.cos(a) * out, centre.y + up, Math.sin(a) * out), centre, kind * 31 + i));
     }
     lumps.push(blob(2.2 * lump, new THREE.Vector3(0, centre.y + tall * 0.75, 0), centre, kind * 31 + 99));
     const crown = shaded(mergeGeometries(lumps)!, p => { const d = p.clone().sub(centre); return Math.min(1, 0.5 + 0.35 * (d.y / (tall + 2) + 0.6) + 0.25 * Math.hypot(d.x, d.z) / (spread + 2)); });

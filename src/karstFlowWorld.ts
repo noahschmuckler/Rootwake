@@ -82,8 +82,9 @@ export function buildKarstFlow(scene: THREE.Scene, options: { sharedGround?: boo
     else tree(n);
     colliders.push({ x: n.at.x, z: n.at.z, radius: n.trunk, minY: n.at.y - 0.2, maxY: n.at.y + (n.kind === 'fern' ? 1.2 : n.crownH) });
   }
-  scene.add(new THREE.Mesh(mergeGeometries(wood)!, bark));
-  for (const [kind, mat] of [['leaf', leaf], ['maple', maple], ['oak', oak], ['needle', needle], ['frond', fern]] as const) if (cards[kind].length) scene.add(new THREE.Mesh(standees(cards[kind]), mat));
+  { const w = new THREE.Mesh(mergeGeometries(wood)!, bark); w.name = 'karst-wood'; scene.add(w); }
+  // Named so another renderer (the vista look) may draw the trees itself and leave the ferns.
+  for (const [kind, mat] of [['leaf', leaf], ['maple', maple], ['oak', oak], ['needle', needle], ['frond', fern]] as const) if (cards[kind].length) { const m = new THREE.Mesh(standees(cards[kind]), mat); m.name = kind === 'frond' ? 'karst-ferns' : `karst-leaves-${kind}`; scene.add(m); }
   // Grass on the forest floor.
   const floorGrass: Standee[] = [];
   for (let i = 0; i < 900; i++) { const a = rand() * 6.28, r = Math.sqrt(rand()) * FOREST_RADIUS; const x = Math.cos(a) * r, z = Math.sin(a) * r; if (PILLARS.some(p => Math.hypot(x - p.x, z - p.z) < p.radius(0) + 0.5)) continue; const k = 0.35 + rand() * 0.35; floorGrass.push({ position: vec(x, relief(x, z), z), yaw: rand() * Math.PI, width: k, height: k * (0.8 + rand() * 0.5) }); }

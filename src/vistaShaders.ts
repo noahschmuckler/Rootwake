@@ -109,6 +109,19 @@ vec3 terrainAlbedo(vec3 wp, vec3 n, vec4 md, out float grass){
 }
 `;
 
+/** Where the village stands: up to three masks, each a square (x0, z0, side) drawn from above (north up, so v runs against z).
+ * R: anything built (no grass), G: a worn path or the green (painted as a trodden trail). */
+export const CLEAR = /* glsl */`
+uniform sampler2D uClear0; uniform sampler2D uClear1; uniform sampler2D uClear2; uniform vec3 uClearAt[3];
+vec2 clearAt(vec2 xz){
+  vec2 c = vec2(0.0), u;
+  u = (xz - uClearAt[0].xy) / uClearAt[0].z; u.y = 1.0 - u.y; if (all(greaterThan(u, vec2(0.0))) && all(lessThan(u, vec2(1.0)))) c = max(c, texture2D(uClear0, u).rg);
+  u = (xz - uClearAt[1].xy) / uClearAt[1].z; u.y = 1.0 - u.y; if (all(greaterThan(u, vec2(0.0))) && all(lessThan(u, vec2(1.0)))) c = max(c, texture2D(uClear1, u).rg);
+  u = (xz - uClearAt[2].xy) / uClearAt[2].z; u.y = 1.0 - u.y; if (all(greaterThan(u, vec2(0.0))) && all(lessThan(u, vec2(1.0)))) c = max(c, texture2D(uClear2, u).rg);
+  return c;
+}
+`;
+
 export const SHADOW_VERT = /* glsl */`
 #include <common>
 #include <shadowmap_pars_vertex>
@@ -139,7 +152,7 @@ void main(){
 }`;
 export const terrainFrag = /* glsl */`
 ${SHADOW_FRAG}
-${NOISE}${ATMOS}${MAP}${TERRAIN_ALBEDO}
+${NOISE}${ATMOS}${MAP}${TERRAIN_ALBEDO}${CLEAR}
 varying vec3 vWorld; varying vec3 vNormal;
 uniform vec4 uSoil; // x, z, amount: within reach of her the ground thins to glass while she is beneath it (groundVision)
 void main(){
@@ -150,6 +163,11 @@ void main(){
   n = normalize(n + vec3(b0 - bx, 0.0, b0 - bz) * 0.9);
   vec4 md = mapData(p);
   float g; vec3 albedo = terrainAlbedo(vWorld, n, md, g);
+  // A trodden trail where the village walks: packed earth, lighter down its middle, its edge ragged with grass.
+  float trail = clearAt(p).y;
+  if (trail > 0.01) { float rag = vnoise(p * 1.7) * 0.35 + vnoise(p * 6.0) * 0.15; float k = smoothstep(0.25, 0.6, trail + rag - 0.25);
+    vec3 earth = mix(srgb(vec3(0.55, 0.45, 0.31)), srgb(vec3(0.70, 0.61, 0.44)), smoothstep(0.6, 1.0, trail)) * (0.9 + 0.2 * vnoise(p * 3.1));
+    albedo = mix(albedo, earth, k); }
   float vis = min(md.r, getShadowMask());
   vec3 col = toon(albedo, n, vis, mix(0.55, 1.0, md.g));
   float soil = 1.0 - 0.78 * uSoil.z * (1.0 - smoothstep(14.0, 28.0, distance(vWorld.xz, uSoil.xy)));
@@ -161,21 +179,12 @@ void main(){
 /** One blade per instance in a square patch that wraps around the camera, so the blades stay put in the world. */
 export const grassVert = /* glsl */`
 ${SHADOW_VERT}
-${NOISE}${ATMOS}${MAP}${TERRAIN_ALBEDO}
+${NOISE}${ATMOS}${MAP}${TERRAIN_ALBEDO}${CLEAR}
 attribute vec4 aBlade; // x, z in the patch; size; rotation
 attribute vec4 aTuft; // the blade within its tuft: angle, offset x, offset z, height
 uniform vec2 uCenter; uniform float uPatch; uniform float uBladeH; uniform float uBladeW; uniform vec2 uWind;
-// Where nothing grows (paths, floors, the green): up to three masks, each a square (x0, z0, side) drawn from above (north up, so v runs against z).
-uniform sampler2D uClear0; uniform sampler2D uClear1; uniform sampler2D uClear2; uniform vec3 uClearAt[3];
 // The ground near her at a finer step than the map (x0, z0, side, texels): blades stand on the walked surface.
 uniform highp sampler2D uFine; uniform vec4 uFineAt;
-float cleared(vec2 xz){
-  float c = 0.0; vec2 u;
-  u = (xz - uClearAt[0].xy) / uClearAt[0].z; u.y = 1.0 - u.y; if (all(greaterThan(u, vec2(0.0))) && all(lessThan(u, vec2(1.0)))) c = max(c, texture2D(uClear0, u).r);
-  u = (xz - uClearAt[1].xy) / uClearAt[1].z; u.y = 1.0 - u.y; if (all(greaterThan(u, vec2(0.0))) && all(lessThan(u, vec2(1.0)))) c = max(c, texture2D(uClear1, u).r);
-  u = (xz - uClearAt[2].xy) / uClearAt[2].z; u.y = 1.0 - u.y; if (all(greaterThan(u, vec2(0.0))) && all(lessThan(u, vec2(1.0)))) c = max(c, texture2D(uClear2, u).r);
-  return c;
-}
 float fineHeight(vec2 xz, float coarse){
   vec2 f = (xz - uFineAt.xy) / uFineAt.z * (uFineAt.w - 1.0);
   if (uFineAt.w < 2.0 || any(lessThan(f, vec2(0.0))) || any(greaterThanEqual(f, vec2(uFineAt.w - 1.0)))) return coarse;
@@ -191,7 +200,7 @@ void main(){
   vec3 base = terrainAlbedo(vec3(xz.x, h, xz.y), n, md, g);
   float fade = 1.0 - smoothstep(uPatch * 0.3, uPatch * 0.5, dist);
   h = fineHeight(xz, h);
-  float hgt = uBladeH * (0.45 + 0.55 * aBlade.z) * smoothstep(0.3, 0.7, g) * fade * (1.0 + md.b * 0.8) * (0.7 + 0.6 * vnoise(xz * 0.08)) * (1.0 - smoothstep(0.2, 0.5, cleared(xz)));
+  float hgt = uBladeH * (0.45 + 0.55 * aBlade.z) * smoothstep(0.3, 0.7, g) * fade * (1.0 + md.b * 0.8) * (0.7 + 0.6 * vnoise(xz * 0.08)) * (1.0 - smoothstep(0.2, 0.5, max(clearAt(xz).x, clearAt(xz).y)));
   if (hgt < 0.015 || h < uWaterY + 0.2) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
   float y = position.y, ang = aBlade.w + aTuft.x, c = cos(ang), s = sin(ang), cr = cos(aBlade.w), sr = sin(aBlade.w);
   hgt *= aTuft.w;
@@ -268,6 +277,12 @@ void main(){
   albedo = mix(albedo, grassColour(vWorld.xz, md) * 0.8, moss);
 #else
   vec3 albedo = uColor * (0.85 + 0.3 * tint);
+#ifdef VARIED
+  // Groves of a warmer or a cooler green, and the odd tree already turning: a wood seen from above is not one colour.
+  float grove = fbm3(vBase * 0.006);
+  albedo *= mix(vec3(1.12, 1.04, 0.78), vec3(0.82, 0.98, 1.12), smoothstep(0.3, 0.7, grove));
+  albedo = mix(albedo, srgb(vec3(0.78, 0.62, 0.22)), step(0.94, hash12(floor(vBase * 0.5) + 7.0)) * 0.6);
+#endif
   albedo *= 0.82 + 0.36 * fbm3(vWorld.xz * 1.7 + vWorld.y * 1.3);
 #endif
   float vis = min(md.r, getShadowMask());

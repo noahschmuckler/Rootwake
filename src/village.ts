@@ -145,6 +145,8 @@ const lockedWorld: TraversalWorld = { surfacesAt: () => [], canOccupy: () => fal
 const player = new Player(renderer.domElement, scene, camera); scene.add(player.avatar); player.view = 'third'; player.traversalWorld = groundWorld;
 const presentation = createHuldaPresentation(scene, home_().world.figure, home_().world.mass);
 karst = createKarstFeature(scene, player, camera, KARST_AT, { orbit: (t, back, up, ease) => orbitCamera(t, back, up, ease), want: () => want(), ground: () => groundWorld, locked: lockedWorld, height: relief, portal: openPortal });
+// The vista look draws the karst's trees itself (villageVista.villageTrees); the karst keeps their climbing and colliders.
+if (look) scene.traverse(o => { if (o.name === 'karst-wood' || o.name.startsWith('karst-leaves-')) o.visible = false; });
 { const karstClear = player.cameraClear; player.cameraClear = p => (!karstClear || karstClear(p)) && denField.cameraClear(p); }
 const hulda = presentation.hulda;
 // Hulda and the hobbits share the skeleton, so the Mixamo clips drive all nine (public/models/README.md).

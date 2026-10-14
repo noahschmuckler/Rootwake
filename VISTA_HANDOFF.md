@@ -122,3 +122,25 @@ On desktop node: land 1.2 s (shape 0.2 s, erosion 0.75 s, AO 0.2 s), trees and r
 - `node scripts/test-village.mjs` and `node scripts/test-world.mjs` (unchanged mechanics).
 - `node scripts/browser-village.mjs`: passes against the default look. Under the vista look (with `dist/village-vista.html` copied over `dist/village.html`), it stops at the gathering check, because SwiftShader draws the heavier scene at about 2 fps and the village's clamped frame time slows its clock. Given more time she gathers 8 berries, so the mechanic holds; the test's timing is SwiftShader's.
 - `node scripts/browser-village-vista.mjs`: the land drawn, the chunks' ground and trees not, mountains in `relief`, the sky following the clock, the cost readout, no shader errors; screenshots in `artifacts/village-vista/`.
+
+## V1.1: finishing pass (after the first phone readout, 2026-10-14)
+
+The phone read about 60 fps on the ground and fell into the 30s, at worst 19, on the karst. That view drew about 1.1M triangles in up to 551 calls.
+
+- **Grass only near the ground.** No blades are drawn once the camera is more than `GRASS_CEILING` (14 m) above the land under it. On the summit this was 330k triangles nobody could see.
+- **Trails painted into the land.** The village's worn paths and green (named `worn-*`) are no longer flat overlays. The clearing mask now has two channels: R is anything built (no grass), G is the paths and the green. The land paints G as trodden earth, lighter down the middle with ragged grassy edges, and redraws it when a hut is built.
+- **The karst's trees in the vista style.**
+  - Its broadleaves (kind 5) and maples (new kind 8, warm orange) are placed with the free flow's own `nodeFrame`, so the trees leaning on the pillar faces lean, and the trunk climb meets the crown.
+  - Its pines become the vista conifer (kind 3 at 0.38 × size).
+  - Ferns stay the karst's own.
+  - Its `karst-wood` and `karst-leaves-*` meshes are hidden; they keep their colliders and their part in the free flow.
+- **Lighter woods.**
+  - The village tree has 5 larger lumps instead of 7–9.
+  - Full crowns are drawn within 35% of the tier's radius (`NEAR_TREES`).
+  - Shadow-casting copies only within 1.25 × the shadow box plus 8 m.
+  - Together these took the karst foot from 1.2M to about 0.94M triangles.
+- **Forest colour.** The village's kinds (`VARIED`) vary in warmer and cooler groves, with the odd tree already turning, so a wood seen from the karst is not one green.
+- **Rocks.** About 900 small boulders, knee-high at most, in the woods away from every place, and 900 large ones on the foothills (`villageRocks`).
+- **Readout.** `?hud=1` now sits at the bottom centre, clear of the village's panels.
+
+Still open: the load (land generation on the main thread, 5–7 s on a phone) and the draw-call count of the village's and karst's own scenes.
