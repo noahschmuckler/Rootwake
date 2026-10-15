@@ -807,6 +807,12 @@ export function spawnRaid(v: Village, rand: () => number): void {
 }
 const towards = (r: { x: number; z: number; heading: number }, to: Vec2, m: number): number => { const d = Math.hypot(to.x - r.x, to.z - r.z); if (d < 1e-6) return 0; const step = Math.min(d, m); r.heading = Math.atan2(to.z - r.z, to.x - r.x); r.x += (to.x - r.x) / d * step; r.z += (to.z - r.z) / d * step; return d - step; };
 /** The Dark Young by real seconds: walking, eating, hunting her, biting, leaving, and the dead fading; her vigor and sap refilling. `her` is where she stands (null while she is not on her feet). */
+/** F1, the practice clearing: a foe set down at (x, z) already hunting her, for `aggro` seconds. Returns it. */
+export function spawnFoe(v: Village, kind: RaiderKind, x: number, z: number, aggro: number): Raider {
+  const id = v.raiders.reduce((m, r) => Math.max(m, r.id), -1) + 1;
+  const r: Raider = { id, x, z, heading: Math.atan2(-z, -x), hp: kind === 'wolf' ? WOLF_HP : DY_HP, state: 'hunting', target: null, ate: 0, eatClock: 0, aggro, rooted: 0, biteClock: 0, hurt: 0, gone: 0, site: null, devourClock: 0, held: 0, infant: null, kind, den: null, prey: null };
+  v.raiders.push(r); return r;
+}
 export function stepRaiders(v: Village, dt: number, her: Vec2 | null, herTime = true, regen = 1): void {
   // G4: her hero is one across the villages; her clocks (calm, sap, vigor, the faint) run once, in the village she is in (`herTime`), not once per village stepped.
   const h = v.hero; if (herTime) { h.calm += dt; h.sap = Math.min(sapMax(h), h.sap + SAP_REGEN * regen * dt); if (h.faint > 0) { h.faint = Math.max(0, h.faint - dt); if (h.faint === 0) h.vigor = Math.max(h.vigor, FAINT_VIGOR); } else if (h.calm > VIGOR_CALM_S) h.vigor = Math.min(vigorMax(h), h.vigor + VIGOR_REGEN * dt); }

@@ -1,10 +1,10 @@
-// Run TypeScript math/rig regression tests without needing a WebGL renderer.
+// Run TypeScript math/rig regression tests without needing a WebGL renderer: the vista's land, and the feel of a blow (F1).
 import { build } from 'esbuild';
 import { spawnSync } from 'node:child_process';
 import { rmSync } from 'node:fs';
-const output = '.vista-tests.mjs';
+const suites = [['tests/vista.test.ts', '.vista-tests.mjs'], ['tests/impact.test.ts', '.impact-tests.mjs']];
 try {
-  await build({ entryPoints: ['tests/vista.test.ts'], bundle: true, platform: 'node', format: 'esm', outfile: output, packages: 'external' });
-  const result = spawnSync(process.execPath, ['--test', output], { stdio: 'inherit' });
+  for (const [entry, outfile] of suites) await build({ entryPoints: [entry], bundle: true, platform: 'node', format: 'esm', outfile, packages: 'external' });
+  const result = spawnSync(process.execPath, ['--test', ...suites.map(s => s[1])], { stdio: 'inherit' });
   process.exitCode = result.status ?? 1;
-} finally { rmSync(output, { force: true }); }
+} finally { for (const [, outfile] of suites) rmSync(outfile, { force: true }); }
