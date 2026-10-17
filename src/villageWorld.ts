@@ -15,6 +15,7 @@ import { spriteMaterial, standees, crownStandees, type Standee } from './sprites
 import { treeParts, taperedTube } from './flora';
 import { createHulda } from './huldaCharacter';
 import { makeWolf, setDireLook } from './wolfFigure';
+import { createDarkYoung, DY_SCALE, type DarkYoung } from './darkYoung';
 
 /** The ground's height: the meadow's gentle relief, and beyond the island the chunks' hills (zero within the village). */
 export const relief = createTerrain(1).height;
@@ -201,28 +202,23 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
     while (spiritFigures.length <= i) { const fr = mulberry32(900 + spiritFigures.length), g = new THREE.Group(); const body = crownStandees(fr, new THREE.Vector3(0, 0.42, 0), 0.24, 0.32, 0.18, 7, 0.5); body.push({ position: new THREE.Vector3(0, 0.66, 0), yaw: 0.4, width: 0.24, height: 0.24, flat: true }); g.add(new THREE.Mesh(standees(body), spiritMat)); const load = new THREE.Mesh(new THREE.SphereGeometry(0.11, 6, 5), sackMat); load.name = 'load'; load.position.set(0, 0.2, -0.16); load.visible = false; g.add(load); root.add(g); spiritFigures.push(g); }
     return spiritFigures[i];
   }
-  // The Dark Young: an oversized goat, dark as a wet stone, six legs, a head with four tentacle horns that writhe (setRaider), eyes with their own light; struck, it flashes; rooted, a coil of root holds its feet; dead, it lies on its side and sinks.
+  // The Dark Young (darkYoung.ts): an octopus folded into a goat, its arms the legs, the neck, the face, the horns and the ears; it walks and butts as a goat and unfolds to lash, reach, feed, flee and die. Struck, it flashes; rooted, a coil of root holds its feet.
+  // The old goat's materials stay for the mother of goats at the lair.
   const hideMat = new THREE.MeshStandardMaterial({ color: '#2b2130', emissive: '#000000', roughness: 0.95, flatShading: true }), hornMat = new THREE.MeshStandardMaterial({ color: '#4a2a3a', emissive: '#3a1020', emissiveIntensity: 0.3, roughness: 0.8 }), eyeMat = new THREE.MeshBasicMaterial({ color: '#d8ff60' }), coilMat = new THREE.MeshStandardMaterial({ color: '#8a6f4e', emissive: '#c9a24a', emissiveIntensity: 0.4, roughness: 0.9 });
-  const raiderFigures = new Map<number, { group: THREE.Group; horns: THREE.Group[]; legs: THREE.Mesh[]; coil: THREE.Mesh; hide: THREE.MeshStandardMaterial }>();
+  const raiderFigures = new Map<number, { group: THREE.Group; dy: DarkYoung; coil: THREE.Mesh; hide: THREE.MeshStandardMaterial; t: number }>();
   function raiderFigure(id: number) {
     let f = raiderFigures.get(id); if (f) return f;
-    const group = new THREE.Group(), hide = hideMat.clone(), horns: THREE.Group[] = [], legs: THREE.Mesh[] = [];
-    const body = new THREE.Mesh(new THREE.SphereGeometry(0.62, 10, 8), hide); body.scale.set(1.7, 0.95, 0.85); body.position.y = 1.05; group.add(body);
-    const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 0.7, 7), hide); neck.position.set(1.0, 1.35, 0); neck.rotation.z = -0.9; group.add(neck);
-    const head = new THREE.Mesh(new THREE.SphereGeometry(0.3, 8, 6), hide); head.scale.set(1.5, 0.9, 0.8); head.position.set(1.35, 1.6, 0); group.add(head);
-    for (const zz of [-0.12, 0.12]) { const eye = new THREE.Mesh(new THREE.SphereGeometry(0.05, 6, 5), eyeMat); eye.position.set(1.6, 1.68, zz); group.add(eye); }
-    for (let i = 0; i < 4; i++) { const g = new THREE.Group(); g.position.set(1.1 + (i % 2) * 0.15, 1.85, (i - 1.5) * 0.14); const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(-0.15, 0.35, (i - 1.5) * 0.12), new THREE.Vector3(-0.45, 0.55, (i - 1.5) * 0.3), new THREE.Vector3(-0.55, 0.9, (i - 1.5) * 0.45)]); g.add(new THREE.Mesh(taperedTube(curve, 12, 5, t => 0.07 * (1 - t * 0.85), 0), hornMat)); group.add(g); horns.push(g); }
-    for (let i = 0; i < 6; i++) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.05, 0.95, 5), hide); leg.position.set(-0.75 + Math.floor(i / 2) * 0.75, 0.48, (i % 2 ? 1 : -1) * 0.38); group.add(leg); legs.push(leg); }
-    const coil = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.06, 6, 20), coilMat); coil.rotation.x = -Math.PI / 2; coil.position.y = 0.12; coil.visible = false; group.add(coil);
-    group.scale.setScalar(0.82); root.add(group); f = { group, horns, legs, coil, hide }; raiderFigures.set(id, f); return f;
+    const dy = createDarkYoung(id + 1), group = dy.group;
+    const coil = new THREE.Mesh(new THREE.TorusGeometry(1.0, 0.06, 6, 20), coilMat); coil.rotation.x = -Math.PI / 2; coil.position.y = 0.12; coil.visible = false; group.add(coil);
+    root.add(group); f = { group, dy, coil, hide: dy.hide, t: NaN }; raiderFigures.set(id, f); return f;
   }
   // F1: a figure's reaction to a blow (driven back along the blow, a white flash, a squash; a killed wolf is thrown and stays thrown) and its lunge when it bites. Presentation only: the model's position is untouched. Tuning: REACT_*.
   const REACT_PUSH = 0.42, REACT_FLASH_S = 0.09, LUNGE_M = 0.45;
   const reacts = new Map<number, { age: number; dx: number; dz: number; power: number; killed: boolean; lunge: boolean }>();
   /** A blow from (dx, dz) (unit, horizontal) lands on raider `id`; `power` 1 for a strike, more for the thorns or a kill. */
-  function react(id: number, dx: number, dz: number, power = 1, killed = false): void { reacts.set(id, { age: 0, dx, dz, power, killed, lunge: false }); }
+  function react(id: number, dx: number, dz: number, power = 1, killed = false): void { reacts.set(id, { age: 0, dx, dz, power, killed, lunge: false }); raiderFigures.get(id)?.dy.flinch(killed ? 3 : power); }
   /** Raider `id` lunges along (dx, dz) to bite. */
-  function lunge(id: number, dx: number, dz: number): void { const r = reacts.get(id); if (r && !r.lunge && r.age < 0.3) return; reacts.set(id, { age: 0, dx, dz, power: 1, killed: false, lunge: true }); }
+  function lunge(id: number, dx: number, dz: number): void { const r = reacts.get(id); if (r && !r.lunge && r.age < 0.3) return; reacts.set(id, { age: 0, dx, dz, power: 1, killed: false, lunge: true }); raiderFigures.get(id)?.dy.attack(); }
   function applyReact(id: number, group: THREE.Group, hide: THREE.MeshStandardMaterial, hurt: number): void {
     const r = reacts.get(id); if (!r) { hide.emissive.set(hurt > 0 ? '#b03030' : '#000000'); return; }
     const t = r.age;
@@ -234,17 +230,12 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
     if (t < REACT_FLASH_S) { hide.emissive.setRGB(1.4, 1.35, 1.2); } else hide.emissive.set(hurt > 0 ? '#b03030' : '#000000');
   }
   function stepReacts(dt: number): void { for (const [id, r] of reacts) { r.age += dt; if (r.age > (r.killed ? 6 : 0.8)) reacts.delete(id); } }
-  /** Place and animate a Dark Young: walking legs, writhing horns, the hurt flash, the root coil, the fall of the dead. */
-  function setRaider(id: number, x: number, z: number, heading: number, t: number, moving: boolean, hurt: number, rooted: number, dead: number, flat = false, tell = 0): void {
-    const f = raiderFigure(id); f.group.visible = true; f.group.position.set(x, relief(x, z), z); f.group.rotation.y = -heading;
-    // Beaten (or leaving at the end of the night) it runs flat, an octopus overland: pressed to the ground, the legs splayed, the horns trailing.
-    f.group.scale.set(0.82 * (flat ? 1.35 : 1), 0.82 * (flat ? 0.35 : 1), 0.82 * (flat ? 1.35 : 1)); for (let i = 0; i < f.legs.length; i++) f.legs[i].rotation.x = flat ? (i % 2 ? 1.1 : -1.1) : 0;
-    // F3: in its tell the horns go still and stand forward. 
-    for (let i = 0; i < f.horns.length; i++) { const h = f.horns[i], w = 1 - tell; h.rotation.z = (flat ? 1.3 : 0) + Math.sin(t * (flat ? 0.006 : 0.0021) + i * 1.7) * 0.5 * w - tell * 0.5; h.rotation.x = Math.cos(t * 0.0017 + i * 2.3) * 0.5 * w; }
-    for (let i = 0; i < f.legs.length; i++) f.legs[i].rotation.z = moving ? Math.sin(t * (flat ? 0.02 : 0.008) + i * 1.05) * 0.35 : 0;
-    f.coil.visible = rooted > 0; f.coil.scale.setScalar(1 + Math.sin(t * 0.01) * 0.05);
-    if (dead > 0) { f.group.rotation.z = Math.min(1.4, dead * 3); f.group.position.y = relief(x, z) - Math.max(0, dead - 4) * 0.25; }
-    else f.group.rotation.z = tell * 0.38; // F3: it rears before it strikes
+  /** Place and animate a Dark Young: its gait, its tell and blows, the roots' hold, its flight flat on its arms (`flat`), its feeding at a store or a place (`feed`), its death; then the blow's reaction. */
+  function setRaider(id: number, x: number, z: number, heading: number, t: number, moving: boolean, hurt: number, rooted: number, dead: number, flat = false, tell = 0, feed = false): void {
+    const f = raiderFigure(id), dt = Number.isNaN(f.t) ? 0 : (t - f.t) / 1000; f.t = t;
+    f.group.visible = true; f.group.position.set(x, relief(x, z), z); f.group.rotation.y = -heading; f.group.scale.setScalar(DY_SCALE);
+    f.dy.update(x, z, { moving, tell, rooted, dead, flat, feed }, dt);
+    f.coil.visible = rooted > 0 && dead <= 0; f.coil.scale.setScalar(1 + Math.sin(t * 0.01) * 0.05);
     applyReact(id, f.group, f.hide, hurt);
   }
   // G3: a wolf, low and grey, four legs, a tail and ears, eyes that catch the light; struck it flashes; dead it lies on its side.
