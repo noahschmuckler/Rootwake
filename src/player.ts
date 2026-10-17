@@ -1,6 +1,6 @@
 // One touch-first player controller for the plateau, underworld and laboratory.
 import * as THREE from 'three';
-import { BODY_RADIUS, BODY_HEIGHT, MobilityMotor, planDrift, planTraversal, supportAt, traversalPoint, type Traversal, type TraversalWorld } from './mobility';
+import { BODY_RADIUS, BODY_HEIGHT, STEP_HEIGHT, MobilityMotor, planDrift, planTraversal, supportAt, traversalPoint, type Traversal, type TraversalWorld } from './mobility';
 import { MovementGesture } from './movementGesture';
 
 export const EYE_HEIGHT = 0.55;
@@ -232,6 +232,21 @@ export class Player {
     const result = this.gesture.end(e.pointerId, performance.now(), e.type !== 'pointerup');
     if (result === 'commit' && target && this.enabled) this.motor.commit(target.plan, this.movementWorld);
     this.closeFan(); this.onMobilityFrame();
+  }
+  /** F3: carry her along the ground by (dx, dz) (a dodge's roll), in small steps that keep to walkable support and stop short of what she cannot occupy or of a collider. Returns how far she went. */
+  slide(dx: number, dz: number): number {
+    if (this.motor.airborne || this.free || this.motor.mode !== 'grounded') return 0;
+    const from = this.feet(), len = Math.hypot(dx, dz); if (len < 1e-5) return 0;
+    const steps = Math.max(1, Math.ceil(len / 0.08)); let went = 0; const p = from.clone();
+    for (let i = 1; i <= steps; i++) {
+      const q = new THREE.Vector3(from.x + dx * i / steps, 0, from.z + dz * i / steps);
+      const support = supportAt(this.movementWorld, q.x, q.z, p.y + STEP_HEIGHT); if (support === null || Math.abs(support - p.y) > STEP_HEIGHT) break;
+      q.y = support; if (!this.movementWorld.canOccupy(q, BODY_RADIUS, BODY_HEIGHT)) break;
+      if (this.colliders.some(c => { if (q.y >= (c.maxY ?? Infinity) || q.y + BODY_HEIGHT <= (c.minY ?? -Infinity)) return false; const n = nearestOnCollider(c, q.x, q.z); return Math.hypot(q.x - n.x, q.z - n.z) < c.radius + BODY_RADIUS; })) break;
+      p.copy(q); went = len * i / steps;
+    }
+    if (went > 0) { this.motor.feet.copy(p); this.position.x = p.x; this.position.z = p.z; }
+    return went;
   }
   update(nowMs: number, colliders: readonly Collider[], isWalkable?: (p: THREE.Vector3) => boolean): void {
     this.colliders = colliders; this.isWalkable = isWalkable; this.syncPose();

@@ -64,3 +64,31 @@ test('the casts land once; a bite does not break a blow, but she flinches when i
   assert.equal(q.flinch(), true); assert.equal(q.current?.move, 'hit');
   q.press('light'); assert.equal(q.current?.move, 'attack-1', 'a blow cuts a flinch short');
 });
+
+import { ROOT_SCALE, ROOT_S } from '../src/impact';
+import { dodgeProgress, EVADE_TO } from '../src/huldaMoves';
+import { defense, tellOf, TELL_S, LUNGE_REACH, GUARD_TAKE, DY_BITE_S, WOLF_BITE } from '../src/villageModel';
+test('root time slows the world and not her, then lets go', () => {
+  const k = new Impact(); k.rootTime(); const scales: number[] = [], hers: number[] = [];
+  for (let t = 0; t < ROOT_S + 0.5; t += 1 / 60) { scales.push(k.step(1 / 60)); hers.push(k.herScale); }
+  assert.ok(Math.min(...scales) <= ROOT_SCALE + 0.01, 'the world slows'); assert.ok(Math.min(...hers) > 0.99, 'she does not');
+  assert.equal(scales[scales.length - 1], 1); assert.equal(k.held, false);
+});
+test('a dodge cuts a blow short, rolls once, and is untouchable only in its middle', () => {
+  const q = new MoveQueue(); q.press('light'); q.step(0.05); assert.equal(q.press('dodge'), true); assert.equal(q.current?.move, 'dodge'); assert.equal(q.press('dodge'), false, 'one roll at a time');
+  let seen = false, first = -1, last = -1, t = 0; while (q.current?.move === 'dodge') { q.step(1 / 60); t += 1 / 60; if (q.evading) { seen = true; if (first < 0) first = t; last = t; } }
+  assert.ok(seen && first < 0.1 && last - first > 0.3 && last - first < 0.5, `evading ${first.toFixed(2)}..${last.toFixed(2)}`);
+  assert.equal(dodgeProgress(MOVES.dodge.from), 0); assert.equal(dodgeProgress(MOVES.dodge.to), 1); assert.ok(dodgeProgress(EVADE_TO) > 0.6);
+});
+test('a foe tells before it bites; rolled clear it misses, on her guard it bites less', () => {
+  const v = freshVillage(1), w = spawnFoe(v, 'wolf', 0, -1, 99), her = { x: 0, z: 0 }; v.hero.vigor = 100;
+  let told = -1; for (let t = 0; t < DY_BITE_S; t += 0.02) { stepRaiders(v, 0.02, her); if (tellOf(w) > 0 && told < 0) told = t; }
+  assert.ok(told >= 0 && Math.abs(DY_BITE_S - told - TELL_S) < 0.06, `told ${told}`); 
+  stepRaiders(v, 0.05, her); assert.equal(v.hero.vigor, 100 - WOLF_BITE, 'unguarded, the whole bite');
+  defense.guarding = true; for (let t = 0; t < DY_BITE_S + 0.05; t += 0.02) stepRaiders(v, 0.02, her); defense.guarding = false;
+  assert.ok(Math.abs(v.hero.vigor - (100 - WOLF_BITE * (1 + GUARD_TAKE))) < 1e-6, 'guarded, a share'); assert.equal(defense.blocked, 1);
+  const before = v.hero.vigor; defense.evading = true; for (let t = 0; t < DY_BITE_S + 0.05; t += 0.02) stepRaiders(v, 0.02, her); defense.evading = false;
+  assert.equal(v.hero.vigor, before, 'rolling, none'); assert.ok(defense.dodged >= 1); assert.ok(defense.lunges.length >= 3);
+  defense.lunges.length = 0; defense.dodged = 0; defense.blocked = 0;
+  void LUNGE_REACH;
+});

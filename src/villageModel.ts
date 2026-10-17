@@ -813,6 +813,11 @@ export function spawnFoe(v: Village, kind: RaiderKind, x: number, z: number, agg
   const r: Raider = { id, x, z, heading: Math.atan2(-z, -x), hp: kind === 'wolf' ? WOLF_HP : DY_HP, state: 'hunting', target: null, ate: 0, eatClock: 0, aggro, rooted: 0, biteClock: 0, hurt: 0, gone: 0, site: null, devourClock: 0, held: 0, infant: null, kind, den: null, prey: null };
   v.raiders.push(r); return r;
 }
+/** F3: her defence, set by the entry each frame: `evading` (the dodge's untouchable window) and `guarding` (the guard held). The raiders' step adds what happened: `lunges` (the ids that bit or tried to), `dodged` (bites she rolled clear of as they landed), `blocked` (bites taken on her guard); the entry reads and clears them. Tuning: TELL_S, LUNGE_REACH, GUARD_TAKE (an open question for the phone). */
+export const TELL_S = 0.55, LUNGE_REACH = 2.3, GUARD_TAKE = 0.35;
+export const defense = { evading: false, guarding: false, lunges: [] as number[], dodged: 0, blocked: 0 };
+/** How far into its tell a raider hunting her is, 0..1 (0: not winding up). */
+export const tellOf = (r: Raider): number => (r.state === 'hunting' ? Math.max(0, Math.min(1, (r.biteClock - (DY_BITE_S - TELL_S)) / TELL_S)) : 0);
 export function stepRaiders(v: Village, dt: number, her: Vec2 | null, herTime = true, regen = 1): void {
   // G4: her hero is one across the villages; her clocks (calm, sap, vigor, the faint) run once, in the village she is in (`herTime`), not once per village stepped.
   const h = v.hero; if (herTime) { h.calm += dt; h.sap = Math.min(sapMax(h), h.sap + SAP_REGEN * regen * dt); if (h.faint > 0) { h.faint = Math.max(0, h.faint - dt); if (h.faint === 0) h.vigor = Math.max(h.vigor, FAINT_VIGOR); } else if (h.calm > VIGOR_CALM_S) h.vigor = Math.min(vigorMax(h), h.vigor + VIGOR_REGEN * dt); }
@@ -843,7 +848,13 @@ export function stepRaiders(v: Village, dt: number, her: Vec2 | null, herTime = 
     if (r.aggro > 0 && her && h.faint === 0) {
       // Hunting her: to her at a charge, a bite within reach.
       r.state = 'hunting'; r.aggro -= dt; const d = Math.hypot(her.x - r.x, her.z - r.z);
-      if (d > DY_REACH) towards(r, her, DY_CHARGE * dt); else { r.heading = Math.atan2(her.z - r.z, her.x - r.x); r.biteClock += dt; if (r.biteClock >= DY_BITE_S) { r.biteClock = 0; h.vigor = Math.max(0, h.vigor - (r.kind === 'wolf' ? WOLF_BITE : DY_BITE)); h.calm = 0; if (h.vigor === 0) { h.faint = FAINT_S; r.aggro = 0; } } }
+      // F3: the last TELL_S of its wind up is the tell (it crouches or rears, its eyes flare); a bite once begun lunges as far as LUNGE_REACH. Out of that reach mid wind up, the wind up is wasted.
+      const winding = r.biteClock > DY_BITE_S - TELL_S;
+      if (d > DY_REACH && !(winding && d <= LUNGE_REACH)) { towards(r, her, DY_CHARGE * dt); if (winding) { r.biteClock = 0; if (defense.evading) { defense.dodged++; defense.lunges.push(r.id); } } }
+      else { r.heading = Math.atan2(her.z - r.z, her.x - r.x); r.biteClock += dt; if (r.biteClock >= DY_BITE_S) { r.biteClock = 0; defense.lunges.push(r.id);
+        // Rolling clear as it lands, she is not there to bite; guarding, she takes GUARD_TAKE of it.
+        if (defense.evading) defense.dodged++;
+        else { if (defense.guarding) defense.blocked++; h.vigor = Math.max(0, h.vigor - (r.kind === 'wolf' ? WOLF_BITE : DY_BITE) * (defense.guarding ? GUARD_TAKE : 1)); h.calm = 0; if (h.vigor === 0) { h.faint = FAINT_S; r.aggro = 0; } } } }
       if (r.aggro <= 0) { r.aggro = 0; r.state = 'coming'; r.target = null; }
       continue;
     }

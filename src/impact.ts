@@ -24,6 +24,8 @@ export const BLOWS: Record<Blow, BlowFeel> = {
 };
 /** The time scale while frozen (not quite zero, so nothing divides by it) and at the bottom of the slow motion. Tuning. */
 export const STOP_SCALE = 0.02, SLOW_SCALE = 0.25;
+/** F3, root time: after a dodge timed to the bite, the world runs at ROOT_SCALE for ROOT_S real seconds (easing in and out over ROOT_EASE) while she keeps her own pace. Tuning. */
+export const ROOT_SCALE = 0.22, ROOT_S = 2.2, ROOT_EASE = 0.25;
 /** Trauma lost per second; the shake's largest turn (radians) and drift (m); its noise rate (Hz). Tuning. */
 export const TRAUMA_DECAY = 1.7, SHAKE_TURN = 0.045, SHAKE_SHIFT = 0.07, SHAKE_HZ = 17;
 /** The punch in eases back at this rate (1/s). Tuning. */
@@ -43,6 +45,12 @@ const wobble = (t: number, seed: number): number => (Math.sin(t * 1.0 + seed) * 
 
 export class Impact {
   stop = 0; slow = 0; slowTotal = 0; trauma = 0; kick = 0; clock = 0;
+  /** F3: root time left (real seconds), and her own time scale this frame (the world's is what `step` returns). */
+  root = 0; herScale = 1;
+  /** Begin root time. */
+  rootTime(seconds = ROOT_S): void { this.root = Math.max(this.root, seconds); }
+  /** 0..1, how deep into root time the world is (for the screen's tint). */
+  get rooted(): number { if (this.root <= 0) return 0; const age = ROOT_S - this.root; return Math.min(1, age / ROOT_EASE, this.root / ROOT_EASE); }
   /** Off by `?shake=0`, for those it unsettles; the hit-stop and slow motion stay. */
   shake = true;
   private saved = { fov: 0, x: 0, y: 0, z: 0, qx: 0, qy: 0, qz: 0, qw: 1 };
@@ -61,16 +69,24 @@ export class Impact {
   }
   /** Advance by real seconds; returns the scale for the world's time this frame (the stop first, then the slow motion easing back to 1). */
   step(real: number): number {
+    const world = this.stepWorld(real), r = this.rooted;
+    // In root time the world slows and she does not: her scale is the world's without the root.
+    this.herScale = r > 0 ? Math.min(1, world / (1 - r * (1 - ROOT_SCALE))) : world;
+    if (this.root > 0) this.root = Math.max(0, this.root - (Number.isFinite(real) ? Math.max(0, Math.min(0.25, real)) : 0));
+    return world;
+  }
+  private stepWorld(real: number): number {
     const dt = Number.isFinite(real) ? Math.max(0, Math.min(0.25, real)) : 0;
     this.clock += dt;
     this.trauma = Math.max(0, this.trauma - TRAUMA_DECAY * dt);
     this.kick *= Math.exp(-KICK_EASE * dt); if (Math.abs(this.kick) < 0.01) this.kick = 0;
+    const root = 1 - this.rooted * (1 - ROOT_SCALE);
     if (this.stop > 0) { this.stop = Math.max(0, this.stop - dt); return STOP_SCALE; }
-    if (this.slow > 0) { this.slow = Math.max(0, this.slow - dt); const k = this.slowTotal > 0 ? this.slow / this.slowTotal : 0; return SLOW_SCALE + (1 - SLOW_SCALE) * (1 - k * k); }
-    return 1;
+    if (this.slow > 0) { this.slow = Math.max(0, this.slow - dt); const k = this.slowTotal > 0 ? this.slow / this.slowTotal : 0; return Math.min(root, SLOW_SCALE + (1 - SLOW_SCALE) * (1 - k * k)); }
+    return root;
   }
   /** True while the world is frozen or slowed. */
-  get held(): boolean { return this.stop > 0 || this.slow > 0; }
+  get held(): boolean { return this.stop > 0 || this.slow > 0 || this.root > 0; }
   /** Shake and punch the camera for this render only; `pop` puts it back. */
   push(camera: ShakeCamera): void {
     if (this.pushed) this.pop(camera);

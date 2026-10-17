@@ -9,8 +9,8 @@
 import * as THREE from 'three';
 import type { Gait } from './huldaRig';
 
-export type MoveName = 'attack-1' | 'attack-2' | 'attack-3' | 'heavy' | 'cast-burst' | 'cast-bind' | 'hit';
-export type Press = 'light' | 'heavy' | 'burst' | 'bind';
+export type MoveName = 'attack-1' | 'attack-2' | 'attack-3' | 'heavy' | 'cast-burst' | 'cast-bind' | 'hit' | 'dodge';
+export type Press = 'light' | 'heavy' | 'burst' | 'bind' | 'dodge';
 export interface MoveSpec {
   /** Clip seconds: where it starts, where the blow lands, from when the next move may start, where it ends. */
   from: number; contact: number; chain: number; to: number;
@@ -25,8 +25,19 @@ export const MOVES: Record<MoveName, MoveSpec> = {
   'cast-burst': { from: 0.82, contact: 1.27, chain: 1.5, to: 1.95, scale: 1.4 },
   'cast-bind': { from: 0.4, contact: 0.8, chain: 1.0, to: 1.35, scale: 1.3 },
   hit: { from: 0.0, contact: 0.15, chain: 0.4, to: 0.7, scale: 1.2 },
+  // F3: the dive roll from just before the dive; its contact is where she becomes untouchable (EVADE_TO ends it), its chain where the next move may start.
+  dodge: { from: 0.55, contact: 0.6, chain: 1.75, to: 2.0, scale: 2.2 },
 };
-export const FIGHT_CLIPS: MoveName[] = ['attack-1', 'attack-2', 'attack-3', 'heavy', 'cast-burst', 'cast-bind', 'hit'];
+/** F3: the dodge's untouchable window ends at this clip time (the roll's middle). Tuning. */
+export const EVADE_TO = 1.45;
+/** The dive roll's travel along its clip (clip seconds, hips z in cm): she is moved along it, the clip itself kept in place. */
+const DODGE_TRAVEL: [number, number][] = [[0.5, 56], [0.6, 82], [0.7, 127], [0.8, 169], [0.9, 216], [1.0, 260], [1.1, 304], [1.2, 338], [1.3, 361], [1.4, 379], [1.5, 400], [1.6, 421], [1.7, 436], [1.8, 446], [1.9, 450], [2.0, 452]];
+/** How far through the roll's travel she is at clip time t, 0..1 from the move's start to its end. */
+export function dodgeProgress(t: number): number {
+  const z = (x: number): number => { const k = DODGE_TRAVEL; if (x <= k[0][0]) return k[0][1]; for (let i = 1; i < k.length; i++) if (x <= k[i][0]) { const [t0, z0] = k[i - 1], [t1, z1] = k[i]; return z0 + (z1 - z0) * (x - t0) / (t1 - t0); } return k[k.length - 1][1]; };
+  const a = z(MOVES.dodge.from), b = z(MOVES.dodge.to); return Math.max(0, Math.min(1, (z(t) - a) / (b - a)));
+}
+export const FIGHT_CLIPS: MoveName[] = ['attack-1', 'attack-2', 'attack-3', 'heavy', 'cast-burst', 'cast-bind', 'hit', 'dodge'];
 /** Seconds to blend a move in and out. Tuning. */
 export const FADE_IN = 0.07, FADE_OUT = 0.16;
 const COMBO: MoveName[] = ['attack-1', 'attack-2', 'attack-3'];
@@ -40,6 +51,8 @@ export class MoveQueue {
   weight = 0;
   private ending: { move: MoveName; t: number; w: number } | null = null;
   get ended(): { move: MoveName; t: number; w: number } | null { return this.ending; }
+  /** F3: in the dodge's untouchable window. */
+  get evading(): boolean { const c = this.current; return !!c && c.move === 'dodge' && c.t >= MOVES.dodge.contact && c.t <= EVADE_TO; }
   /** Whether a move is playing (or one is waiting to). */
   get busy(): boolean { return !!this.current || !!this.queued; }
   /** A press: true if it started a move or was held for the next one. */
@@ -49,6 +62,8 @@ export class MoveQueue {
       const step = c && COMBO.includes(c.move) ? (c.step + 1) % COMBO.length : 0;
       return this.offer({ move: COMBO[step], step });
     }
+    // A dodge cuts any move short at once (not another dodge: one roll at a time).
+    if (p === 'dodge') { if (c?.move === 'dodge') return false; this.begin({ move: 'dodge', step: 0 }); return true; }
     const move: MoveName = p === 'heavy' ? 'heavy' : p === 'burst' ? 'cast-burst' : 'cast-bind';
     return this.offer({ move, step: 0 });
   }
@@ -85,7 +100,7 @@ export class MoveQueue {
 
 /** The bones a move keeps while she runs: spine up, arms and hands. */
 const UPPER = /Spine|Neck|Head|Shoulder|Arm|Hand/;
-export interface MoveLayer { queue: MoveQueue; press(p: Press): boolean; flinch(): boolean; update(dt: number, moving: number): MoveEvent[]; readonly playing: MoveName | null; dispose(): void }
+export interface MoveLayer { queue: MoveQueue; press(p: Press): boolean; flinch(): boolean; /** F3: hold the guard stance while no move plays. */ guard: boolean; update(dt: number, moving: number): MoveEvent[]; readonly playing: MoveName | null; dispose(): void }
 /** Put the moves' clips (named after their files) on the gait's mixer. */
 export function createMoveLayer(gait: Gait, root: THREE.Object3D, clips: THREE.AnimationClip[]): MoveLayer {
   const queue = new MoveQueue(), full = new Map<MoveName, THREE.AnimationAction>(), upper = new Map<MoveName, THREE.AnimationAction>();
@@ -96,7 +111,9 @@ export function createMoveLayer(gait: Gait, root: THREE.Object3D, clips: THREE.A
     const top = new THREE.AnimationClip(`${name}-upper`, clip.duration, clip.tracks.filter(t => UPPER.test(t.name.split('.')[0])));
     for (const [map, c] of [[full, clip], [upper, top]] as const) { const a = gait.mixer.clipAction(c, root); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.paused = true; a.setEffectiveWeight(0); a.play(); map.set(name, a); }
   }
-  let moving = 0;
+  let moving = 0, guardW = 0;
+  /** F3: the guard stance: the fighting stance the combo's first clip starts from, held. Tuning: the clip time. */
+  const GUARD_POSE: { move: MoveName; t: number } = { move: 'attack-2', t: 0.3 };
   function pose(move: MoveName, t: number, w: number): void {
     const f = full.get(move), u = upper.get(move); if (!f || !u) return;
     f.time = t; u.time = t;
@@ -109,9 +126,12 @@ export function createMoveLayer(gait: Gait, root: THREE.Object3D, clips: THREE.A
     for (const a of full.values()) a.setEffectiveWeight(0); for (const a of upper.values()) a.setEffectiveWeight(0);
     const e = queue.ended; if (e) pose(e.move, e.t, e.w);
     const c = queue.current; if (c) pose(c.move, c.t, queue.weight);
-    gait.suppress = Math.max(c ? queue.weight : 0, e ? e.w : 0) * (1 - moving);
+    guardW = THREE.MathUtils.clamp(guardW + (layer.guard && !c ? dt : -dt) / 0.12, 0, 1);
+    const g = guardW * (1 - (c ? queue.weight : 0)); if (g > 0 && !(c && c.move === GUARD_POSE.move) && !(e && e.move === GUARD_POSE.move)) pose(GUARD_POSE.move, GUARD_POSE.t, g);
+    gait.suppress = Math.max(c ? queue.weight : 0, e ? e.w : 0, g) * (1 - moving);
     return events;
   }
   function dispose(): void { for (const a of [...full.values(), ...upper.values()]) { a.stop(); gait.mixer.uncacheAction(a.getClip(), root); } gait.suppress = 0; }
-  return { queue, press: p => full.size > 0 && queue.press(p), flinch: () => full.has('hit') && queue.flinch(), update, get playing() { return queue.current?.move ?? null; }, dispose };
+  const layer: MoveLayer = { queue, guard: false, press: p => full.has(p === 'dodge' ? 'dodge' : 'attack-1') && queue.press(p), flinch: () => full.has('hit') && queue.flinch(), update, get playing() { return queue.current?.move ?? null; }, dispose };
+  return layer;
 }

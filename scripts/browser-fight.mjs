@@ -62,6 +62,34 @@ try{
   await page.waitForFunction(()=>Number(document.getElementById('hurt').style.opacity)>0.05,null,{timeout:120000});
   report.bite=await page.evaluate(()=>({vigor:window.__village.hero.vigor,hurt:Number(document.getElementById('hurt').style.opacity)}));
   await page.screenshot({path:`${out}/bitten.png`,timeout:180000});
+  // F3: the guard. Held, a bite lands on her guard (a share of it); the foe tells first.
+  await page.waitForFunction(()=>window.__village.raiders().some(r=>window.__village.feel.practice.ids.includes(r.id)&&r.state==='hunting'),null,{timeout:120000});
+  await page.waitForFunction(()=>!window.__village.feel.moves.queue.busy,null,{timeout:120000});
+  await page.evaluate(()=>{window.__village.guard.held=true;});
+  await ahead(1.2);
+  await page.waitForFunction(()=>window.__village.raiders().some(r=>r.state==='hunting'&&r.biteClock>1.0),null,{timeout:120000});
+  report.tell=await page.evaluate(()=>({locked:window.__village.guard.locked,eyes:true}));
+  assert.notEqual(report.tell.locked,null,'the foe hunting her is locked');
+  await page.evaluate(()=>{const v=window.__village;v.feel.impact.stop=60;v.feel.impact.trauma=0;});
+  await page.waitForTimeout(2500);await page.screenshot({path:`${out}/guard-tell.png`,timeout:180000});
+  await page.evaluate(()=>{window.__village.feel.impact.stop=0;window.__vg=window.__village.hero.vigor;});
+  await page.waitForFunction(()=>window.__village.hero.vigor<window.__vg,null,{timeout:120000});
+  report.block=await page.evaluate(()=>({lost:window.__vg-window.__village.hero.vigor}));
+  { const n=report.block.lost/2.8; assert.ok(Math.abs(n-Math.round(n))<1e-6&&n>=1,`a bite on her guard takes a share: 2.8 a wolf, not 8 (${report.block.lost})`); }
+  // F3: a roll as the bite lands: it misses, and root time begins.
+  await page.waitForFunction(()=>!window.__village.feel.moves.queue.busy,null,{timeout:120000});
+  await ahead(1.2);
+  await page.evaluate(()=>{const v=window.__village,y=v.player.yaw;window.__vr=v.raiders().find(r=>v.feel.practice.ids.includes(r.id)&&r.state==='hunting').id;window.__vg=v.hero.vigor;window.__at=v.player.feet();v.guard.dodgeTo(Math.cos(y),-Math.sin(y));});
+  await page.waitForFunction(()=>window.__village.defense.evading,null,{timeout:60000});
+  await page.evaluate(()=>{window.__village.setBite(window.__vr,1.38);});
+  await page.waitForFunction(()=>window.__village.feel.impact.root>0,null,{timeout:60000});
+  report.root=await page.evaluate(()=>{const v=window.__village,f=v.player.feet();return {vigor:v.hero.vigor,was:window.__vg,moved:Math.hypot(f.x-window.__at.x,f.z-window.__at.z)};});
+  assert.equal(report.root.vigor,report.root.was,'the bite misses her as she rolls');
+  await page.waitForTimeout(1500);await page.screenshot({path:`${out}/root-time.png`,timeout:180000});
+  await page.waitForFunction(()=>!window.__village.feel.moves.queue.busy,null,{timeout:120000});
+  report.rolled=await page.evaluate(()=>{const f=window.__village.player.feet();return Math.hypot(f.x-window.__at.x,f.z-window.__at.z);});
+  assert.ok(report.rolled>1.5,`the roll carries her (${report.rolled})`);
+  await page.evaluate(()=>{window.__village.guard.held=false;});
   // Finish the wave: the last one falls in slow motion.
   const wave=await page.evaluate(()=>window.__village.feel.practice.wave);
   for(let i=0;i<30;i++){

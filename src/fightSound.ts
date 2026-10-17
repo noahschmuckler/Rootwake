@@ -50,6 +50,14 @@ export class FightSound {
   thorns(): void { this.tone('sine', 85, 38, 0.45, 0.9); for (let i = 0; i < 5; i++) this.hiss(0.2, 0.09, 0.4, 'highpass', [2400, 3800, 1600], 1.5, i * 0.035); this.hiss(0.25, 0.5, 0.35, 'lowpass', [1400, 900, 200], 0.6); }
   /** The roots heaving up and winding tight. */
   roots(): void { this.tone('sawtooth', 70, 48, 0.55, 0.22, 0, 0.04); this.tone('sawtooth', 104, 66, 0.5, 0.12, 0.05, 0.05); this.hiss(0.4, 0.5, 0.4, 'lowpass', [500, 1200, 300], 0.8); }
+  /** F3: a foe's tell: a low snarl rising. */
+  growl(): void { this.tone('sawtooth', 62, 90, 0.42, 0.16, 0, 0.08); this.tone('sawtooth', 93, 128, 0.4, 0.08, 0.02, 0.08); this.hiss(0.6, 0.42, 0.22, 'bandpass', [300, 700, 400], 2.5); }
+  /** F3: a bite taken on her guard: a hard wooden knock. */
+  block(): void { this.tone('triangle', 420, 260, 0.08, 0.5); this.tone('sine', 140, 80, 0.16, 0.6); this.hiss(0.05, 0.08, 0.5, 'bandpass', [2400, 1600, 900], 2); }
+  /** F3: the roll. */
+  roll(): void { this.hiss(0.4, 0.32, 0.4, 'lowpass', [400, 1400, 300], 0.8); }
+  /** F3: root time beginning: the world drops away under a low drone and a bright bell. */
+  rootTime(): void { this.tone('sine', 55, 42, 2.2, 0.35, 0, 0.25); this.tone('sine', 1318, 1310, 1.6, 0.14, 0.02, 0.003); this.tone('sine', 1975, 1970, 1.2, 0.07, 0.05, 0.003); this.hiss(0.15, 0.6, 0.35, 'lowpass', [3000, 900, 150], 0.7); }
   /** She is bitten. */
   hurt(): void { this.tone('sine', 95, 45, 0.28, 0.9); this.hiss(0.15, 0.25, 0.5, 'bandpass', [700, 400, 160], 1.4); }
 }

@@ -64,6 +64,32 @@ Noah supplied all ten clips; they are in `public/models/clips/`. The build lists
   - **The trail:** an additive ribbon between the staff's head and a point down the shaft, sampled each frame through a swing and faded by age.
 - **Fallback:** without the clips (`?fightclips=0`), F1's instant blows and the swept slash remain.
 
+## F3 as built (2026-10-17): the guard, the dodge, the tells, root time
+Noah's design: a **guard** button beside the fight column, under the left thumb (`#guard`).
+- **Holding guard:**
+  - She stands in her fighting stance (`MoveLayer.guard`, a held frame of attack-2), facing the foe she is locked on.
+  - A bite takes `GUARD_TAKE` (0.35) of itself. This is an open question for the phone.
+  - The stick no longer walks (`player.moveSlowdown`). Pushed past `DODGE_PUSH`, it rolls her that way, relative to the camera, once per push.
+- **Future "down" modifier:** the same button is meant for a crouch (double tap; slow and stealthy), diving when swimming, going down in flight, and going under the soil. None of those is built yet.
+- **The roll:** `dodge.fbx` from just before the dive (`MOVES.dodge`).
+  - She is carried `DODGE_DIST` (2.8 m) along the clip's own travel (`dodgeProgress`) by `Player.slide`, which keeps to walkable support and stops at colliders.
+  - She is untouchable from the dive to `EVADE_TO`, about 0.4 s.
+  - A roll cuts any move short.
+- **Tells** (`villageModel.ts`):
+  - A foe hunting her winds up for `TELL_S` (0.55 s) before a bite: `tellOf`.
+  - Wolves crouch and their eyes flare. Dark Young rear and their horns go still and stand forward. A coloured glint and a snarl mark the start of each tell.
+  - A bite once begun lunges as far as `LUNGE_REACH` (2.3 m). Beyond that, the wind-up is wasted.
+- **Root time:**
+  - A bite that lands while she rolls misses (`defense.dodged`), and so does a wind-up she rolls out of reach of.
+  - Either way, root time begins (`Impact.rootTime`): the world runs at `ROOT_SCALE` (0.22) for 2.2 s while she keeps her own pace (`Impact.herScale`), and her moves run `ROOT_FLURRY` (×1.4) faster.
+  - The screen's edge greens over, with roots curling in from it (`#rootTime`). A low drone and a bell sound.
+- **The lock:** the nearest foe hunting her within `LOCK_M` (9 m) has a ring on the ground, which turns orange in its tell. Her blows turn to it first. Tapping to switch is not built yet.
+- **Model contract:** the entry sets `defense.evading` and `defense.guarding` each frame. The raiders' step adds `lunges`, `dodged` and `blocked`, and `defended()` in `village.ts` reads and clears them.
+- **Checks:**
+  - `tests/impact.test.ts`: root time, the roll's window, and the tell, guard and roll against a bite.
+  - `scripts/browser-fight.mjs`: a bite on her guard takes a share; a roll as the bite lands misses and starts root time; the roll carries her.
+  - Screenshots go to `artifacts/fight/`.
+
 ## For F2: clips to download from Mixamo (done)
 Download each with the same settings as the clips already in `public/models/clips`:
 - Format **FBX Binary**, **Without Skin**, 30 fps.

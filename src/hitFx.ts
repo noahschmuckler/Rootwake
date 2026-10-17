@@ -69,6 +69,8 @@ export interface HitFx {
   slash(at: THREE.Vector3, yaw: number, side: number, lift?: number): void;
   /** A blow lands at `at`, driven along `dir` (horizontal): a star, flecks of `kind`, a ground ring when heavy. */
   blow(at: THREE.Vector3, dir: THREE.Vector3, kind: Flecks, heavy: boolean, count?: number): void;
+  /** F3: a star of light alone, in a colour (a foe's eyes flaring in its tell). */
+  glint(at: THREE.Vector3, color: string, size?: number): void;
   /** A spray of flecks without the star (soil from the roots, leaves from her when bitten). */
   spray(at: THREE.Vector3, dir: THREE.Vector3, kind: Flecks, count: number, speed?: number): void;
   /** The thorn burst round her feet out to `range`. */
@@ -116,8 +118,10 @@ export function createHitFx(scene: THREE.Scene, ground: (x: number, z: number) =
   const rings: Ring[] = Array.from({ length: MAX_RINGS }, () => { const mat = new THREE.MeshBasicMaterial({ color: '#f4f0c8', transparent: true, depthWrite: false, side: THREE.DoubleSide }); const m = new THREE.Mesh(ringGeo, mat); m.visible = false; m.renderOrder = 4; root.add(m); return { m, mat, age: 1, life: 0, size: 1 }; });
   let nextRing = 0;
   function ring(at: THREE.Vector3, size: number, color = '#f4f0c8'): void { const r = rings[nextRing]; nextRing = (nextRing + 1) % MAX_RINGS; r.age = 0; r.life = 0.38; r.size = size; r.mat.color.set(color); r.m.position.set(at.x, ground(at.x, at.z) + 0.06, at.z); r.m.visible = true; }
+  const sparkWhite = new THREE.Color(1.5, 1.45, 1.1);
+  function glint(at: THREE.Vector3, color: string, size = 0.7): void { const s = sparks[nextSpark]; nextSpark = (nextSpark + 1) % MAX_SPARKS; s.age = 0; s.life = 0.22; s.size = size; s.s.position.copy(at); s.s.material.color.set(color).multiplyScalar(2.2); s.s.material.rotation = Math.random() * Math.PI; s.s.visible = true; }
   function blow(at: THREE.Vector3, dir: THREE.Vector3, kind: Flecks, heavy: boolean, count = heavy ? 26 : 14): void {
-    const s = sparks[nextSpark]; nextSpark = (nextSpark + 1) % MAX_SPARKS; s.age = 0; s.life = heavy ? 0.16 : 0.11; s.size = heavy ? 0.85 : 0.55; s.s.position.copy(at); s.s.material.rotation = Math.random() * Math.PI; s.s.visible = true;
+    const s = sparks[nextSpark]; nextSpark = (nextSpark + 1) % MAX_SPARKS; s.s.material.color.copy(sparkWhite); s.age = 0; s.life = heavy ? 0.16 : 0.11; s.size = heavy ? 0.85 : 0.55; s.s.position.copy(at); s.s.material.rotation = Math.random() * Math.PI; s.s.visible = true;
     spray(at, dir, kind, count, heavy ? 4.2 : 3.2); spray(at, dir, 'leaf', Math.round(count * 0.35), heavy ? 3.4 : 2.6);
     if (heavy) ring(at, 1.6);
   }
@@ -181,5 +185,5 @@ export function createHitFx(scene: THREE.Scene, ground: (x: number, z: number) =
     void camera;
   }
   function dispose(): void { root.removeFromParent(); diamond.dispose(); fleckMat.dispose(); star.dispose(); for (const s of sparks) s.s.material.dispose(); ringGeo.dispose(); for (const r of rings) r.mat.dispose(); slashMesh.geometry.dispose(); slashMat.dispose(); cone.dispose(); thornMat.dispose(); flecks.dispose(); thornMesh.dispose(); }
-  return { slash, blow, spray, thorns, ring, update, get live() { return live; }, dispose };
+  return { slash, blow, glint, spray, thorns, ring, update, get live() { return live; }, dispose };
 }

@@ -235,15 +235,16 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   }
   function stepReacts(dt: number): void { for (const [id, r] of reacts) { r.age += dt; if (r.age > (r.killed ? 6 : 0.8)) reacts.delete(id); } }
   /** Place and animate a Dark Young: walking legs, writhing horns, the hurt flash, the root coil, the fall of the dead. */
-  function setRaider(id: number, x: number, z: number, heading: number, t: number, moving: boolean, hurt: number, rooted: number, dead: number, flat = false): void {
+  function setRaider(id: number, x: number, z: number, heading: number, t: number, moving: boolean, hurt: number, rooted: number, dead: number, flat = false, tell = 0): void {
     const f = raiderFigure(id); f.group.visible = true; f.group.position.set(x, relief(x, z), z); f.group.rotation.y = -heading;
     // Beaten (or leaving at the end of the night) it runs flat, an octopus overland: pressed to the ground, the legs splayed, the horns trailing.
     f.group.scale.set(0.82 * (flat ? 1.35 : 1), 0.82 * (flat ? 0.35 : 1), 0.82 * (flat ? 1.35 : 1)); for (let i = 0; i < f.legs.length; i++) f.legs[i].rotation.x = flat ? (i % 2 ? 1.1 : -1.1) : 0;
-    for (let i = 0; i < f.horns.length; i++) { const h = f.horns[i]; h.rotation.z = (flat ? 1.3 : 0) + Math.sin(t * (flat ? 0.006 : 0.0021) + i * 1.7) * 0.5; h.rotation.x = Math.cos(t * 0.0017 + i * 2.3) * 0.5; }
+    // F3: in its tell the horns go still and stand forward. 
+    for (let i = 0; i < f.horns.length; i++) { const h = f.horns[i], w = 1 - tell; h.rotation.z = (flat ? 1.3 : 0) + Math.sin(t * (flat ? 0.006 : 0.0021) + i * 1.7) * 0.5 * w - tell * 0.5; h.rotation.x = Math.cos(t * 0.0017 + i * 2.3) * 0.5 * w; }
     for (let i = 0; i < f.legs.length; i++) f.legs[i].rotation.z = moving ? Math.sin(t * (flat ? 0.02 : 0.008) + i * 1.05) * 0.35 : 0;
     f.coil.visible = rooted > 0; f.coil.scale.setScalar(1 + Math.sin(t * 0.01) * 0.05);
     if (dead > 0) { f.group.rotation.z = Math.min(1.4, dead * 3); f.group.position.y = relief(x, z) - Math.max(0, dead - 4) * 0.25; }
-    else f.group.rotation.z = 0;
+    else f.group.rotation.z = tell * 0.38; // F3: it rears before it strikes
     applyReact(id, f.group, f.hide, hurt);
   }
   // G3: a wolf, low and grey, four legs, a tail and ears, eyes that catch the light; struck it flashes; dead it lies on its side.
@@ -254,12 +255,14 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
     const coil = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.05, 6, 20), coilMat); coil.rotation.x = -Math.PI / 2; coil.position.y = 0.08; coil.visible = false; group.add(coil);
     root.add(group); f = { group, legs, tail, coil, hide, eyes, dire: false }; wolfFigures.set(id, f); return f;
   }
-  function setWolf(id: number, x: number, z: number, heading: number, t: number, moving: boolean, hurt: number, rooted: number, dead: number, dire = false): void {
+  function setWolf(id: number, x: number, z: number, heading: number, t: number, moving: boolean, hurt: number, rooted: number, dead: number, dire = false, tell = 0): void {
     const f = wolfFigure(id); if (f.dire !== dire) { f.dire = dire; setDireLook(f, dire); } f.group.visible = true; f.group.position.set(x, relief(x, z), z); f.group.rotation.y = -heading;
     for (let i = 0; i < f.legs.length; i++) f.legs[i].rotation.z = moving ? Math.sin(t * 0.014 + i * 1.6) * 0.5 : 0;
     f.tail.rotation.x = Math.sin(t * 0.005 + id) * 0.25; f.coil.visible = rooted > 0;
-    if (dead > 0) { f.group.rotation.z = Math.min(1.5, dead * 3); f.group.position.y = relief(x, z) - Math.max(0, dead - 4) * 0.2; } else f.group.rotation.z = 0;
+    if (dead > 0) { f.group.rotation.z = Math.min(1.5, dead * 3); f.group.position.y = relief(x, z) - Math.max(0, dead - 4) * 0.2; } else f.group.rotation.z = -tell * 0.2;
     f.group.scale.setScalar(1); applyReact(id, f.group, f.hide, hurt);
+    // F3: in its tell it crouches to spring, nose down, and its eyes flare.
+    if (dead <= 0 && tell > 0) { f.group.scale.y *= 1 - 0.22 * tell; f.group.scale.x *= 1 + 0.06 * tell; } for (const e of f.eyes) e.scale.setScalar((f.dire ? 1.5 : 1) * (1 + 1.6 * tell));
   }
   function hideRaider(id: number): void { const f = raiderFigures.get(id); if (f) f.group.visible = false; const w = wolfFigures.get(id); if (w) w.group.visible = false; }
   // D3: the snatcher, a small octopoid, low and dark with two dim eyes and six arms that ripple as it runs; an infant is a pale bundle in its arms, lying on the land, or in hers.

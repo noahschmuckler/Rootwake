@@ -5,7 +5,7 @@ import { existsSync, readdirSync } from 'node:fs';
 const huldaModel = ['hulda.glb', 'hulda.gltf', 'hulda.fbx'].map(f => `models/${f}`).find(f => existsSync(`public/${f}`)) ?? null;
 // Its clips, exported separately (Mixamo without skin): only the ones the gait drives, idle / walking / running.
 // F2: her fight clips (Mixamo, without skin), loaded after the gait's: FIGHT_HANDOFF.md.
-const fightClips = existsSync('public/models/clips') ? ['attack-1', 'attack-2', 'attack-3', 'heavy', 'cast-burst', 'cast-bind', 'hit'].filter(n => existsSync(`public/models/clips/${n}.fbx`)).map(n => `models/clips/${n}.fbx`) : [];
+const fightClips = existsSync('public/models/clips') ? ['attack-1', 'attack-2', 'attack-3', 'heavy', 'cast-burst', 'cast-bind', 'hit', 'dodge'].filter(n => existsSync(`public/models/clips/${n}.fbx`)).map(n => `models/clips/${n}.fbx`) : [];
 const huldaClips = existsSync('public/models/clips') ? readdirSync('public/models/clips').filter(f => /^(idle|walk|walking|run|running)\.(fbx|glb|gltf)$/i.test(f)).sort().map(f => `models/clips/${f}`) : [];
 
 export default defineConfig({
