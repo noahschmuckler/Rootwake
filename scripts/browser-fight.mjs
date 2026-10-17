@@ -29,33 +29,49 @@ try{
   assert.ok(report.first.fight,'the fight buttons are open');
   // Set the foe just ahead of her and strike.
   const ahead=d=>page.evaluate(d=>{const v=window.__village,f=v.player.feet(),yaw=v.player.yaw,l=v.herLocal(),dx=-Math.sin(yaw)*d,dz=-Math.cos(yaw)*d;for(const r of v.raiders())if(v.feel.practice.ids.includes(r.id)&&r.state==='hunting')v.placeRaider(r.id,l.x+dx,l.z+dz);void f;},d);
+  // F2: her fight clips are loaded, so a press starts a move and the blow lands at its contact.
+  await page.waitForFunction(()=>window.__village.feel.fightClips==='ready',null,{timeout:180000});
   await ahead(1.2);
-  const strike=await page.evaluate(()=>{const v=window.__village,id=v.raiders().find(r=>r.state==='hunting').id,hp=v.raiders().find(r=>r.id===id).hp;v.cooldowns.strike=0;v.attack('strike');const r=v.raiders().find(r=>r.id===id);return {hp,after:r.hp,stop:v.feel.impact.stop,trauma:v.feel.impact.trauma,kick:v.feel.impact.kick};});
-  report.strike=strike;
-  assert.ok(strike.after<strike.hp,'the strike lands');assert.ok(strike.stop>0,'the world stops for it');assert.ok(strike.trauma>0,'the camera jolts');
-  // Freeze the world on the blow for the screenshot.
-  await page.evaluate(()=>{const v=window.__village;v.cooldowns.strike=0;v.attack('strike');v.feel.impact.stop=60;v.feel.impact.trauma=0;});
-  await page.waitForFunction(()=>window.__village.feel.fx.live>5,null,{timeout:60000});report.live=await page.evaluate(()=>window.__village.feel.fx.live);
+  report.strike=await page.evaluate(()=>{const v=window.__village,r=v.raiders().find(r=>r.state==='hunting');window.__t={id:r.id,hp:r.hp,felt:v.feel.impact.log.length};v.attack('strike');return {hp:r.hp,move:v.feel.moves.playing};});
+  assert.equal(report.strike.move,'attack-1','a tap starts the first blow of the combo');
+  await page.waitForFunction(()=>{const v=window.__village,r=v.raiders().find(r=>r.id===window.__t.id);return r.hp<window.__t.hp;},null,{timeout:120000});
+  report.landed=await page.evaluate(()=>{const v=window.__village;return {hp:v.raiders().find(r=>r.id===window.__t.id).hp,felt:v.feel.impact.log.slice(window.__t.felt),staff:v.feel.staff.shown};});
+  assert.ok(report.landed.felt.length>0,'the blow is felt (hit-stop, shake)');assert.ok(report.landed.staff,'the staff is out');
+  await page.waitForFunction(()=>window.__village.feel.fx.live>5,null,{timeout:60000});
+  // Freeze mid-swing for the screenshot.
+  await page.waitForFunction(()=>!window.__village.feel.moves.queue.busy,null,{timeout:120000});
+  await ahead(1.2);
+  await page.evaluate(()=>{window.__village.attack('strike');});
+  await page.waitForFunction(()=>{const c=window.__village.feel.moves.queue.current;return c&&c.t>=1.0;},null,{timeout:120000});
+  await page.evaluate(()=>{const v=window.__village;v.feel.impact.stop=60;v.feel.impact.trauma=0;});
+  await page.waitForTimeout(2500);
   await page.screenshot({path:`${out}/strike.png`,timeout:180000});
   await page.evaluate(()=>{window.__village.feel.impact.stop=0;});
-  // The thorns.
+  // The thorns: the cast, then the spikes.
+  await page.waitForFunction(()=>!window.__village.feel.moves.queue.busy,null,{timeout:120000});
   await ahead(1.5);
   await page.evaluate(()=>{const v=window.__village;v.cooldowns.thorn=0;v.attack('thorn');});
-  await page.waitForFunction(()=>window.__village.scene.getObjectByName('hit-thorns').count>=24,null,{timeout:60000});
+  await page.waitForFunction(()=>window.__village.scene.getObjectByName('hit-thorns').count>=24,null,{timeout:120000});
   await page.evaluate(()=>{const v=window.__village;v.feel.impact.stop=60;v.feel.impact.trauma=0;});
+  await page.waitForTimeout(2500);
   await page.screenshot({path:`${out}/thorns.png`,timeout:180000});
   await page.evaluate(()=>{window.__village.feel.impact.stop=0;});
   // A bite: stand still by a hunting foe until it bites.
+  await page.waitForFunction(()=>window.__village.raiders().some(r=>window.__village.feel.practice.ids.includes(r.id)&&r.state==='hunting'),null,{timeout:120000});
   await ahead(0.9);
   await page.waitForFunction(()=>Number(document.getElementById('hurt').style.opacity)>0.05,null,{timeout:120000});
   report.bite=await page.evaluate(()=>({vigor:window.__village.hero.vigor,hurt:Number(document.getElementById('hurt').style.opacity)}));
   await page.screenshot({path:`${out}/bitten.png`,timeout:180000});
   // Finish the wave: the last one falls in slow motion.
-  await page.waitForFunction(()=>window.__village.raiders().some(r=>window.__village.feel.practice.ids.includes(r.id)&&r.state==='hunting'),null,{timeout:120000});
-  report.before=await page.evaluate(()=>({wave:window.__village.feel.practice.wave,foes:window.__village.raiders().map(r=>[r.kind,r.state,r.hp])}));
-  const finale=await page.evaluate(()=>{const v=window.__village;let slow=0;for(let i=0;i<40;i++){const foes=v.raiders().filter(r=>v.feel.practice.ids.includes(r.id)&&r.state==='hunting');if(!foes.length)break;const l=v.herLocal(),yaw=v.player.yaw;for(const r of foes)v.placeRaider(r.id,l.x-Math.sin(yaw)*1.1,l.z-Math.cos(yaw)*1.1);v.cooldowns.strike=0;v.attack('strike');slow=Math.max(slow,v.feel.impact.slow);}return {slow,left:v.raiders().filter(r=>v.feel.practice.ids.includes(r.id)&&r.state==='hunting').length};});
-  report.finale=finale;assert.equal(finale.left,0,'the wave is beaten');assert.ok(finale.slow>0,'its last foe falls in slow motion');
-  await page.waitForFunction(()=>window.__village.feel.practice.wave>=2,null,{timeout:120000});
+  const wave=await page.evaluate(()=>window.__village.feel.practice.wave);
+  for(let i=0;i<30;i++){
+    const left=await page.evaluate(()=>window.__village.raiders().filter(r=>window.__village.feel.practice.ids.includes(r.id)&&r.state==='hunting').length);if(!left)break;
+    await ahead(1.1);await page.evaluate(()=>{window.__t2=window.__village.feel.impact.log.length;window.__village.attack('strike');});
+    await page.waitForFunction(()=>window.__village.feel.impact.log.length>window.__t2||!window.__village.feel.moves.queue.busy,null,{timeout:60000});
+  }
+  report.finale=await page.evaluate(()=>window.__village.feel.impact.log);
+  assert.ok(report.finale.includes('finale'),'the last foe of a wave falls in slow motion');
+  await page.waitForFunction(w=>window.__village.feel.practice.wave>w,wave,{timeout:120000});
   report.second=await page.evaluate(()=>window.__village.feel.practice.wave);
   assert.deepEqual(errors,[],'no console or shader errors');
   console.log('fight browser checks passed');

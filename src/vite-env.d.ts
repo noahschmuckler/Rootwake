@@ -3,3 +3,4 @@
 declare const __HULDA_MODEL__: string | null;
 /** Its separately exported idle / walking / running clip files under public/models/clips, found at build time. */
 declare const __HULDA_CLIPS__: string[];
+declare const __FIGHT_CLIPS__: string[];

@@ -37,3 +37,30 @@ test('a practice foe is set down hunting her, and is struck like any other', () 
   const hit = strike(v, { x: 0, z: 0 }, 0, -1); assert.equal(hit?.id, w.id); assert.equal(w.hp, WOLF_HP - STRIKE_DMG);
   stepRaiders(v, 0.5, { x: 0, z: 0 }); assert.equal(d.state, 'hunting'); assert.ok(Math.hypot(d.x, d.z) < 6, 'it comes for her');
 });
+
+import { MoveQueue, MOVES, type MoveEvent } from '../src/huldaMoves';
+const run = (q: MoveQueue, seconds: number, presses: Record<number, Parameters<MoveQueue['press']>[0]> = {}): MoveEvent[] => {
+  const out: MoveEvent[] = []; const dt = 1 / 60; for (let i = 0; i * dt < seconds; i++) { const p = presses[i]; if (p) q.press(p); out.push(...q.step(dt)); } return out;
+};
+test('a tap is one blow: it starts, lands once at its contact, and ends', () => {
+  const q = new MoveQueue(); q.press('light'); const ev = run(q, 2);
+  assert.deepEqual(ev.map(e => `${e.kind}:${e.move}`), ['start:attack-1', 'contact:attack-1', 'end:attack-1']);
+  const s = MOVES['attack-1']; assert.ok((s.contact - s.from) / s.scale < 0.3, 'it lands quickly');
+  assert.equal(q.busy, false); run(q, 0.5); assert.equal(q.weight, 0);
+});
+test('taps in a row chain the combo, the third the finisher, and a mash does not run on', () => {
+  const q = new MoveQueue(), presses: Record<number, 'light'> = {}; for (let i = 0; i < 40; i += 4) presses[i] = 'light';
+  const ev = run(q, 4, presses).filter(e => e.kind === 'contact').map(e => e.move);
+  assert.deepEqual(ev.slice(0, 3), ['attack-1', 'attack-2', 'attack-3']);
+  assert.ok(ev.length <= 5, `ten taps in two thirds of a second are not ten blows (${ev.length})`);
+});
+test('the combo resets when the taps stop', () => {
+  const q = new MoveQueue(); q.press('light'); run(q, 2); q.press('light'); const ev = run(q, 2);
+  assert.equal(ev.find(e => e.kind === 'contact')?.move, 'attack-1');
+});
+test('the casts land once; a bite does not break a blow, but she flinches when idle', () => {
+  const q = new MoveQueue(); q.press('burst'); assert.equal(q.flinch(), false); const ev = run(q, 2);
+  assert.deepEqual(ev.filter(e => e.kind === 'contact').map(e => e.move), ['cast-burst']);
+  assert.equal(q.flinch(), true); assert.equal(q.current?.move, 'hit');
+  q.press('light'); assert.equal(q.current?.move, 'attack-1', 'a blow cuts a flinch short');
+});

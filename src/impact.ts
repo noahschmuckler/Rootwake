@@ -47,9 +47,11 @@ export class Impact {
   shake = true;
   private saved = { fov: 0, x: 0, y: 0, z: 0, qx: 0, qy: 0, qz: 0, qw: 1 };
   private pushed = false;
+  /** The latest blows felt (dev and checks), newest last. */
+  log: Blow[] = [];
   /** A blow lands: the stronger of what is running and what it asks for, never stacked into a long freeze. */
   hit(kind: Blow, scale = 1): void {
-    const f = BLOWS[kind];
+    const f = BLOWS[kind]; this.log.push(kind); if (this.log.length > 24) this.log.shift();
     this.stop = Math.max(this.stop, f.stop * scale);
     this.trauma = Math.min(1, this.trauma + f.trauma * scale);
     this.kick = Math.abs(f.kick) > Math.abs(this.kick) ? f.kick * scale : this.kick;

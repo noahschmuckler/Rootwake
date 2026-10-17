@@ -963,10 +963,12 @@ const alive = (v: Village): Raider[] => v.raiders.filter(r => r.state !== 'dead'
 /** The ones her root bind can hold: everything still on the land, the beaten first of all. */
 const bindable = (v: Village): Raider[] => v.raiders.filter(r => r.state !== 'dead' && r.state !== 'melting');
 /** Her strike: the nearest Dark Young within reach and ahead of her (facing (fx, fz)). Returns it, or null when nothing was there. */
-export function strike(v: Village, her: Vec2, fx: number, fz: number): Raider | null {
+/** F2: the combo's third blow and the held heavy blow hit harder than a strike; their wind ups are longer, so her damage over time stays near the old strike's. Tuning (an open question for the phone). */
+export const FINISHER_MULT = 1.6, HEAVY_MULT = 2.2;
+export function strike(v: Village, her: Vec2, fx: number, fz: number, mult = 1): Raider | null {
   scare(v, her, STRIKE_RANGE + 0.6);
   let best: Raider | null = null, bd = Infinity; for (const r of alive(v)) { const dx = r.x - her.x, dz = r.z - her.z, d = Math.hypot(dx, dz); if (d <= STRIKE_RANGE + 0.6 && (d < 0.5 || (dx * fx + dz * fz) / d > STRIKE_COS) && d < bd) { best = r; bd = d; } }
-  if (best) hurt(v, best, strikeDamage(v.hero)); else if (lairAt && v.lair.alive && Math.hypot(her.x - lairAt.x, her.z - lairAt.z) <= LAIR_HURT_RANGE) hurtLair(v, strikeDamage(v.hero));
+  if (best) hurt(v, best, strikeDamage(v.hero) * mult); else if (lairAt && v.lair.alive && Math.hypot(her.x - lairAt.x, her.z - lairAt.z) <= LAIR_HURT_RANGE) hurtLair(v, strikeDamage(v.hero) * mult);
   return best;
 }
 /** Her thorn burst: everything within THORN_RANGE, for THORN_SAP. Returns how many were hurt, or -1 without the sap. */

@@ -43,7 +43,28 @@ Branch `feat/vista`. Noah, 2026-10-15: after Hulda's new look, "more modern styl
 
   Screenshots go to `artifacts/fight/`.
 
-## For F2: clips to download from Mixamo
+## F2 as built (2026-10-17)
+Noah supplied all ten clips; they are in `public/models/clips/`. The build lists the seven it plays as `__FIGHT_CLIPS__` (`vite.config.ts`) and loads them after the gait's. `dodge.fbx` waits for F3; `jump-attack.fbx` and `combo.fbx` are kept for reference.
+- **`src/huldaMoves.ts`:**
+  - `MOVES`: each move is a window of its clip. `from`, `contact`, `chain` and `to` were read off the clips' hand speed, and each plays sped up by `scale`, so the blow lands 0.2–0.35 s after the press.
+  - `MoveQueue` (pure, tested):
+    - A tap chains attack-1 → attack-2 → attack-3 (the finisher).
+    - A press during a move is held and starts the next one at the current move's `chain` time. The latest press wins, so mashing doesn't run on after the hands stop.
+    - The combo resets when the taps stop. A bite makes her flinch only when she isn't mid-move.
+  - `createMoveLayer` plays the clips on the gait's mixer at manually set times. Standing, the whole body plays the move and the gait gives way (`Gait.suppress`, new in `huldaRig.ts`). Moving, only the spine, arms and hands play it, weighted to win over the gait there, so her legs keep running.
+- **The rules at contact.** The fight's rules now run when the blow lands, not at the press.
+  - The finisher and the held **heavy** blow hit harder: `FINISHER_MULT` 1.6 and `HEAVY_MULT` 2.2 in `villageModel.ts`. This is an open tuning question for the phone. Their longer wind-ups keep her damage over time near the old strike's.
+  - The thorn burst and root bind ride the casts. Their cooldowns start at the press; the sap is spent when they land.
+  - **The strike button:** a press is a light blow at once; held past `HOLD_MS` (260 ms), it is also the heavy blow.
+  - **The soft lock:** a press turns her most of the way toward the nearest foe ahead (`FACE_*`).
+- **`src/huldaStaff.ts`:**
+  - **The staff** rides her `RightHand` bone. In that bone's frame +X runs through the thumb, so the shaft lies along X through the curled fingers.
+  - It has a birch shaft wound with a copper vine, thorns along the head, a knot of leaves and a glowing seed.
+  - It grows out of her fist on her first blow and withdraws `STAFF_KEEP_S` after the last one, once nothing hunts her within `STAFF_NEAR_M`.
+  - **The trail:** an additive ribbon between the staff's head and a point down the shaft, sampled each frame through a swing and faded by age.
+- **Fallback:** without the clips (`?fightclips=0`), F1's instant blows and the swept slash remain.
+
+## For F2: clips to download from Mixamo (done)
 Download each with the same settings as the clips already in `public/models/clips`:
 - Format **FBX Binary**, **Without Skin**, 30 fps.
 - **In Place** ticked where offered.
