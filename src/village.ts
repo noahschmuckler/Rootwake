@@ -1016,7 +1016,7 @@ function overheadCamera(): void { player.pitchLimit = zoom <= ZOOM_MIN + 0.05 ? 
 // F1, the practice clearing (fight.html, /vista/fight/): the village under the vista with nothing saved (the page lends it a storage that forgets), her on the meadow by mid morning with the fight open, and foes set down round her in waves, hunting her from the start; between waves her vigor and sap are made whole. Day never turns to night: past PRACTICE_LATE the clock goes on to the next morning. Tuning: the waves, their distance, the rest between them.
 const PRACTICE = (window as { __ROOTWAKE_PRACTICE?: boolean }).__ROOTWAKE_PRACTICE === true;
 /** The black wolves come as a pack of their own (practice only: their den is PRACTICE_DIRE, made the dire one while practising). */
-const PRACTICE_WAVES: ('wolf' | 'dy' | 'dire')[][] = [['wolf'], ['dire', 'dire', 'dire'], ['wolf', 'wolf'], ['dy'], ['wolf', 'wolf', 'wolf'], ['dy', 'wolf', 'wolf'], ['dire', 'dire', 'dy'], ['dy', 'dy']], PRACTICE_DIRE = 'practice-dire';
+const PRACTICE_WAVES: ('wolf' | 'dy' | 'dire')[][] = [['wolf'], ['wolf', 'wolf'], ['dire', 'dire', 'dire'], ['dy'], ['wolf', 'wolf', 'wolf'], ['dy', 'wolf', 'wolf'], ['dire', 'dire', 'dy'], ['dy', 'dy']], PRACTICE_DIRE = 'practice-dire';
 const PRACTICE_FROM = 8, PRACTICE_REST_S = 2.5, PRACTICE_HOUR = 10, PRACTICE_LATE = 16;
 const practice = { wave: 0, restUntil: 0, slainAt: 0, ids: new Set<number>(), el: null as HTMLElement | null };
 function tickAtHour(hour: number, from: number): number { let t = from; while (clockOf(t).hour !== hour) t++; return t; }

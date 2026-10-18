@@ -96,7 +96,7 @@ The pack lies on its flanks, breathing as one, with the bellies keeping their ow
 
 - **The field:** `villageWorld.setWolf(…, dire)` draws a black wolf with this figure (`DIRE_SCALE`); the grey wolves keep `wolfFigure.ts`. `lunge` calls `bite()` and `react` calls `flinch()`.
 - **The tell:** its glint is lime (`village.ts`).
-- **Practice clearing:** the second wave is a black pack of three, and a later wave mixes two with a Dark Young. Their den is `PRACTICE_DIRE`, made the dire den while practising.
+- **Practice clearing:** the third wave is a black pack of three (after the grey wolves the fight checks are written for), and a later wave mixes two with a Dark Young. Their den is `PRACTICE_DIRE`, made the dire den while practising.
 - **Rules:** unchanged. These are `DIRE_HP` and the dire bite rules of S4c.
 
 ## Study page
