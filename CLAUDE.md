@@ -4,7 +4,7 @@
 
 On branch `feat/vista`, read **VISTA_HANDOFF.md**: how far the look can go on a phone's browser, after Breath of the Wild — an eroded 2 km valley (`vistaTerrain.ts`), shared cel/haze shaders (`vistaShaders.ts`), terrain LOD, far ring, lake, wind grass, instanced trees and rocks, painted sky (`vistaWorld.ts`), bloom and grade, quality tiers with dynamic render scale and a cost readout (`vista.ts`). Live: https://noahschmuckler.github.io/Rootwake/vista/ . V1 (same handoff): the village unchanged under that look at `/vista/village/` (`village-vista.html`, or `?look=vista`), its land ringed by eroded mountains past the farthest den (`villageVista.ts`). The fight's feel (F1 of F1–F4: hit-stop, shake, flecks, the swept slash, the thorns erupting, synthesised sound, the practice clearing at `/vista/fight/`) and F2 (her Mixamo fight clips as a tap combo, a held heavy blow and casts landing at their contact frames, the thorn staff and its trail) and F3 (the guard button: guard stance, stick dodges, tells before bites, root time on a well-timed roll, the lock ring): **FIGHT_HANDOFF.md**.
 
-The Dark Young as an octopus folded into a goat (its anatomy, its unfoldings, the study page `/dark-young.html`): **DARK_YOUNG.md**, branch `feat/dark-young`.
+The Dark Young as an octopus folded into a goat (its anatomy, its unfoldings, the study page `/dark-young.html`), and the black wolves as wolves the mother has got into (`direWolf.ts`, `/dire-wolf.html`): **DARK_YOUNG.md**, branch `feat/dark-young`.
 
 # Active phone study: The Village (E1)
 

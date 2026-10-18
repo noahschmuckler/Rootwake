@@ -68,6 +68,8 @@ jobs:
           cp dist/fight.html "$study_checkout/vista/fight/index.html"
           mkdir -p "$study_checkout/vista/dark-young"
           cp dist/dark-young.html "$study_checkout/vista/dark-young/index.html"
+          mkdir -p "$study_checkout/vista/dire-wolf"
+          cp dist/dire-wolf.html "$study_checkout/vista/dire-wolf/index.html"
           cp dist/assets/* "$study_checkout/vista/assets/"
           cp -r dist/models "$study_checkout/vista/models"
           printf '{"sourceCommit":"%s","study":"vista-v0"}\n' "$GITHUB_SHA" > "$study_checkout/vista/revision.json"

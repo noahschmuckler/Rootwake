@@ -50,3 +50,63 @@ Open questions for Noah:
 
 - Should the lash and grab reach farther than the model's bite (`LUNGE_REACH` 2.3 m)? Today they are only shown.
 - Should the snatchers and the mother of goats take the same anatomy?
+
+# The black wolves (the dire pack): wolves the mother has got into
+
+Noah, 2026-10-18. The Dark Young are octopuses folded into goats. The black wolves are not that. They are real wolves that the same entity has corrupted, and each one carries one of her young. They should be thematically close to the Dark Young without reading as small ones. Noah's choices before building:
+
+- Their eyes are the mother's lime with a goat's bar pupil.
+- Dead, the thing a wolf carried crawls out of its mouth and dissolves.
+- From far off, the sign is strange movement. Up close, the horror deepens.
+
+## The rule
+
+The octopus shows only where the wolf is breached: the mouth, the eyes, the hackles, the wounds. Everywhere else it is fur, bone and teeth, and it never has a tentacle for a leg.
+
+## The figure (`src/direWolf.ts`)
+
+- **Body:** starved. The ribs stand out of the flank, the flank hollows under them, the waist is pinched, and the hips and spine are knobbed. Wet fur hangs in clumps.
+- **Belly:** a bare, veined swelling. It breathes out of time with the chest, and something moves under its skin.
+- **Hackles:** filaments, not fur. They drift slowly as if under water, whatever the wolf does, bristle when it is struck, and go slack when it dies.
+- **Head:** the mother's eyes under a heavy brow, and black gums with two crowded rows of teeth. In its throat sit a beak and a knot of small arms.
+- **The tell:** it crouches, and the arms show behind the teeth.
+- **The bite:** the jaw opens far past a wolf's, and the arms push out of the mouth, writhing.
+- **Hit:** it jerks, and it bleeds two bloods (`hitFx` `dire`): its own red and the green of what it carries.
+
+## The movement
+
+- **One will:** every black wolf reads the same clock (`now`).
+  - **The trot stutters:** it stalls and lurches on the same beat for the whole pack.
+  - **The breath:** the pack breathes together.
+  - **The look:** every `HIVE_PERIOD` seconds all their heads snap the same way at once. One period in `OWL_EVERY`, they turn past what a neck can.
+- **Glitches:** each wolf also has its own, one every few seconds: a leg bending where there is no joint, the neck stretching, or the head wrenching round.
+
+## Asleep in the dire den (`denWorld.ts`)
+
+The pack lies on its flanks, breathing as one, with the bellies keeping their own time. Slain asleep, a wolf plays its whole death before it is taken away.
+
+## Death
+
+1. It falls as a wolf.
+2. The belly sags, the hackles go slack, and the jaw falls open.
+3. The young drags itself out of the mouth: a fist of wet dark body with two lime eyes and six arms.
+4. It crawls about a metre and dissolves into a green stain. The carcass sinks after `DEATH.sink`.
+
+## Wiring
+
+- **The field:** `villageWorld.setWolf(…, dire)` draws a black wolf with this figure (`DIRE_SCALE`); the grey wolves keep `wolfFigure.ts`. `lunge` calls `bite()` and `react` calls `flinch()`.
+- **The tell:** its glint is lime (`village.ts`).
+- **Practice clearing:** the second wave is a black pack of three, and a later wave mixes two with a Dark Young. Their den is `PRACTICE_DIRE`, made the dire den while practising.
+- **Rules:** unchanged. These are `DIRE_HP` and the dire bite rules of S4c.
+
+## Study page
+
+`dire-wolf.html` (`src/direWolfStudy.ts`), live at https://noahschmuckler.github.io/Rootwake/vista/dire-wolf/ .
+
+- **What it shows:** a pack of three, or one alone, beside a grey wolf and Hulda.
+- **Buttons:** stand, walk, trot, bite, hit, asleep, die, and light.
+- **Headless:** `window.__dw`.
+
+## Tuning (top of `direWolf.ts`)
+
+`DIRE_SCALE`, `DROP`, `STRIDE`, `STALL_S`, `STUTTER_PERIOD`, `HIVE_PERIOD`, `OWL_EVERY`, `GLITCH_S`, `GLITCH_LEN`, `BITE_S`, `THROAT_REACH`, `DEATH`.

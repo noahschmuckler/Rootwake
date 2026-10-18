@@ -16,6 +16,7 @@ import { treeParts, taperedTube } from './flora';
 import { createHulda } from './huldaCharacter';
 import { makeWolf, setDireLook } from './wolfFigure';
 import { createDarkYoung, DY_SCALE, type DarkYoung } from './darkYoung';
+import { createDireWolf, DIRE_SCALE, type DireWolf } from './direWolf';
 
 /** The ground's height: the meadow's gentle relief, and beyond the island the chunks' hills (zero within the village). */
 export const relief = createTerrain(1).height;
@@ -216,9 +217,9 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   const REACT_PUSH = 0.42, REACT_FLASH_S = 0.09, LUNGE_M = 0.45;
   const reacts = new Map<number, { age: number; dx: number; dz: number; power: number; killed: boolean; lunge: boolean }>();
   /** A blow from (dx, dz) (unit, horizontal) lands on raider `id`; `power` 1 for a strike, more for the thorns or a kill. */
-  function react(id: number, dx: number, dz: number, power = 1, killed = false): void { reacts.set(id, { age: 0, dx, dz, power, killed, lunge: false }); raiderFigures.get(id)?.dy.flinch(killed ? 3 : power); }
+  function react(id: number, dx: number, dz: number, power = 1, killed = false): void { reacts.set(id, { age: 0, dx, dz, power, killed, lunge: false }); raiderFigures.get(id)?.dy.flinch(killed ? 3 : power); direFigures.get(id)?.dw.flinch(power); }
   /** Raider `id` lunges along (dx, dz) to bite. */
-  function lunge(id: number, dx: number, dz: number): void { const r = reacts.get(id); if (r && !r.lunge && r.age < 0.3) return; reacts.set(id, { age: 0, dx, dz, power: 1, killed: false, lunge: true }); raiderFigures.get(id)?.dy.attack(); }
+  function lunge(id: number, dx: number, dz: number): void { const r = reacts.get(id); if (r && !r.lunge && r.age < 0.3) return; reacts.set(id, { age: 0, dx, dz, power: 1, killed: false, lunge: true }); raiderFigures.get(id)?.dy.attack(); direFigures.get(id)?.dw.bite(); }
   function applyReact(id: number, group: THREE.Group, hide: THREE.MeshStandardMaterial, hurt: number): void {
     const r = reacts.get(id); if (!r) { hide.emissive.set(hurt > 0 ? '#b03030' : '#000000'); return; }
     const t = r.age;
@@ -246,7 +247,22 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
     const coil = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.05, 6, 20), coilMat); coil.rotation.x = -Math.PI / 2; coil.position.y = 0.08; coil.visible = false; group.add(coil);
     root.add(group); f = { group, legs, tail, coil, hide, eyes, dire: false }; wolfFigures.set(id, f); return f;
   }
+  // S4c, the black wolves (direWolf.ts): wolves the mother has got into, starved round what they carry, moving as one; their own figure, not the grey one blackened.
+  const direFigures = new Map<number, { group: THREE.Group; dw: DireWolf; coil: THREE.Mesh; t: number }>();
+  function direFigure(id: number) {
+    let f = direFigures.get(id); if (f) return f;
+    const dw = createDireWolf(id + 1), coil = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.05, 6, 20), coilMat); coil.rotation.x = -Math.PI / 2; coil.position.y = 0.08; coil.visible = false; dw.group.add(coil);
+    root.add(dw.group); f = { group: dw.group, dw, coil, t: NaN }; direFigures.set(id, f); return f;
+  }
   function setWolf(id: number, x: number, z: number, heading: number, t: number, moving: boolean, hurt: number, rooted: number, dead: number, dire = false, tell = 0): void {
+    if (dire) {
+      const g = wolfFigures.get(id); if (g) g.group.visible = false;
+      const f = direFigure(id), dt = Number.isNaN(f.t) ? 0 : (t - f.t) / 1000; f.t = t;
+      f.group.visible = true; f.group.position.set(x, relief(x, z), z); f.group.rotation.y = -heading; f.group.scale.setScalar(DIRE_SCALE);
+      f.dw.update(x, z, { moving, tell, rooted, dead }, dt, t / 1000); f.coil.visible = rooted > 0 && dead <= 0;
+      applyReact(id, f.group, f.dw.hide, hurt); return;
+    }
+    { const d = direFigures.get(id); if (d) d.group.visible = false; }
     const f = wolfFigure(id); if (f.dire !== dire) { f.dire = dire; setDireLook(f, dire); } f.group.visible = true; f.group.position.set(x, relief(x, z), z); f.group.rotation.y = -heading;
     for (let i = 0; i < f.legs.length; i++) f.legs[i].rotation.z = moving ? Math.sin(t * 0.014 + i * 1.6) * 0.5 : 0;
     f.tail.rotation.x = Math.sin(t * 0.005 + id) * 0.25; f.coil.visible = rooted > 0;
@@ -255,7 +271,7 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
     // F3: in its tell it crouches to spring, nose down, and its eyes flare.
     if (dead <= 0 && tell > 0) { f.group.scale.y *= 1 - 0.22 * tell; f.group.scale.x *= 1 + 0.06 * tell; } for (const e of f.eyes) e.scale.setScalar((f.dire ? 1.5 : 1) * (1 + 1.6 * tell));
   }
-  function hideRaider(id: number): void { const f = raiderFigures.get(id); if (f) f.group.visible = false; const w = wolfFigures.get(id); if (w) w.group.visible = false; }
+  function hideRaider(id: number): void { const f = raiderFigures.get(id); if (f) f.group.visible = false; const w = wolfFigures.get(id); if (w) w.group.visible = false; const d = direFigures.get(id); if (d) d.group.visible = false; }
   // D3: the snatcher, a small octopoid, low and dark with two dim eyes and six arms that ripple as it runs; an infant is a pale bundle in its arms, lying on the land, or in hers.
   const snatchMat = new THREE.MeshStandardMaterial({ color: '#1a1420', emissive: '#2a0a30', emissiveIntensity: 0.4, roughness: 0.35 }), snatchEye = new THREE.MeshBasicMaterial({ color: '#c08aff' }), bundleMat = new THREE.MeshStandardMaterial({ color: '#efe6cc', emissive: '#3a3020', emissiveIntensity: 0.25, roughness: 0.9 });
   const makeBundle = (): THREE.Mesh => { const b = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), bundleMat); b.scale.set(1.5, 0.8, 0.9); return b; };

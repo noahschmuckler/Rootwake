@@ -10,7 +10,8 @@ const PALETTES: Record<Flecks, string[]> = {
   leaf: ['#717e49', '#b0a258', '#88801d', '#d4652a', '#4a5b31'],
   ichor: ['#2b1838', '#5a2a6a', '#9a4ab0', '#d8ff60'],
   fur: ['#6a655c', '#8d877c', '#4a4640', '#b8b0a0'],
-  dire: ['#17141a', '#2a2228', '#3a2a30', '#ff2a1a'],
+  // A black wolf bleeds two bloods: its own red, and the green of what it carries.
+  dire: ['#17141a', '#7a1010', '#b01818', '#9cff3a'],
   soil: ['#5c3d22', '#7a5a35', '#3a2716', '#717e49'],
 };
 /** Pool sizes. */
@@ -106,7 +107,7 @@ export function createHitFx(scene: THREE.Scene, ground: (x: number, z: number) =
       colours[k].set(pal[Math.floor(Math.random() * pal.length)]);
       // A Dark Young's eye-coloured flecks glow (the vista's bloom catches them).
       if (kind === 'ichor' && colours[k].g > 0.9) colours[k].multiplyScalar(2.2);
-      if (kind === 'dire' && colours[k].r > 0.9) colours[k].multiplyScalar(2);
+      if (kind === 'dire' && colours[k].g > 0.9) colours[k].multiplyScalar(2.2);
     }
   }
   // The stars of light.
