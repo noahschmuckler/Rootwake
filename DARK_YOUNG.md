@@ -37,7 +37,7 @@ Every pose is laid over the goat arm by arm. Each arm opens from its base outwar
 
 ## Study page
 
-`dark-young.html` (`src/darkYoungStudy.ts`): the figure alone on a meadow.
+`dark-young.html` (`src/darkYoungStudy.ts`), live at https://noahschmuckler.github.io/Rootwake/vista/dark-young/ (published with the vista study): the figure alone on a meadow.
 
 - **Controls:** drag to turn, pinch to zoom. There are buttons for stand, walk and charge round a ring; head-butt, lash and grab (each with its tell); feed; hit and heavy hit; rooted; flee; die; Hulda beside it for scale; and day, dusk and night light.
 - **Headless:** `window.__dy` has `step(dt)`, `render()` and setters for every state.
