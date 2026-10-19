@@ -2,7 +2,7 @@
 import { build } from 'esbuild';
 import { spawnSync } from 'node:child_process';
 import { rmSync } from 'node:fs';
-const suites = [['tests/vista.test.ts', '.vista-tests.mjs'], ['tests/impact.test.ts', '.impact-tests.mjs'], ['tests/descent.test.ts', '.descent-tests.mjs']];
+const suites = [['tests/vista.test.ts', '.vista-tests.mjs'], ['tests/impact.test.ts', '.impact-tests.mjs'], ['tests/descent.test.ts', '.descent-tests.mjs'], ['tests/plateau.test.ts', '.plateau-tests.mjs']];
 try {
   for (const [entry, outfile] of suites) await build({ entryPoints: [entry], bundle: true, platform: 'node', format: 'esm', outfile, packages: 'external' });
   const result = spawnSync(process.execPath, ['--test', ...suites.map(s => s[1])], { stdio: 'inherit' });
