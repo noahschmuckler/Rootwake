@@ -194,7 +194,7 @@ export interface LookInputs {
 /** Tuning: the grade after tone mapping, and bloom only on what is brighter than sunlit ground. */
 const GRADE = { saturation: 1.1, vignette: 0.5 }, BLOOM = { strength: 0.35, radius: 0.5, threshold: 2.4 };
 /** MOTHER.md, the Colour: the grade's last pass. uC how strongly it shows (depth and her attention), uEx how far into her out-breath (0 the in-breath's tolerable magenta, 1 fractured), uT time. In: a magenta whose red and blue will not hold still. Out: red and blue torn apart into separate images. And here and there, at random, about a tree (uSpot: its place on screen, radius, strength; uSpotHue orange or green), the split goes far past the rest and the clashing colour floods it. Tuning: COLOUR. */
-const COLOUR = { split: [0.0005, 0.02], magenta: [0.42, 0.26], spotSplit: 0.045, spotTint: 0.55 };
+const COLOUR = { split: [0.0005, 0.02], magenta: [0.42, 0.26], spotSplit: 0.045, spotTint: 0.55, anaglyph: 70 };
 const COLOUR_GRADE = `uniform sampler2D tDiffuse; uniform float uSat; uniform float uVig; uniform float uC; uniform float uEx; uniform float uT; uniform vec4 uSpot; uniform float uSpotHue; uniform float uAspect; varying vec2 vUv;
 void main(){
   vec2 d = vUv - 0.5;
@@ -203,7 +203,10 @@ void main(){
     vec2 sd = (vUv - uSpot.xy) * vec2(uAspect, 1.0); float spot = uSpot.w * (1.0 - smoothstep(uSpot.z * 0.25, uSpot.z, length(sd)));
     float split = uC * (${COLOUR.split[0]} + ${COLOUR.split[1]} * uEx * uEx) * (0.35 + length(d) * 1.8) + spot * ${COLOUR.spotSplit};
     vec2 dir = vec2(cos(uT * 0.9 + sin(uT * 2.7) * uEx), sin(uT * 1.37));
-    c.r = texture2D(tDiffuse, vUv + dir * split).r; c.b = texture2D(tDiffuse, vUv - dir * split * 1.3).b;
+    // Noah: a red/green split reads familiar (over the grass, shifting red and blue left the green where it was); red/blue reads alien. So the torn images carry brightness, not channels: the one to one side shows red, the other blue, and the green drops where it tears, whatever lies under.
+    vec3 ca = texture2D(tDiffuse, vUv + dir * split).rgb, cb = texture2D(tDiffuse, vUv - dir * split * 1.3).rgb;
+    float w = clamp(split * ${COLOUR.anaglyph.toFixed(1)}, 0.0, 0.92), la = dot(ca, vec3(0.299, 0.587, 0.114)), lb = dot(cb, vec3(0.299, 0.587, 0.114));
+    c.r = mix(ca.r, la * 1.15, w); c.b = mix(cb.b, lb * 1.25, w); c.g = mix(c.g, min(c.g, (la + lb) * 0.25), w);
     float l = dot(c.rgb, vec3(0.299, 0.587, 0.114));
     vec3 mag = vec3(0.95 + 0.3 * sin(uT * 2.3), 0.12 + 0.06 * sin(uT * 3.1), 0.9 + 0.3 * sin(uT * 1.7 + 2.0)) * (l * 1.05 + 0.01);
     c.rgb = mix(c.rgb, mag + c.rgb * 0.35, uC * (${COLOUR.magenta[0]} - ${COLOUR.magenta[1]} * uEx));

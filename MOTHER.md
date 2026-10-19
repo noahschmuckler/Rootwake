@@ -116,6 +116,7 @@ Noah: "lose the tiles". Her clashing colours now come two ways, and "the randomn
 - **Around a tree** (`stepTaintFx` in `village.ts`; the grade's `uSpot`): now and then, at random, one tree in view flares. The red/blue split goes far past the rest about it, flooded with yellow, orange or green for about a second.
   - Rate: `SPOT_RATE` × `flareAt(depth, attention, exhale)`.
   - Nothing in the outer grey (`FLARE_FROM`).
+- **The split is red and blue everywhere** (Noah: red/green reads familiar, red/blue alien): the torn images carry brightness, one side shown red and the other blue, the green pulled down where it tears (`COLOUR.anaglyph`), so the grass tears like the alveoli.
 - **In the mist** (`taintMist.ts`): grey translucent puffs drift over the ground about the camera. Without warning one flushes yellow-green, green or orange, a share of them neon bright past the bloom's threshold, and fades back.
   - Only closer in, by `flareAt`.
 
