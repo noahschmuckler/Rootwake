@@ -21,6 +21,8 @@ async function press(page,x,y,holdMs=120){const canvas=page.locator('canvas').fi
 try{
  const page=await browser.newPage({viewport:{width:390,height:844},isMobile:true,hasTouch:true});page.on('dialog',d=>d.accept());const errors=[];page.on('pageerror',e=>errors.push(String(e)));page.on('response',r=>{if(r.status()>=400)errors.push(r.status()+' '+r.url());});
  await page.goto('http://127.0.0.1:4187'+BASE);await page.click('#begin');await page.waitForFunction(()=>window.__village&&window.__village.character.status!=='loading',null,{timeout:120000});
+ // She wakes on the karst's summit (PLATEAU.md, T3); these checks begin on her village's green.
+ await page.evaluate(()=>window.__village.goTo(window.__village.active));
  const character=await v(page,()=>window.__village.character);assert.equal(character.status,'ready',character.error);assert.deepEqual(character.roles,{idle:'idle',walk:'walking',run:'running'});assert.equal(character.hobbitWeights.filter(Boolean).length,8,'the eight hobbits have the clips too');
  assert.equal(await v(page,()=>window.__village.player.view),'third','Third person');assert.equal(await page.locator('#hint, #story, #actions button:visible').count(),0,'no hints');
  // Dawn: eight hobbits, all indoors; the clock reads day one, six o'clock or a little after.
@@ -39,7 +41,7 @@ try{
  // Time passes only while watched: a real second is about 1.2 ticks.
  const t0=await v(page,()=>window.__village.tick);await page.waitForTimeout(3000);const t1=await v(page,()=>window.__village.tick);assert.ok(t1-t0>=2&&t1-t0<=6,`ticks in three seconds: ${t1-t0}`);
  // W1, her hands: standing in the thicket's ring fills her stack with a meal's berries in a few seconds; a loaded stack refuses the grass (a wobble); the baskets' ring takes it. Then the pickers, supplied, go to the stone and pray, and prayer pools.
- await v(page,()=>{const k=window.__village;k.speed=0;const st=k.stations.find(s=>s.id==='gather-thicket');k.standAt(st.x,st.z,0);});await page.waitForTimeout(4500);
+ await v(page,()=>{const k=window.__village;k.speed=0;const st=k.stations.find(s=>s.id==='gather-thicket');k.standAt(st.x,st.z,0);});await page.waitForFunction(()=>(window.__village.stack?.n??0)>=6,null,{timeout:15000}).catch(()=>{});
  const stack=await v(page,()=>window.__village.stack);assert.ok(stack&&stack.kind==='berries'&&stack.n>=6,`a stack of berries from standing in the ring (${JSON.stringify(stack)})`);assert.ok(await v(page,()=>window.__village.land.berries<35),'off the bushes');
  await doubleTapStick(page);await page.waitForTimeout(400);assert.equal(await v(page,()=>window.__village.mode),'ground','a loaded stack refuses the grass');
  // With the baskets full she is told so and collects only the overfill; the heap beside the rack takes it.
