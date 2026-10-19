@@ -20,7 +20,8 @@ export const vec = (x: number, y: number, z: number) => new Vector3(x, y, z);
 /** Where a body can stand: one small world per plant. `inner` is a hole (the pool, the pillar's foot). */
 export interface Zone { id: string; x: number; z: number; y: number; radius: number; inner?: number }
 export const ZONES: Record<string, Zone> = {
-  summit: { id: 'summit', x: 0, z: 0, y: PILLAR_HEIGHT, radius: 3.2 },
+  // Noah (2026-10-19): she walks right to the rim and looks straight down; the summit's disc runs to the rock's edge (the cap is drawn 0.2 m past it).
+  summit: { id: 'summit', x: 0, z: 0, y: PILLAR_HEIGHT, radius: pillarRadius(PILLAR_HEIGHT) - 0.1 },
   east: { id: 'east', x: pillarRadius(48) + 1.2, z: 0, y: 48.3, radius: 1.55 },
   west: { id: 'west', x: -(pillarRadius(34) + 1.2), z: 0, y: 34.3, radius: 1.55 },
   south: { id: 'south', x: 0, z: pillarRadius(18) + 1.2, y: 18.3, radius: 1.55 },

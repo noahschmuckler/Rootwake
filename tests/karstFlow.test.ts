@@ -20,7 +20,7 @@ test('the roots: none on the karst’s faces (Noah, 2026-10-19: no root ascends 
   assert.ok(!reachable('pine', 'floorOak', 'hop'), 'no leaf route down from the summit: the way down is the drop');
 });
 test('each zone is a small world for the shared player: edges hold, trunks block, the face and the pool and the pillars’ feet are not floor', () => {
-  const summit = makeZoneWorld(ZONES.summit); assert.ok(summit.canOccupy(vec(1, PILLAR_HEIGHT + 0.02, 1), 0.25, 0.72)); assert.equal(summit.canOccupy(vec(3.5, PILLAR_HEIGHT, 0), 0.25, 0.72), false);
+  const summit = makeZoneWorld(ZONES.summit); assert.ok(summit.canOccupy(vec(1, PILLAR_HEIGHT + 0.02, 1), 0.25, 0.72)); assert.ok(summit.canOccupy(vec(3.6, PILLAR_HEIGHT, 0), 0.25, 0.72), 'to the rim (Noah)'); assert.equal(summit.canOccupy(vec(4.2, PILLAR_HEIGHT, 0), 0.25, 0.72), false, 'not over it');
   assert.equal(summit.canOccupy(vec(NODES.pine.at.x, PILLAR_HEIGHT, NODES.pine.at.z), 0.25, 0.72), false, 'the pine’s trunk blocks');
   const floor = makeZoneWorld(ZONES.floor); assert.equal(floor.canOccupy(vec(0, 0, 0), 0.25, 0.72), false, 'the karst’s foot'); assert.ok(floor.canOccupy(vec(20, 0.05, 0), 0.25, 0.72)); assert.ok(floor.canOccupy(vec(60, 0.05, -30), 0.25, 0.72), 'where a sister stood is floor');
   const t = FOREST[0]; assert.equal(floor.canOccupy(vec(t.at.x, t.at.y, t.at.z), 0.25, 0.72), false, 'a forest trunk blocks'); assert.equal(nearestNode('floor', t.at.x + 1, t.at.z).node.id, t.id);

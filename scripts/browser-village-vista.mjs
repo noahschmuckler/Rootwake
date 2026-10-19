@@ -54,8 +54,10 @@ try{
   await page.waitForFunction(()=>window.__village.deep.visit.near==='portal'&&document.getElementById('descentAct').textContent==='open the portal',null,{timeout:20000});
   await page.click('#descentAct');await page.waitForFunction(()=>window.__village.mode==='meditate'&&window.__village.deep.boardShown,null,{timeout:10000});
   await page.waitForTimeout(1500);await page.screenshot({path:`${out}/catwalk-portal.png`,timeout:180000});
-  await page.evaluate(()=>window.__village.deep.feed(window.__village.deep.portalGems));
+  // Noah (2026-10-19): the last gems land while the board still cascades; the board must close when it is still, and the passage follow.
+  assert.ok(await page.evaluate(()=>{const d=window.__village.deep;d.feed(d.portalGems-2);return d.busyFeed(2);}),'the last gems land mid-cascade');
   await page.waitForFunction(()=>window.__village.mode==='ground'&&window.__village.karst.zone==='floor',null,{timeout:90000});
+  await page.waitForFunction(()=>!window.__village.deep.boardShown&&document.getElementById('meditate').hidden,null,{timeout:20000});
   report.island=await page.evaluate(()=>{const v=window.__village,f=v.player.feet(),p=v.deep.islandPortal().world;return {d:Math.hypot(f.x-p.x,f.z-p.z),y:f.y,visit:v.deep.visit.active};});
   assert.ok(report.island.d<5&&!report.island.visit,`out of the portal at the island's foot (${JSON.stringify(report.island)})`);
   await page.waitForTimeout(2500);await page.screenshot({path:`${out}/island-portal.png`,timeout:180000});
