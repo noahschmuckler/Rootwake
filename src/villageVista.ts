@@ -171,7 +171,7 @@ export function hourAtClock(h: number): Hour {
 }
 
 // ── the look ─────────────────────────────────────────────────────────────
-export interface LookFrame { clockHour: number; feet: THREE.Vector3; under: number; interior: boolean; gloom: number; hidden?: boolean; /** MOTHER.md: the Colour's strength (0..1) and how far into her out-breath (0..1). */ colour?: number; exhale?: number }
+export interface LookFrame { clockHour: number; feet: THREE.Vector3; under: number; interior: boolean; gloom: number; hidden?: boolean; /** MOTHER.md: the Colour's strength (0..1) and how far into her out-breath (0..1); a tree's flare on screen (uv x, y, radius, strength; hue 0..1); the grey fog thinning (0..1). */ colour?: number; exhale?: number; spot?: [number, number, number, number]; spotHue?: number; clear?: number }
 export interface VillageLook {
   world: VistaWorld; quality: Quality;
   frame(f: LookFrame): void;
@@ -193,25 +193,22 @@ export interface LookInputs {
 }
 /** Tuning: the grade after tone mapping, and bloom only on what is brighter than sunlit ground. */
 const GRADE = { saturation: 1.1, vignette: 0.5 }, BLOOM = { strength: 0.35, radius: 0.5, threshold: 2.4 };
-/** MOTHER.md, the Colour: the grade's last pass. uC how strongly it shows (depth and her attention), uEx how far into her out-breath (0 the in-breath's tolerable magenta, 1 fractured), uT time. In: a magenta whose red and blue will not hold still. Out: red and blue torn apart into separate images, and bands of clashing yellow, orange and green flickering through. Tuning: COLOUR. */
-const COLOUR = { split: [0.0005, 0.02], magenta: [0.42, 0.26], clash: 0.5 };
-const COLOUR_GRADE = `uniform sampler2D tDiffuse; uniform float uSat; uniform float uVig; uniform float uC; uniform float uEx; uniform float uT; varying vec2 vUv;
+/** MOTHER.md, the Colour: the grade's last pass. uC how strongly it shows (depth and her attention), uEx how far into her out-breath (0 the in-breath's tolerable magenta, 1 fractured), uT time. In: a magenta whose red and blue will not hold still. Out: red and blue torn apart into separate images. And here and there, at random, about a tree (uSpot: its place on screen, radius, strength; uSpotHue orange or green), the split goes far past the rest and the clashing colour floods it. Tuning: COLOUR. */
+const COLOUR = { split: [0.0005, 0.02], magenta: [0.42, 0.26], spotSplit: 0.045, spotTint: 0.55 };
+const COLOUR_GRADE = `uniform sampler2D tDiffuse; uniform float uSat; uniform float uVig; uniform float uC; uniform float uEx; uniform float uT; uniform vec4 uSpot; uniform float uSpotHue; uniform float uAspect; varying vec2 vUv;
 void main(){
   vec2 d = vUv - 0.5;
   vec4 c = texture2D(tDiffuse, vUv);
-  if (uC > 0.001) {
-    float split = uC * (${COLOUR.split[0]} + ${COLOUR.split[1]} * uEx * uEx) * (0.35 + length(d) * 1.8);
+  if (uC > 0.001 || uSpot.w > 0.001) {
+    vec2 sd = (vUv - uSpot.xy) * vec2(uAspect, 1.0); float spot = uSpot.w * (1.0 - smoothstep(uSpot.z * 0.25, uSpot.z, length(sd)));
+    float split = uC * (${COLOUR.split[0]} + ${COLOUR.split[1]} * uEx * uEx) * (0.35 + length(d) * 1.8) + spot * ${COLOUR.spotSplit};
     vec2 dir = vec2(cos(uT * 0.9 + sin(uT * 2.7) * uEx), sin(uT * 1.37));
     c.r = texture2D(tDiffuse, vUv + dir * split).r; c.b = texture2D(tDiffuse, vUv - dir * split * 1.3).b;
     float l = dot(c.rgb, vec3(0.299, 0.587, 0.114));
     vec3 mag = vec3(0.95 + 0.3 * sin(uT * 2.3), 0.12 + 0.06 * sin(uT * 3.1), 0.9 + 0.3 * sin(uT * 1.7 + 2.0)) * (l * 1.05 + 0.01);
     c.rgb = mix(c.rgb, mag + c.rgb * 0.35, uC * (${COLOUR.magenta[0]} - ${COLOUR.magenta[1]} * uEx));
-    // The clash: on the out-breath, small tiles of the picture flick to yellow, orange or green for a frame or two, here and there.
-    vec2 cell = floor(vUv * vec2(14.0, 26.0) + vec2(floor(uT * 3.0) * 0.37, 0.0));
-    float h = fract(sin(dot(cell + floor(uT * 11.0) * 1.7, vec2(12.9898, 78.233))) * 43758.5453);
-    float flick = step(0.93, h) * smoothstep(0.35, 0.85, uEx);
-    vec3 clash = h > 0.977 ? vec3(1.0, 0.88, 0.08) : h > 0.954 ? vec3(1.0, 0.45, 0.04) : vec3(0.35, 1.0, 0.16);
-    c.rgb = mix(c.rgb, clash * (0.3 + l * 1.3), uC * flick * ${COLOUR.clash});
+    vec3 clash = uSpotHue > 0.66 ? vec3(1.0, 0.86, 0.06) : uSpotHue > 0.33 ? vec3(1.0, 0.42, 0.04) : vec3(0.3, 1.0, 0.16);
+    c.rgb = mix(c.rgb, clash * (0.35 + l * 1.8), spot * ${COLOUR.spotTint});
   }
   float l2 = dot(c.rgb, vec3(0.299, 0.587, 0.114)); c.rgb = mix(vec3(l2), c.rgb, uSat); c.rgb *= 1.0 - dot(d, d) * uVig; gl_FragColor = c;
 }`;
@@ -237,7 +234,7 @@ export function createVillageLook(inp: LookInputs): VillageLook {
   const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth / 2, innerHeight / 2), BLOOM.strength, BLOOM.radius, BLOOM.threshold); composer.addPass(bloom);
   composer.addPass(new OutputPass());
   const grade = new ShaderPass({
-    uniforms: { tDiffuse: { value: null }, uSat: { value: GRADE.saturation }, uVig: { value: GRADE.vignette }, uC: { value: 0 }, uEx: { value: 0 }, uT: { value: 0 } },
+    uniforms: { tDiffuse: { value: null }, uSat: { value: GRADE.saturation }, uVig: { value: GRADE.vignette }, uC: { value: 0 }, uEx: { value: 0 }, uT: { value: 0 }, uSpot: { value: new THREE.Vector4() }, uSpotHue: { value: 0 }, uAspect: { value: 1 } },
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: COLOUR_GRADE,
   }); composer.addPass(grade);
@@ -273,7 +270,7 @@ export function createVillageLook(inp: LookInputs): VillageLook {
   }
 
   // ── each frame ──
-  const GLOOM = new THREE.Color('#1a1020'), GLOOM_IN = new THREE.Color('#4a0c40'), gloomColour = new THREE.Color('#1a1020'), fogColour = new THREE.Color(), dir = new THREE.Vector3();
+  const GREY_FOG = new THREE.Color('#77746f'), GLOOM = new THREE.Color('#1a1020'), GLOOM_IN = new THREE.Color('#4a0c40'), gloomColour = new THREE.Color('#1a1020'), fogColour = new THREE.Color(), dir = new THREE.Vector3();
   let lastClock = -1;
   function setQuality(q: Quality): void {
     quality = q; world.setQuality(q);
@@ -291,23 +288,24 @@ export function createVillageLook(inp: LookInputs): VillageLook {
     frame(f) {
       // Inside (the deep, a den, the karst's cavern) the land is not drawn: the village's own dark fog holds.
       const show = !f.interior && !f.hidden; world.root.visible = show;
-      const col = show ? f.colour ?? 0 : 0, ex = f.exhale ?? 0; grade.uniforms.uC.value = col; grade.uniforms.uEx.value = ex; grade.uniforms.uT.value = performance.now() / 1000;
+      const col = show ? f.colour ?? 0 : 0, ex = f.exhale ?? 0, clear = f.clear ?? 0; grade.uniforms.uC.value = col; grade.uniforms.uEx.value = ex; grade.uniforms.uT.value = performance.now() / 1000; grade.uniforms.uAspect.value = innerWidth / innerHeight;
+      if (f.spot && show) grade.uniforms.uSpot.value.set(...f.spot); else grade.uniforms.uSpot.value.set(0, 0, 0, 0); grade.uniforms.uSpotHue.value = f.spotHue ?? 0;
       if (!show) return;
-      // The gloom breathes with her: a tolerable magenta in the in-breath, the purple-black of the wood as she breathes out.
-      gloomColour.set(GLOOM).lerp(GLOOM_IN, col * (1 - ex) * 0.8);
+      // The gloom: a grey fog through the outer biome, deepening to the purple-black of her wood; it breathes with her, a tolerable magenta drawn in on the in-breath, deeper in.
+      gloomColour.set(GREY_FOG).lerp(GLOOM, smooth(0.45, 0.9, f.gloom)).lerp(GLOOM_IN, col * (1 - ex) * 0.8 * smooth(0.3, 0.8, f.gloom));
       const h = hourAtClock(f.clockHour);
       // A moving sun rebakes the mountains' shadows over the next frames; a jump (a skipped hour) at once.
       world.setHour(h, lastClock < 0 || Math.abs(f.clockHour - lastClock) > 0.5); lastClock = f.clockHour;
       renderer.toneMappingExposure = h.exposure;
       world.setSoil(f.under, f.feet.x, f.feet.z);
-      world.setGloom(gloomColour, Math.min(1, f.gloom * 1.15), 0.02 + f.gloom * 0.03);
+      world.setGloom(gloomColour, Math.min(1, (0.25 + f.gloom * 0.9) * Math.min(1, f.gloom * 8)) * (1 - 0.8 * clear), (0.012 + f.gloom * 0.03) * (1 - 0.85 * clear));
       world.update(camera, performance.now() / 1000);
       // The village's figures and houses: the same sun (dimmed in a mountain's baked shadow), shadows near her, fog of the hour's horizon.
       dir.copy(sunDirection(h)); const lit = world.sunAt(f.feet.x, f.feet.z);
       sun.color.set(h.sun); sun.intensity = h.sunI * 0.9 * (0.25 + 0.75 * lit) * (1 - f.gloom * 0.6); sun.target.position.copy(f.feet); sun.position.copy(f.feet).addScaledVector(dir, 400);
       hemi.color.set(h.ambSky); hemi.groundColor.set(h.ambGround); hemi.intensity = h.ambI * 2.2 * (1 - f.gloom * 0.5);
-      fogColour.set(h.horizon).lerp(gloomColour, Math.min(1, f.gloom * 0.8 + f.gloom * f.gloom * 0.2)); scene.background = fogColour.clone();
-      scene.fog = new THREE.FogExp2(fogColour.getHex(), h.haze * 1.3 + f.gloom * 0.03);
+      fogColour.set(h.horizon).lerp(gloomColour, Math.min(1, f.gloom > 0 ? 0.3 + f.gloom * 0.6 + f.gloom * f.gloom * 0.1 : 0) * (1 - 0.6 * clear)); scene.background = fogColour.clone();
+      scene.fog = new THREE.FogExp2(fogColour.getHex(), h.haze * 1.3 + (f.gloom > 0 ? 0.008 + f.gloom * 0.03 : 0) * (1 - 0.92 * clear));
       if (camera.far !== 9000) { camera.far = 9000; camera.updateProjectionMatrix(); }
     },
     render() {

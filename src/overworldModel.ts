@@ -4,11 +4,14 @@
 // placed from a village. The map shows only what she has explored: a coarse grid of cells revealed
 // within EXPLORE_RADIUS of her, saved; and the places she knows.
 import { mulberry32 } from './colors';
+import { TAINT } from './taintModel';
 
 export type PlaceKind = 'village' | 'karst' | 'lair' | 'den' | 'ruin' | 'warren' | 'moot' | /** S4b */ 'wallow';
 export interface Place { id: string; kind: PlaceKind; name: string; x: number; z: number; radius: number; tier?: number }
 /** The lair's distance and the dark forest's breadth (Noah: 400 m, 150 m across). The karst 330 m north. Tuning. */
-export const LAIR_DISTANCE = 400, FOREST_RADIUS = 75, KARST_AT = { x: -60, z: -330 };
+export const LAIR_DISTANCE = 950, FOREST_RADIUS = 75, KARST_AT = { x: -60, z: -330 };
+/** MOTHER.md: nothing else is placed in her taint (its edge, TAINT.edge, from the breach): dens, ruins and warrens stand outside it. */
+const LAIR_CLEAR = TAINT.edge + 30;
 /** The karsts, for the danger field (G5 adds more). */
 export const KARSTS: { x: number; z: number }[] = [KARST_AT];
 /** G3 (EXPANSION.md): danger is placement, keyed to distance from the nearest karst: none within DANGER_SAFE m of one, full by DANGER_FAR. Tuning. */
@@ -25,7 +28,7 @@ export function dens(seed: number): Den[] {
     const rand = mulberry32((seed * 9173 + (cx + 50) * 613 + (cz + 50) * 7919 + 100003) >>> 0);
     const x = Math.round((cx + 0.5) * DEN_CELL + (rand() - 0.5) * 0.6 * DEN_CELL), z = Math.round((cz + 0.5) * DEN_CELL + (rand() - 0.5) * 0.6 * DEN_CELL), dg = danger(x, z), roll = rand();
     if (roll >= dg * DEN_CHANCE) continue;
-    if (Math.hypot(x, z) < VILLAGE_RADIUS + DEN_CLEAR || Math.hypot(x - KARST_AT.x, z - KARST_AT.z) < 100 + DEN_CLEAR || Math.hypot(x - lair.x, z - lair.z) < FOREST_RADIUS + DEN_CLEAR || villageSites(seed).some(v => Math.hypot(x - v.x, z - v.z) < VILLAGE_RADIUS + DEN_CLEAR)) continue;
+    if (Math.hypot(x, z) < VILLAGE_RADIUS + DEN_CLEAR || Math.hypot(x - KARST_AT.x, z - KARST_AT.z) < 100 + DEN_CLEAR || Math.hypot(x - lair.x, z - lair.z) < Math.max(FOREST_RADIUS + DEN_CLEAR, LAIR_CLEAR) || villageSites(seed).some(v => Math.hypot(x - v.x, z - v.z) < VILLAGE_RADIUS + DEN_CLEAR)) continue;
     const tier = 1 + Math.min(2, Math.floor(dg * 3)); out.push({ id: `den-${cx},${cz}`, x, z, tier, pack: PACK_BASE + tier });
   }
   denCache.set(seed, out); return out;
@@ -35,7 +38,7 @@ function basePlaces(seed: number): Place[] {
   return [
     { id: 'village', kind: 'village', name: 'the village', x: 0, z: 0, radius: VILLAGE_RADIUS },
     { id: 'karst', kind: 'karst', name: 'the Wellspire', x: KARST_AT.x, z: KARST_AT.z, radius: 60 },
-    { id: 'lair', kind: 'lair', name: 'the dark forest', x: Math.round(Math.cos(a) * LAIR_DISTANCE), z: Math.round(Math.sin(a) * LAIR_DISTANCE), radius: FOREST_RADIUS },
+    { id: 'lair', kind: 'lair', name: 'the dark forest', x: Math.round(Math.cos(a) * LAIR_DISTANCE), z: Math.round(Math.sin(a) * LAIR_DISTANCE), radius: TAINT.edge },
   ];
 }
 /** G4 (EXPANSION.md): the other villages. Same folk, other names (villageModel's FOLK), each a whole village of its own on calmer ground: within SITE_KARST of the karst (the danger field's safe side, where the dens are few), SITE_NEAR to SITE_FAR from the first village, past the dark forest by SITE_LAIR (so the first village is always the nearest to the lair), and SITE_APART from one another. Placed by the seed. Their names and folk pools are authored (SITE_NAMES), in order. Tuning. */
@@ -68,7 +71,7 @@ export function ruins(seed: number): Ruin[] {
   const rand = mulberry32((seed * 7127 + 331) >>> 0), lair = basePlaces(seed).find(p => p.id === 'lair')!, out: Ruin[] = [];
   for (let i = 0; i < 600 && out.length < RUIN_N; i++) {
     const a = rand() * Math.PI * 2, r = RUIN_NEAR + rand() * (RUIN_FAR - RUIN_NEAR), x = Math.round(Math.cos(a) * r), z = Math.round(Math.sin(a) * r);
-    if (Math.hypot(x - KARST_AT.x, z - KARST_AT.z) < 100 + RUIN_CLEAR || Math.hypot(x - lair.x, z - lair.z) < FOREST_RADIUS + RUIN_CLEAR) continue;
+    if (Math.hypot(x - KARST_AT.x, z - KARST_AT.z) < 100 + RUIN_CLEAR || Math.hypot(x - lair.x, z - lair.z) < Math.max(FOREST_RADIUS, TAINT.edge) + RUIN_CLEAR) continue;
     if (villageSites(seed).some(v => Math.hypot(x - v.x, z - v.z) < VILLAGE_RADIUS + RUIN_CLEAR) || dens(seed).some(d => Math.hypot(x - d.x, z - d.z) < DEN_RADIUS + RUIN_CLEAR) || warrens(seed).some(w => Math.hypot(x - w.x, z - w.z) < WARREN_RADIUS + RUIN_CLEAR) || out.some(o => Math.hypot(x - o.x, z - o.z) < RUIN_APART)) continue;
     const k = out.length; out.push({ id: `ruin-${k}`, name: RUIN_LORE[k].name, lore: RUIN_LORE[k].lore, x, z });
   }
@@ -85,7 +88,7 @@ export function warrens(seed: number): Warren[] {
     const rand = mulberry32((seed * 7477 + d.x * 31 + d.z * 17 + 9001) >>> 0), v = villages.slice().sort((a, b) => Math.hypot(a.x - d.x, a.z - d.z) - Math.hypot(b.x - d.x, b.z - d.z))[0];
     const dx = v.x - d.x, dz = v.z - d.z, len = Math.hypot(dx, dz) || 1, nx = -dz / len, nz = dx / len, side = (rand() - 0.5) * 2 * WARREN_SIDE;
     let x = Math.round(d.x + dx * WARREN_FRAC + nx * side), z = Math.round(d.z + dz * WARREN_FRAC + nz * side);
-    if (Math.hypot(x - lair.x, z - lair.z) < FOREST_RADIUS + 20) { x = Math.round(d.x + dx * WARREN_FRAC - nx * side); z = Math.round(d.z + dz * WARREN_FRAC - nz * side); }
+    if (Math.hypot(x - lair.x, z - lair.z) < LAIR_CLEAR) { x = Math.round(d.x + dx * WARREN_FRAC - nx * side); z = Math.round(d.z + dz * WARREN_FRAC - nz * side); }
     out.push({ id: `warren:${d.id}`, den: d.id, x, z });
   }
   warrenCache.set(seed, out); return out;

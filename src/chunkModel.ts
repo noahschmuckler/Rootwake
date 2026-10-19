@@ -5,6 +5,7 @@
 // village, and the karst stands on an island of its own (KARST_ISLAND), its clearing kept free of chunk trees.
 import { mulberry32 } from './colors';
 import { places, villageSites, FOREST_RADIUS, KARST_AT } from './overworldModel';
+import { TAINT } from './taintModel';
 import type { Tree } from './villageModel';
 
 export const CHUNK = 64, LOAD_RING = 2, MEADOW_ISLAND = 90, ISLAND_FADE = 60, KARST_CLEARING = 100, KARST_ISLAND = 96, KARST_FADE = 50;
@@ -26,7 +27,8 @@ export const HILL_M = 7;
 export function hills(x: number, z: number, seed = 1): number { const k = beyond(x, z, seed); if (k <= 0) return 0; return k * HILL_M * (noise(x, z, 140, seed) * 0.7 + noise(x, z, 46, seed + 7) * 0.3 - 0.45); }
 /** The biome: the dark forest about the lair, else meadow or wood by a slow noise (wood the more common). */
 export function biomeAt(x: number, z: number, seed = 1): Biome {
-  const lair = places(seed).find(p => p.id === 'lair')!; if (Math.hypot(x - lair.x, z - lair.z) <= FOREST_RADIUS) return 'dark';
+  // MOTHER.md: her taint is a whole biome of dense wood, all of it dead or worse (the look decides which); FOREST_RADIUS is its old dark heart.
+  const lair = places(seed).find(p => p.id === 'lair')!; if (Math.hypot(x - lair.x, z - lair.z) <= Math.max(FOREST_RADIUS, TAINT.edge)) return 'dark';
   return noise(x, z, 110, seed + 3) > 0.58 ? 'meadow' : 'wood';
 }
 export const chunkKey = (cx: number, cz: number): string => `${cx},${cz}`;

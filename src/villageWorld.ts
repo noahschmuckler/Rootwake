@@ -26,6 +26,8 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   const ox = origin.x, oz = origin.z, root = new THREE.Group(); root.position.set(ox, 0, oz); root.name = 'village-root'; scene.add(root);
   const relief = (x: number, z: number): number => terrain.height(x + ox, z + oz);
   const rand = mulberry32(220926);
+  // MOTHER.md: what walks far out from the village (its Dark Young, wolves, snatchers, the infants lying out or in her sacs) in the village's frame but not under its root, which is hidden past SHOW_M: the breach lies 950 m off.
+  const foes = new THREE.Group(); foes.position.set(ox, 0, oz); foes.name = 'village-foes'; scene.add(foes);
   // The chunk surface owns the meadow ground; no second translucent disc.
   // The green: a worn circle, and paths trodden from it to each door and out through each gap.
   const worn = new THREE.MeshStandardMaterial({ color: '#8a7a56', roughness: 1, transparent: true, opacity: 0.85, depthWrite: false });
@@ -211,7 +213,7 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
     let f = raiderFigures.get(id); if (f) return f;
     const dy = createDarkYoung(id + 1), group = dy.group;
     const coil = new THREE.Mesh(new THREE.TorusGeometry(1.0, 0.06, 6, 20), coilMat); coil.rotation.x = -Math.PI / 2; coil.position.y = 0.12; coil.visible = false; group.add(coil);
-    root.add(group); f = { group, dy, coil, hide: dy.hide, t: NaN }; raiderFigures.set(id, f); return f;
+    foes.add(group); f = { group, dy, coil, hide: dy.hide, t: NaN }; raiderFigures.set(id, f); return f;
   }
   // F1: a figure's reaction to a blow (driven back along the blow, a white flash, a squash; a killed wolf is thrown and stays thrown) and its lunge when it bites. Presentation only: the model's position is untouched. Tuning: REACT_*.
   const REACT_PUSH = 0.42, REACT_FLASH_S = 0.09, LUNGE_M = 0.45;
@@ -245,14 +247,14 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
     let f = wolfFigures.get(id); if (f) return f;
     const { group, legs, tail, hide, eyes } = makeWolf();
     const coil = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.05, 6, 20), coilMat); coil.rotation.x = -Math.PI / 2; coil.position.y = 0.08; coil.visible = false; group.add(coil);
-    root.add(group); f = { group, legs, tail, coil, hide, eyes, dire: false }; wolfFigures.set(id, f); return f;
+    foes.add(group); f = { group, legs, tail, coil, hide, eyes, dire: false }; wolfFigures.set(id, f); return f;
   }
   // S4c, the black wolves (direWolf.ts): wolves the mother has got into, starved round what they carry, moving as one; their own figure, not the grey one blackened.
   const direFigures = new Map<number, { group: THREE.Group; dw: DireWolf; coil: THREE.Mesh; t: number }>();
   function direFigure(id: number) {
     let f = direFigures.get(id); if (f) return f;
     const dw = createDireWolf(id + 1), coil = new THREE.Mesh(new THREE.TorusGeometry(0.6, 0.05, 6, 20), coilMat); coil.rotation.x = -Math.PI / 2; coil.position.y = 0.08; coil.visible = false; dw.group.add(coil);
-    root.add(dw.group); f = { group: dw.group, dw, coil, t: NaN }; direFigures.set(id, f); return f;
+    foes.add(dw.group); f = { group: dw.group, dw, coil, t: NaN }; direFigures.set(id, f); return f;
   }
   function setWolf(id: number, x: number, z: number, heading: number, t: number, moving: boolean, hurt: number, rooted: number, dead: number, dire = false, tell = 0): void {
     if (dire) {
@@ -282,7 +284,7 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
     for (const zz of [-0.07, 0.07]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 5), snatchEye); e.position.set(0.22, 0.22, zz); group.add(e); }
     const arms: THREE.Group[] = []; for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2 + 0.5, g = new THREE.Group(); g.position.set(Math.cos(a) * 0.12, 0.08, Math.sin(a) * 0.12); g.rotation.y = -a; const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0.18, -0.05, 0.03), new THREE.Vector3(0.36, -0.07, -0.03), new THREE.Vector3(0.5, -0.06, 0.02)]); g.add(new THREE.Mesh(taperedTube(curve, 10, 5, t => 0.035 * (1 - t * 0.85), 0), snatchMat)); group.add(g); arms.push(g); }
     const bundle = makeBundle(); bundle.position.set(-0.05, 0.3, 0); bundle.visible = false; group.add(bundle);
-    root.add(group); f = { group, arms, bundle }; snatchFigures.set(id, f); return f;
+    foes.add(group); f = { group, arms, bundle }; snatchFigures.set(id, f); return f;
   }
   function setSnatcher(id: number, x: number, z: number, heading: number, t: number, carrying: boolean): void {
     const f = snatchFigure(id); f.group.visible = true; f.group.position.set(x, relief(x, z), z); f.group.rotation.y = -heading; f.bundle.visible = carrying;
@@ -299,7 +301,7 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
     const cyst = new THREE.Group(); cyst.position.copy(hang);
     const skin = new THREE.Mesh(new THREE.SphereGeometry(0.55, 14, 10), sacMat); skin.scale.set(1, 1.35, 1); skin.position.y = -0.7; cyst.add(skin);
     const babe = makeBundle(); babe.position.y = -0.75; babe.rotation.z = 1.2; babe.scale.multiplyScalar(1.2); cyst.add(babe);
-    group.add(cyst); root.add(group); return { group, cyst, seed: r() * 6.28 };
+    group.add(cyst); foes.add(group); return { group, cyst, seed: r() * 6.28 };
   }
   /** The infants the mother keeps, each in its sac at its place in the grove (village frame). */
   function setSacs(kept: { x: number; z: number }[], t: number): void {
@@ -309,7 +311,7 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   const lying: THREE.Mesh[] = [], inArms = makeBundle(); inArms.visible = false; scene.add(inArms);
   /** The infants lying on the land, and the one in her arms (null when none). */
   function setInfants(out: { x: number; z: number }[], arms: THREE.Vector3 | null): void {
-    while (lying.length < out.length) { const b = makeBundle(); root.add(b); lying.push(b); }
+    while (lying.length < out.length) { const b = makeBundle(); foes.add(b); lying.push(b); }
     lying.forEach((b, i) => { const d = out[i]; b.visible = !!d; if (d) b.position.set(d.x, relief(d.x, d.z) + 0.1, d.z); });
     inArms.visible = !!arms; if (arms) inArms.position.copy(arms);
   }
@@ -324,13 +326,14 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   function updateStrokes(dt: number): void { stepReacts(dt); if (slashT > 0) { slashT -= dt; slashMat.opacity = Math.max(0, slashT / 0.18); slash.visible = slashT > 0; } if (burstT > 0) { burstT -= dt; const k = 1 - burstT / 0.4; burst.scale.setScalar(0.5 + k * 3.0); burstMat.opacity = 0.8 * (1 - k); burst.visible = burstT > 0; } }
   // The lair's manifestation (M1b): a local mother of goats at the dark forest's centre, a great dark mass with many horns that writhe, eyes with their own light; it does not walk. Placed by setLairAt; animated and shown alive or gone by setLair.
   const lairGroup = new THREE.Group(); lairGroup.visible = false; scene.add(lairGroup); const lairHide = hideMat.clone(), lairHorns: THREE.Group[] = [];
-  // M1 (MOTHER.md): until her full form (M2), the heart shows her as arms: black, longer than the tallest tree, rising out of a low mound and writhing up into the fog, with her eyes in the mound.
-  { const mound = new THREE.Mesh(new THREE.SphereGeometry(9, 16, 10), lairHide); mound.scale.set(1, 0.28, 1); mound.position.y = 0.4; lairGroup.add(mound);
-    const fr = mulberry32(666); for (let i = 0; i < 14; i++) { const g = new THREE.Group(); const a = (i / 14) * Math.PI * 2 + fr() * 0.4, r = 2 + fr() * 6, H = 22 + fr() * 26, lean = 4 + fr() * 8; g.position.set(Math.cos(a) * r, 0, Math.sin(a) * r); const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, -1, 0), new THREE.Vector3(Math.cos(a) * lean * 0.3, H * 0.3, Math.sin(a) * lean * 0.3), new THREE.Vector3(Math.cos(a + 0.6) * lean * 0.8, H * 0.65, Math.sin(a + 0.6) * lean * 0.8), new THREE.Vector3(Math.cos(a + 1.1) * lean, H, Math.sin(a + 1.1) * lean)]); g.add(new THREE.Mesh(taperedTube(curve, 24, 7, t => (1.1 + fr() * 0.5) * (1 - t * 0.9), 0.05), lairHide)); lairGroup.add(g); lairHorns.push(g); }
-    for (let i = 0; i < 9; i++) { const eye = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 6), eyeMat); const a = i * 0.7; eye.position.set(Math.cos(a) * (3 + (i % 3) * 1.8), 1.6 + (i % 2) * 0.6, Math.sin(a) * (3 + (i % 3) * 1.8)); lairGroup.add(eye); } }
-  const lairLight = new THREE.PointLight('#b040c0', 0, 60, 1.4); lairLight.position.y = 6; lairGroup.add(lairLight);
+  // M1 (MOTHER.md): until her full form (M2), the heart shows her as arms: black, a hundred to three hundred metres tall, rising out of a wide mound and writhing up into the cloud, with her eyes in the mound; glimpsed from afar only when the grey fog thins.
+  { const mound = new THREE.Mesh(new THREE.SphereGeometry(30, 20, 12), lairHide); mound.scale.set(1, 0.3, 1); mound.position.y = 1; lairGroup.add(mound);
+    const fr = mulberry32(666); for (let i = 0; i < 14; i++) { const g = new THREE.Group(); const a = (i / 14) * Math.PI * 2 + fr() * 0.4, r = 6 + fr() * 22, H = 110 + fr() * 170, lean = 20 + fr() * 45; g.position.set(Math.cos(a) * r, 0, Math.sin(a) * r); const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, -1, 0), new THREE.Vector3(Math.cos(a) * lean * 0.3, H * 0.3, Math.sin(a) * lean * 0.3), new THREE.Vector3(Math.cos(a + 0.6) * lean * 0.8, H * 0.65, Math.sin(a + 0.6) * lean * 0.8), new THREE.Vector3(Math.cos(a + 1.1) * lean, H, Math.sin(a + 1.1) * lean)]); const thick = 3.5 + fr() * 3; g.add(new THREE.Mesh(taperedTube(curve, 28, 8, t => thick * (1 - t * 0.92), 0.05), lairHide)); lairGroup.add(g); lairHorns.push(g); }
+    for (let i = 0; i < 13; i++) { const eye = new THREE.Mesh(new THREE.SphereGeometry(0.8 + (i % 3) * 0.4, 8, 6), eyeMat); const a = i * 0.83; eye.position.set(Math.cos(a) * (8 + (i % 4) * 5), 4 + (i % 2) * 2, Math.sin(a) * (8 + (i % 4) * 5)); lairGroup.add(eye); } }
+  const lairLight = new THREE.PointLight('#b040c0', 0, 90, 1.4); lairLight.position.y = 12; lairGroup.add(lairLight);
   function setLairAt(x: number, z: number): void { lairGroup.position.set(x, terrain.height(x, z), z); }
-  function setLair(alive: boolean, hurt: number, t: number, hpShare: number): void { lairGroup.visible = alive; if (!alive) return; for (let i = 0; i < lairHorns.length; i++) { const h = lairHorns[i]; h.rotation.z = Math.sin(t * 0.0004 + i * 1.3) * 0.12; h.rotation.x = Math.cos(t * 0.00035 + i * 2.1) * 0.12; } lairHide.emissive.set(hurt > 0 ? '#b03030' : '#000000'); lairLight.intensity = 0.8 + Math.sin(t * 0.003) * 0.4 + (1 - hpShare) * 1.5; }
+  /** `seen` 0..1: her arms are hidden in the grey fog past a few hundred metres, and glimpsed only when it thins (the entry decides). */
+  function setLair(alive: boolean, hurt: number, t: number, hpShare: number, seen = 1): void { lairGroup.visible = alive && seen > 0.01; if (!lairGroup.visible) return; lairHide.fog = false; /* glimpsed through the fog she must read dark, not as pale fogged shapes: her fading is her own */ lairHide.transparent = seen < 0.99; lairHide.opacity = seen * (seen < 0.99 ? 0.8 : 1); lairHide.depthWrite = seen > 0.5; for (let i = 0; i < lairHorns.length; i++) { const h = lairHorns[i]; h.rotation.z = Math.sin(t * 0.0004 + i * 1.3) * 0.12; h.rotation.x = Math.cos(t * 0.00035 + i * 2.1) * 0.12; } lairHide.emissive.set(hurt > 0 ? '#b03030' : '#000000'); lairLight.intensity = 0.8 + Math.sin(t * 0.003) * 0.4 + (1 - hpShare) * 1.5; }
   const mass = new THREE.Group(); mass.visible = false; scene.add(mass);
   { const mr = mulberry32(78); const tufts: Standee[] = []; for (let i = 0; i < 14; i++) { const a = mr() * 6.28, r = mr() * 0.42, k = 0.28 + mr() * 0.22; tufts.push({ position: new THREE.Vector3(Math.cos(a) * r, 0.3 - r * 0.35, Math.sin(a) * r), yaw: mr() * Math.PI, width: k, height: k * 1.2 }); } mass.add(new THREE.Mesh(standees(tufts), spriteMaterial('grass', '#b6d47a', { emissive: '#3a5a20', emissiveIntensity: 0.25 }))); }
   // A tree here is in the scene's frame (the first village's, or a copy of it placed by the entry at another village's origin).

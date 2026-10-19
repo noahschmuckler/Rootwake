@@ -100,7 +100,7 @@ These rules exist today and conflict with "she cannot be defeated and does not g
 - **The sacs** (`villageWorld.setSacs`): a cyst hangs from a black vessel arching over, translucent pink with the infant inside, swaying and swelling. Each is labelled "<name>, in a sac".
 - **The heart, until M2:** her arms rise from a low mound: fourteen black tentacles 20–50 m tall, writhing slowly into the fog, with her eyes in the mound. Her label carries no bar, since she cannot be hurt.
 - **Cost:** inside the taint the land draws about 500k triangles at low quality, against about 600k at the village.
-- **Dev handle:** `__village.taint`, with `breach`, `now` (depth, colour, exhale, attention, breath), `attention =`, `keep(n)` (hang n newcomers in the sacs) and `veins()`.
+- **Dev handle:** `__village.taint`, with `breach`, `now` (depth, colour, exhale, flare, attention, breath, the lift), `attention =`, `keep(n)` (hang n newcomers in the sacs), `veins()`, `lift()` and `flareNext()`.
 - **Open, for Noah's playtest:**
   - the radii;
   - how fast attention rises and falls;
@@ -108,3 +108,31 @@ These rules exist today and conflict with "she cannot be defeated and does not g
   - the Colour's strengths (`COLOUR`);
   - whether the mild ring's grey trees should be fewer;
   - whether the plain (non-vista) look needs the taint too (it keeps only the fixed blight).
+
+## M1.1, after Noah's first look (2026-10-19)
+
+Noah: "lose the tiles". Her clashing colours now come two ways, and "the randomness is what sells it":
+
+- **Around a tree** (`stepTaintFx` in `village.ts`; the grade's `uSpot`): now and then, at random, one tree in view flares. The red/blue split goes far past the rest about it, flooded with yellow, orange or green for about a second.
+  - Rate: `SPOT_RATE` × `flareAt(depth, attention, exhale)`.
+  - Nothing in the outer grey (`FLARE_FROM`).
+- **In the mist** (`taintMist.ts`): grey translucent puffs drift over the ground about the camera. Without warning one flushes yellow-green, green or orange, a share of them neon bright past the bloom's threshold, and fades back.
+  - Only closer in, by `flareAt`.
+
+The scale (Noah: "an entire biome of grey twitching trees, the alveoli trees only two thirds of the way in, the creature deeper and more obscured"):
+
+- **The breach** stands 950 m from the first village (`LAIR_DISTANCE`, was 400).
+- **The rings** (`TAINT`):
+  - heart: 110 m;
+  - nursery: 215 m, a third of the way out;
+  - grey: 520 m;
+  - edge: 650 m;
+  - veins: 120 m past the edge.
+- **Clearance:** the dens, ruins and warrens are kept out of it, and the lair's place has the taint's radius.
+- **The trees:** the taint is dense wood throughout (`chunkModel.biomeAt`: 'dark' to the edge).
+- **The fog:** grey through the outer biome, deepening to her purple-black.
+- **The veins:** laid from the chunks' hubs; generating every chunk's roots took seconds.
+- **The far figures:** the home village's Dark Young, wolves, snatchers, sacs and infants live in a `foes` group that is not hidden with the village's root past `SHOW_M`. The home village is "near" out to `LAIR_DISTANCE + 250`.
+- **Her arms:** 110–280 m tall, rising from a 30 m mound. Within 150–250 m of the breach they show fully.
+  - Farther out, only when the grey fog thins: every `LIFT_EVERY` 45–110 s, for `LIFT_S` 6 s.
+  - They are dark shapes then, out of the scene's fog (it painted them pale).

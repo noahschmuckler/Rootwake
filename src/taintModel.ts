@@ -12,8 +12,8 @@
 // rises with depth and with violence inside her, toward a ceiling the depth sets, and falls away once
 // Hulda leaves. In M1 it drives the Colour (the breath); in M2 it drives what the forest does.
 
-/** The rings' outer radii from the breach (m), and how far the veins run out past the edge. Tuning (set against the first village 400 m off, the dens and ruins kept 195 m and more from the breach). */
-export const TAINT = { heart: 40, nursery: 85, grey: 135, edge: 190, veins: 70 } as const;
+/** The rings' outer radii from the breach (m), and how far the veins run out past the edge. Noah (2026-10-19): a whole biome of grey twitching trees, the alveolar growths only two thirds of the way in, the heart deeper still: the breach 950 m from the first village (overworldModel.LAIR_DISTANCE), its edge 300 m from it, the dens and ruins kept out of it. Tuning. */
+export const TAINT = { heart: 110, nursery: 215, grey: 520, edge: 650, veins: 120 } as const;
 export type Ring = 'heart' | 'nursery' | 'grey' | 'mild' | null;
 export interface At { x: number; z: number }
 
@@ -45,4 +45,7 @@ export const stepBreath = (phase: number, attention: number, dt: number): number
 /** How far into the out-breath she is: 0 through the in-breath (the tolerable magenta), rising to 1 as she breathes out (the colour fractured), and back. */
 export function exhaleAt(phase: number): number { const s = Math.sin(phase * Math.PI * 2); return s < 0 ? 0 : Math.pow(s, 0.7); }
 /** How strongly the Colour shows: a little at the edge, more with depth, most with attention. */
-export const colourAt = (depth: number, attention: number): number => Math.min(1, depth * 0.35 + attention * 0.85);
+export const colourAt = (depth: number, attention: number): number => Math.min(1, depth * 0.4 + attention * 0.8 * Math.min(1, depth * 2.5));
+/** Closer in, the mist and the trees flare with her clashing colours: none in the outer grey, rising past this depth. Tuning. */
+export const FLARE_FROM = 0.3;
+export const flareAt = (depth: number, attention: number, exhale: number): number => Math.max(0, Math.min(1, (depth - FLARE_FROM) / (1 - FLARE_FROM))) * (0.35 + attention * 0.45 + exhale * 0.2);
