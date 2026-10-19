@@ -13,6 +13,7 @@ Noah, 2026-10-19. These are his musings, recorded as given and then organised, w
 - **Phase one.** In the first phase she cannot be defeated, and certainly not solo: she is forest-sized. In this phase she also **does not grow**. What must be evident is how massive she is.
 - **How she falls.** She is defeated by strengthening the natural world and augmenting it. That could be powerful druids, magitech, the combined prayer of several cities of monks, or "something amazing we haven't defined yet".
 - **The likely handle.** She is controlled by constructing **miniature aetherforges** geographically around the tainted forest, and probably below ground as well, in the extended underworld still to be made.
+- **Revised (Noah, 2026-10-19, RUINS.md):** she builds none. The mountains are the old works, where chaos seeps up and crystallises, failed for want of tending. A ring of the old containment's ruins (the wards) still stands about her forest, and their lingering order is why she has spread no further. Hulda **reactivates** the wards and, in the end, the mountain.
 - **Open:** what the aetherforges are made of, who builds them, whether each one is a karst-like site, a village construction or a companion's work, and how the final reactivation of the old containment plays.
 
 ## The land: a gradient into insanity
@@ -50,9 +51,9 @@ A significant radius of tainted land, graded from mild at the edge to an inner a
   - The attention's attacks, each with its warning, and the brood.
   - Lore to be found in the ruin.
   - Freeing infants from the sacs.
-- **M3, the aetherforges.**
-  - Their lore, the first miniature forge, and what holding the land around her does.
-  - Waits for Noah to define what builds them.
+- **M3, the wards woken** (was "the aetherforges"; RUINS.md).
+  - Waking the wards about her forest, one by one, and what holding the land around her does.
+  - R1 (the surface wards) is built; their interiors are RUINS.md's R2 onward.
 - **Later.** The forges below ground in the extended underworld; reactivating the old containment; the finale.
 
 ## Consequences to decide in M1 (current rules this changes)
@@ -137,3 +138,13 @@ The scale (Noah: "an entire biome of grey twitching trees, the alveoli trees onl
 - **Her arms:** 110–280 m tall, rising from a 30 m mound. Within 150–250 m of the breach they show fully.
   - Farther out, only when the grey fog thins: every `LIFT_EVERY` 45–110 s, for `LIFT_S` 6 s.
   - They are dark shapes then, out of the scene's fog (it painted them pale).
+
+## Her form, revised (Noah, 2026-10-19)
+
+- **A massive branching worm.** Most of her body is in a huge, mostly vertical tunnel underground. Her arms at the heart are where she breaks the surface.
+- **She has infested the mountain.** She clogs its workings and blocks the deeper levels. In places she is reached from the deepened crystal drop at the plateau's centre (DESCENT.md), elsewhere only through the wards' entrances (RUINS.md R4).
+- **She is held, not caged.**
+  - The wards' lingering order keeps her in her forest.
+  - She is strong enough to hold it and to send her young to farm the villages, gaining strength slowly toward freeing herself.
+  - That is not a realised risk on the game's timescale.
+

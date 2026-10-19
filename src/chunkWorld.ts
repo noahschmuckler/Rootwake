@@ -18,7 +18,7 @@ interface Chunk { key: string; group: THREE.Group; trees: Tree[]; colliders: Col
 export const RUIN_STONES = 7, RUIN_STONE_R = 2.8;
 /** S2: the moot's stone seats and their ring. Tuning. */
 export const MOOT_SEATS = 7, MOOT_SEAT_R = 4.2;
-export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain = createTerrain(seed), dens: { id?: string; x: number; z: number; tier?: number }[] = [], rings: { x: number; z: number }[] = [], ruinList: { id: string; x: number; z: number }[] = [], warrenList: { id: string; x: number; z: number }[] = [], mootAt: { x: number; z: number } | null = null, wallowList: { id: string; x: number; z: number }[] = []) {
+export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain = createTerrain(seed), dens: { id?: string; x: number; z: number; tier?: number }[] = [], rings: { x: number; z: number }[] = [], ruinList: { id: string; x: number; z: number }[] = [], warrenList: { id: string; x: number; z: number }[] = [], mootAt: { x: number; z: number } | null = null, wallowList: { id: string; x: number; z: number }[] = [], clearings: { x: number; z: number; r: number }[] = []) {
   let sanctified = new Set<string>();
   // S1: a warren: burrows in the grass and rabbits among them, as many as the pool holds (setRabbits gives the count by id; refreshRabbits applies it to the warrens built). Tuning.
   const WARREN_BURROWS = 5, WARREN_RABBITS = 12, burrowMat = new THREE.MeshStandardMaterial({ color: '#2e2418', roughness: 1 }), moundMat = new THREE.MeshStandardMaterial({ color: '#6a5a44', roughness: 1, flatShading: true }), rabbitMat = new THREE.MeshStandardMaterial({ color: '#a89478', roughness: 0.95 }), rabbitEar = new THREE.MeshStandardMaterial({ color: '#c8b09a', roughness: 0.95 });
@@ -51,8 +51,8 @@ export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain 
   const vision = groundVision(), ground = vision.material;
   const setUnder = (under: number, x = 0, z = 0) => vision.update(under, x, z);
   const colourOf = terrain.colour;
-  /** A chunk's trees as built: its own, less any too near a den, ring, ruin, warren or the moot. */
-  const treesFor = (cx: number, cz: number): Tree[] => chunkTrees(cx, cz, seed).filter(t => !dens.some(d => Math.hypot(t.x - d.x, t.z - d.z) < 14) && !rings.some(r => Math.hypot(t.x - r.x, t.z - r.z) < 5) && !ruinList.some(r => Math.hypot(t.x - r.x, t.z - r.z) < 7) && !warrenList.some(w => Math.hypot(t.x - w.x, t.z - w.z) < 9) && !(mootAt && Math.hypot(t.x - mootAt.x, t.z - mootAt.z) < 9));
+  /** A chunk's trees as built: its own, less any too near a den, ring, ruin, warren or the moot, or within a clearing's square (the wards' earthworks, RUINS.md). */
+  const treesFor = (cx: number, cz: number): Tree[] => chunkTrees(cx, cz, seed).filter(t => !dens.some(d => Math.hypot(t.x - d.x, t.z - d.z) < 14) && !rings.some(r => Math.hypot(t.x - r.x, t.z - r.z) < 5) && !ruinList.some(r => Math.hypot(t.x - r.x, t.z - r.z) < 7) && !warrenList.some(w => Math.hypot(t.x - w.x, t.z - w.z) < 9) && !(mootAt && Math.hypot(t.x - mootAt.x, t.z - mootAt.z) < 9) && !clearings.some(c => Math.max(Math.abs(t.x - c.x), Math.abs(t.z - c.z)) < c.r));
   /** Another renderer (the vista look) may draw the ground and the trees itself: the chunks keep their trees, colliders and the rest, unseen. */
   const look = { ground: true, trees: true };
   const applyLook = (o: THREE.Object3D): void => { o.traverse(m => { if (m.name === 'world-ground' || m.name === 'far-ground') m.visible = look.ground; else if (m.name === 'tree-wood' || m.name === 'tree-leaves') m.visible = look.trees; }); };

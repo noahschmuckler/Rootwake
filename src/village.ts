@@ -32,6 +32,8 @@ import { rootNetworkWorld } from './rootNetworkWorld';
 import { NODES as ROOT_NODES, PILLARS, standNear, groundAt, nodeName, ZONES as ROOT_ZONES, type Node as RootNode } from './karstFlowModel';
 import { createTerrain } from './worldTerrain';
 import { createDenField } from './denWorld';
+import { createWardField } from './ruinWorld';
+import { wards, WARD } from './ruinsModel';
 import { createVillageLook, type VillageLook } from './villageVista';
 import { loadVillageLand } from './plateauLand';
 import { freshCultivation, parseCultivation, serializeCultivation, worldTier, power, lacking, grow, grownEnough, mayFirstDive, canRaise, raise, reachBonus, viewScale, TIER_POINTS, TIER_CLARITY, TIER_CAP, type Cultivation, type WorldState } from './cultivationModel';
@@ -110,7 +112,9 @@ const ownWarrenPlaces = ownWarrens(home.seed); setOwnWarrens(ownWarrenPlaces.map
 // S2 (SETTLEMENTS.md): the old moot, where the steward sleeps.
 const mootPlace = moot(home.seed);
 const wallowPlaces = wallows(home.seed); setWallows(wallowPlaces.map(w => ({ id: w.id, x: w.x, z: w.z })));
-const chunks = createChunks(scene, home.seed, terrain, dens(home.seed), convergences(home.seed), ruins(home.seed), [...warrenPlaces, ...ownWarrenPlaces], mootPlace, wallowPlaces);
+// RUINS.md (Noah, 2026-10-19): the wards, the old containment's ruins ringing the breach just inside the taint's edge, each on a level earthwork cleared of trees.
+const wardList = wards(home.seed, places(home.seed).find(p => p.id === 'lair')!, relief, (x, z) => walkable(plateau(home.seed), x, z), places(home.seed).filter(p => p.id !== 'lair').map(p => ({ x: p.x, z: p.z, r: p.radius })));
+const chunks = createChunks(scene, home.seed, terrain, dens(home.seed), convergences(home.seed), ruins(home.seed), [...warrenPlaces, ...ownWarrenPlaces], mootPlace, wallowPlaces, wardList.map(w => ({ x: w.x, z: w.z, r: WARD.court + w.skirt + 1 })));
 const ownerOf = (w: { x: number; z: number }): Ctx => ctxs.slice().sort((a, b) => Math.hypot(a.ox - w.x, a.oz - w.z) - Math.hypot(b.ox - w.x, b.oz - w.z))[0];
 const rabbitStock = (id: string): number => { const own = ownWarrenPlaces.find(x => x.id === id); if (own) return ownerOf(own).v.ownRabbits; const w = warrenPlaces.find(x => x.id === id); if (!w) return 0; const k = denKnownBy(w.den); return k ? rabbitsAt(k.c.v, k.d) : WARREN_CAP; }; chunks.setRabbits(rabbitStock);
 chunks.setBoars(id => { const w = wallowPlaces.find(x => x.id === id); return w ? ctxs.find(c => c.id === w.village)?.v.boars ?? 0 : 0; });
@@ -157,6 +161,11 @@ const look: VillageLook | null = vistaLand ? createVillageLook({ taint: { at: { 
 if (look) { Object.assign(window, { __look: look }); chunks.setLook({ ground: false, trees: false }); for (const c of ctxs) c.world.root.traverse(o => { if (o.name === 'tree-wood' || o.name === 'tree-leaves') o.visible = false; }); look.refreshClearing(); }
 // PLATEAU.md: the rivers' water, the crossings and the island's old bridge.
 const waterworks = buildWaterworks(look ? look.world.root : scene, plateau(home.seed), look ? look.world.uniforms : null);
+const WARDS_KEY = 'rootwake-wards-read';
+const wardRead = ((): Set<string> => { try { return new Set(JSON.parse(localStorage.getItem(WARDS_KEY) ?? '[]') as string[]); } catch { return new Set(); } })();
+const wardField = createWardField(look ? look.world.root : scene, wardList, relief, wardRead, ids => { try { localStorage.setItem(WARDS_KEY, JSON.stringify([...ids])); } catch { /* Storage is optional. */ } });
+let wardHere: string | null = null; const tmpWard = new THREE.Vector3();
+Object.assign(window, { __wards: { list: wardList, field: wardField } });
 Object.assign(window, { __plateau: { model: plateau(home.seed), waterworks, land: vistaLand ? { baked: vistaLand.baked, ms: Math.round(vistaLand.ms) } : null } });
 let lookHuts = ctxs.reduce((n, c) => n + c.v.huts, 0);
 // S4c (SETTLEMENTS.md §6): the steward's waking is answered: one den's pack turns dire, black and red-eyed, until it is slain asleep in its den.
@@ -181,8 +190,8 @@ let karst: ReturnType<typeof createKarstFeature>;
 const groundWorld: TraversalWorld = {
   // The land is unbounded: the meadow, and past it the chunks (chunkWorld), whose trees the model's lookups see through setTreeProvider.
   // The land is unbounded: the meadow, and past it the chunks (chunkWorld), whose trees the model's lookups see through setTreeProvider; where the karst stands, its own zone worlds are her ground (karstFeature).
-  surfacesAt: (x, z) => (karst.owns(x, z) ? karst.traversal().surfacesAt(x, z) : denField.surfacesAt(x, z) ?? [relief(x, z)]),
-  canOccupy: (p, radius, height) => { if (karst.owns(p.x, p.z)) return karst.traversal().canOccupy(p, radius, height); const den = denField.canOccupy(p, radius, height); if (den !== null) return den; return p.y >= relief(p.x, p.z) - 0.03 && !houseNear(p.x, p.z, radius) && !treesNear(p.x, p.z, 6).some(t => Math.hypot(p.x - t.x, p.z - t.z) < trunkRadius(t) + radius) && walkable(plateau(home.seed), p.x, p.z); },
+  surfacesAt: (x, z) => (karst.owns(x, z) ? karst.traversal().surfacesAt(x, z) : wardField.surfacesAt(x, z) ?? denField.surfacesAt(x, z) ?? [relief(x, z)]),
+  canOccupy: (p, radius, height) => { if (karst.owns(p.x, p.z)) return karst.traversal().canOccupy(p, radius, height); const ward = wardField.canOccupy(p, radius, height); if (ward !== null) return ward && walkable(plateau(home.seed), p.x, p.z); const den = denField.canOccupy(p, radius, height); if (den !== null) return den; return p.y >= relief(p.x, p.z) - 0.03 && !houseNear(p.x, p.z, radius) && !treesNear(p.x, p.z, 6).some(t => Math.hypot(p.x - t.x, p.z - t.z) < trunkRadius(t) + radius) && walkable(plateau(home.seed), p.x, p.z); },
 };
 // PLATEAU.md (Noah): the rivers are barriers, crossed at their fords, stepping stones and bridges; the lake rings the island, crossed by its old bridge. Underground (the roots) she passes beneath them.
 /** While she is a bulge, a figure of leaves or a knot in a root, the shared motor stays put but the stick still speaks. */
@@ -1196,6 +1205,9 @@ function frame(now: number) {
   if (pendingTap && now - pendingTap > 330) { pendingTap = 0; singleTap(); }
   if (!portalEl.hidden && (mode !== 'ground' || Math.hypot(player.feet().x - portalAt.x, player.feet().z - portalAt.z) > 1.5)) closePortal();
   if (!underCap(mode)) { chunks.update(player.feet().x, player.feet().z); denField.update(player.feet(), time, packAsleepAt); }
+  // RUINS.md: the ward she stands on is named; a glyph-plate she reaches is read.
+  { const f = player.feet(), w = wardField.wardAt(f.x, f.z); if ((w?.id ?? null) !== wardHere) { wardHere = w?.id ?? null; if (w) say(w.name, 3); }
+    camera.getWorldDirection(tmpWard); wardField.face(Math.atan2(-tmpWard.x, -tmpWard.z)); const plate = wardField.update(f, time); if (plate) tellBanner(plate.lore); }
   // G4: the village she is in is the one her hands and her panel belong to; the ones near enough are presented in full.
   pickActive(); { const f = player.feet(); for (const c of ctxs) { const d = Math.hypot(f.x - c.ox, f.z - c.oz), near = d <= (c.i === 0 ? HOME_NEAR_M : NEAR_M); if (near && !c.near) syncShown(c); if (!near && c.near) hideShown(c); c.near = near; c.world.root.visible = d <= SHOW_M; } }
   // D4: the blight moved (at dawn): the land's trees and the roots drawn again under it.

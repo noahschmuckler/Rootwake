@@ -1,6 +1,6 @@
 // Parkour (headless Chromium, SwiftShader; MOBILITY.md "Parkour"): the practice course loads with its clips, and
 // the stick alone (a held W) takes her onto a waist-high top by the mount, up a wall by the braced hang (where she waits for the stick), over a rail and off a sheer drop by a hang, each posed by its
-// clip, with no errors. Screenshots at a phone's portrait aspect land in artifacts/parkour.
+// clip, and up a ward's post (RUINS.md) onto its glyph-plate, with no errors. Screenshots at a phone's portrait aspect land in artifacts/parkour.
 import {createRequire} from 'node:module';
 import {createServer} from 'node:http';
 import {readFile,mkdir,writeFile} from 'node:fs/promises';
@@ -40,7 +40,9 @@ try{
   report.climb=await run('climb',0,-9.3,'climb',3);assert.ok(report.climb.includes('climb'),`a climb from the stick (${report.climb})`);
   report.vault=await run('vault',4,-2,'vault',2);assert.ok(report.vault.includes('vault'),`a vault from the stick (${report.vault})`);
   report.drop=await run('drop',0,-15,'hangDrop',3);assert.ok(report.drop.includes('hangDrop'),`a hang drop from the stick (${report.drop})`);
-  assert.ok(report.paused>=2,`she paused in the braced hang on the climb and on the drop (${report.paused})`);
+  // RUINS.md: the practice ward's post behind it, climbed by the braced hang onto its glyph-plate, which she reads.
+  report.ward=await run('ward',34,-2,'climb',2);report.wardRead=await page.evaluate(()=>[...window.__parkour.wardField.read]);assert.ok(report.wardRead.length>=1,`a ward's glyph-plate read from its post (${report.ward}; ${report.wardRead})`);
+  assert.ok(report.paused>=3,`she paused in the braced hang on the climb, the drop and the ward's post (${report.paused})`);
   report.stages=await page.evaluate(()=>[...window.__parkour.seen.stages]);
   for(const s of ['mount','stand','reach','catch','hang','pull','vault','lower','fall'])assert.ok(report.stages.includes(s),`the ${s} stage played its clip (${report.stages})`);
   assert.deepEqual(errors,[]);

@@ -166,7 +166,8 @@ after a clip is replaced. `?parkourclips=0` turns the layer off in the village.
 village's third-person framing on one lane of each move. Every obstacle is canonical. The left lane is a step, a mount and a wall, with a ledge at its far end.
 The middle lane has two rails to vault, a mount's block to clamber onto and hop off, a wall to climb and
 drop from, and a gap to leap. The right lane has a wall too high and
-a pit too wide. On the far right is the old bridge's foot, shaped as the plateau shapes its deck. `?hud=1` shows the move and its stage;
+a pit too wide. On the far right is the old bridge's foot, shaped as the plateau shapes its deck. East of the lanes stands a ward
+(RUINS.md): one of the old containment's ruins, as the dark forest's are built, all of canonical faces. `?hud=1` shows the move and its stage;
 ↺ goes back to the start. `scripts/browser-parkour.mjs` runs it in CI, and `npm run test:mobility`
 walks every lane with the motor alone.
 

@@ -4,6 +4,8 @@
 import { Vector3 } from 'three';
 import type { TraversalWorld } from './mobility';
 import { CANON } from './parkour';
+import { buildWard, wardGround, wardOccupy, WARD_LORE, type Ward } from './ruinsModel';
+import { mulberry32 } from './colors';
 
 /** A solid block: its footprint (x0..x1, z0..z1), its top, and its floor (a pit's floor is below 0). */
 export interface Block { x0: number; x1: number; z0: number; z1: number; top: number; label?: string; kind: 'stone' | 'rail' | 'pit' | 'ramp' }
@@ -27,12 +29,15 @@ export const COURSE: Block[] = [
 /** The old bridge's foot, as plateauModel shapes its deck (BRIDGE_CROWN over its 125 m `span`), the first `length` m of it. */
 export const RAMP = { x: 12, z0: -4, length: 25, span: 125, crown: 4.2, halfW: 1.5 };
 const rampAt = (x: number, z: number): number | null => { const d = RAMP.z0 - z, t = d / RAMP.span; if (d < 0 || d > RAMP.length || Math.abs(x - RAMP.x) > RAMP.halfW) return null; return 0.05 + RAMP.crown * Math.sin(Math.PI * t) ** 0.6; };
-/** The course's ground: 30 × 40 m of floor, x −6..18, z 6..−30. */
-export const BOUNDS = { x0: -6, x1: 18, z0: -30, z1: 6 };
+/** A ward (RUINS.md) east of the lanes on the flat, its door toward −z (the lanes' way), to try the ruins on. */
+export const PRACTICE_WARD: Ward = buildWard('practice', 'the practice ward', 34, -13, 0, 3, 2.5, WARD_LORE[0], mulberry32(3));
+/** The course's ground: floor x −6..48, z 6..−30. */
+export const BOUNDS = { x0: -6, x1: 48, z0: -30, z1: 6 };
 const inside = (b: Block, x: number, z: number, m = 0): boolean => x > b.x0 - m && x < b.x1 + m && z > b.z0 - m && z < b.z1 + m;
 /** The height of the ground at x, z (the highest block there, a pit's floor, the ramp, or the floor). */
 export function groundAt(x: number, z: number): number | null {
   if (x < BOUNDS.x0 || x > BOUNDS.x1 || z < BOUNDS.z0 || z > BOUNDS.z1) return null;
+  const w = wardGround(PRACTICE_WARD, x, z, 0); if (w !== null) return w;
   let y = 0, pit = false;
   for (const b of COURSE) if (inside(b, x, z)) { if (b.kind === 'pit') { pit = true; y = Math.min(y, b.top); } else if (!pit) y = Math.max(y, b.top); }
   const r = rampAt(x, z); if (r !== null && r > y) y = r;
@@ -44,6 +49,7 @@ export const courseWorld: TraversalWorld = {
   // Her body may not sink into a block nor stand in one's side: a block's walls are as sheer as they are drawn.
   canOccupy: (p: Vector3, radius: number) => {
     const g = groundAt(p.x, p.z); if (g === null || p.y < g - 0.03) return false;
+    const w = wardOccupy(PRACTICE_WARD, p, radius, 0); if (w !== null) return w && p.x > BOUNDS.x0 + radius && p.x < BOUNDS.x1 - radius && p.z > BOUNDS.z0 + radius && p.z < BOUNDS.z1 - radius;
     for (const b of COURSE) if (b.kind !== 'pit' && p.y < b.top - 0.001 && inside(b, p.x, p.z, radius)) return false;
     // A pit's walls likewise, below the floor.
     for (const b of COURSE) if (b.kind === 'pit' && p.y < -0.001 && !inside(b, p.x, p.z, -radius)) return false;

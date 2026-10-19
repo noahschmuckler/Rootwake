@@ -304,3 +304,56 @@ test('parkour: a sloped foot is stepped up even past a step\'s height; a sheer f
   assert.equal(run(slope(0.42, 0.25), 3).kinds[0], 'step');
   assert.equal(run(box(1, 30, 0.42), 3).kinds[0], 'clamber');
 });
+
+// The wards (RUINS.md, ruinsModel.ts): stone ruins built only of the canonical heights, on a level earthwork.
+import { buildWard, wardGround, wardOccupy, wards, toWorld, WARD, WARD_LORE, WARD_N, WARD_RING, WARD_APART } from '../src/ruinsModel';
+import { mulberry32 } from '../src/colors';
+const wardWorld = (w: ReturnType<typeof buildWard>, land = (_x: number, _z: number) => 0): TraversalWorld => ({ surfacesAt: (x, z) => [wardGround(w, x, z, land(x, z)) ?? land(x, z)], canOccupy: (p, r) => wardOccupy(w, p, r, land(p.x, p.z)) ?? p.y >= land(p.x, p.z) - 0.03 });
+/** Drive the stick along the ward's own +u from (u, v), letting go at each braced hang. */
+function across(w: ReturnType<typeof buildWard>, u: number, v: number, seconds: number) {
+  const world = wardWorld(w), [x, z] = toWorld(w.q, u, v), [fx, fz] = toWorld(w.q, 1, 0);
+  const m = new MobilityMotor(); m.parkour = true; m.reset(new Vector3(w.x + x, world.surfacesAt(w.x + x, w.z + z)[0], w.z + z)); const kinds: string[] = []; m.onCommit = p => kinds.push(p.kind);
+  let letGo = 0, was = false, top = 0;
+  for (let i = 0; i < seconds * 60; i++) {
+    if (m.hanging && !was) letGo = 0.3; was = !!m.hanging; const input = letGo > 0 ? idle : { ...idle, right: fx, forward: -fz, held: true }; letGo = Math.max(0, letGo - 1 / 60);
+    m.update(1 / 60, world, input); top = Math.max(top, m.feet.y); assert.ok(world.canOccupy(m.feet, BODY_RADIUS, BODY_HEIGHT), `${m.mode} ${m.feet.toArray()}`);
+  }
+  return { m, kinds, top, u: (m.feet.x - w.x) * fx + (m.feet.z - w.z) * fz };
+}
+test('wards: every sheer face is one canonical height (no grey between the clips), in every turn and seed', () => {
+  const canon = [CANON.step, CANON.clamber, CANON.wall];
+  for (let q = 0; q < 4; q++) for (let seed = 1; seed <= 4; seed++) {
+    const w = buildWard('w', 't', 0, 0, 0, q, 3, WARD_LORE[0], mulberry32(seed)), world = wardWorld(w); const at = (x: number, z: number) => world.surfacesAt(x, z)[0];
+    for (let x = -WARD.court; x < WARD.court; x += 0.05) for (let z = -WARD.court; z < WARD.court; z += 0.05) for (const [dx, dz] of [[0.05, 0], [0, 0.05]]) {
+      const d = Math.abs(at(x + dx, z + dz) - at(x, z)); if (d > 0.12) assert.ok(canon.some(c => Math.abs(c - d) < 0.005), `q${q} s${seed} ${x.toFixed(2)},${z.toFixed(2)}: ${d.toFixed(3)}`);
+    }
+  }
+});
+test('wards: the stick alone takes her up a ward (step, mount, the braced hang) over its keep and its tower, and down the far side', () => {
+  for (let q = 0; q < 4; q++) {
+    const w = buildWard('w', 't', 5, -7, 0.4, q, 3, WARD_LORE[0], mulberry32(2 + q));
+    const flank = across(w, -WARD.court - 1, 1.5, 30);
+    assert.deepEqual(flank.kinds.slice(0, 4), ['step', 'clamber', 'climb', 'climb'], flank.kinds.join()); assert.ok(flank.kinds.includes('hangDrop')); assert.ok(flank.u > WARD.court, `${flank.u}`);
+    const tower = across(w, -6, 0, 30);
+    assert.deepEqual(tower.kinds.slice(0, 5), ['clamber', 'climb', 'climb', 'climb', 'climb'], tower.kinds.join()); assert.ok(tower.top >= w.y0 + CANON.step + CANON.clamber + 2 * CANON.wall - 0.01, 'she stood on the tower');
+  }
+});
+test('wards: each glyph-plate stands on a top she can stand on, and the door faces the breach', () => {
+  const w = buildWard('w', 't', 0, 0, 1, 1, 3, WARD_LORE[1], mulberry32(5)), world = wardWorld(w);
+  assert.equal(w.plates.length, 4);
+  for (const p of w.plates) { near(world.surfacesAt(p.x, p.z)[0], p.y, 1e-6); assert.ok(world.canOccupy(new Vector3(p.x, p.y, p.z), BODY_RADIUS, BODY_HEIGHT), p.where); assert.ok(p.lore.length > 20); }
+  const [fx, fz] = toWorld(w.q, 1, 0); assert.ok((w.door.x - w.x) * fx + (w.door.z - w.z) * fz > 0);
+});
+test('wards: placed about the breach on its ring, apart, on walkable ground, clear of other places, their earthwork level', async () => {
+  const { createTerrain } = await import('../src/worldTerrain'); const { places } = await import('../src/overworldModel'); const { plateau, walkable } = await import('../src/plateauModel');
+  const t = createTerrain(1), breach = places(1).find(p => p.id === 'lair')!, avoid = places(1).filter(p => p.id !== 'lair').map(p => ({ x: p.x, z: p.z, r: p.radius }));
+  const list = wards(1, breach, t.height, (x, z) => walkable(plateau(1), x, z), avoid);
+  assert.equal(list.length, WARD_N);
+  for (const w of list) {
+    const r = Math.hypot(w.x - breach.x, w.z - breach.z); assert.ok(r >= WARD_RING[0] - 1 && r <= WARD_RING[1] + 1, `${r}`);
+    assert.ok(avoid.every(p => Math.hypot(p.x - w.x, p.z - w.z) >= p.r), w.id);
+    for (let u = -WARD.court; u <= WARD.court; u += 2) for (let v = -WARD.court; v <= WARD.court; v += 2) assert.ok(t.height(w.x + u, w.z + v) <= w.y0 + 1e-6, 'the court stands on the land, never under it');
+  }
+  for (const a of list) for (const b of list) if (a !== b) { const d = Math.abs(Math.atan2(a.z - breach.z, a.x - breach.x) - Math.atan2(b.z - breach.z, b.x - breach.x)) % (Math.PI * 2); assert.ok(Math.min(d, Math.PI * 2 - d) >= WARD_APART - 1e-6); }
+  assert.deepEqual(new Set(list.map(w => w.name)).size, list.length, list.map(w => w.name).join());
+});
