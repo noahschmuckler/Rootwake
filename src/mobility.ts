@@ -1,5 +1,6 @@
 /** Shared, renderer-independent traversal. All coordinates here are absolute feet positions. */
 import { Vector3, MathUtils } from 'three';
+import { planParkour, CLIMB_INTENT_S } from './parkour';
 
 export const BODY_RADIUS = 0.25;
 export const BODY_HEIGHT = 0.72;
@@ -16,9 +17,12 @@ export interface MobilityProfile {
   jumpSpeed: number;
   maxDrop: number;
   hoverSpeed: number;
+  /** Parkour (parkour.ts): the highest lip she climbs from the stick alone, and the widest gap she leaps at a run. */
+  climbRise: number;
+  leapReach: number;
 }
-export const NORMAL_MOBILITY: Readonly<MobilityProfile> = Object.freeze({ runSpeed: 2.8, reach: 4.2, jumpRise: 1.1, jumpApex: 1.55, jumpSpeed: 4.6, maxDrop: 4.6, hoverSpeed: 0 });
-export const POWERED_MOBILITY: Readonly<MobilityProfile> = Object.freeze({ runSpeed: 5.8, reach: 8.5, jumpRise: 3.2, jumpApex: 4.1, jumpSpeed: 7.8, maxDrop: 10, hoverSpeed: 4.8 });
+export const NORMAL_MOBILITY: Readonly<MobilityProfile> = Object.freeze({ runSpeed: 2.8, reach: 4.2, jumpRise: 1.1, jumpApex: 1.55, jumpSpeed: 4.6, maxDrop: 4.6, hoverSpeed: 0, climbRise: 1.75, leapReach: 2.6 });
+export const POWERED_MOBILITY: Readonly<MobilityProfile> = Object.freeze({ runSpeed: 5.8, reach: 8.5, jumpRise: 3.2, jumpApex: 4.1, jumpSpeed: 7.8, maxDrop: 10, hoverSpeed: 4.8, climbRise: 3.2, leapReach: 4.5 });
 export interface TraversalWorld {
   /** Every solid, walkable top at x,z, in absolute world Y. Not just the highest top. */
   surfacesAt(x: number, z: number): readonly number[];
@@ -28,7 +32,9 @@ export interface TraversalWorld {
   anchors?(): readonly Vector3[];
 }
 /** 'drift' is the free-volume move: a straight line through a medium with no support, gravity or arc. */
-export type TraversalKind = 'walk' | 'jump' | 'drop' | 'drift';
+export type TraversalKind = 'walk' | 'jump' | 'drop' | 'drift'
+  // Parkour (parkour.ts): the moves the stick alone makes over ground the walk cannot take.
+  | 'step' | 'clamber' | 'mantle' | 'climb' | 'vault' | 'hop' | 'hangDrop' | 'leap';
 export interface Traversal {
   kind: TraversalKind;
   from: Vector3;
@@ -37,6 +43,10 @@ export interface Traversal {
   velocityY: number;
   /** Walk routes follow every sampled height, rather than cutting through a ramp. */
   floorPath?: Vector3[];
+  /** Parkour: the time of each floorPath point (else they are evenly spaced), what the body does from when, and the way she faces (a yaw). */
+  times?: number[];
+  stages?: { name: string; at: number }[];
+  face?: number;
 }
 /** 'free' is the opt-in volume medium (Hulda's awareness in the soil): the body floats, steered by
  * yaw and pitch, and is bound only by what the world's canOccupy admits. */
@@ -70,6 +80,11 @@ export function supportAt(world: TraversalWorld, x: number, z: number, ceiling =
 }
 export function traversalPoint(plan: Traversal, time: number, out = new Vector3()): Vector3 {
   const t = clamp(time / plan.duration, 0, 1);
+  if (plan.floorPath && plan.times) {
+    const ts = plan.times, tt = clamp(time, 0, plan.duration); let i = 0;
+    while (i < ts.length - 2 && ts[i + 1] < tt) i++;
+    return out.lerpVectors(plan.floorPath[i], plan.floorPath[i + 1], clamp((tt - ts[i]) / Math.max(1e-6, ts[i + 1] - ts[i]), 0, 1));
+  }
   if (plan.floorPath) {
     const n = t * (plan.floorPath.length - 1), i = Math.min(plan.floorPath.length - 2, Math.floor(n));
     return out.lerpVectors(plan.floorPath[i], plan.floorPath[i + 1], n - i);
@@ -152,8 +167,15 @@ export class MobilityMotor {
   canMove = true;
   distance = 0;
   speed = 0;
+  /** Parkour (parkour.ts): the stick alone takes her over ground the walk cannot (opt in per world; the lab's measured courses leave it off). */
+  parkour = false;
+  private pushTime = 0;
+  private probeWait = 0;
   private plan: Traversal | null = null;
   private planTime = 0;
+  /** The move under way and how far into it (seconds), for the presentation; null when none. */
+  get traversal(): Traversal | null { return this.mode === 'traverse' ? this.plan : null; }
+  get traversalTime(): number { return this.planTime; }
   private idleTime = 0;
   private flightCeiling = Infinity;
   onTravel: (distance: number) => void = () => {};
@@ -267,6 +289,24 @@ export class MobilityMotor {
       else this.velocity[axis] = 0;
     }
   }
+  /** Parkour: when the drive presses into ground the walk cannot take, a move along the drive. A drop, a vault
+   * and a leap go at once (she is already going over); a face to climb needs CLIMB_INTENT_S of pressing, so
+   * brushing a wall while sliding along it never climbs it. Planning is throttled while nothing fits. */
+  private autoMove(dt: number, world: TraversalWorld, wantedX: number, wantedZ: number, amount: number): boolean {
+    this.probeWait = Math.max(0, this.probeWait - dt);
+    const wanted = Math.hypot(wantedX, wantedZ);
+    if (amount < 0.2 || wanted < 0.05) { this.pushTime = 0; return false; }
+    const dx = wantedX / wanted, dz = wantedZ / wanted, ahead = new Vector3(this.feet.x + dx * 0.14, 0, this.feet.z + dz * 0.14);
+    const s = supportAt(world, ahead.x, ahead.z, this.feet.y + STEP_HEIGHT);
+    const down = s !== null && s < this.feet.y - STEP_HEIGHT;
+    if (s !== null && !down) { ahead.y = s; if (world.canOccupy(ahead, BODY_RADIUS, BODY_HEIGHT)) { this.pushTime = 0; return false; } }
+    this.pushTime += dt;
+    if (this.probeWait > 0 || (!down && this.pushTime < CLIMB_INTENT_S && Math.hypot(this.velocity.x, this.velocity.z) < 1.5)) return false;
+    const plan = planParkour(world, this.feet, dx, dz, this.profile, Math.max(Math.hypot(this.velocity.x, this.velocity.z), wanted * 0.6));
+    if (!plan) { this.probeWait = 0.12; return false; }
+    this.plan = plan; this.planTime = 0; this.mode = 'traverse'; this.velocity.set(0, 0, 0); this.pushTime = 0;
+    this.onCommit(plan); return true;
+  }
   private step(dt: number, world: TraversalWorld, input: MotionInput): void {
     if (this.plan && this.mode === 'traverse') {
       if (!this.enabled || !this.canMove) { this.plan = null; this.mode = this.free ? 'free' : 'falling'; return; }
@@ -302,6 +342,7 @@ export class MobilityMotor {
     this.velocity.x += (wantedX - this.velocity.x) * damping;
     this.velocity.z += (wantedZ - this.velocity.z) * damping;
     if (Math.abs(this.velocity.x) + Math.abs(this.velocity.z) < 0.001) { this.velocity.x = 0; this.velocity.z = 0; }
+    if (this.mode === 'grounded' && this.parkour && this.autoMove(dt, world, wantedX, wantedZ, r.amount)) return;
     // Axis separation provides wall sliding; substeps prevent high-speed tunnelling.
     for (const axis of ['x', 'z'] as const) {
       const delta = this.velocity[axis] * dt;

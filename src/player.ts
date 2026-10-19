@@ -1,6 +1,6 @@
 // One touch-first player controller for the plateau, underworld and laboratory.
 import * as THREE from 'three';
-import { BODY_RADIUS, BODY_HEIGHT, STEP_HEIGHT, MobilityMotor, planDrift, planTraversal, supportAt, traversalPoint, type Traversal, type TraversalWorld } from './mobility';
+import { BODY_RADIUS, BODY_HEIGHT, STEP_HEIGHT, MobilityMotor, planDrift, planTraversal, supportAt, traversalPoint, type Traversal, type TraversalKind, type TraversalWorld } from './mobility';
 import { MovementGesture } from './movementGesture';
 
 export const EYE_HEIGHT = 0.55;
@@ -95,6 +95,8 @@ export class Player {
     drift: new THREE.MeshBasicMaterial({ color: 0xd7bdff, opacity: 0.9, transparent: true, depthTest: false, depthWrite: false, fog: false, side: THREE.DoubleSide }),
   };
   private readonly arc = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.75, depthTest: false, depthWrite: false, fog: false }));
+  /** The fan offers walks, jumps, drops and drifts; parkour's moves (made by the stick, never offered) read as jumps. */
+  private markerMaterial(kind: TraversalKind): THREE.MeshBasicMaterial { return kind === 'walk' || kind === 'drop' || kind === 'drift' ? this.materials[kind] : this.materials.jump; }
   readonly keys = new Set<string>();
   get poweredLegs(): boolean { return this.motor.powered; }
   set poweredLegs(value: boolean) { this.motor.powered = value; if (!value) { this.motor.cutThrusters(); this.flightStick.held = false; } }
@@ -311,7 +313,7 @@ export class Player {
       if (this.candidates.some(c => c.plan.to.distanceTo(to) < 0.3)) continue;
       const plan = planTraversal(this.movementWorld, from, to, this.motor.profile, this.fanScale);
       if (!plan) continue;
-      const marker = new THREE.Mesh(this.ring, this.materials[plan.kind]);
+      const marker = new THREE.Mesh(this.ring, this.markerMaterial(plan.kind));
       marker.rotation.x = -Math.PI / 2; marker.position.copy(to); marker.position.y += 0.045;
       // An explicit overlay: never cut in half by jittered rock, fog or depth occlusion.
       marker.renderOrder = 1001; this.markers.add(marker); this.candidates.push({ plan, marker });
@@ -351,7 +353,7 @@ export class Player {
       const error = Math.abs(distance / reach - magnitude);
       const s = angle * 1.5 + error * 2;
       if (magnitude > 0.18 && angle < 0.5 && error < 0.3 && s < score) { score = s; best = candidate; }
-      candidate.marker.material = this.materials[candidate.plan.kind]; candidate.marker.scale.setScalar(1);
+      candidate.marker.material = this.markerMaterial(candidate.plan.kind); candidate.marker.scale.setScalar(1);
     }
     const previous = this.picked;
     this.picked = best;

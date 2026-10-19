@@ -75,6 +75,59 @@ same reach (`planDrift`). Leaving the medium (`player.free = false`) drops
 the body to the nearest support; the study teleports it onto the surface
 it rose to.
 
+## Parkour (the stick alone)
+
+Noah (2026-10-19), after the old bridge's first step stopped her: rather than smooth the bridge, the
+movement takes any ground that ought to be climbable, with no input beyond pushing the stick the way
+she should go. `parkour.ts` plans the move; the motor (`MobilityMotor.parkour`, opt in per world: the
+village and its studies turn it on, the lab's measured courses keep it off) asks for one when the drive
+presses into ground the walk cannot take, a lookahead 0.14 m along the drive: a rise past STEP_HEIGHT,
+a drop, something in the way. A drop, a vault or a leap goes at once; a face to climb needs
+CLIMB_INTENT_S (0.12 s) of pressing, so sliding along a wall never climbs it. Every move is a keyed
+traversal through the same swept body test as a jump (`validateTraversal`) and lands only on a full
+footprint, so it can take her nowhere the walk and the fan could not stand her.
+
+| Move | When (normal legs; tuning in `PARKOUR`) | What she does |
+|---|---|---|
+| step | a rise to 0.42 m | a knee up, no hands (the bridge's foot) |
+| clamber | to 0.8 m | hands on the top, the body over them, a knee on |
+| mantle | to 1.25 m | a crouch, a hop that puts her hands on the lip, the press up |
+| climb | to `climbRise` (1.75 m; 3.2 with the powered legs) | a jump to a hang, a breath, the pull up and over |
+| vault | a top to 0.8 m high and no thicker than 0.9 m, ground beyond at about her height | over it without stopping |
+| hop | a drop to 0.95 m | a short arc down |
+| hangDrop | a sheer drop of 1.15 m or more (to `maxDrop`) | she turns to the wall, lowers to a hang off the lip, lets go |
+| leap | a gap she runs at (1.6 m/s or more), ground across it within `leapReach` (2.6 m; 4.5 powered) | a running jump |
+
+A rise past `climbRise`, a drop past `maxDrop` and a gap past `leapReach` stop her as before. Water is
+never leapt (the plateau's `canOccupy` refuses the air over it), so the rivers stay barriers but at
+their crossings. The motor exposes the move (`motor.traversal`, `traversalTime`); each carries its
+stages (crouch, reach, hang, pull, over, land; turn, lower, fall) and the way she faces (`face`).
+
+### Parkour clips
+
+`huldaTraverse.ts` plays each stage as a window of a Mixamo clip stretched over the stage's seconds,
+whole body (the gait gives way, as it does to the fight's moves); the fan's own jumps and drops now
+play the jump too. Until a clip is downloaded its stages stand in with windows of `jump.fbx`, and a
+step keeps the stride. Download each with the settings of the clips already in `public/models/clips`
+(FBX Binary, Without Skin, 30 fps, In Place where offered; the X Bot is fine) and drop it in with the
+file name below; the build finds it. Mixamo's search terms are in quotes; any clip with the same action
+works. `?parkourclips=0` turns the layer off.
+
+| File | Search Mixamo for | Plays |
+|---|---|---|
+| `step-up.fbx` | "Step Up" (or "Climbing Stairs") | the step |
+| `clamber.fbx` | "Climbing Up Wall" (a short, standing one) | the clamber |
+| `jump-to-hang.fbx` | "Jump To Hang" | the mantle's and climb's reach |
+| `hang.fbx` | "Hanging Idle" (or "Braced Hang") | the hang, held |
+| `climb-up.fbx` | "Braced Hang To Crouch" (or "Freehang Climb") | the pull up and over; backwards, lowering into a hang |
+| `vault.fbx` | "Jump Over" (or "Vault", "Over Obstacle Jumping") | the vault |
+| `hang-drop.fbx` | "Braced Hang Drop" (or "Freehang Drop") | letting go |
+| `running-jump.fbx` | "Running Jump" | the hop, the leap, the fan's jumps |
+| `landing.fbx` | "Falling To Landing" (or "Hard Landing") | landing a drop or a leap |
+
+Each clip's travel (its hips' rise and drift) is taken out: the motor moves her, the clip poses her.
+Once they are in, the windows in `SEGS` want tuning against the clips' own frames.
+
 ## Courses and measurements
 
 The 16 m track exposes instantaneous speed and elapsed time. The slalom has
@@ -104,8 +157,7 @@ does not award it. Reset course returns to the selected start.
 `TraversalWorld.surfacesAt` to expose stacked walkable surfaces and
 `canOccupy` for body clearance. Legacy worlds retain their safe edge
 boundaries and existing object interactions. The motor does not make the
-plateau's distant decorative landscape walkable. Climbing/ledge-grabbing
-is a future traversal type, not implemented or faked by this pass.
+plateau's distant decorative landscape walkable. Climbing and ledge-grabbing are parkour's (above).
 
 ## Verification
 

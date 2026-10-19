@@ -51,6 +51,7 @@ import { createDeepWorld } from './deepWorld';
 import { Impact, type Blow } from './impact';
 import { FightSound } from './fightSound';
 import { createHitFx, type Flecks } from './hitFx';
+import { createTraverseLayer, type TraverseLayer } from './huldaTraverse';
 import { createMoveLayer, MOVES, dodgeProgress, type MoveLayer, type MoveEvent } from './huldaMoves';
 import { createStaff, createTrail } from './huldaStaff';
 import { HULDA_PALETTE } from './huldaDress';
@@ -186,6 +187,8 @@ const groundWorld: TraversalWorld = {
 /** While she is a bulge, a figure of leaves or a knot in a root, the shared motor stays put but the stick still speaks. */
 const lockedWorld: TraversalWorld = { surfacesAt: () => [], canOccupy: () => false };
 const player = new Player(renderer.domElement, scene, camera); scene.add(player.avatar); player.view = 'third'; player.traversalWorld = groundWorld;
+// MOBILITY.md, parkour: the stick alone takes her up, over and down whatever the walk cannot (Noah, 2026-10-19).
+player.motor.parkour = true;
 const presentation = createHuldaPresentation(scene, home_().world.figure, home_().world.mass);
 karst = createKarstFeature(scene, player, camera, KARST_AT, { orbit: (t, back, up, ease) => orbitCamera(t, back, up, ease), want: () => want(), ground: () => groundWorld, locked: lockedWorld, height: relief, portal: openPortal });
 // The vista look draws the karst's trees itself (villageVista.villageTrees); the karst keeps their climbing and colliders.
@@ -195,9 +198,15 @@ const hulda = presentation.hulda;
 // Hulda and the hobbits share the skeleton, so the Mixamo clips drive all nine (public/models/README.md).
 const query = new URLSearchParams(location.search), clipUrls = query.get('clips')?.split(',').filter(Boolean) ?? __HULDA_CLIPS__, base = (c: string) => import.meta.env.BASE_URL + c;
 let clipStatus: 'none' | 'loading' | 'ready' | 'failed' = clipUrls.length ? 'loading' : 'none', clipError = '';
-if (clipUrls.length) import('./huldaModel').then(({ loadHuldaClips }) => loadHuldaClips(clipUrls.map(base))).then(clips => { presentation.setClips(clips); stewardFig.setClips(clips); for (const c of ctxs) c.world.setFigureClips(clips); clipStatus = 'ready'; loadFightClips(); }, e => { clipStatus = 'failed'; clipError = String(e); console.warn('clips', e); });
+if (clipUrls.length) import('./huldaModel').then(({ loadHuldaClips }) => loadHuldaClips(clipUrls.map(base))).then(clips => { presentation.setClips(clips); stewardFig.setClips(clips); for (const c of ctxs) c.world.setFigureClips(clips); clipStatus = 'ready'; loadFightClips(); loadTraverseClips(); }, e => { clipStatus = 'failed'; clipError = String(e); console.warn('clips', e); });
 // F2: her fight clips, after the gait's (they are only hers; `?fightclips=0` leaves her to F1's instant blows).
 let fightClipStatus: 'none' | 'loading' | 'ready' | 'failed' = 'none';
+// Her parkour's clips (huldaTraverse.ts): whichever of them are downloaded, and the jump; `?parkourclips=0` leaves her climbs to the gait.
+let traverse: TraverseLayer | null = null;
+function loadTraverseClips(): void {
+  const urls = query.get('parkourclips') === '0' ? [] : __TRAVERSE_CLIPS__; if (!urls.length || !hulda.gait) return;
+  import('./huldaModel').then(({ loadHuldaClips }) => loadHuldaClips(urls.map(base))).then(clips => { if (hulda.gait) traverse = createTraverseLayer(hulda.gait, hulda.rig, clips); }, e => console.warn('parkour clips', e));
+}
 function loadFightClips(): void {
   const urls = query.get('fightclips') === '0' ? [] : __FIGHT_CLIPS__; if (!urls.length || !hulda.gait) return; fightClipStatus = 'loading';
   import('./huldaModel').then(({ loadHuldaClips }) => loadHuldaClips(urls.map(base))).then(clips => { if (!hulda.gait) return; moves = createMoveLayer(hulda.gait, hulda.rig, clips); fightClipStatus = 'ready'; }, e => { fightClipStatus = 'failed'; console.warn('fight clips', e); });
@@ -401,6 +410,9 @@ function presentHulda(dt: number): void {
   let heading = player.yaw; if ((mode === 'ground' || mode === 'catwalk') && player.motor.speed > 0.08) heading = Math.atan2(-player.motor.velocity.x, -player.motor.velocity.z);
   // F3: she faces the way she rolls, and in her guard, the foe she guards against.
   if (mode === 'ground' && dodge) heading = dodge.heading; else if (mode === 'ground' && guarding && locked) heading = Math.atan2(-(locked.x + ctx.ox - player.feet().x), -(locked.z + ctx.oz - player.feet().z));
+  // Parkour: she faces the way the move goes (a hang drop turns her to the wall), and its clips pose her.
+  const move = mode === 'ground' || mode === 'catwalk' ? player.motor.traversal : null; if (move?.face !== undefined) heading = move.face;
+  traverse?.update(dt, move, player.motor.traversalTime);
   visualRotation.setFromAxisAngle(up, heading);
   if (mode === 'trunk' && trunk) { form = 'burl'; visualPosition.copy(world.trunkPoint(trunk.tree, trunk.h, trunk.az)); visualRotation.setFromAxisAngle(up, Math.PI / 2 - trunk.az); }
   else if (mode === 'crown' && crown) { form = 'leaf'; visualPosition.copy(world.crownPoint(crown.tree, crown.az)); }

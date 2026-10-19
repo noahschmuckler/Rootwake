@@ -224,3 +224,47 @@ test('free volume: a drift is bound by reach in three dimensions and by the soil
   simulate(m, soil, 3); assert.equal(m.mode, 'free'); near(m.feet.distanceTo(new Vector3(2, -1.5, 5.5)), 0, 1e-3); near(m.velocity.length(), 0);
   assert.equal(m.ignite(), false, 'no thrusters in the soil');
 });
+
+// Parkour (parkour.ts): the stick alone takes her over what the walk can't, through the same swept body test.
+const box = (x0: number, x1: number, top: number, base = 0): TraversalWorld => ({
+  surfacesAt: x => (x >= x0 && x <= x1 ? [top] : [base]),
+  canOccupy: (p, r) => p.y >= base - 0.025 && !(p.x + r > x0 && p.x - r < x1 && p.y < top - 0.001),
+});
+function run(world: TraversalWorld, seconds: number, right = 1, fps = 60): { m: MobilityMotor; kinds: string[] } {
+  const m = new MobilityMotor(); m.parkour = true; m.reset(new Vector3(0, supportAt(world, 0, 0) ?? 0, 0)); const kinds: string[] = [];
+  m.onCommit = p => kinds.push(p.kind);
+  for (let i = 0; i < Math.round(seconds * fps); i++) { m.update(1 / fps, world, { ...idle, right, held: true }); assert.ok(world.canOccupy(m.feet, BODY_RADIUS, BODY_HEIGHT), `${m.mode} ${m.feet.toArray()}`); }
+  return { m, kinds };
+}
+test('parkour: a rise past the step is stepped, clambered, mantled or climbed by height, landing on top', () => {
+  for (const [top, kind] of [[0.35, 'step'], [0.7, 'clamber'], [1.1, 'mantle'], [1.6, 'climb']] as const) {
+    const { m, kinds } = run(box(1, 30, top), 4);
+    assert.deepEqual(kinds, [kind], `${top}`); near(m.feet.y, top, 1e-3); assert.equal(m.mode, 'grounded'); assert.ok(m.feet.x > 1.5, `${m.feet.x}`);
+  }
+  // Higher than she climbs: the wall stops her as before.
+  const { m, kinds } = run(box(1, 30, 2.2), 3); assert.deepEqual(kinds, []); assert.ok(m.feet.x < 1); near(m.feet.y, 0);
+});
+test('parkour: off by default (the lab courses keep their measured rules)', () => {
+  const m = new MobilityMotor(); m.reset(new Vector3()); simulate(m, box(1, 9, 0.35), 3, { ...idle, right: 1, held: true }); assert.ok(m.feet.x < 1); near(m.feet.y, 0);
+});
+test('parkour: a thin top is vaulted, a broad one climbed onto', () => {
+  const thin = run(box(1, 1.4, 0.6), 3); assert.equal(thin.kinds[0], 'vault'); near(thin.m.feet.y, 0); assert.ok(thin.m.feet.x > 1.6);
+  const broad = run(box(1, 30, 0.6), 1.5); assert.equal(broad.kinds[0], 'clamber');
+});
+test('parkour: a ledge is hopped down when low, lowered from by a hang when sheer, and its drop bound kept', () => {
+  const ledge = (h: number): TraversalWorld => ({ surfacesAt: x => [x < 1 ? h : 0], canOccupy: p => p.y >= (p.x < 1 ? h : 0) - 0.025 });
+  const low = run(ledge(0.6), 3); assert.equal(low.kinds[0], 'hop'); near(low.m.feet.y, 0);
+  const high = run(ledge(2.4), 4); assert.equal(high.kinds[0], 'hangDrop'); near(high.m.feet.y, 0); assert.equal(high.m.mode, 'grounded');
+  const cliff = run(ledge(6), 3); assert.deepEqual(cliff.kinds, []); near(cliff.m.feet.y, 6);
+});
+test('parkour: a gap is leapt only at a run, and only to ground she can land on', () => {
+  const gap = (w: number): TraversalWorld => { const g = (x: number) => (x > 1 && x < 1 + w ? -8 : 0); return { surfacesAt: x => [g(x)], canOccupy: p => p.y >= g(p.x) - 0.025 }; };
+  const leap = run(gap(1.6), 3); assert.equal(leap.kinds[0], 'leap'); assert.ok(leap.m.feet.x > 2.6);
+  const creep = run(gap(1.6), 3, 0.3); assert.deepEqual(creep.kinds, []); assert.ok(creep.m.feet.x < 1);
+  const wide = run(gap(4), 3); assert.deepEqual(wide.kinds, []); assert.ok(wide.m.feet.x < 1);
+});
+test('parkour: a ramp steeper at its foot than the step allows (the old bridge) is stepped onto and walked', () => {
+  const deck = (x: number) => (x < 0.5 ? 0 : 0.05 + 4.2 * Math.sin(Math.PI * Math.min(1, (x - 0.5) / 125)) ** 0.6);
+  const world: TraversalWorld = { surfacesAt: x => [deck(x)], canOccupy: p => p.y >= deck(p.x) - 0.03 };
+  const { m, kinds } = run(world, 6); assert.ok(kinds.length >= 1 && kinds.length <= 3, kinds.join()); assert.ok(m.feet.x > 8, `${m.feet.x}`); near(m.feet.y, deck(m.feet.x), 0.05);
+});
