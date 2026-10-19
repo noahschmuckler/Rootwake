@@ -28,7 +28,7 @@ export function buildKarstFlow(scene: THREE.Scene, options: { sharedGround?: boo
   const grassMat = spriteMaterial('grass', '#9fc06a'), mossMat = new THREE.MeshStandardMaterial({ color: '#6f9450', roughness: 1, flatShading: true });
   const o = new THREE.Object3D();
   for (const p of PILLARS) {
-    const g = new THREE.Group(); g.position.set(p.x, 0, p.z); scene.add(g);
+    const g = new THREE.Group(); g.name = `pillar-${p.id}`; g.position.set(p.x, 0, p.z); scene.add(g);
     const body = new THREE.Mesh(lathe(p.radius, p.height, p.climbable ? 64 : 30, p.climbable ? 40 : 22, rand, p.id === 'main' ? 0.06 : 0.08), p.climbable ? limestone : mist); g.add(body);
     if (!p.climbable) continue;
     const cap = new THREE.Mesh(new THREE.CircleGeometry(p.radius(p.height) + 0.2, 40), limestone); cap.rotation.x = -Math.PI / 2; cap.position.y = p.height; g.add(cap);

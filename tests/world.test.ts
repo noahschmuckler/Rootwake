@@ -83,19 +83,13 @@ test('a course runs from a tree by the village to the karst and back, joined roo
     assert.ok(c.length < Math.hypot(to.x - e.x, to.z - e.z) * 1.6 + 120, `not the long way round (${c.length.toFixed(0)} m)`);
   }
 });
-test('the karst roots: no way up from the foot (Noah: the trees near the karst have flat roots); a ledge tree offers the places its pillar’s roots reach', () => {
-  assert.equal(shortestPath('floorOak', 'pine'), null, 'no root route from the foot to the summit'); assert.equal(shortestPath('Bfoot', 'pineB'), null, 'nor up sister B from its foot tree');
-  const up = shortestPath('B0', 'pineB')!; assert.ok(up && up.length >= 2, 'up sister B from its first ledge');
-  let at = 'B0'; for (const r of up) { assert.ok(r.a === at || r.b === at); at = r.a === at ? r.b : r.a; } assert.equal(at, 'pineB');
-  assert.ok(shortestPath('southShrub', 'pine') && shortestPath('eastShrub', 'cavernFern'), 'the karst’s own plants reach each other');
-  const places = destinationsFrom('B6'); const ids = places.map(p => p.id);
-  assert.deepEqual(ids, ['pineB'], `sister B's halfway tree offers its summit and nothing of the other pillars (${ids.join(',')})`);
-  const south = destinationsFrom('southShrub').map(p => p.id); assert.ok(south.includes('pine') && south.includes('cavernFern') && !south.some(id => NODES[id].zone === 'floor'), `the south ledge offers the summit and the cavern, no floor places (${south.join(',')})`);
-  assert.ok(places.every((p, i) => i === 0 || p.length >= places[i - 1].length), 'nearest first');
+test('the karst roots: none up or down it (Noah, 2026-10-19: the way down is the drop and the catwalk’s portal); the karst’s ledge plants are no portals', () => {
+  assert.equal(shortestPath('floorOak', 'pine'), null, 'no root route from the foot to the summit'); assert.equal(shortestPath('southShrub', 'pine'), null, 'nor between the ledges and the summit');
   for (const n of Object.values(NODES)) if (n.zone === 'floor') assert.equal(destinationsFrom(n.id).length, 0, `${n.id}: a floor tree is no portal`);
-  assert.equal(nodeName('pine'), 'the summit pine'); assert.equal(nodeName('pineB'), "the Heron's summit"); assert.equal(nodeName('B3'), 'the Heron, ledge 4'); assert.equal(nodeName('Cfoot'), 'the foot of the Anvil'); assert.equal(destinationsFrom('B0')[0].name, 'the Heron, halfway up');
-  // The karsts' names (Noah, 2026-09-27): every pillar has one, all different, the one with the pool the Wellspire, the place on the map named after it.
-  assert.equal(PILLARS.find(p => p.id === 'main')!.name, 'the Wellspire'); assert.equal(new Set(PILLARS.map(p => p.name)).size, PILLARS.length); assert.equal(overworldPlaces(1).find(p => p.kind === 'karst')!.name, 'the Wellspire');
+  assert.equal(destinationsFrom('southShrub').length, 0, 'a ledge plant offers nothing');
+  assert.equal(nodeName('pine'), 'the summit pine');
+  // The karst's name (Noah, 2026-09-27): the one with the pool the Wellspire, the place on the map named after it; one karst (2026-10-19).
+  assert.deepEqual(PILLARS.map(p => p.name), ['the Wellspire']); assert.equal(overworldPlaces(1).find(p => p.kind === 'karst')!.name, 'the Wellspire');
 });
 test('the other villages have roots too (Noah: root travel did not work at the pines): a course from each far green home and back, an entry tree in reach, a root under the copse', () => {
   const g = createRootNetwork(createTerrain(1));

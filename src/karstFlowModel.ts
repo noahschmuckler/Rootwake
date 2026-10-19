@@ -13,11 +13,9 @@ export type { Root } from './karstModel';
 /** The pillars: the karst she wakes on and its sisters in the mist. Two of the sisters can be climbed. */
 /** Every pillar has a name (Noah, 2026-09-27: the one with the pool needed its own, and the others were hard to tell apart); the entries float it over the summit. */
 export interface Pillar { id: string; name: string; x: number; z: number; height: number; base: number; climbable: boolean; radius: (y: number) => number }
-const sister = (id: string, name: string, x: number, z: number, height: number, base: number, climbable: boolean): Pillar => ({ id, name, x, z, height, base, climbable, radius: y => base * (1.1 - 0.6 * Math.pow(Math.min(1, Math.max(0, y / height)), 1.2)) + 1.5 * Math.sin(y * 0.2) });
+// Noah (2026-10-19): one karst. The six sisters in the mist came of reading the eight karsts at the corners of a cubic world as eight karsts clustered together; the world has one at the centre of its plateau, and its sisters (and their helices) are gone.
 export const PILLARS: Pillar[] = [
   { id: 'main', name: 'the Wellspire', x: 0, z: 0, height: PILLAR_HEIGHT, base: pillarRadius(0), climbable: true, radius: pillarRadius },
-  sister('B', 'the Heron', 60, -30, 78, 9, true), sister('C', 'the Anvil', -55, 40, 58, 12, true),
-  sister('D', 'the Needle', 20, 75, 66, 8, false), sister('E', 'the Elder', -70, -50, 84, 10, false), sister('F', 'the Stump', 85, 45, 52, 11, false), sister('G', 'the Hood', -30, -85, 70, 9, false),
 ];
 export const pillarById = (id: string): Pillar => PILLARS.find(p => p.id === id)!;
 /** A point on a pillar's face, pushed out by `out`, at height y and angle a about its axis. */
@@ -34,7 +32,7 @@ export const ZONES: Record<string, Zone> = {
 export const inZone = (zone: Zone, x: number, z: number): boolean => (zone.contains ? zone.contains(x, z) : inDisc(zone, x, z));
 export const groundAt = (zone: Zone, x: number, z: number): number => zone.y + relief(x, z);
 /** The helix of ledges up a climbable sister: each a shelf with one clinging tree, a leaf-hop from the last. Tuning: the climb's rhythm. */
-export const HELIX = { B: { from: 6, step: 6.05, count: 12, angle0: 3.6, turn: 0.75 }, C: { from: 6, step: 5.9, count: 9, angle0: 0.4, turn: 0.55 } } as const;
+export const HELIX: Record<string, { from: number; step: number; count: number; angle0: number; turn: number }> = {};
 export const LEDGE_RADIUS = 1.55, LEDGE_OUT = 1.3;
 for (const [pid, h] of Object.entries(HELIX)) {
   const p = pillarById(pid);
@@ -76,7 +74,7 @@ export function dense(x: number, z: number): boolean {
   return false;
 }
 export const FOREST: Node[] = (() => {
-  const rand = mulberry32(FOREST_SEED), out: Node[] = [], keep = [NODES.floorOak, NODES.floorMaple, NODES.Bfoot, NODES.Cfoot];
+  const rand = mulberry32(FOREST_SEED), out: Node[] = [], keep = [NODES.floorOak, NODES.floorMaple];
   const clearOf = (x: number, z: number): boolean => keep.every(k => Math.hypot(x - k.at.x, z - k.at.z) > 5) && PILLARS.every(p => Math.hypot(x - p.x, z - p.z) > p.radius(0) + 3.2) && Math.hypot(x - PLANTS.floorOak.mouth.x, z - PLANTS.floorOak.mouth.z) > 4;
   for (let i = 0; i < 40000 && out.length < 460; i++) {
     const a = rand() * Math.PI * 2, r = Math.sqrt(rand()) * (FOREST_RADIUS - 3), x = Math.cos(a) * r, z = Math.sin(a) * r;
@@ -142,7 +140,8 @@ export function standNear(n: Node): { x: number; z: number; yaw: number } {
 const makeRoot = (id: string, a: string, b: string, interior: boolean, points: Vector3[]): Root => { const curve = new CatmullRomCurve3(points, false, 'centripetal', 0.6); return { id, a, b, interior, curve, length: curve.getLength() }; };
 /** Noah (2026-09-27, the village): the trees near the karst have roots like any tree's, relatively flat; riding a root from the floor up the pillar (or down it) was nauseating even with the camera's follow. So no root leaves the floor: the karst's own roots that ran from the floor trees up to the ledges and the cavern (`south-floor`, `west-floor`, `cavern-floor`), and the sisters' from their foot trees (`foot-mid`, `h0`), are gone from the flow. The floor keeps its flat network; the pillars keep the roots between their own plants (the way up a sister is the leaf-hops of its helix; the way onto the karst's summit is the deep, from a fairy ring or a shrined stone). The old study's ROOTS are untouched. */
 const leavesFloor = (r: Root): boolean => (NODES[r.a].zone === 'floor') !== (NODES[r.b].zone === 'floor');
-export const KARST_ROOTS: Root[] = ROOTS.filter(r => !r.dormant && !leavesFloor(r));
+// Noah (2026-10-19): no root ascends or descends the karst at all, the ledge-to-ledge and summit roots on its faces included: she comes down from the summit by the drop and the catwalk's portal. The floor's roots stay.
+export const KARST_ROOTS: Root[] = ROOTS.filter(r => !r.dormant && !leavesFloor(r) && NODES[r.a].zone === 'floor');
 export const NETWORK_LINK = 9.5, NETWORK_JOIN = 18;
 export const NETWORK_ROOTS: Root[] = (() => {
   const floor = nodesOf('floor'), out: Root[] = [], seen = new Set<string>();
@@ -159,23 +158,9 @@ export const NETWORK_ROOTS: Root[] = (() => {
   }
   return out;
 })();
-export const SISTER_ROOTS: Root[] = (() => {
-  const out: Root[] = [];
-  for (const [pid, h] of Object.entries(HELIX)) {
-    const p = pillarById(pid), mid = Math.floor(h.count / 2), midNode = NODES[`${pid}${mid}`];
-    // Draped over the face the short way round, keeping just outside the rock (the sisters' faces are jittered more than the karst's).
-    const drape = (a: Node, b: Node, y0: number, y1: number, a0: number, a1: number): Vector3[] => { const sweep = Math.atan2(Math.sin(a1 - a0), Math.cos(a1 - a0)), pts: Vector3[] = []; for (let i = 1; i < 7; i++) { const t = i / 7; pts.push(onPillar(p, y0 + (y1 - y0) * t, a0 + sweep * t, 0.75 + 0.15 * Math.sin(t * 9))); } return [a.mouth.clone(), ...pts, b.mouth.clone()]; };
-    const midAngle = h.angle0 + mid * h.turn, topAngle = h.angle0 + (h.count - 1) * h.turn;
-    // No root from the foot tree (see KARST_ROOTS): ledge to ledge up the helix from the first ledge, so every clinging tree has roots to sink into and the climb can be taken a ledge at a time.
-    for (let i = 0; i + 1 < h.count; i++) { const a = NODES[`${pid}${i}`], b = NODES[`${pid}${i + 1}`]; out.push(makeRoot(`${pid}-h${i + 1}`, a.id, b.id, false, drape(a, b, a.at.y + 0.3, b.at.y - 0.3, h.angle0 + i * h.turn, h.angle0 + (i + 1) * h.turn))); }
-    const pine = NODES[`pine${pid}`], rim = [onPillar(p, p.height - 1.5, topAngle, 0.6), onPillar(p, p.height, topAngle, 0.35).setY(p.height + 0.1), onPillar(p, p.height, topAngle, -1.2).setY(p.height + 0.15)];
-    out.push(makeRoot(`${pid}-mid-top`, midNode.id, pine.id, false, [...drape(midNode, pine, midNode.at.y + 0.5, p.height - 2.5, midAngle, topAngle).slice(0, -1), ...rim, pine.mouth.clone()]));
-  }
-  return out;
-})();
-export const FLOW_ROOTS: Root[] = [...KARST_ROOTS, ...SISTER_ROOTS, ...NETWORK_ROOTS];
+export const FLOW_ROOTS: Root[] = [...KARST_ROOTS, ...NETWORK_ROOTS];
 /** The long roots (the karst's and the sisters'): the ones that carry motes. */
-export const LONG_ROOTS: Root[] = [...KARST_ROOTS, ...SISTER_ROOTS];
+export const LONG_ROOTS: Root[] = [...KARST_ROOTS];
 const rootIndex = new Map<string, Root[]>(); for (const r of FLOW_ROOTS) for (const end of [r.a, r.b]) (rootIndex.get(end) ?? rootIndex.set(end, []).get(end)!).push(r);
 export const rootsAt = (nodeId: string): Root[] => rootIndex.get(nodeId) ?? [];
 const other = (r: Root, id: string): string => (r.a === id ? r.b : r.a);

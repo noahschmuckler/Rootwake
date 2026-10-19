@@ -18,6 +18,8 @@ export function createKarstFeature(scene: THREE.Scene, player: Player, camera: T
   const KEY = `rootwake-world-karst:${origin.x},${origin.z}:v1`;
   const offset = new THREE.Vector3(origin.x, 0, origin.z), group = new THREE.Group(); group.position.copy(offset); scene.add(group);
   const world = buildKarstFlow(group as unknown as THREE.Scene, { sharedGround: true });
+  // The pillar is the land's landmark (Noah, 2026-10-19: one karst at the centre of the plateau): its rock is drawn from anywhere, so the trees on its faces and summit (which the vista draws far out) never hang in the air without it. The rest (its forest, roots, ferns) only near, below.
+  const far = new THREE.Group(); far.position.copy(offset); scene.add(far); { const pillar = group.getObjectByName('pillar-main'); if (pillar) far.add(pillar); }
   const W = (p: THREE.Vector3): THREE.Vector3 => p.clone().add(offset), L = (p: THREE.Vector3): THREE.Vector3 => p.clone().sub(offset);
   const zoneWorlds = Object.fromEntries(Object.values(ZONES).map(z => { const zw = makeZoneWorld(z); return [z.id, { surfacesAt: (x: number, z2: number) => zw.surfacesAt(x - origin.x, z2 - origin.z), canOccupy: (p: THREE.Vector3, r: number, h: number) => zw.canOccupy(L(p), r, h) } as TraversalWorld]; })) as Record<string, TraversalWorld>;
   const colliders: Collider[] = world.colliders.map(c => ('x1' in c ? { ...c, x1: c.x1 + origin.x, z1: c.z1 + origin.z, x2: c.x2 + origin.x, z2: c.z2 + origin.z } : { ...c, x: c.x + origin.x, z: c.z + origin.z }));
