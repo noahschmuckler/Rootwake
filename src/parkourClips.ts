@@ -9,11 +9,12 @@ export const CLIP_STEP = 0.05;
 export const FOOT_REST = 9;
 /** Centimetres of the X Bot to metres of Hulda (her 0.72 m to its 178 cm). */
 export const CM = 0.72 / 178;
-export interface ClipMotion { duration: number; foot: number[]; hipsZ: number[] }
+/** A clip whose obstacle doesn't lie ahead also has `yaw`: the degrees about +y that bring it ahead, eased in as she travels (the layer turns its hips by them; hipsZ is measured turned). */
+export interface ClipMotion { duration: number; foot: number[]; hipsZ: number[]; yaw?: number[] }
 export const CLIP_MOTION: Record<string, ClipMotion> = {
   // <clip-motion> (written by scripts/parkour-clips.mjs)
   'step-up': { duration: 1.367, foot: [9, 9, 9, 9, 9, 9, 10, 13, 17, 23, 31, 34, 34, 34, 33, 33, 33, 33, 33, 33, 34, 36, 39, 44, 53, 57, 57, 57], hipsZ: [2, 4, 7, 9, 11, 14, 16, 18, 20, 21, 23, 23, 25, 26, 27, 29, 31, 33, 35, 37, 40, 43, 45, 47, 49, 50, 52, 53] },
-  'clamber': { duration: 2.000, foot: [13, 16, 22, 27, 37, 52, 70, 77, 77, 78, 79, 81, 81, 81, 80, 79, 77, 77, 78, 81, 84, 87, 91, 95, 101, 107, 114, 122, 131, 141, 141, 142, 142, 142, 142, 142, 142, 141, 140, 140, 139], hipsZ: [0, 1, 2, 1, 0, -3, -6, -8, -9, -10, -10, -8, -7, -5, -2, 1, 4, 5, 5, 3, 0, -4, -8, -12, -16, -18, -20, -21, -22, -22, -23, -21, -19, -15, -12, -8, -4, -2, 0, 1, 0] },
+  'mount': { duration: 2.267, foot: [9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 11, 9, 9, 9, 9, 9, 10, 10, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 10, 10, 11, 12, 13, 13, 13, 14, 14, 14, 14, 14], hipsZ: [1, 1, 1, 1, 1, 0, -1, -2, -2, -2, -1, 0, 0, -1, -1, 0, 2, 5, 10, 15, 21, 27, 32, 38, 43, 46, 49, 52, 54, 57, 59, 62, 66, 69, 72, 76, 78, 81, 83, 85, 87, 88, 89, 89, 90, 90], yaw: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -1, -2, -3, -3, -4, -5, -6, -10, -14, -19, -24, -29, -33, -38, -42, -45, -48, -51, -54, -57, -61, -64, -69, -73, -78, -82, -85, -87, -88, -89, -90, -90, -90, -90, -90, -90] },
   'jump': { duration: 1.667, foot: [9, 9, 9, 9, 10, 9, 9, 9, 9, 10, 10, 11, 12, 21, 30, 41, 60, 63, 46, 31, 20, 12, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9, 9], hipsZ: [2, 1, 1, 0, -2, -5, -7, -8, -9, -8, -7, -4, -1, 3, 5, 2, -1, -3, -4, -3, -1, 0, 0, 0, -1, -1, -1, -1, 0, 1, 1, 1, 2, 2] },
   'jump-to-hang': { duration: 2.000, foot: [132, 137, 144, 152, 158, 158, 150, 135, 122, 113, 113, 118, 124, 130, 135, 139, 141, 140, 135, 126, 116, 104, 93, 81, 70, 62, 58, 56, 54, 54, 55, 54, 54, 54, 53, 52, 51, 50, 50, 50, 49], hipsZ: [0, 11, 21, 32, 43, 53, 63, 74, 87, 98, 107, 112, 116, 115, 112, 106, 99, 90, 82, 75, 68, 63, 61, 61, 63, 67, 72, 77, 83, 89, 96, 102, 108, 112, 114, 115, 114, 114, 113, 112, 110] },
   'hang': { duration: 2.333, foot: [77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 77, 78, 78, 78, 77, 77, 77], hipsZ: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1] },
@@ -29,3 +30,5 @@ const at = (a: number[], t: number): number => { const x = Math.max(0, t / CLIP_
 export const footAt = (clip: string, t: number): number => { const m = CLIP_MOTION[clip]; return m ? at(m.foot, t) : FOOT_REST; };
 /** The hips' travel forward (cm) at clip time t. */
 export const hipsZAt = (clip: string, t: number): number => { const m = CLIP_MOTION[clip]; return m ? at(m.hipsZ, t) : 0; };
+/** The yaw (radians) a clip's hips are turned by at clip time t (`yaw` above); 0 for most. */
+export const yawAt = (clip: string, t: number): number => { const m = CLIP_MOTION[clip]; return m?.yaw ? at(m.yaw, t) * Math.PI / 180 : 0; };

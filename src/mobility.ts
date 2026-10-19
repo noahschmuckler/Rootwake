@@ -45,7 +45,7 @@ export interface Traversal {
   floorPath?: Vector3[];
   /** Parkour: the time of each floorPath point (else they are evenly spaced), what the body does from when, and the way she faces (a yaw). */
   times?: number[];
-  stages?: { name: string; at: number; clip?: string; from?: number; to?: number }[];
+  stages?: { name: string; at: number; clip?: string; from?: number; to?: number; fade?: number }[];
   face?: number;
 }
 /** 'free' is the opt-in volume medium (Hulda's awareness in the soil): the body floats, steered by

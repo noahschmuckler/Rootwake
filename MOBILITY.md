@@ -89,11 +89,11 @@ footprint, so it can take her nowhere the walk and the fan could not stand her.
 
 | Move | When (normal legs; tuning in `PARKOUR`) | What she does |
 |---|---|---|
-| step | a rise to 0.42 m | a knee up, no hands (the bridge's foot) |
-| clamber | to 0.8 m | hands on the top, the body over them, a knee on |
+| step | a rise to 0.3 m | a knee up, no hands (the bridge's foot) |
+| clamber | to 0.48 m, about her waist | the mount: hands and her left knee on the top, then up into a crouch on it and standing |
 | mantle | to 1.25 m | a crouch, a hop that puts her hands on the lip, the press up |
 | climb | to `climbRise` (1.75 m; 3.2 with the powered legs) | a jump to a hang, a breath, the pull up and over |
-| vault | a top to 0.8 m high and no thicker than 0.9 m, ground beyond at about her height | over it without stopping |
+| vault | a top to 0.6 m high and no thicker than 0.9 m, ground beyond at about her height | over it without stopping |
 | hop | a drop to 0.95 m | a short arc down |
 | hangDrop | a sheer drop of 1.15 m or more (to `maxDrop`) | she turns to the wall, lowers to a hang off the lip, lets go |
 | leap | a gap she runs at (1.6 m/s or more), ground across it within `leapReach` (2.6 m; 4.5 powered) | a running jump |
@@ -110,7 +110,7 @@ Noah's Mixamo clips (2026-10-19) are in `public/models/clips` (FBX Binary, Witho
 | File | Plays |
 |---|---|
 | `step-up.fbx` | the step |
-| `clamber.fbx` | the clamber (a short wall climb: a foot on the face, hands on the top) |
+| `mount.fbx` | the clamber: hands and the left knee onto a waist-high top (its obstacle lies to her left; the layer turns it ahead), then the landing's crouch risen out of to standing |
 | `jump.fbx` | the crouch and spring of a mantle's or climb's reach |
 | `jump-to-hang.fbx` | the catch: hands on the lip, the feet finding the face |
 | `hang.fbx` | the hang, held (a climb's breath; before a hang drop lets go) |
@@ -118,7 +118,9 @@ Noah's Mixamo clips (2026-10-19) are in `public/models/clips` (FBX Binary, Witho
 | `vault.fbx` | the vault |
 | `hang-drop.fbx` | letting go from the hang, the fall and rising from the landing |
 | `running-jump.fbx` | the hop, the leap and the fan's own jumps and drops |
-| `landing.fbx` | landing a hop or a leap (deep and slow past BIG_LANDING, 1.6 m) |
+| `landing.fbx` | landing a hop or a leap (deep and slow past BIG_LANDING, 1.6 m); the clamber's crouch on the top and standing |
+
+`clamber.fbx` (a short wall climb) is kept but not played: on a waist-high top it had her climbing air (Noah, 2026-10-19).
 
 Each stage of a move names its clip window (`WINDOWS` in `parkour.ts`: clip seconds and pace). The
 planner shapes the stage's path on the clip's own motion (`parkourClips.ts`: the lowest foot's height
@@ -132,8 +134,8 @@ after a clip is replaced. `?parkourclips=0` turns the layer off in the village.
 ### The practice course
 
 `/parkour.html` (`parkourStudy.ts`, `parkourCourse.ts`; live at `/vista/parkour/`): Hulda in the
-village's third-person framing on one lane of each move. The left lane is a stair of rises (step 0.35,
-clamber 0.7, mantle 1.1, climb 1.6) ending in a sheer 3.75 m drop. The middle lane has three rails to
+village's third-person framing on one lane of each move. The left lane is a stair of rises (step 0.25,
+clamber 0.45, mantle 1.1, climb 1.6) ending in a sheer 3.4 m drop. The middle lane has three rails to
 vault, a block to clamber onto and hop off, and a pit to leap. The right lane has a wall too high and
 a pit too wide. On the far right is the old bridge's steep foot. `?hud=1` shows the move and its stage;
 ↺ goes back to the start. `scripts/browser-parkour.mjs` runs it in CI, and `npm run test:mobility`

@@ -9,11 +9,11 @@ export interface Block { x0: number; x1: number; z0: number; z1: number; top: nu
 const B = (x: number, w: number, zNear: number, zFar: number, top: number, kind: Block['kind'] = 'stone', label?: string): Block => ({ x0: x - w / 2, x1: x + w / 2, z0: zFar, z1: zNear, top, kind, label });
 /** The lanes. Tuning: heights straddle PARKOUR's limits, so each lane shows its moves and where they change. */
 export const COURSE: Block[] = [
-  // Up: a stair of rises, each one move: step 0.35, clamber +0.7, mantle +1.1, climb +1.6; the far end a sheer drop (a hang drop) to the ground.
-  B(0, 3, -4, -24, 0.35, 'stone', 'step 0.35'), B(0, 3, -7, -24, 1.05, 'stone', 'clamber 0.7'), B(0, 3, -10, -24, 2.15, 'stone', 'mantle 1.1'), B(0, 3, -13, -24, 3.75, 'stone', 'climb 1.6 · hang drop at its end'),
+  // Up: a stair of rises, each one move: step 0.25, clamber +0.45, mantle +1.1, climb +1.6; the far end a sheer drop (a hang drop) to the ground.
+  B(0, 3, -4, -24, 0.25, 'stone', 'step 0.25'), B(0, 3, -7, -24, 0.7, 'stone', 'clamber 0.45'), B(0, 3, -10, -24, 1.8, 'stone', 'mantle 1.1'), B(0, 3, -13, -24, 3.4, 'stone', 'climb 1.6 · hang drop at its end'),
   // Over: three rails to vault at a run, a low block to clamber onto and hop off, and a pit to leap.
-  B(4, 3, -4, -4.3, 0.55, 'rail', 'vault'), B(4, 3, -7, -7.3, 0.4, 'rail'), B(4, 3, -10, -10.4, 0.7, 'rail'),
-  B(4, 3, -13, -15, 0.6, 'stone', 'clamber, hop'), B(4, 3, -18, -19.6, -6, 'pit', 'leap the pit'),
+  B(4, 3, -4, -4.3, 0.55, 'rail', 'vault'), B(4, 3, -7, -7.3, 0.4, 'rail'), B(4, 3, -10, -10.4, 0.5, 'rail'),
+  B(4, 3, -13, -15, 0.45, 'stone', 'clamber, hop'), B(4, 3, -18, -19.6, -6, 'pit', 'leap the pit'),
   // Too high and too far: a wall past her climb and a pit past her leap stop her.
   B(8, 3, -6, -8, 2.3, 'stone', 'too high'), B(8, 3, -12, -15.5, -6, 'pit', 'too far'),
 ];

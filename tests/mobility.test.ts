@@ -238,7 +238,7 @@ function run(world: TraversalWorld, seconds: number, right = 1, fps = 60): { m: 
   return { m, kinds };
 }
 test('parkour: a rise past the step is stepped, clambered, mantled or climbed by height, landing on top', () => {
-  for (const [top, kind] of [[0.35, 'step'], [0.7, 'clamber'], [1.1, 'mantle'], [1.6, 'climb']] as const) {
+  for (const [top, kind] of [[0.25, 'step'], [0.42, 'clamber'], [0.9, 'mantle'], [1.6, 'climb']] as const) {
     const { m, kinds } = run(box(1, 30, top), 4);
     assert.deepEqual(kinds, [kind], `${top}`); near(m.feet.y, top, 1e-3); assert.equal(m.mode, 'grounded'); assert.ok(m.feet.x > 1.5, `${m.feet.x}`);
   }
@@ -249,8 +249,8 @@ test('parkour: off by default (the lab courses keep their measured rules)', () =
   const m = new MobilityMotor(); m.reset(new Vector3()); simulate(m, box(1, 9, 0.35), 3, { ...idle, right: 1, held: true }); assert.ok(m.feet.x < 1); near(m.feet.y, 0);
 });
 test('parkour: a thin top is vaulted, a broad one climbed onto', () => {
-  const thin = run(box(1, 1.4, 0.6), 3); assert.equal(thin.kinds[0], 'vault'); near(thin.m.feet.y, 0); assert.ok(thin.m.feet.x > 1.6);
-  const broad = run(box(1, 30, 0.6), 1.5); assert.equal(broad.kinds[0], 'clamber');
+  const thin = run(box(1, 1.4, 0.5), 3); assert.equal(thin.kinds[0], 'vault'); near(thin.m.feet.y, 0); assert.ok(thin.m.feet.x > 1.6);
+  const broad = run(box(1, 30, 0.45), 1.5); assert.equal(broad.kinds[0], 'clamber');
 });
 test('parkour: a ledge is hopped down when low, lowered from by a hang when sheer, and its drop bound kept', () => {
   const ledge = (h: number): TraversalWorld => ({ surfacesAt: x => [x < 1 ? h : 0], canOccupy: p => p.y >= (p.x < 1 ? h : 0) - 0.025 });

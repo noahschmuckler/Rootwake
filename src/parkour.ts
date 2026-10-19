@@ -7,10 +7,11 @@
 // DOM; the presentation reads the move's kind and stages (huldaTraverse.ts) to pick her clips.
 //
 // The moves, by how far the ground ahead rises or falls (body heights are BODY_HEIGHT, 0.72):
-//   up:   step (to STEP_UP: a knee up, no hands) · clamber (to CLAMBER: hands on the top, a knee over)
+//   up:   step (to STEP_UP: a knee up, no hands) · clamber (to CLAMBER, about her waist: the mount, hands and a knee
+//         on the top, then up into a crouch on it and standing)
 //         · mantle (to MANTLE: a little jump, hands on the lip, pressed up) · climb (to the profile's
 //         climbRise: a jump to a hang, a pause, the pull up and over)
-//   over: vault (a top no thicker than VAULT_TOP, no higher than CLAMBER, with ground beyond at about her height)
+//   over: vault (a top no thicker than VAULT_TOP, no higher than VAULT, with ground beyond at about her height)
 //   down: hop (to HOP_MAX) · hangDrop (a sheer drop: she turns, lowers to a hang off the lip, lets go)
 //         · the old 'drop' arc where it is no sheer face
 //   gap:  leap (running, across ground she can't stand on, to a landing within the profile's leapReach)
@@ -24,8 +25,8 @@ import { Vector3, MathUtils } from 'three';
 import { footAt, hipsZAt } from './parkourClips';
 import { BODY_RADIUS, BODY_HEIGHT, STEP_HEIGHT, GRAVITY, supportAt, planTraversal, validateTraversal, traversalPoint, type MobilityProfile, type Traversal, type TraversalKind, type TraversalWorld } from './mobility';
 
-/** Rise limits (m) of each move up; VAULT_TOP is the thickest top she vaults rather than climbs onto; HOP_MAX the deepest drop she hops; HANG_DROP the least drop she lowers into a hang for; BIG_LANDING the drop past which she lands deep and rises slowly. Tuning: judge on the phone. */
-export const PARKOUR = { stepUp: 0.42, clamber: 0.8, mantle: 1.25, vaultTop: 0.9, hopMax: 0.95, hangDrop: 1.15, bigLanding: 1.6 } as const;
+/** Rise limits (m) of each move up (Noah's mount fits a top about 0.34 m high, CLAMBER brackets it; the old wall-climb clip had her climbing air below 0.6, so a mantle takes over above CLAMBER); VAULT the highest top she vaults; VAULT_TOP is the thickest top she vaults rather than climbs onto; HOP_MAX the deepest drop she hops; HANG_DROP the least drop she lowers into a hang for; BIG_LANDING the drop past which she lands deep and rises slowly. Tuning: judge on the phone. */
+export const PARKOUR = { stepUp: 0.3, clamber: 0.48, vault: 0.6, mantle: 1.25, vaultTop: 0.9, hopMax: 0.95, hangDrop: 1.15, bigLanding: 1.6 } as const;
 /** How far ahead (m) the planner looks for a face or an edge; the sample spacing. Tuning. */
 export const PROBE = 1.25, SAMPLE = 0.05;
 /** A leap is only taken at a run (m/s), never from a standstill: the stick alone carries her, but only into a gap she is running at. Tuning. */
@@ -34,13 +35,19 @@ export const LEAP_SPEED = 1.6;
 export const CLIMB_INTENT_S = 0.12;
 /** Where her feet hang below a lip (m): the hang clip's hands to its lowest foot (117 cm of the X Bot), her hands on the lip. */
 export const HANG_BELOW = 0.47;
+/** How long the kneel of the mount blends into the crouch on the top (s). Tuning. */
+export const RISE_FADE = 0.28;
 /** How high over her landing she jumps before she catches the lip (m). Tuning. */
 const CATCH_OVER = 0.12;
 /** Each clip window (clip seconds) and its pace (× the clip's own): the moves' timing. Tuning, against the clips. */
 export interface Window { clip: string; from: number; to: number; rate: number }
 export const WINDOWS: Record<string, Window> = {
   step: { clip: 'step-up', from: 0.05, to: 1.25, rate: 2.1 },
-  clamber: { clip: 'clamber', from: 0, to: 1.85, rate: 1.45 },
+  // The clamber: Noah's mount (hands and the left knee onto the top, the right foot left on the ground; its turn into the
+  // obstacle undone), then the landing's crouch, on the top, risen out of to standing.
+  mount: { clip: 'mount', from: 0.25, to: 2.05, rate: 1.6 },
+  onto: { clip: 'landing', from: 1.3, to: 1.5, rate: 0.6 },
+  stand: { clip: 'landing', from: 1.5, to: 2.3, rate: 1.3 },
   reach: { clip: 'jump', from: 0.2, to: 0.85, rate: 1.5 },
   catch: { clip: 'jump-to-hang', from: 0.55, to: 1.5, rate: 1.6 },
   hang: { clip: 'hang', from: 0, to: 0.45, rate: 1 },
@@ -58,7 +65,7 @@ export const WINDOWS: Record<string, Window> = {
 export type ParkourKind = Extract<TraversalKind, 'step' | 'clamber' | 'mantle' | 'climb' | 'vault' | 'hop' | 'hangDrop' | 'leap'>;
 const clamp = MathUtils.clamp;
 const smooth = (a: number, b: number, x: number): number => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
-type Stage = { name: string; at: number; clip?: string; from?: number; to?: number };
+type Stage = { name: string; at: number; clip?: string; from?: number; to?: number; fade?: number };
 /** 'shaped' follows the clip; 'up' keys it safe for a climb (up first, then over); 'out' for a lowering (out first, then down). */
 type Keying = 'shaped' | 'up' | 'out';
 
@@ -74,11 +81,11 @@ class Moves {
   hold(name: string, w: Window): this { this.stages.push({ name, at: this.t, clip: w.clip, from: w.from, to: w.to }); this.key(this.at.clone(), Math.abs(w.to - w.from) / w.rate); return this; }
   /** A clip window carrying her from here to E: up and down along the clip's lowest foot, forward along its hips. A
    * window whose foot ends about where it began (a jump, a vault) is a bump over the straight line, `bump` m at its height. */
-  clip(name: string, w: Window, E: Vector3, bump = 0, lip = E.y): this {
+  clip(name: string, w: Window, E: Vector3, bump = 0, lip = E.y, fade?: number): this {
     const S = this.at.clone(), f0 = footAt(w.clip, w.from), f1 = footAt(w.clip, w.to), z0 = hipsZAt(w.clip, w.from), z1 = hipsZAt(w.clip, w.to);
     const n = Math.max(2, Math.ceil(Math.abs(w.to - w.from) / 0.05)), dt = Math.abs(w.to - w.from) / w.rate / n, fit = Math.abs(f1 - f0) > 6;
     let peak = 0; if (!fit) for (let i = 0; i <= n; i++) { const u = i / n, tau = w.from + (w.to - w.from) * u; peak = Math.max(peak, footAt(w.clip, tau) - (f0 + (f1 - f0) * u)); }
-    this.stages.push({ name, at: this.t, clip: w.clip, from: w.from, to: w.to });
+    this.stages.push({ name, at: this.t, clip: w.clip, from: w.from, to: w.to, fade });
     const run = Math.hypot(E.x - S.x, E.z - S.z) || 1, ux = (E.x - S.x) / run, uz = (E.z - S.z) / run;
     for (let i = 1; i <= n; i++) {
       const u = i / n, tau = w.from + (w.to - w.from) * u, f = footAt(w.clip, tau);
@@ -163,9 +170,9 @@ type At = (d: number, y: number) => Vector3;
 
 function planUp(world: TraversalWorld, feet: Vector3, dx: number, dz: number, d0: number, face: number, speed: number, profile: Readonly<MobilityProfile>, at: At): Traversal | null {
   const ceiling = feet.y + profile.climbRise + 0.05;
-  // A vault first: a thin top no higher than a clamber, with ground beyond at about her height.
+  // A vault first: a thin top no higher than VAULT, with ground beyond at about her height.
   let crest = -Infinity; for (let d = d0; d <= d0 + PARKOUR.vaultTop + 1e-6; d += SAMPLE) { const y = topAt(world, feet.x + dx * d, feet.z + dz * d, ceiling); if (y === null || y < crest - STEP_HEIGHT) break; crest = Math.max(crest, y); }
-  if (crest - feet.y <= PARKOUR.clamber && crest - feet.y > STEP_HEIGHT * 0.6) { const v = planVault(world, feet, dx, dz, d0, crest, face, speed, at); if (v) return v; }
+  if (crest - feet.y <= PARKOUR.vault && crest - feet.y > STEP_HEIGHT * 0.6) { const v = planVault(world, feet, dx, dz, d0, crest, face, speed, at); if (v) return v; }
   // The landing: the nearest place past the face where the whole footprint stands, higher than she is.
   let land: { d: number; y: number } | null = null;
   for (let d = d0 + BODY_RADIUS * 0.6; d <= d0 + PROBE * 0.8; d += SAMPLE) {
@@ -184,8 +191,9 @@ function planUp(world: TraversalWorld, feet: Vector3, dx: number, dz: number, d0
     const m = new Moves(world, feet, k).move(A, approach);
     // A step: a knee up and the weight over, in one stride.
     if (kind === 'step') m.clip('step', WINDOWS.step, L, 0, lip);
-    // A clamber: hands on the top, a foot on the face, the body pressed up and a knee over.
-    else if (kind === 'clamber') m.clip('clamber', WINDOWS.clamber, L, 0, lip);
+    // A clamber: the mount where she stands (its own travel carries her figure toward the top), then up
+    // onto the top into a crouch that blends from the kneel, and standing.
+    else if (kind === 'clamber') m.hold('mount', WINDOWS.mount).clip('rise', WINDOWS.rise, L, 0, lip, RISE_FADE).hold('stand', WINDOWS.stand);
     else {
       // A mantle or a climb: a crouch and a jump that puts her hands on the lip, the catch (her feet find the face), for a
       // climb a breath in the hang, and the pull up and over.

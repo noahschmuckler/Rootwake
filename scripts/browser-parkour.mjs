@@ -1,5 +1,5 @@
 // Parkour (headless Chromium, SwiftShader; MOBILITY.md "Parkour"): the practice course loads with its clips, and
-// the stick alone (a held W) takes her up a climb, over a rail and off a sheer drop by a hang, each posed by its
+// the stick alone (a held W) takes her onto a waist-high top by the mount, up a climb, over a rail and off a sheer drop by a hang, each posed by its
 // clip, with no errors. Screenshots at a phone's portrait aspect land in artifacts/parkour.
 import {createRequire} from 'node:module';
 import {createServer} from 'node:http';
@@ -32,11 +32,12 @@ try{
     await page.keyboard.up('w');
     return page.evaluate(()=>[...window.__parkour.seen.moves]);
   };
+  report.clamber=await run('clamber',0,-6.3,'clamber',3);assert.ok(report.clamber.includes('clamber'),`a clamber from the stick (${report.clamber})`);
   report.climb=await run('climb',0,-11.6,'climb',3);assert.ok(report.climb.includes('climb'),`a climb from the stick (${report.climb})`);
   report.vault=await run('vault',4,-2,'vault',2);assert.ok(report.vault.includes('vault'),`a vault from the stick (${report.vault})`);
   report.drop=await run('drop',0,-21.5,'hangDrop',3);assert.ok(report.drop.includes('hangDrop'),`a hang drop from the stick (${report.drop})`);
   report.stages=await page.evaluate(()=>[...window.__parkour.seen.stages]);
-  for(const s of ['reach','hang','pull','vault','lower','fall'])assert.ok(report.stages.includes(s),`the ${s} stage played its clip (${report.stages})`);
+  for(const s of ['mount','stand','reach','hang','pull','vault','lower','fall'])assert.ok(report.stages.includes(s),`the ${s} stage played its clip (${report.stages})`);
   assert.deepEqual(errors,[]);
   await writeFile(`${out}/report.json`,JSON.stringify(report,null,2));
   console.log('parkour browser checks passed');

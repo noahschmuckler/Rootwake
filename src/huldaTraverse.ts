@@ -9,17 +9,17 @@ import * as THREE from 'three';
 import type { Gait } from './huldaRig';
 import type { Traversal } from './mobility';
 import { stageAt } from './parkour';
-import { footAt, FOOT_REST } from './parkourClips';
+import { footAt, yawAt, FOOT_REST } from './parkourClips';
 
 /** The clips the layer plays, by file name. */
-export const TRAVERSE_CLIPS = ['step-up', 'clamber', 'jump', 'jump-to-hang', 'hang', 'climb-up', 'vault', 'hang-drop', 'running-jump', 'landing'] as const;
+export const TRAVERSE_CLIPS = ['step-up', 'mount', 'jump', 'jump-to-hang', 'hang', 'climb-up', 'vault', 'hang-drop', 'running-jump', 'landing'] as const;
 /** The fan's jumps and drops (no stages): the running jump's air through their length. Tuning. */
 const FAN_JUMP = { clip: 'running-jump', from: 0.05, to: 0.72 };
 /** Seconds to blend a move in, out, and from one stage's clip to the next. Tuning. */
 export const FADE_IN = 0.08, FADE_OUT = 0.2, CROSS = 0.12;
 
 /** Which clip a move plays at time t and where in it (seconds). */
-export function poseFor(plan: Traversal, t: number): { clip: string; time: number; stage: string } | null {
+export function poseFor(plan: Traversal, t: number): { clip: string; time: number; stage: string; fade?: number } | null {
   const st = stageAt(plan, t);
   if (!st) {
     if (plan.kind !== 'jump' && plan.kind !== 'drop') return null;
@@ -28,15 +28,27 @@ export function poseFor(plan: Traversal, t: number): { clip: string; time: numbe
   }
   const s = plan.stages!.find(x => x.at === st.at && x.name === st.name);
   if (!s?.clip || s.from === undefined || s.to === undefined) return null;
-  return { clip: s.clip, time: s.from + (s.to - s.from) * st.k, stage: s.name };
+  return { clip: s.clip, time: s.from + (s.to - s.from) * st.k, stage: s.name, fade: s.fade };
 }
 
-/** Take a clip's travel out (above): the hips pinned across, and their height kept about its lowest foot. */
+/** Clips whose travel stays in them: the mount's figure goes over the top while her body (the path) waits at its foot. */
+const KEEPS_TRAVEL = new Set(['mount']);
+/** Take a clip's travel out (above): the hips pinned across, and their height kept about its lowest foot. A clip whose
+ * obstacle doesn't lie ahead (parkourClips' yaw: the mount's) is turned until it does. */
 export function inPlace(clip: THREE.AnimationClip, name: string): void {
+  const q = new THREE.Quaternion(), turn = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), keep = KEEPS_TRAVEL.has(name);
   for (const t of clip.tracks) {
+    if (t instanceof THREE.QuaternionKeyframeTrack && /Hips\.quaternion$/.test(t.name)) {
+      const v = t.values;
+      for (let i = 0; i < t.times.length; i++) { const a = yawAt(name, t.times[i]); if (!a) continue; turn.setFromAxisAngle(up, a); q.fromArray(v, i * 4).premultiply(turn).toArray(v, i * 4); }
+    }
     if (!(t instanceof THREE.VectorKeyframeTrack) || !/Hips\.position$/.test(t.name)) continue;
-    const v = t.values;
-    for (let i = 0; i < t.times.length; i++) { v[i * 3] = v[0]; v[i * 3 + 2] = v[2]; v[i * 3 + 1] -= footAt(name, t.times[i]) - FOOT_REST; }
+    const v = t.values, x0 = v[0], z0 = v[2];
+    for (let i = 0; i < t.times.length; i++) {
+      const a = yawAt(name, t.times[i]), dx = v[i * 3] - x0, dz = v[i * 3 + 2] - z0, c = Math.cos(a), s = Math.sin(a);
+      v[i * 3] = keep ? x0 + dx * c + dz * s : x0; v[i * 3 + 2] = keep ? z0 - dx * s + dz * c : z0;
+      v[i * 3 + 1] -= footAt(name, t.times[i]) - FOOT_REST;
+    }
   }
 }
 
@@ -48,14 +60,14 @@ export function createTraverseLayer(gait: Gait, root: THREE.Object3D, clips: THR
     const clip = src.clone(); clip.name = `parkour-${name}`; inPlace(clip, name);
     const a = gait.mixer.clipAction(clip, root); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.paused = true; a.setEffectiveWeight(0); a.play(); actions.set(name, a);
   }
-  let weight = 0, last = 0, current: { clip: string; time: number } | null = null, previous: { clip: string; time: number; w: number } | null = null, stage: string | null = null;
+  let weight = 0, last = 0, cross = CROSS, current: { clip: string; time: number } | null = null, previous: { clip: string; time: number; w: number } | null = null, stage: string | null = null;
   function update(dt: number, plan: Traversal | null, t: number): void {
     const p = plan ? poseFor(plan, t) : null;
     if (p && actions.has(p.clip)) {
-      if (current && current.clip !== p.clip) previous = { ...current, w: 1 };
+      if (current && current.clip !== p.clip) { previous = { ...current, w: 1 }; cross = p.fade ?? CROSS; }
       current = { clip: p.clip, time: p.time }; stage = p.stage; weight = Math.min(1, weight + dt / FADE_IN);
     } else { stage = p?.stage ?? null; weight = Math.max(0, weight - dt / FADE_OUT); if (weight === 0) current = null; }
-    if (previous) { previous.w = Math.max(0, previous.w - dt / CROSS); if (previous.w === 0 || previous.clip === current?.clip) previous = null; }
+    if (previous) { previous.w = Math.max(0, previous.w - dt / cross); if (previous.w === 0 || previous.clip === current?.clip) previous = null; }
     for (const a of actions.values()) a.setEffectiveWeight(0);
     const k = previous ? 1 - previous.w : 1;
     if (previous) { const a = actions.get(previous.clip)!; a.time = previous.time; a.setEffectiveWeight(weight * previous.w); }

@@ -7,7 +7,7 @@ const huldaModel = ['hulda.glb', 'hulda.gltf', 'hulda.fbx'].map(f => `models/${f
 // Its clips, exported separately (Mixamo without skin): only the ones the gait drives, idle / walking / running.
 // F2: her fight clips (Mixamo, without skin), loaded after the gait's: FIGHT_HANDOFF.md.
 const fightClips = existsSync('public/models/clips') ? ['attack-1', 'attack-2', 'attack-3', 'heavy', 'cast-burst', 'cast-bind', 'hit', 'dodge'].filter(n => existsSync(`public/models/clips/${n}.fbx`)).map(n => `models/clips/${n}.fbx`) : [];
-const traverseClips = existsSync('public/models/clips') ? ['step-up', 'clamber', 'jump-to-hang', 'hang', 'climb-up', 'vault', 'hang-drop', 'running-jump', 'landing', 'jump'].filter(n => existsSync(`public/models/clips/${n}.fbx`)).map(n => `models/clips/${n}.fbx`) : [];
+const traverseClips = existsSync('public/models/clips') ? ['step-up', 'mount', 'jump-to-hang', 'hang', 'climb-up', 'vault', 'hang-drop', 'running-jump', 'landing', 'jump'].filter(n => existsSync(`public/models/clips/${n}.fbx`)).map(n => `models/clips/${n}.fbx`) : [];
 const huldaClips = existsSync('public/models/clips') ? readdirSync('public/models/clips').filter(f => /^(idle|walk|walking|run|running)\.(fbx|glb|gltf)$/i.test(f)).sort().map(f => `models/clips/${f}`) : [];
 
 // PLATEAU.md: the plateau's eroded land, baked at build (its erosion costs a phone seconds at every load; the world's seed is fixed). The page loads it, and erodes itself when it is missing or stale.
