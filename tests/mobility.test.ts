@@ -277,3 +277,8 @@ test('parkour: the practice course\'s lanes, from the stick alone, each move whe
   const rails = lane(4, -2, 15); assert.deepEqual(rails.kinds, ['vault', 'vault', 'vault', 'clamber', 'hop', 'leap']); assert.ok(rails.m.feet.z < -20);
   const too = lane(8, -3, 6); assert.deepEqual(too.kinds, []); assert.ok(too.m.feet.z > -6);
 });
+test('parkour: a sloped foot is stepped up even past a step\'s height; a sheer face that high is clambered', () => {
+  const slope = (h: number, w: number): TraversalWorld => { const g = (x: number) => h * Math.min(1, Math.max(0, (x - 1) / w)); return { surfacesAt: x => [g(x)], canOccupy: p => p.y >= g(p.x) - 0.03 }; };
+  assert.equal(run(slope(0.42, 0.25), 3).kinds[0], 'step');
+  assert.equal(run(box(1, 30, 0.42), 3).kinds[0], 'clamber');
+});

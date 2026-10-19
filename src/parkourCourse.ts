@@ -18,8 +18,9 @@ export const COURSE: Block[] = [
   B(8, 3, -6, -8, 2.3, 'stone', 'too high'), B(8, 3, -12, -15.5, -6, 'pit', 'too far'),
 ];
 /** The old bridge's foot: a deck steeper at its start than the walk's step (the reason for all this). */
-export const RAMP = { x: 12, z0: -4, length: 40, crown: 4.2, halfW: 1.5 };
-const rampAt = (x: number, z: number): number | null => { const t = (RAMP.z0 - z) / RAMP.length; if (t < 0 || t > 1 || Math.abs(x - RAMP.x) > RAMP.halfW) return null; return 0.05 + RAMP.crown * Math.sin(Math.PI * t) ** 0.6; };
+/** The old bridge's foot, as plateauModel shapes its deck (BRIDGE_CROWN over its 125 m `span`), the first `length` m of it. */
+export const RAMP = { x: 12, z0: -4, length: 25, span: 125, crown: 4.2, halfW: 1.5 };
+const rampAt = (x: number, z: number): number | null => { const d = RAMP.z0 - z, t = d / RAMP.span; if (d < 0 || d > RAMP.length || Math.abs(x - RAMP.x) > RAMP.halfW) return null; return 0.05 + RAMP.crown * Math.sin(Math.PI * t) ** 0.6; };
 /** The course's ground: 30 × 40 m of floor, x −6..18, z 6..−30. */
 export const BOUNDS = { x0: -6, x1: 18, z0: -30, z1: 6 };
 const inside = (b: Block, x: number, z: number, m = 0): boolean => x > b.x0 - m && x < b.x1 + m && z > b.z0 - m && z < b.z1 + m;

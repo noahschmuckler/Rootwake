@@ -27,8 +27,8 @@ import { BODY_RADIUS, BODY_HEIGHT, STEP_HEIGHT, GRAVITY, supportAt, planTraversa
 
 /** Rise limits (m) of each move up (Noah's mount fits a top about 0.34 m high, CLAMBER brackets it; the old wall-climb clip had her climbing air below 0.6, so a mantle takes over above CLAMBER); VAULT the highest top she vaults; VAULT_TOP is the thickest top she vaults rather than climbs onto; HOP_MAX the deepest drop she hops; HANG_DROP the least drop she lowers into a hang for; BIG_LANDING the drop past which she lands deep and rises slowly. Tuning: judge on the phone. */
 export const PARKOUR = { stepUp: 0.3, clamber: 0.48, vault: 0.6, mantle: 1.25, vaultTop: 0.9, hopMax: 0.95, hangDrop: 1.15, bigLanding: 1.6 } as const;
-/** How far ahead (m) the planner looks for a face or an edge; the sample spacing. Tuning. */
-export const PROBE = 1.25, SAMPLE = 0.05;
+/** How far ahead (m) the planner looks for a face or an edge; the sample spacing; the ground (m) a face gains most of its rise within to be sheer rather than a slope. Tuning. */
+export const PROBE = 1.25, SAMPLE = 0.05, SHEER_W = 0.15;
 /** A leap is only taken at a run (m/s), never from a standstill: the stick alone carries her, but only into a gap she is running at. Tuning. */
 export const LEAP_SPEED = 1.6;
 /** Seconds the stick must press into a face before she climbs it (a drop, a vault and a leap go at once). Tuning. */
@@ -186,7 +186,16 @@ function planUp(world: TraversalWorld, feet: Vector3, dx: number, dz: number, d0
   const r = lip - feet.y;
   if (r > profile.climbRise) return null;
   const a = Math.max(0, d0 - SAMPLE - BODY_RADIUS - 0.02), A = at(a, feet.y), L = at(land.d, land.y), approach = a / Math.max(1.2, speed);
-  const kind: ParkourKind = r <= PARKOUR.stepUp ? 'step' : r <= PARKOUR.clamber ? 'clamber' : r <= PARKOUR.mantle ? 'mantle' : 'climb';
+  // A sloped foot (a ramp, the old bridge's deck and the curb at its end, a bank) is stepped up however high the
+  // landing, to a clamber's height: only a sheer face, which gains most of its rise (10% to 90%) within SHEER_W m
+  // of ground, is clambered.
+  let d10 = -1, d90 = -1;
+  for (let d = SAMPLE; d <= land.d + BODY_RADIUS + 1e-6 && d90 < 0; d += SAMPLE) { // (the landing's height is its footprint's: the front of it)
+    const y = topAt(world, feet.x + dx * d, feet.z + dz * d, ceiling); if (y === null) continue;
+    if (d10 < 0 && y >= feet.y + r * 0.1) d10 = d; if (y >= feet.y + r * 0.9) d90 = d;
+  }
+  const sheer = d10 < 0 || d90 < 0 || d90 - d10 < SHEER_W;
+  const kind: ParkourKind = r <= PARKOUR.stepUp || (!sheer && r <= PARKOUR.clamber) ? 'step' : r <= PARKOUR.clamber ? 'clamber' : r <= PARKOUR.mantle ? 'mantle' : 'climb';
   return shaped(world, 'up', k => {
     const m = new Moves(world, feet, k).move(A, approach);
     // A step: a knee up and the weight over, in one stride.

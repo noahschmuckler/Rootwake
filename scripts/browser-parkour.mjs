@@ -33,6 +33,7 @@ try{
     return page.evaluate(()=>[...window.__parkour.seen.moves]);
   };
   report.clamber=await run('clamber',0,-6.3,'clamber',3);assert.ok(report.clamber.includes('clamber'),`a clamber from the stick (${report.clamber})`);
+  report.ramp=await run('ramp',12,-2,'step',1);assert.ok(report.ramp.includes('step')&&!report.ramp.includes('clamber'),`the bridge's foot is stepped, not clambered (${report.ramp})`);
   report.climb=await run('climb',0,-11.6,'climb',3);assert.ok(report.climb.includes('climb'),`a climb from the stick (${report.climb})`);
   report.vault=await run('vault',4,-2,'vault',2);assert.ok(report.vault.includes('vault'),`a vault from the stick (${report.vault})`);
   report.drop=await run('drop',0,-21.5,'hangDrop',3);assert.ok(report.drop.includes('hangDrop'),`a hang drop from the stick (${report.drop})`);

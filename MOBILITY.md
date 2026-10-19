@@ -90,7 +90,8 @@ footprint, so it can take her nowhere the walk and the fan could not stand her.
 | Move | When (normal legs; tuning in `PARKOUR`) | What she does |
 |---|---|---|
 | step | a rise to 0.3 m | a knee up, no hands (the bridge's foot) |
-| clamber | to 0.48 m, about her waist | the mount: hands and her left knee on the top, then up into a crouch on it and standing |
+| step, on a slope | a sloped foot to 0.48 m (a ramp, the old bridge's deck and its curb, a bank: one that gains most of its rise over SHEER_W, 0.15 m, or more) | the step, not the clamber |
+| clamber | a sheer face to 0.48 m, about her waist | the mount: hands and her left knee on the top, then up into a crouch on it and standing |
 | mantle | to 1.25 m | a crouch, a hop that puts her hands on the lip, the press up |
 | climb | to `climbRise` (1.75 m; 3.2 with the powered legs) | a jump to a hang, a breath, the pull up and over |
 | vault | a top to 0.6 m high and no thicker than 0.9 m, ground beyond at about her height | over it without stopping |
@@ -137,7 +138,7 @@ after a clip is replaced. `?parkourclips=0` turns the layer off in the village.
 village's third-person framing on one lane of each move. The left lane is a stair of rises (step 0.25,
 clamber 0.45, mantle 1.1, climb 1.6) ending in a sheer 3.4 m drop. The middle lane has three rails to
 vault, a block to clamber onto and hop off, and a pit to leap. The right lane has a wall too high and
-a pit too wide. On the far right is the old bridge's steep foot. `?hud=1` shows the move and its stage;
+a pit too wide. On the far right is the old bridge's foot, shaped as the plateau shapes its deck. `?hud=1` shows the move and its stage;
 ↺ goes back to the start. `scripts/browser-parkour.mjs` runs it in CI, and `npm run test:mobility`
 walks every lane with the motor alone.
 
