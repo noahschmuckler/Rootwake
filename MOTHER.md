@@ -122,7 +122,7 @@ Noah: "lose the tiles". Her clashing colours now come two ways, and "the randomn
 
 The scale (Noah: "an entire biome of grey twitching trees, the alveoli trees only two thirds of the way in, the creature deeper and more obscured"):
 
-- **The breach** stands 950 m from the first village (`LAIR_DISTANCE`, was 400).
+- **The breach** stands 950 m from the first village (`LAIR_DISTANCE`, was 400). On the plateau (PLATEAU.md, agreed with the plateau session): it stands `LAIR_FROM_KARST` 1050 m from the karst, `LAIR_TURN` about 100° off the karst→village line, so the edge (650) ends inside the plateau's 1800 m rim, about 300 m from the first village (`LAIR_DISTANCE` 1160).
 - **The rings** (`TAINT`):
   - heart: 110 m;
   - nursery: 215 m, a third of the way out;
