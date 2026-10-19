@@ -92,8 +92,10 @@ try{
   await page.evaluate(()=>{window.__village.guard.held=false;});
   // Finish the wave: the last one falls in slow motion.
   const wave=await page.evaluate(()=>window.__village.feel.practice.wave);
-  for(let i=0;i<30;i++){
-    const left=await page.evaluate(()=>window.__village.raiders().filter(r=>window.__village.feel.practice.ids.includes(r.id)&&r.state==='hunting').length);if(!left)break;
+  // A foe of the wave still standing in any state (as the game's own count reads it) keeps the wave going: the finale is the last of them, not the last hunting.
+  for(let i=0;i<45;i++){
+    const left=await page.evaluate(()=>{const v=window.__village,ids=v.feel.practice.ids,alive=v.raiders().filter(r=>ids.includes(r.id)&&!['dead','melting','retreating','leaving'].includes(r.state));return {alive:alive.length,hunting:alive.filter(r=>r.state==='hunting').length};});if(!left.alive)break;
+    if(!left.hunting){await page.waitForTimeout(1000);continue;}
     await ahead(1.1);await page.evaluate(()=>{window.__t2=window.__village.feel.impact.log.length;window.__village.attack('strike');});
     await page.waitForFunction(()=>window.__village.feel.impact.log.length>window.__t2||!window.__village.feel.moves.queue.busy,null,{timeout:60000});
   }
