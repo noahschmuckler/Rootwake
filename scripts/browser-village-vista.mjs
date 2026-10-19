@@ -32,6 +32,24 @@ try{
   assert.notEqual(report.noon.zenith,report.night.zenith,'the sky follows the clock');assert.ok(report.night.stars>0.5,'stars by night');
   await shot('dusk-karst',()=>{const v=window.__village;v.jumpTo('dusk');v.standAt(-60+160,-330+60,Math.atan2(160,60));});
   await shot('wood-noon',()=>{const v=window.__village;v.jumpTo('noon');v.standAt(120,60,0.4);});
+  // D1 (DESCENT.md): down to the node, out onto the catwalk of its depth, a keeper heard, back into the drop.
+  await page.evaluate(()=>{const v=window.__village;v.jumpTo('noon');v.karst.standOn('summit',-1.3,0.5,0);v.deep.clarity=v.deep.costs.dive+v.deep.costs.back+5;v.deep.dive();});
+  await page.waitForFunction(()=>window.__village.mode==='deep'&&!document.getElementById('deepOut').closest('#deep').hidden,null,{timeout:120000});
+  await page.click('#deepOut');await page.waitForFunction(()=>window.__village.mode==='catwalk',null,{timeout:10000});
+  report.catwalk=await page.evaluate(()=>{const v=window.__village,w=v.deep.visit,n=v.deep.node(),f=v.player.feet();return {active:w.active,letter:w.catwalk.letter,feetY:f.y,dropY:n.y,deepHidden:document.getElementById('deep').hidden,interior:!v.scene.getObjectByName('vista')?.visible};});
+  assert.ok(report.catwalk.active&&report.catwalk.letter==='R','the first catwalk, layer R');assert.ok(Math.abs(report.catwalk.feetY-(report.catwalk.dropY-0.95))<0.05,`she stands on its floor beneath the drop (${JSON.stringify(report.catwalk)})`);assert.ok(report.catwalk.deepHidden,'the node\'s panel is closed');
+  await page.waitForTimeout(2500);await page.screenshot({path:`${out}/catwalk-out.png`,timeout:180000});
+  await page.evaluate(()=>{const v=window.__village,w=v.deep.visit,c=w.catwalk,s=c.stations[0],o=w.world.root.position,r=c.wallR-0.6;v.player.teleport(o.x+Math.cos(s.angle)*r,o.z+Math.sin(s.angle)*r,Math.atan2(Math.cos(s.angle),Math.sin(s.angle))+Math.PI,o.y);});
+  await page.waitForFunction(()=>window.__village.deep.visit.near==='listen'&&!document.getElementById('descentAct').hidden,null,{timeout:20000});
+  await page.click('#descentAct');await page.waitForFunction(()=>!document.getElementById('descentBubble').hidden,null,{timeout:10000});
+  report.keeper=await page.evaluate(()=>({act:document.getElementById('descentAct').textContent,said:document.getElementById('descentBubble').textContent,mode:window.__village.mode}));
+  assert.equal(report.keeper.act,'listen to the snerk');assert.ok(report.keeper.said.length>10,'the snerk speaks');assert.equal(report.keeper.mode,'catwalk','she is still on the catwalk');
+  await page.waitForTimeout(1500);await page.screenshot({path:`${out}/catwalk-snerk.png`,timeout:180000});
+  await page.evaluate(()=>{const v=window.__village,w=v.deep.visit,o=w.world.root.position,r=1.75;v.player.teleport(o.x+r,o.z,Math.PI/2,o.y);});
+  await page.waitForFunction(()=>window.__village.deep.visit.near==='drop',null,{timeout:20000});await page.click('#descentAct');
+  await page.waitForFunction(()=>window.__village.mode==='deep'&&!document.getElementById('deep').hidden,null,{timeout:10000});
+  report.back=await page.evaluate(()=>({active:window.__village.deep.visit.active,act:document.getElementById('descentAct').hidden}));assert.ok(!report.back.active&&report.back.act,'back in the drop, the catwalk gone');
+  await page.evaluate(()=>window.__village.deep.launch('pool'));await page.waitForFunction(()=>window.__village.mode==='ground',null,{timeout:120000});
   report.hud=await page.evaluate(()=>document.getElementById('look-hud')?.textContent??'');
   assert.match(report.hud,/tris/);
   assert.deepEqual(errors,[],'no console or shader errors');

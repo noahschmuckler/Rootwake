@@ -92,3 +92,21 @@ Open questions:
   - "listen to the snerk" (and the others) opens a speech bubble. "into the drop" stands for D1.
   - ▲ ▼ visit the seven layers. Options: `?depth=0..6`, `?hud=1`, `?intro=0`.
 - **Checks:** `scripts/browser-descent.mjs` (CI) checks that she stands on the catwalk, that it stays within the draw-call budget, that the snerk speaks, and that every layer builds with its keepers. Screenshots go to `artifacts/descent/`.
+
+## D1 as built (2026-10-19): stepping out from the village's node
+
+- At the deep node, a **"step out onto the catwalk"** button sits above the root button.
+  - It builds the catwalk of the node's depth (`deep.depth`, clamped to the seven layers) where the node is, so the drop she was inside hangs in the beam at the centre.
+  - She stands at the gangway's ring end, turned back to the drop.
+- **`src/descentVisit.ts`** holds the visit:
+  - the traversal world (`walkable` in the chamber's frame, the floor 0.95 m under the drop's centre);
+  - the camera kept inside the chamber;
+  - the act button and the keepers' bubble, the same lines as the study page.
+- **`village.ts`** gives it a mode, `catwalk`:
+  - she walks on the shared player, while the land above (chunks, the root network, the overhead camera) rests;
+  - the chamber is dark (`CATWALK_FOG`), the sun out, and the vista look is told it is an interior;
+  - the fight, the stations and the miracles stay off, since they ask for `ground`.
+- **"into the drop"** at the gangway's foot takes her back into the node: the catwalk is disposed and the lights on the drop return.
+- Dev: `__village.deep.stepOut()`, `.backIn()`, `.visit`.
+- **Checks:** `scripts/browser-village-vista.mjs` dives to the node, steps out, checks that she stands on layer R's floor under the drop, hears the snerk, and goes back into the drop and up to the pool. The screenshots are `catwalk-out.png` and `catwalk-snerk.png`.
+- **Open:** deepening is the only way deeper; there is no stair between catwalks yet. The summit rim is D2, and what the keepers ask of her is D3.
