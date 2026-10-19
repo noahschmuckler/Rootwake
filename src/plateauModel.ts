@@ -8,6 +8,7 @@
 import { gradientNoise, fbm, ridged, rng, type Noise } from './vistaTerrain';
 import { KARST_AT, villageSites, lairPlace } from './overworldModel';
 import { STREAM_Z, STREAM_REACH } from './villageModel';
+import { TAINT } from './taintModel';
 
 const smooth = (a: number, b: number, x: number): number => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
@@ -125,7 +126,8 @@ function build(seed: number): Plateau {
   function ok(course: P[], own: string | null): boolean {
     for (const p of course) {
       for (const v of villages) if (v.id !== own && Math.hypot(p.x - v.x, p.z - v.z) < TERRACE_R + 50) return false;
-      if (Math.hypot(p.x - lair.x, p.z - lair.z) < 160) return false;
+      // Out of the taint and its veins (the creature session: no river through her biome).
+      if (Math.hypot(p.x - lair.x, p.z - lair.z) < TAINT.edge + TAINT.veins) return false;
       if (Math.hypot(p.x - C.x, p.z - C.z) < ISLAND_R + 40) return false;
       for (const r of rivers) for (let i = 0; i < r.points.length; i += 3) { const q = r.points[i]; if (Math.hypot(p.x - q.x, p.z - q.z) < 60 && Math.hypot(q.x - C.x, q.z - C.z) > LAKE_R + 30) return false; }
     }

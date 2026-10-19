@@ -114,6 +114,9 @@ The overworld is a large plateau bounded by mountains, the summit of DiggyDwarve
 - **Load time:** the land now loads from the bake. The old in-page erosion would have cost a phone about 15–20 s.
 - **Cost:** the vista draws about 700–950k triangles around the villages, and 35k of that is the finer near mesh.
 
-## Open
+## The dark forest's place (agreed with the creature session, 2026-10-19)
 
-- **The dark forest must fit inside the rim.** The creature session's lair at `LAIR_DISTANCE` 950 m from the first village, with `TAINT.edge` 650, reaches past the plateau's edge. I've asked them to keep the lair plus the edge within about 1700 m of the karst.
+- **Where the breach stands:** `LAIR_FROM_KARST` 1050 m from the karst, about 100° off the karst→village line, on the side the seed picks. That is about 1157 m from the first village.
+- **The taint's extent:** `TAINT.edge` stays 650 m, so the taint ends 1700 m from the karst, inside the rim, about 300 m from the first village.
+- **What it keeps out:** rivers stay out of the taint and its veins (edge plus 120 m); the other villages stay a further 60 m clear (`SITE_LAIR`).
+- **`LAIR_DISTANCE`** (1160) is the village's distance to the breach, rounded up. It sets how far the home village's presentation reaches.

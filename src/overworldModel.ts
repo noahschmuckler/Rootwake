@@ -10,7 +10,8 @@ import { plateau, PLATEAU_R } from './plateauModel';
 export type PlaceKind = 'village' | 'karst' | 'lair' | 'den' | 'ruin' | 'warren' | 'moot' | /** S4b */ 'wallow';
 export interface Place { id: string; kind: PlaceKind; name: string; x: number; z: number; radius: number; tier?: number }
 /** The lair's distance and the dark forest's breadth (Noah: 400 m, 150 m across). The karst 330 m north. Tuning. */
-export const LAIR_DISTANCE = 950, FOREST_RADIUS = 75, KARST_AT = { x: -60, z: -330 };
+/** PLATEAU.md (with the creature session, 2026-10-19): the breach stands LAIR_FROM_KARST m from the karst, LAIR_TURN off the karst→village line to the side the seed picks, so the taint (TAINT.edge 650) ends LAIR_FROM_KARST + 650 m out, inside the plateau's rim, and about 300 m from the first village; LAIR_DISTANCE is its distance from the village (rounded up), for how far that village's presentation reaches. Tuning. */
+export const LAIR_FROM_KARST = 1050, LAIR_TURN = 1.75, LAIR_DISTANCE = 1160, FOREST_RADIUS = 75, KARST_AT = { x: -60, z: -330 };
 /** MOTHER.md: nothing else is placed in her taint (its edge, TAINT.edge, from the breach): dens, ruins and warrens stand outside it. */
 const LAIR_CLEAR = TAINT.edge + 30;
 /** The karsts, for the danger field (G5 adds more). */
@@ -41,17 +42,17 @@ export function dens(seed: number): Den[] {
   denCache.set(seed, out); return out;
 }
 function basePlaces(seed: number): Place[] {
-  const rand = mulberry32((seed * 3251 + 17) >>> 0); const a = 0.55 + rand() * 1.4; // south-east to south-west: away from the karst
+  const rand = mulberry32((seed * 3251 + 17) >>> 0), side = rand() < 0.5 ? -1 : 1, a = Math.atan2(-KARST_AT.z, -KARST_AT.x) + side * (LAIR_TURN + (rand() - 0.5) * 0.1);
   return [
     { id: 'village', kind: 'village', name: 'the village', x: 0, z: 0, radius: VILLAGE_RADIUS },
     { id: 'karst', kind: 'karst', name: 'the Wellspire', x: KARST_AT.x, z: KARST_AT.z, radius: 60 },
-    { id: 'lair', kind: 'lair', name: 'the dark forest', x: Math.round(Math.cos(a) * LAIR_DISTANCE), z: Math.round(Math.sin(a) * LAIR_DISTANCE), radius: TAINT.edge },
+    { id: 'lair', kind: 'lair', name: 'the dark forest', x: Math.round(KARST_AT.x + Math.cos(a) * LAIR_FROM_KARST), z: Math.round(KARST_AT.z + Math.sin(a) * LAIR_FROM_KARST), radius: TAINT.edge },
   ];
 }
 /** The lair (the dark forest's heart, the breach), by the seed. */
 export const lairPlace = (seed: number): Place => basePlaces(seed).find(p => p.id === 'lair')!;
 /** G4 (EXPANSION.md): the other villages. Same folk, other names (villageModel's FOLK), each a whole village of its own on calmer ground: within SITE_KARST of the karst (the danger field's safe side, where the dens are few), SITE_NEAR to SITE_FAR from the first village, past the dark forest by SITE_LAIR (so the first village is always the nearest to the lair), and SITE_APART from one another. Placed by the seed. Their names and folk pools are authored (SITE_NAMES), in order. Tuning. */
-export const VILLAGE_RADIUS = 44, SITE_KARST: [number, number] = [560, 700], SITE_NEAR = 650, SITE_FAR = 1400, SITE_LAIR = 500, SITE_APART = 450;
+export const VILLAGE_RADIUS = 44, SITE_KARST: [number, number] = [560, 700], SITE_NEAR = 650, SITE_FAR = 1400, SITE_LAIR = TAINT.edge + TAINT.veins + 60, SITE_APART = 450;
 export const SITE_NAMES: { short: string; name: string }[] = [{ short: 'the ford', name: 'the village at the ford' }, { short: 'the pines', name: 'the village under the pines' }];
 export interface VillageSite { id: string; folk: number; short: string; name: string; x: number; z: number }
 const siteCache = new Map<number, VillageSite[]>();
