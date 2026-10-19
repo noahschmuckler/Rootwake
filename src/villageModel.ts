@@ -11,6 +11,7 @@ import { CatmullRomCurve3, Vector3 } from 'three';
 import { mulberry32 } from './colors';
 import { KARST_AT } from './overworldModel';
 import { routeBetween } from './stewardModel';
+import { TAINT, depthAt, distTo, stepAttention, provoke, inTaint } from './taintModel';
 
 /** One tick is one sim minute; a day is 1440 of them and takes DAY_REAL_SECONDS of real time. Tuning. */
 export const DAY_TICKS = 1440, DAY_REAL_SECONDS = 20 * 60, TICKS_PER_SECOND = DAY_TICKS / DAY_REAL_SECONDS;
@@ -201,7 +202,7 @@ export interface Snatcher { id: number; x: number; z: number; heading: number; s
 /** Her fighting stat (vigor: bitten down, never to death; at nothing she fades and wakes at the stone, weakened) and her sap (spent by the specials, refilling slowly for now; match-3 is reserved for building it later). */
 export interface Hero { vigor: number; sap: number; faint: number; calm: number; xp: number; level: number; choices: number; perks: { vigor: number; strike: number; sap: number; regen: number }; holding: number }
 /** The lair's manifestation: a local mother of goats at the dark forest's centre, awake while she is near, with its own hp; slain, it is gone for LAIR_PEACE_DAYS and the raids with it, then grows again. */
-export interface Lair { hp: number; alive: boolean; slainDay: number; spawnClock: number; sweepClock: number; hurt: number; woke: boolean }
+export interface Lair { hp: number; alive: boolean; slainDay: number; spawnClock: number; sweepClock: number; hurt: number; woke: boolean; /** M1 (MOTHER.md): her attention on Hulda, 0..1 (taintModel); not saved. */ attention: number }
 export interface Village { seed: number; tick: number; folk: number; origin: Vec2; incidents: Incident[]; hobbits: HobbitState[]; stores: Record<Store, number>; land: Land; fireWood: number; take: Take; lastTake: Take; prayer: number; prayed: number; spirits: Spirit[]; stack: Carry | null; raiders: Raider[]; hero: Hero; raidDay: number; slain: number; eaten: number; lair: Lair; dead: { id: string; tick: number }[]; wellFedDays: number; dayMissed: boolean; mourningUntil: number; events: VillageEvent[]; darkMealsToday: number; melted: number; blight: number; snatchers: Snatcher[]; snatchDay: number; brood: { infant: InfantRef; due: number }[]; bred: InfantRef[]; dropped: { infant: InfantRef; x: number; z: number }[]; carried: InfantRef | null; taken: number; returned: number; huts: number; site: HutSite | null; /** S3: the village's own warren's rabbits (a village with no den's warren in reach), and whether it has a drying rack for the meat. */ ownRabbits: number; rack: boolean; /** S4: the search the steward gave, and how far it has come. */ search: Search | null; /** S4b: what the hunters go for, the wallow's boars, and a boar hunt under way. */ quarry: Quarry; boars: number; boarHunt: BoarHunt | null; fedStreak: number; raidEaten: number; lastRaidEaten: number; voiced: Voiced[]; told: StateKind; dens: Record<string, DenState>; wolfDay: number; bitten: number; lastBitten: number; hedges: Hedge[] }
 /** G3b (VILLAGERS.md: "a thorn hedge grown across the wolves' run is a shield"): a hedge is HEDGE_LEN m of thorn laid across the line to the green where she stands (its angle is the run's normal), for HEDGE_PRAYER prayer and the miracle's channelling, standing HEDGE_DAYS; it may be grown HEDGE_MIN to HEDGE_MAX m from the green, HEDGE_APART from another, HEDGES_MAX at once. A raider within HEDGE_R of it is held off it, slid along it toward its nearer end at half pace, and pricked HEDGE_PRICK a second. Tuning. */
 export interface Hedge { x: number; z: number; angle: number; until: number; /** The harm it has dealt: at HEDGE_WEAR it is spent and gone (Noah, 2026-09-27). */ dealt: number }
@@ -254,7 +255,7 @@ export const living = (v: Village, home: number): HobbitState[] => v.hobbits.fil
 export function freshVillage(seed = 1, folk = 0, origin: Vec2 = { x: 0, z: 0 }): Village {
   const founders = folkOf(folk).founders;
   return {
-    seed, tick: 0, folk, origin: { x: origin.x, z: origin.z }, stores: { berries: 3, milk: 2, grain: 6, wood: 8, water: 5, dark: 0, meat: 0 }, land: { berries: BERRY_CAP, branches: 6, milk: MILK_PER_DAY, goats: GOATS, crops: Array.from({ length: CROP_STRIPS }, (_, i) => (i + 0.5) / CROP_STRIPS), spoiled: { thicket: 0, copse: 0, field: 0, pen: 0 } }, fireWood: 0, take: freshTake(), lastTake: freshTake(), prayer: 0, prayed: 0, spirits: [], stack: null, raiders: [], hero: { vigor: VIGOR_MAX, sap: SAP_MAX, faint: 0, calm: 0, xp: 0, level: 1, choices: 0, perks: { vigor: 0, strike: 0, sap: 0, regen: 0 }, holding: -1 }, raidDay: -1, slain: 0, eaten: 0, lair: { hp: LAIR_HP, alive: true, slainDay: -99, spawnClock: 0, sweepClock: 0, hurt: 0, woke: false }, dead: [], wellFedDays: 0, dayMissed: false, mourningUntil: 0, events: [], darkMealsToday: 0, melted: 0, blight: 0, snatchers: [], snatchDay: -1, brood: [], bred: [], dropped: [], carried: null, taken: 0, returned: 0, huts: 0, site: null, ownRabbits: WARREN_CAP, rack: false, search: null, quarry: 'rabbit', boars: BOAR_CAP, boarHunt: null, fedStreak: 0, raidEaten: 0, lastRaidEaten: 0, voiced: [], told: 'steady', dens: {}, wolfDay: -1, hedges: [], bitten: 0, lastBitten: 0, incidents: [],
+    seed, tick: 0, folk, origin: { x: origin.x, z: origin.z }, stores: { berries: 3, milk: 2, grain: 6, wood: 8, water: 5, dark: 0, meat: 0 }, land: { berries: BERRY_CAP, branches: 6, milk: MILK_PER_DAY, goats: GOATS, crops: Array.from({ length: CROP_STRIPS }, (_, i) => (i + 0.5) / CROP_STRIPS), spoiled: { thicket: 0, copse: 0, field: 0, pen: 0 } }, fireWood: 0, take: freshTake(), lastTake: freshTake(), prayer: 0, prayed: 0, spirits: [], stack: null, raiders: [], hero: { vigor: VIGOR_MAX, sap: SAP_MAX, faint: 0, calm: 0, xp: 0, level: 1, choices: 0, perks: { vigor: 0, strike: 0, sap: 0, regen: 0 }, holding: -1 }, raidDay: -1, slain: 0, eaten: 0, lair: { hp: LAIR_HP, alive: true, slainDay: -99, spawnClock: 0, sweepClock: 0, hurt: 0, woke: false, attention: 0 }, dead: [], wellFedDays: 0, dayMissed: false, mourningUntil: 0, events: [], darkMealsToday: 0, melted: 0, blight: 0, snatchers: [], snatchDay: -1, brood: [], bred: [], dropped: [], carried: null, taken: 0, returned: 0, huts: 0, site: null, ownRabbits: WARREN_CAP, rack: false, search: null, quarry: 'rabbit', boars: BOAR_CAP, boarHunt: null, fedStreak: 0, raidEaten: 0, lastRaidEaten: 0, voiced: [], told: 'steady', dens: {}, wolfDay: -1, hedges: [], bitten: 0, lastBitten: 0, incidents: [],
     hobbits: founders.map(h => { const d = houseOf(h).door; return { id: h.id, x: d.x, z: d.z, heading: houseOf(h).facing, activity: 'sleeping', want: 'home', job: 'gather', path: [], speed: 0, inside: true, bubble: '', bubbleUntil: 0, wanderAt: 0, faceAt: 0, hunger: 0.3, carry: null, errand: null, gatherAt: 0, eatUntil: 0, jobAt: 0, meals: 0, ate: -1, home: h.home, stage: 'grown', born: -(INFANT_DAYS + CHILD_DAYS) * DAY_TICKS, missed: 0, duty: null }; }),
   };
 }
@@ -502,17 +503,17 @@ export const RAID_TICK = 870, RAID_END = 1380, RAID_FROM = WALK_RADIUS - 12, DY_
 /** D3, the snatchers. At SNATCH_TICK (after the raid sets out) SNATCHERS_PER_NIGHT come out of the lair while the village has an infant in a house or lying out; they run at SNATCH_PACE (root-travel pace), a house door takes SNATCH_ENTER_S, an infant lying out a moment; within TELL_RANGE of the green the goats bleat (told). Back at the lair an infant becomes a Dark Young after GESTATION_TICKS; the night's raid is Shub's own (raidSize by day) and every Dark Young bred of an infant, up to DY_MAX. Struck, burst or bound, a snatcher drops what it carries and runs. She picks up an infant within PICK_RANGE and it is home at its door within HOME_RANGE; a melted Dark Young leaves its infant where it melted. Tuning. */
 /** D4, the blight. Round the lair the Dark Young, in their hunger, spoil the trees: the blight's reach is BLIGHT_BASE m and BLIGHT_PER_DY more for every Dark Young bred of an infant (none bred, none), up to BLIGHT_MAX; each dawn the blight moves toward that reach by at most BLIGHT_STEP m, spreading or drawing back (a tree heals a day behind it). Inside it a tree is black and its roots refuse root travel. Tuning. */
 export const BLIGHT_BASE = 50, BLIGHT_PER_DY = 30, BLIGHT_MAX = 360, BLIGHT_STEP = 30;
-export const blightTarget = (v: Village): number => (v.bred.length ? Math.min(BLIGHT_MAX, BLIGHT_BASE + BLIGHT_PER_DY * v.bred.length) : 0);
+/** M1 (MOTHER.md): the blight is the taint's dead land, fixed: in this phase she does not grow, however many Dark Young are bred. (BLIGHT_BASE / BLIGHT_PER_DY / BLIGHT_STEP are kept for the record.) */
+export const blightTarget = (_v: Village): number => TAINT.grey;
 /** Is this point in the blight? */
 export const isBlighted = (v: { blight: number }, x: number, z: number): boolean => !!lairAt && v.blight > 0 && Math.hypot(x - lairAt.x, z - lairAt.z) <= v.blight;
 /** Dawn: the blight moves toward its reach, told when it spreads or draws back. */
 function stepBlight(v: Village): void {
-  const target = blightTarget(v), before = v.blight; if (!lairAt || !isHome(v) || target === before) return;
-  v.blight = target > before ? Math.min(target, before + BLIGHT_STEP) : Math.max(target, before - BLIGHT_STEP);
-  event(v, v.blight > before ? `The blight spreads: ${Math.round(v.blight)} m round the mother, her roots closed to Hulda` : v.blight > 0 ? `The blight draws back to ${Math.round(v.blight)} m round the mother` : 'The blight is gone from the forest', true);
+  // M1: always there, never growing: set at once, unannounced (it is the land as it is).
+  if (!lairAt || !isHome(v)) return; v.blight = blightTarget(v);
 }
-/** Infants kept at the lair lie BROOD_RING m from its heart, inside the mother's reach: taking one back is a delve. Tuning. */
-export const BROOD_RING = 3.2;
+/** M1 (MOTHER.md): infants are not carried to the heart but hung in birth sacs in the nursery, on its rim nearest the first village: a grove BROOD_RING m from the breach, the sacs BROOD_STEP rad apart along it. Taking one back is a delve into the taint. Tuning. */
+export const BROOD_RING = (TAINT.heart + TAINT.nursery) / 2 + 8, BROOD_STEP = 0.05;
 export const SNATCH_TICK = 900, SNATCHERS_PER_NIGHT = 1, SNATCH_PACE = 9, SNATCH_ENTER_S = 4, TELL_RANGE = 25, GESTATION_TICKS = DAY_TICKS, DY_MAX = 8, PICK_RANGE = 1.4, HOME_RANGE = 2.4;
 export const DY_DEVOUR_S = 10, SPOIL_TICKS = DAY_TICKS, DARK_PER_UNIT = 1, DARK_PER_SITE = 3, DARK_FED_DAYS = 3, DY_FLEE = 9, LAIR_HOME = 10, HOLD_RANGE = 3.5, HOLD_SAP = 3, HOLD_MELT_S = 60, MELT_S = 6;
 export const raidSize = (day: number): number => Math.min(3, 1 + Math.floor(day / 2));
@@ -536,16 +537,22 @@ export function gainXp(v: Village, n: number): void { const h = v.hero; h.xp += 
 /** Spend a level's choice. Returns false when none is owed. */
 export function choosePerk(v: Village, perk: Perk): boolean { const h = v.hero; if (h.choices < 1) return false; h.choices -= 1; h.perks[perk] += 1; if (perk === 'vigor') h.vigor = Math.min(vigorMax(h), h.vigor + PERK_VIGOR); if (perk === 'sap') h.sap = Math.min(sapMax(h), h.sap + PERK_SAP); return true; }
 /** The dark forest and the lair. Inside the forest her vigor drains by depth, up to FOREST_DRAIN a second at the centre. The manifestation wakes within LAIR_WAKE m: a Dark Young born every LAIR_SPAWN_S while fewer than LAIR_BROOD are about it, hunting her at once; a sweep of its horns every LAIR_SWEEP_S for LAIR_SWEEP within LAIR_REACH. LAIR_HP to slay; slain, the raids stop for LAIR_PEACE_DAYS, then it grows again. Tuning. */
+/** FOREST_DRAIN is no longer applied (M1: the taint rouses her attention instead); kept for the record. */
 export const FOREST_DRAIN = 2, LAIR_WAKE = 26, LAIR_SPAWN_S = 18, LAIR_BROOD = 3, LAIR_SWEEP_S = 3, LAIR_SWEEP = 20, LAIR_REACH = 4.5, LAIR_HP = 300, LAIR_PEACE_DAYS = 5, LAIR_HURT_RANGE = 5;
 /** Where the lair is, for the seed (the overworld's placing). Set by the entry from overworldModel so the model stays free of it in tests; a village whose lair is unplaced has no forest. */
+/** M1: whether the mother can be slain (not in phase one). Tuning, for tests of the old death. */
+export let UNKILLABLE = true;
+export const setUnkillable = (b: boolean): void => { UNKILLABLE = b; };
 export let lairAt: { x: number; z: number; radius: number } | null = null;
 export const setLair = (at: { x: number; z: number; radius: number } | null): void => { lairAt = at; };
 export const forestDepth = (x: number, z: number): number => { if (!lairAt) return 0; const d = Math.hypot(x - lairAt.x, z - lairAt.z); return d >= lairAt.radius ? 0 : 1 - d / lairAt.radius; };
 export const raidsPaused = (v: Village): boolean => !v.lair.alive && dayOf(v.tick) < v.lair.slainDay + LAIR_PEACE_DAYS;
-function hurtLair(v: Village, dmg: number): void { const l = v.lair; if (!l.alive) return; l.hp = Math.max(0, l.hp - dmg); l.hurt = 0.3; if (l.hp === 0) { l.alive = false; l.slainDay = dayOf(v.tick); l.woke = false; gainXp(v, XP_LAIR); v.brood.forEach((b, i) => { const p = broodSpot(i)!; v.dropped.push({ infant: b.infant, x: p.x, z: p.z }); }); if (v.brood.length) event(v, 'The mother of goats is gone: the infants she held lie free', true); v.brood = []; for (const r of v.raiders) if (r.state !== 'dead') { r.state = 'leaving'; r.aggro = 0; } } }
+/** M1 (MOTHER.md): in this phase the mother cannot be slain, by Hulda or by anyone: she is forest-sized. A blow on her only rouses her (and flashes). The old death below is kept for a saved lair already slain, and for when she can be bound. */
+function hurtLair(v: Village, dmg: number): void { const l = v.lair; if (!l.alive) return; l.hurt = 0.3; l.attention = provoke(l.attention, true); if (UNKILLABLE) return; l.hp = Math.max(0, l.hp - dmg); if (l.hp === 0) { l.alive = false; l.slainDay = dayOf(v.tick); l.woke = false; gainXp(v, XP_LAIR); v.brood.forEach((b, i) => { const p = broodSpot(i)!; v.dropped.push({ infant: b.infant, x: p.x, z: p.z }); }); if (v.brood.length) event(v, 'The mother of goats is gone: the infants she held lie free', true); v.brood = []; for (const r of v.raiders) if (r.state !== 'dead') { r.state = 'leaving'; r.aggro = 0; } } }
 /** The lair by real seconds while she is near: waking, brooding Dark Young, sweeping. Regrows once the peace is over. */
 function stepLair(v: Village, dt: number, her: Vec2 | null): void {
   const l = v.lair; l.hurt = Math.max(0, l.hurt - dt); if (!lairAt) return;
+  if (v.blight !== blightTarget(v)) stepBlight(v);
   if (!l.alive) { if (dayOf(v.tick) >= l.slainDay + LAIR_PEACE_DAYS) { l.alive = true; l.hp = LAIR_HP; } return; }
   if (!her) { l.woke = false; return; } const d = Math.hypot(her.x - lairAt.x, her.z - lairAt.z); l.woke = d <= LAIR_WAKE; if (!l.woke) return;
   l.spawnClock += dt; const brood = v.raiders.filter(r => r.state !== 'dead' && Math.hypot(r.x - lairAt!.x, r.z - lairAt!.z) < LAIR_WAKE + 10).length;
@@ -821,8 +828,8 @@ export const tellOf = (r: Raider): number => (r.state === 'hunting' ? Math.max(0
 export function stepRaiders(v: Village, dt: number, her: Vec2 | null, herTime = true, regen = 1): void {
   // G4: her hero is one across the villages; her clocks (calm, sap, vigor, the faint) run once, in the village she is in (`herTime`), not once per village stepped.
   const h = v.hero; if (herTime) { h.calm += dt; h.sap = Math.min(sapMax(h), h.sap + SAP_REGEN * regen * dt); if (h.faint > 0) { h.faint = Math.max(0, h.faint - dt); if (h.faint === 0) h.vigor = Math.max(h.vigor, FAINT_VIGOR); } else if (h.calm > VIGOR_CALM_S) h.vigor = Math.min(vigorMax(h), h.vigor + VIGOR_REGEN * dt); }
-  // The dark forest drains her by depth while she stands in it; at the bottom she faints as from a bite.
-  if (her && h.faint === 0 && isHome(v)) { const depth = forestDepth(her.x, her.z); if (depth > 0) { h.vigor = Math.max(0, h.vigor - FOREST_DRAIN * depth * dt); h.calm = 0; if (h.vigor === 0) h.faint = FAINT_S; } }
+  // M1 (MOTHER.md, Noah 2026-10-19): the forest no longer drains her. Her standing in it rouses the mother's attention instead, by depth, and leaving lets it settle.
+  if (herTime && isHome(v)) v.lair.attention = stepAttention(v.lair.attention, her && h.faint === 0 ? depthAt(distTo(lairAt, her.x, her.z)) : 0, dt);
   if (isHome(v)) { stepLair(v, dt, her); stepSnatchers(v, dt); }
   const t = v.tick % DAY_TICKS, night = phaseAt(v.tick) === 'night', leaveAll = !night || t >= RAID_END;
   for (const h of v.hedges) if (h.dealt >= HEDGE_WEAR) event(v, 'A thorn hedge is spent: it has torn all it can');
@@ -933,7 +940,7 @@ function pickTarget(v: Village, n: Snatcher): string | null {
 /** The snatchers by real seconds: to the infant, in, and back to the lair; at the lair the infant is kept. */
 function stepSnatchers(v: Village, dt: number): void {
   for (const n of v.snatchers) {
-    if (n.state === 'fleeing') { const home = lairPoint(n); if (towards(n, home, SNATCH_PACE * dt) < LAIR_HOME) { if (n.infant) v.brood.push({ infant: n.infant, due: v.tick + GESTATION_TICKS }); n.infant = null; n.clock = -1; } continue; }
+    if (n.state === 'fleeing') { const home = groveAt() ?? lairPoint(n); if (towards(n, home, SNATCH_PACE * dt) < LAIR_HOME) { if (n.infant) v.brood.push({ infant: n.infant, due: v.tick + GESTATION_TICKS }); n.infant = null; n.clock = -1; } continue; }
     let t = snatchTarget(v, n); if (!t) { n.targetId = pickTarget(v, n); n.state = 'coming'; t = snatchTarget(v, n); if (!t) { n.state = 'fleeing'; continue; } }
     if (!n.told && Math.hypot(n.x - GREEN.x, n.z - GREEN.z) < TELL_RANGE) { n.told = true; event(v, 'The goats are bleating: something small is coming for the infants', true); }
     if (n.state === 'coming') { if (towards(n, t.at, SNATCH_PACE * dt) < 0.4) { n.state = 'taking'; n.clock = 0; } continue; }
@@ -952,7 +959,9 @@ function scare(v: Village, her: Vec2, range: number): number {
 }
 /** Her arms: an infant lying within PICK_RANGE is taken up (her hands empty); carried to within HOME_RANGE of its door, it is home. */
 /** Where the infants kept at the lair lie, held in the mother's roots round her heart. */
-export const broodSpot = (i: number): Vec2 | null => (lairAt ? { x: lairAt.x + Math.cos(i * 2.4 + 0.5) * BROOD_RING, z: lairAt.z + Math.sin(i * 2.4 + 0.5) * BROOD_RING } : null);
+export const broodSpot = (i: number): Vec2 | null => { if (!lairAt) return null; const a = Math.atan2(-lairAt.z, -lairAt.x) + (i % 2 ? 1 : -1) * Math.ceil(i / 2) * BROOD_STEP, r = BROOD_RING + (i % 3) * 2.5; return { x: lairAt.x + Math.cos(a) * r, z: lairAt.z + Math.sin(a) * r }; };
+/** Where the snatchers bring what they carry: the sac grove. */
+export const groveAt = (): Vec2 | null => broodSpot(0);
 export function carryInfant(v: Village, her: Vec2): 'picked' | 'home' | null {
   if (!v.carried && !v.stack) { const i = v.brood.findIndex((_, k) => { const p = broodSpot(k); return !!p && Math.hypot(p.x - her.x, p.z - her.z) <= PICK_RANGE; }); if (i >= 0) { v.carried = v.brood.splice(i, 1)[0].infant; event(v, `She takes ${infantName(v.carried)} back from the mother`, true); return 'picked'; } }
   if (!v.carried) { if (v.stack) return null; const i = v.dropped.findIndex(d => Math.hypot(d.x - her.x, d.z - her.z) <= PICK_RANGE); if (i < 0) return null; v.carried = v.dropped.splice(i, 1)[0].infant; return 'picked'; }
@@ -980,10 +989,11 @@ export function strike(v: Village, her: Vec2, fx: number, fz: number, mult = 1):
   scare(v, her, STRIKE_RANGE + 0.6);
   let best: Raider | null = null, bd = Infinity; for (const r of alive(v)) { const dx = r.x - her.x, dz = r.z - her.z, d = Math.hypot(dx, dz); if (d <= STRIKE_RANGE + 0.6 && (d < 0.5 || (dx * fx + dz * fz) / d > STRIKE_COS) && d < bd) { best = r; bd = d; } }
   if (best) hurt(v, best, strikeDamage(v.hero) * mult); else if (lairAt && v.lair.alive && Math.hypot(her.x - lairAt.x, her.z - lairAt.z) <= LAIR_HURT_RANGE) hurtLair(v, strikeDamage(v.hero) * mult);
+  if (best && isHome(v) && inTaint(lairAt, her.x, her.z)) v.lair.attention = provoke(v.lair.attention);
   return best;
 }
 /** Her thorn burst: everything within THORN_RANGE, for THORN_SAP. Returns how many were hurt, or -1 without the sap. */
-export function thornBurst(v: Village, her: Vec2): number { if (v.hero.sap < THORN_SAP) return -1; v.hero.sap -= THORN_SAP; let n = scare(v, her, THORN_RANGE + 0.6); for (const r of alive(v)) if (Math.hypot(r.x - her.x, r.z - her.z) <= THORN_RANGE + 0.6) { hurt(v, r, THORN_DMG); n++; } if (lairAt && v.lair.alive && Math.hypot(her.x - lairAt.x, her.z - lairAt.z) <= LAIR_HURT_RANGE) { hurtLair(v, THORN_DMG); n++; } return n; }
+export function thornBurst(v: Village, her: Vec2): number { if (v.hero.sap < THORN_SAP) return -1; v.hero.sap -= THORN_SAP; let n = scare(v, her, THORN_RANGE + 0.6); for (const r of alive(v)) if (Math.hypot(r.x - her.x, r.z - her.z) <= THORN_RANGE + 0.6) { hurt(v, r, THORN_DMG); n++; } if (lairAt && v.lair.alive && Math.hypot(her.x - lairAt.x, her.z - lairAt.z) <= LAIR_HURT_RANGE) { hurtLair(v, THORN_DMG); n++; } if (isHome(v) && inTaint(lairAt, her.x, her.z)) v.lair.attention = provoke(v.lair.attention); return n; }
 /** Her root bind: the nearest within ROOT_RANGE held for ROOT_S, for ROOT_SAP. Returns it, null when none, or undefined without the sap. */
 export function rootBind(v: Village, her: Vec2): Raider | null | undefined { if (v.hero.sap < ROOT_SAP) return undefined; if (scare(v, her, ROOT_RANGE + 0.6)) v.hero.sap -= ROOT_SAP; let best: Raider | null = null, bd = Infinity; for (const r of bindable(v)) { const d = Math.hypot(r.x - her.x, r.z - her.z); if (d <= ROOT_RANGE + 0.6 && d < bd) { best = r; bd = d; } } if (!best) return null; v.hero.sap -= ROOT_SAP; v.hero.holding = best.id; best.rooted = ROOT_S; best.aggro = Math.max(best.aggro, DY_AGGRO_S); return best; }
 /** Advance the village by whole ticks. Deterministic: the only randomness is the seeded stream, drawn in a fixed order. */
@@ -1284,7 +1294,7 @@ export function parseVillage(raw: string | null): Village {
       t.inside = s.inside === true; t.activity = ACTIVITIES.includes(s.activity) ? s.activity : 'sleeping'; t.want = ['home', 'place', 'green'].includes(s.want) ? s.want : 'home'; t.job = s.job === 'pray' ? 'pray' : s.job === 'build' ? 'build' : 'gather';
       t.errand = ['deliver', 'meal', 'firewood', 'fetch', 'hut', 'flee', 'torch', 'hunt', 'whittle', 'search', 'boar'].includes(s.errand) ? s.errand : null; if (s.torch === true) t.torch = true; if (s.spear === true) t.spear = true; if (Number.isFinite(s.huntUntil)) t.huntUntil = s.huntUntil;
       t.carry = carryOf(s.carry); if (t.errand === 'deliver' && !t.carry) t.errand = null;
-      t.path = pathOf(s.path); t.bubble = typeof s.bubble === 'string' ? s.bubble.slice(0, 40) : '';
+      t.path = pathOf(s.path); t.bubble = typeof s.bubble === 'string' ? s.bubble.slice(0, 80) : '';
     }
     if (!v.hobbits.length) return freshVillage();
     v.wellFedDays = Math.floor(num(p.wellFedDays, 0, 1e6, 0)); v.dayMissed = p.dayMissed === true; v.mourningUntil = num(p.mourningUntil, 0, 1e9, 0);

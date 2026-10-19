@@ -67,3 +67,44 @@ These rules exist today and conflict with "she cannot be defeated and does not g
 - **The brood.** It sits 3.2 m from the centre (`BROOD_RING`).
   - **Proposed:** the brood moves to the alveolar ring.
   - With the mother unkillable, how infants come free (sacs cut open by Hulda, at a risk) becomes M2's question. Until then they can still come home only as melted Dark Young, as now.
+
+## M1, as built (2026-10-19)
+
+- **Model.**
+  - `taintModel.ts` (pure) holds the rings (`TAINT`: heart 40 m, nursery 85, grey 135, edge 190, veins 70 m past the edge), `depthAt`, `inTaint`, `veinAt`, attention (`stepAttention`, `provoke`, `ATTENTION`) and the breath (`stepBreath`, `exhaleAt`, `BREATH_S` 7 s settled, 3 s roused; `colourAt`).
+  - In `villageModel.ts`:
+    - The forest drain is gone. `lair.attention` rises with depth while Hulda is in the taint, and falls when she leaves.
+    - Her blows inside the taint provoke it; a blow on the mother provokes it most.
+    - The mother cannot be slain (`UNKILLABLE`). The old death is kept behind it for tests and for when she can be bound.
+    - The blight is fixed at the grey ring's edge from the first, unannounced.
+    - The brood hangs in the sac grove: `BROOD_RING`, the nursery's rim toward the first village. The snatchers bring infants there (`groveAt`), and Hulda can still take one back by walking to it.
+- **Travel.**
+  - Inside the edge the grass will not take her: "the soil here is poisoned". Grass travel stops at the edge.
+  - Inside the edge the roots are closed: `network.setBlocked` with the blight or the taint, "the roots here are hers".
+- **The land.** Vista look only (`villageVista.ts`, `vistaWorld.ts`, `vistaShaders.ts`).
+  - Tree kind 9 is the grey dead tree: bare limbs and crooked twigs that twitch (`TWITCH`: still, a sudden jerk that relaxes slowly, a slow lean).
+  - Kind 10 is the nursery's growth: a black bronchial tree of vessels ending in alveoli, breathing (`PULSE`).
+  - Which tree is which:
+    - in the heart and the nursery, all kind 10;
+    - in the grey ring, all kind 9;
+    - in the mild ring, more kind 9 the deeper in;
+    - past the edge, kind 9 wherever a vein passes within 8 m.
+  - The ground: black at the heart and in the nursery, the dead grey of poisoned soil, grey streaks through the mild ring.
+  - The veins:
+    - drawn along the chunks' main root lines, hub to hub, not a tree's own short root;
+    - black inside the taint, ashen outside it, fading 70 m past the edge.
+- **The Colour.** The grade's last pass (`COLOUR_GRADE`, `COLOUR`). Its strength is `colourAt(depth, attention)`, and its phase is how far into the out-breath she is.
+  - **In-breath:** a magenta whose red and blue sway.
+  - **Out-breath:** red and blue torn apart, and small tiles flicking to clashing yellow, orange and green.
+  - The gloom, the fog and the sky breathe with it (magenta drawn in on the in-breath), and darken more toward the heart.
+- **The sacs** (`villageWorld.setSacs`): a cyst hangs from a black vessel arching over, translucent pink with the infant inside, swaying and swelling. Each is labelled "<name>, in a sac".
+- **The heart, until M2:** her arms rise from a low mound: fourteen black tentacles 20–50 m tall, writhing slowly into the fog, with her eyes in the mound. Her label carries no bar, since she cannot be hurt.
+- **Cost:** inside the taint the land draws about 500k triangles at low quality, against about 600k at the village.
+- **Dev handle:** `__village.taint`, with `breach`, `now` (depth, colour, exhale, attention, breath), `attention =`, `keep(n)` (hang n newcomers in the sacs) and `veins()`.
+- **Open, for Noah's playtest:**
+  - the radii;
+  - how fast attention rises and falls;
+  - the breath's period;
+  - the Colour's strengths (`COLOUR`);
+  - whether the mild ring's grey trees should be fewer;
+  - whether the plain (non-vista) look needs the taint too (it keeps only the fixed blight).

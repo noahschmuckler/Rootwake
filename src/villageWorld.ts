@@ -205,7 +205,7 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   }
   // The Dark Young (darkYoung.ts): an octopus folded into a goat, its arms the legs, the neck, the face, the horns and the ears; it walks and butts as a goat and unfolds to lash, reach, feed, flee and die. Struck, it flashes; rooted, a coil of root holds its feet.
   // The old goat's materials stay for the mother of goats at the lair.
-  const hideMat = new THREE.MeshStandardMaterial({ color: '#2b2130', emissive: '#000000', roughness: 0.95, flatShading: true }), hornMat = new THREE.MeshStandardMaterial({ color: '#4a2a3a', emissive: '#3a1020', emissiveIntensity: 0.3, roughness: 0.8 }), eyeMat = new THREE.MeshBasicMaterial({ color: '#d8ff60' }), coilMat = new THREE.MeshStandardMaterial({ color: '#8a6f4e', emissive: '#c9a24a', emissiveIntensity: 0.4, roughness: 0.9 });
+  const hideMat = new THREE.MeshStandardMaterial({ color: '#2b2130', emissive: '#000000', roughness: 0.95, flatShading: true }), eyeMat = new THREE.MeshBasicMaterial({ color: '#d8ff60' }), coilMat = new THREE.MeshStandardMaterial({ color: '#8a6f4e', emissive: '#c9a24a', emissiveIntensity: 0.4, roughness: 0.9 });
   const raiderFigures = new Map<number, { group: THREE.Group; dy: DarkYoung; coil: THREE.Mesh; hide: THREE.MeshStandardMaterial; t: number }>();
   function raiderFigure(id: number) {
     let f = raiderFigures.get(id); if (f) return f;
@@ -289,6 +289,23 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
     for (let i = 0; i < f.arms.length; i++) f.arms[i].rotation.z = Math.sin(t * 0.03 + i * 1.3) * 0.35;
   }
   function hideSnatchersBut(ids: Set<number>): void { for (const [id, f] of snatchFigures) if (!ids.has(id)) f.group.visible = false; }
+  // M1 (MOTHER.md): the birth sacs in the nursery: from a black vessel arching over, a cyst hangs, veined and swollen, translucent enough to show the infant curled inside; it sways and swells.
+  const sacMat = new THREE.MeshStandardMaterial({ color: '#c0507e', emissive: '#a01a6a', emissiveIntensity: 0.9, roughness: 0.25, transparent: true, opacity: 0.72, depthWrite: false }), stalkMat = new THREE.MeshStandardMaterial({ color: '#0c060e', roughness: 0.35 });
+  const sacs: { group: THREE.Group; cyst: THREE.Group; seed: number }[] = [];
+  function makeSac(i: number) {
+    const group = new THREE.Group(), r = mulberry32(4401 + i * 17), a = r() * Math.PI * 2;
+    const foot = new THREE.Vector3(Math.cos(a) * 1.6, 0, Math.sin(a) * 1.6), top = new THREE.Vector3(Math.cos(a) * 0.6, 4.2 + r() * 0.6, Math.sin(a) * 0.6), hang = new THREE.Vector3(0, 3.0, 0);
+    group.add(new THREE.Mesh(taperedTube(new THREE.CatmullRomCurve3([foot, foot.clone().lerp(top, 0.5).add(new THREE.Vector3(0, 0.3, 0)), top, hang.clone().add(new THREE.Vector3(0, 0.6, 0)), hang]), 18, 6, t => 0.2 * (1 - t * 0.7), 0.04), stalkMat));
+    const cyst = new THREE.Group(); cyst.position.copy(hang);
+    const skin = new THREE.Mesh(new THREE.SphereGeometry(0.55, 14, 10), sacMat); skin.scale.set(1, 1.35, 1); skin.position.y = -0.7; cyst.add(skin);
+    const babe = makeBundle(); babe.position.y = -0.75; babe.rotation.z = 1.2; babe.scale.multiplyScalar(1.2); cyst.add(babe);
+    group.add(cyst); root.add(group); return { group, cyst, seed: r() * 6.28 };
+  }
+  /** The infants the mother keeps, each in its sac at its place in the grove (village frame). */
+  function setSacs(kept: { x: number; z: number }[], t: number): void {
+    while (sacs.length < kept.length) sacs.push(makeSac(sacs.length));
+    sacs.forEach((s, i) => { const k = kept[i]; s.group.visible = !!k; if (!k) return; s.group.position.set(k.x, relief(k.x, k.z), k.z); s.cyst.rotation.z = Math.sin(t * 0.0011 + s.seed) * 0.12; s.cyst.rotation.x = Math.cos(t * 0.0009 + s.seed) * 0.1; const w = 1 + Math.sin(t * 0.0021 + s.seed) * 0.06; s.cyst.scale.set(w, 2 - w, w); });
+  }
   const lying: THREE.Mesh[] = [], inArms = makeBundle(); inArms.visible = false; scene.add(inArms);
   /** The infants lying on the land, and the one in her arms (null when none). */
   function setInfants(out: { x: number; z: number }[], arms: THREE.Vector3 | null): void {
@@ -307,13 +324,13 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   function updateStrokes(dt: number): void { stepReacts(dt); if (slashT > 0) { slashT -= dt; slashMat.opacity = Math.max(0, slashT / 0.18); slash.visible = slashT > 0; } if (burstT > 0) { burstT -= dt; const k = 1 - burstT / 0.4; burst.scale.setScalar(0.5 + k * 3.0); burstMat.opacity = 0.8 * (1 - k); burst.visible = burstT > 0; } }
   // The lair's manifestation (M1b): a local mother of goats at the dark forest's centre, a great dark mass with many horns that writhe, eyes with their own light; it does not walk. Placed by setLairAt; animated and shown alive or gone by setLair.
   const lairGroup = new THREE.Group(); lairGroup.visible = false; scene.add(lairGroup); const lairHide = hideMat.clone(), lairHorns: THREE.Group[] = [];
-  { const body = new THREE.Mesh(new THREE.SphereGeometry(2.6, 12, 10), lairHide); body.scale.set(1.4, 1.0, 1.2); body.position.y = 2.4; lairGroup.add(body);
-    const fr = mulberry32(666); for (let i = 0; i < 14; i++) { const g = new THREE.Group(); const a = fr() * Math.PI * 2, r = 1.2 + fr() * 1.6; g.position.set(Math.cos(a) * r, 3.4 + fr() * 1.2, Math.sin(a) * r); const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(Math.cos(a) * 0.6, 1.2, Math.sin(a) * 0.6), new THREE.Vector3(Math.cos(a) * 1.6, 2.2, Math.sin(a) * 1.6), new THREE.Vector3(Math.cos(a) * 2.0, 3.4, Math.sin(a) * 2.0)]); g.add(new THREE.Mesh(taperedTube(curve, 14, 6, t => 0.22 * (1 - t * 0.85), 0), hornMat)); lairGroup.add(g); lairHorns.push(g); }
-    for (let i = 0; i < 6; i++) { const eye = new THREE.Mesh(new THREE.SphereGeometry(0.16, 6, 5), eyeMat); const a = -0.6 + i * 0.25; eye.position.set(Math.cos(a) * 3.5, 2.2 + (i % 2) * 0.5, Math.sin(a) * 3.5); lairGroup.add(eye); }
-    for (let i = 0; i < 8; i++) { const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.22, 0.16, 2.4, 6), lairHide); const a = i / 8 * Math.PI * 2; leg.position.set(Math.cos(a) * 2.6, 1.2, Math.sin(a) * 2.6); leg.rotation.z = Math.cos(a) * 0.35; leg.rotation.x = -Math.sin(a) * 0.35; lairGroup.add(leg); } }
-  const lairLight = new THREE.PointLight('#b040c0', 0, 30, 1.4); lairLight.position.y = 4; lairGroup.add(lairLight);
+  // M1 (MOTHER.md): until her full form (M2), the heart shows her as arms: black, longer than the tallest tree, rising out of a low mound and writhing up into the fog, with her eyes in the mound.
+  { const mound = new THREE.Mesh(new THREE.SphereGeometry(9, 16, 10), lairHide); mound.scale.set(1, 0.28, 1); mound.position.y = 0.4; lairGroup.add(mound);
+    const fr = mulberry32(666); for (let i = 0; i < 14; i++) { const g = new THREE.Group(); const a = (i / 14) * Math.PI * 2 + fr() * 0.4, r = 2 + fr() * 6, H = 22 + fr() * 26, lean = 4 + fr() * 8; g.position.set(Math.cos(a) * r, 0, Math.sin(a) * r); const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, -1, 0), new THREE.Vector3(Math.cos(a) * lean * 0.3, H * 0.3, Math.sin(a) * lean * 0.3), new THREE.Vector3(Math.cos(a + 0.6) * lean * 0.8, H * 0.65, Math.sin(a + 0.6) * lean * 0.8), new THREE.Vector3(Math.cos(a + 1.1) * lean, H, Math.sin(a + 1.1) * lean)]); g.add(new THREE.Mesh(taperedTube(curve, 24, 7, t => (1.1 + fr() * 0.5) * (1 - t * 0.9), 0.05), lairHide)); lairGroup.add(g); lairHorns.push(g); }
+    for (let i = 0; i < 9; i++) { const eye = new THREE.Mesh(new THREE.SphereGeometry(0.35, 8, 6), eyeMat); const a = i * 0.7; eye.position.set(Math.cos(a) * (3 + (i % 3) * 1.8), 1.6 + (i % 2) * 0.6, Math.sin(a) * (3 + (i % 3) * 1.8)); lairGroup.add(eye); } }
+  const lairLight = new THREE.PointLight('#b040c0', 0, 60, 1.4); lairLight.position.y = 6; lairGroup.add(lairLight);
   function setLairAt(x: number, z: number): void { lairGroup.position.set(x, terrain.height(x, z), z); }
-  function setLair(alive: boolean, hurt: number, t: number, hpShare: number): void { lairGroup.visible = alive; if (!alive) return; for (let i = 0; i < lairHorns.length; i++) { const h = lairHorns[i]; h.rotation.z = Math.sin(t * 0.0013 + i * 1.3) * 0.35; h.rotation.x = Math.cos(t * 0.0011 + i * 2.1) * 0.35; } lairHide.emissive.set(hurt > 0 ? '#b03030' : '#000000'); lairLight.intensity = 3 + Math.sin(t * 0.003) * 1.5 + (1 - hpShare) * 4; }
+  function setLair(alive: boolean, hurt: number, t: number, hpShare: number): void { lairGroup.visible = alive; if (!alive) return; for (let i = 0; i < lairHorns.length; i++) { const h = lairHorns[i]; h.rotation.z = Math.sin(t * 0.0004 + i * 1.3) * 0.12; h.rotation.x = Math.cos(t * 0.00035 + i * 2.1) * 0.12; } lairHide.emissive.set(hurt > 0 ? '#b03030' : '#000000'); lairLight.intensity = 0.8 + Math.sin(t * 0.003) * 0.4 + (1 - hpShare) * 1.5; }
   const mass = new THREE.Group(); mass.visible = false; scene.add(mass);
   { const mr = mulberry32(78); const tufts: Standee[] = []; for (let i = 0; i < 14; i++) { const a = mr() * 6.28, r = mr() * 0.42, k = 0.28 + mr() * 0.22; tufts.push({ position: new THREE.Vector3(Math.cos(a) * r, 0.3 - r * 0.35, Math.sin(a) * r), yaw: mr() * Math.PI, width: k, height: k * 1.2 }); } mass.add(new THREE.Mesh(standees(tufts), spriteMaterial('grass', '#b6d47a', { emissive: '#3a5a20', emissiveIntensity: 0.25 }))); }
   // A tree here is in the scene's frame (the first village's, or a copy of it placed by the entry at another village's origin).
@@ -364,6 +381,6 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
     while (markPool.length < list.length) { const mat = new THREE.MeshBasicMaterial({ color: '#e0603a', transparent: true, opacity: 0.85, depthWrite: false }), shaftMat = new THREE.MeshBasicMaterial({ color: '#e0603a', transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide }); const group = new THREE.Group(); group.name = 'incident-mark'; const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.06, 8, 40), mat); ring.rotation.x = Math.PI / 2; ring.position.y = 0.08; const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.16, 9, 8, 1, true), shaftMat); shaft.position.y = 4.5; group.add(ring, shaft); root.add(group); markPool.push({ group, ring, shaft, mat, shaftMat }); }
     markPool.forEach((m, i) => { const d = list[i]; m.group.visible = !!d; if (!d) return; m.group.position.set(d.x, relief(d.x, d.z), d.z); m.mat.color.set(d.colour); m.shaftMat.color.set(d.colour); m.shaft.visible = d.shaft; const k = (d.r ?? 1) * (1 + 0.12 * Math.sin(t * 0.006)); m.ring.scale.set(k, k, 1); });
   }
-  return { root, origin: { x: ox, z: oz }, relief, setMarks, setHedges, setWolf, setHouses, setSite, setSnatcher, hideSnatchersBut, setInfants, colliders, get figures() { return livingNow.map(figureFor); }, figureFor, setFigureClips, figure, mass, update, updateLand, updatePrayer, armfuls, setRaider, hideRaider, react, lunge, flashSlash, flashBurst, updateStrokes, setLairAt, setLair, setStation, get activeStation() { return activeStation; }, setStack, stack, spiritFigure, spiritFigures, stream, crownPoint, trunkPoint };
+  return { root, origin: { x: ox, z: oz }, relief, setMarks, setHedges, setWolf, setHouses, setSite, setSnatcher, hideSnatchersBut, setInfants, setSacs, colliders, get figures() { return livingNow.map(figureFor); }, figureFor, setFigureClips, figure, mass, update, updateLand, updatePrayer, armfuls, setRaider, hideRaider, react, lunge, flashSlash, flashBurst, updateStrokes, setLairAt, setLair, setStation, get activeStation() { return activeStation; }, setStack, stack, spiritFigure, spiritFigures, stream, crownPoint, trunkPoint };
 }
 export type VillageWorld = ReturnType<typeof buildVillage>;

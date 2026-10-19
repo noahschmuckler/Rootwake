@@ -210,7 +210,7 @@ test('the land beyond the meadow: noise in range and seeded, no hills on the isl
 });
 
 import { setLair, forestDepth, gainXp, choosePerk, levelFor, vigorMax, sapMax, strikeDamage, raidsPaused, LEVEL_XP, LEVEL_CAP, XP_DY, XP_LAIR, PERK_VIGOR, PERK_STRIKE, PERK_SAP, PERK_REGEN, CLARITY_REGEN, regenRate, SAP_REGEN, sapMax as sapCap, purify, purifiable, PURIFY_COST, QUICKEN_COST as QC, FOREST_DRAIN, LAIR_HP, LAIR_WAKE, LAIR_SPAWN_S, LAIR_SWEEP, LAIR_SWEEP_S, LAIR_PEACE_DAYS, LAIR_HURT_RANGE, STRIKE_DMG as SD } from '../src/villageModel';
-test('levelling: kills count, a level at each threshold up to five, a choice each level between vigor, strike and sap that grows her; the dark forest drains her by depth; the lair wakes near her, broods Dark Young, sweeps, and slain is gone with the raids for five days, then grows again', () => {
+test('levelling: kills count, a level at each threshold up to five, a choice each level between vigor, strike and sap that grows her; M1: the taint no longer drains her but rouses the mother\'s attention, which settles when she leaves; the lair wakes near her, broods Dark Young, sweeps, cannot be slain (a blow only rouses her); the old death kept behind UNKILLABLE', () => {
   assert.equal(levelFor(0), 1); assert.equal(levelFor(LEVEL_XP[1]), 2); assert.equal(levelFor(999), LEVEL_CAP);
   const v = freshV(1); gainXp(v, XP_DY); assert.equal(v.hero.level, 1); gainXp(v, XP_DY); assert.equal(v.hero.level, 2); assert.equal(v.hero.choices, 1, 'a choice owed');
   assert.equal(choosePerk(v, 'strike'), true); assert.equal(strikeDamage(v.hero), SD + PERK_STRIKE); assert.equal(choosePerk(v, 'strike'), false, 'no second choice'); gainXp(v, 3); assert.equal(v.hero.level, 3); choosePerk(v, 'vigor'); assert.equal(vigorMax(v.hero), 100 + PERK_VIGOR); gainXp(v, XP_LAIR); assert.equal(v.hero.level, LEVEL_CAP); assert.equal(v.hero.choices, 2); choosePerk(v, 'sap'); assert.equal(sapMax(v.hero), 100 + PERK_SAP);
@@ -221,13 +221,17 @@ test('levelling: kills count, a level at each threshold up to five, a choice eac
   assert.deepEqual(par(ser(v)).hero.perks, v.hero.perks, 'the regen perk saved');
   // The forest and the lair, placed for the test.
   setLair(null); assert.equal(forestDepth(0, 0), 0, 'no lair, no forest'); setLair({ x: 300, z: 300, radius: 75 }); assert.equal(forestDepth(300, 300), 1); assert.ok(forestDepth(340, 300) > 0 && forestDepth(340, 300) < 1); assert.equal(forestDepth(400, 300), 0);
-  const w = freshR(1, 3); const v0 = w.hero.vigor; stepRaiders(w, 2, { x: 300, z: 300 }); assert.ok(Math.abs(v0 - w.hero.vigor - FOREST_DRAIN * 2) < 1e-6, 'drained at the centre'); stepRaiders(w, 2, { x: 0, z: 0 }); assert.ok(w.hero.vigor <= v0 - FOREST_DRAIN * 2 + 1e-6, 'and not yet refilled (no calm)');
+  const w = freshR(1, 3); const v0 = w.hero.vigor; void FOREST_DRAIN; stepRaiders(w, 2, { x: 300, z: 300 }); assert.equal(w.hero.vigor, v0, 'no drain at the centre'); assert.ok(w.lair.attention > 0, 'but she notices'); stepRaiders(w, 2, { x: 0, z: 0 });
+  { const x = freshR(1, 0); for (let i = 0; i < 400; i++) stepRaiders(x, 0.25, { x: 300 + TAINT.edge - 5, z: 300 }); const edge = x.lair.attention; for (let i = 0; i < 400; i++) stepRaiders(x, 0.25, { x: 300 + TAINT.heart + 1, z: 300 }); assert.ok(x.lair.attention > edge + 0.3, `deeper, more aware (${edge.toFixed(2)} → ${x.lair.attention.toFixed(2)})`);
+    for (let i = 0; i < 400; i++) stepRaiders(x, 0.25, { x: 0, z: 0 }); assert.equal(x.lair.attention, 0, 'gone, she settles'); }
   assert.equal(w.lair.woke, false); const near = { x: 300 + LAIR_WAKE - 2, z: 300 }; stepRaiders(w, 0.1, near); assert.ok(w.lair.woke, 'it wakes near her'); const n0 = w.raiders.length; stepRaiders(w, LAIR_SPAWN_S + 0.1, near); assert.equal(w.raiders.length, n0 + 1, 'a Dark Young born'); assert.equal(w.raiders[w.raiders.length - 1].state, 'hunting');
   const close = { x: 302, z: 300 }; const vb = w.hero.vigor; for (let i = 0; i < 4; i++) stepRaiders(w, LAIR_SWEEP_S / 2, close); assert.ok(w.hero.vigor <= vb - LAIR_SWEEP + 1e-6, 'swept within reach');
+  { const m = freshV(1); const hp0 = m.lair.hp, a0 = m.lair.attention; strike(m, { x: 300 + LAIR_HURT_RANGE - 1, z: 300 }, 1, 0); assert.equal(m.lair.hp, hp0, 'M1: she cannot be hurt'); assert.ok(m.lair.alive && m.lair.attention > a0 + 0.2, 'a blow on her rouses her'); }
+  setUnkillable(false);
   const u = freshV(1); u.hero.vigor = 1000; const hp0 = u.lair.hp; assert.equal(strike(u, { x: 300 + LAIR_HURT_RANGE - 1, z: 300 }, 1, 0), null, 'nothing else to strike'); assert.equal(u.lair.hp, hp0 - SD, 'the strike lands on the lair'); assert.ok(thornBurst(u, { x: 300, z: 300 }) >= 1); assert.equal(u.lair.hp, hp0 - SD - THORN_DMG);
   u.lair.hp = SD; strike(u, { x: 300, z: 300 }, 1, 0); assert.equal(u.lair.alive, false, 'slain'); assert.equal(u.hero.xp, XP_LAIR); assert.ok(raidsPaused(u), 'the raids stop'); step(u, RAID_TICK + 2); assert.equal(u.raiders.length, 0, 'no raid that night');
   step(u, DT * LAIR_PEACE_DAYS); stepRaiders(u, 0.1, null); assert.ok(u.lair.alive && u.lair.hp === LAIR_HP, 'grown again after the peace'); assert.ok(!raidsPaused(u));
-  const again = par(ser(u)); assert.equal(again.lair.alive, u.lair.alive); setLair(null);
+  const again = par(ser(u)); assert.equal(again.lair.alive, u.lair.alive); setLair(null); setUnkillable(true);
 });
 
 // D1: the village lives and dies.
@@ -340,26 +344,27 @@ test('D3.1: one hold at a time: binding another lets the first go; sap spent, th
   stepRaiders(v, ROOT_S + 1, her); assert.ok(b.rooted > 0, 'the held one stays'); assert.equal(a.rooted, 0, 'the other ran down and is free');
   v.hero.sap = 1; stepRaiders(v, 1, her); stepRaiders(v, 0.1, her); assert.equal(v.hero.holding, -1, 'sap spent, the hold breaks'); assert.ok(v.events.some(e => e.banner && e.text.includes('tears free')));
 });
-test('D3.1: an infant kept at the lair can be taken back by delving (inside the mother\'s reach), or lies free when she falls', () => {
+test('D3.1 / M1: an infant kept at the lair hangs in the nursery\'s sac grove, on its rim toward the village, and can be taken back by delving into the taint; the snatchers bring it there; (were she to fall) the rest lie free', () => {
   setLair({ x: 300, z: 0, radius: 75 });
   try {
     const v = freshV(1); v.brood.push({ infant: { id: NEWCOMERS[3].id, home: 1, born: 0 }, due: 1e9 }, { infant: { id: NEWCOMERS[4].id, home: 2, born: 0 }, due: 1e9 });
-    const p = broodSpot(0)!; assert.ok(Math.abs(Math.hypot(p.x - 300, p.z) - BROOD_RING) < 1e-9 && BROOD_RING < REACH, 'within the mother\'s reach');
+    const p = broodSpot(0)!, d = Math.hypot(p.x - 300, p.z); void REACH; assert.ok(Math.abs(d - BROOD_RING) < 1e-9 && d > TAINT.heart && d < TAINT.nursery, `in the nursery (${d.toFixed(1)} m)`); assert.ok(p.x < 300, 'on the side toward the village');
+    assert.ok([1, 2, 3].every(i => { const q = broodSpot(i)!, e = Math.hypot(q.x - 300, q.z); return e > TAINT.heart && e < TAINT.nursery && Math.hypot(q.x - p.x, q.z - p.z) > 1; }), 'the sacs apart, all in the nursery');
     assert.equal(carryInfant(v, { x: p.x + 0.3, z: p.z }), 'picked'); assert.equal(v.carried?.id, NEWCOMERS[3].id); assert.equal(v.brood.length, 1); assert.ok(v.events.some(e => e.banner && e.text.includes('back from the mother')));
-    v.lair.hp = 1; strike(v, { x: 300, z: 0 }, 1, 0); assert.equal(v.lair.alive, false); assert.equal(v.brood.length, 0); assert.equal(v.dropped.length, 1, 'the rest lie free'); assert.ok(v.events.some(e => e.text.includes('lie free')));
+    setUnkillable(false); v.lair.hp = 1; strike(v, { x: 300, z: 0 }, 1, 0); setUnkillable(true); assert.equal(v.lair.alive, false); assert.equal(v.brood.length, 0); assert.equal(v.dropped.length, 1, 'the rest lie free'); assert.ok(v.events.some(e => e.text.includes('lie free')));
   } finally { setLair(null); }
 });
 
 // D4: the blight.
-import { blightTarget, isBlighted, BLIGHT_BASE, BLIGHT_PER_DY, BLIGHT_STEP } from '../src/villageModel';
-test('D4: no Dark Young bred, no blight; each bred one widens its reach; each dawn it spreads by at most a step toward it, and draws back as they melt; saved', () => {
+import { blightTarget, isBlighted, BLIGHT_BASE, BLIGHT_PER_DY, BLIGHT_STEP, setUnkillable } from '../src/villageModel';
+import { TAINT } from '../src/taintModel';
+test('D4 / M1: the blight is the taint\'s dead land, there from the first and fixed: however many Dark Young are bred it does not grow (she does not grow in this phase); saved', () => {
   setLair({ x: 300, z: 0, radius: 75 });
   try {
-    const v = freshV(1); step(v, 2 * DT + 1); assert.equal(v.blight, 0, 'none bred, none');
-    const w = freshR(1, 3); assert.equal(blightTarget(w), BLIGHT_BASE + 3 * BLIGHT_PER_DY); step(w, 1); assert.equal(w.blight, BLIGHT_STEP, 'a step a dawn');
-    step(w, 6 * DT); assert.equal(w.blight, blightTarget(w), 'up to its reach'); assert.ok(isBlighted(w, 300 + w.blight - 1, 0) && !isBlighted(w, 300 + w.blight + 1, 0)); assert.ok(w.events.some(e => e.banner && e.text.startsWith('The blight spreads')));
-    const full = w.blight; w.bred = []; step(w, DT); assert.equal(w.blight, full - BLIGHT_STEP, 'a step back a dawn once none are bred');
-    const before = w.blight; step(w, DT); assert.ok(w.blight < before || w.blight === 0, 'draws back as they are gone'); step(w, 10 * DT); assert.equal(w.blight, 0, 'gone');
+    void BLIGHT_BASE; void BLIGHT_PER_DY; void BLIGHT_STEP;
+    const v = freshV(1); stepRaiders(v, 0.1, null); assert.equal(v.blight, TAINT.grey, 'there from the first'); assert.ok(!v.events.some(e => e.text.includes('blight')), 'not announced');
+    const w = freshR(1, 3); assert.equal(blightTarget(w), TAINT.grey, 'bred ones do not widen it'); step(w, 4 * DT); assert.equal(w.blight, TAINT.grey); assert.ok(isBlighted(w, 300 + w.blight - 1, 0) && !isBlighted(w, 300 + w.blight + 1, 0));
+    w.bred = []; step(w, 2 * DT); assert.equal(w.blight, TAINT.grey, 'none bred, still there');
     const back = par(ser(w)); assert.equal(back.blight, w.blight);
   } finally { setLair(null); }
 });

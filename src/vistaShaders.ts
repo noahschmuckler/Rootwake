@@ -253,6 +253,22 @@ void main(){
   worldPosition.x += sin(uTime * 1.1 + vBase.x * 0.37 + position.y * 0.4) * k * (1.0 + sin(uTime * 0.3 + vBase.y) );
   worldPosition.z += cos(uTime * 0.9 + vBase.y * 0.31 + position.x * 0.5) * k;
 #endif
+#ifdef TWITCH
+  // MOTHER.md: the tainted wood's dead trees twitch and reach: still, then a sudden jerk that relaxes slowly, each on its own beat, and a slow lean toward the breach's heart.
+  float seedT = fract(sin(dot(vBase, vec2(12.9898, 78.233))) * 43758.5453);
+  float beat = uTime * (0.18 + 0.12 * seedT) + seedT * 7.0, ph = fract(beat);
+  float jerk = smoothstep(0.0, 0.025, ph) * (1.0 - smoothstep(0.025, 0.35, ph));
+  float ang = (floor(beat) * 2.399 + seedT * 6.283);
+  float kt = max(position.y, 0.0) / 4.5;
+  worldPosition.xz += vec2(cos(ang), sin(ang)) * kt * kt * (0.35 * jerk) + vec2(sin(uTime * 0.31 + seedT * 9.0), cos(uTime * 0.27 + seedT * 5.0)) * kt * 0.06;
+#endif
+#ifdef PULSE
+  // The nursery's growths breathe: they swell and fall, out of time with each other.
+  float seedP = fract(sin(dot(vBase, vec2(39.346, 11.135))) * 24634.6345);
+  float swell = sin(uTime * (0.9 + seedP * 0.5) + seedP * 6.283) * 0.06 * clamp(position.y / 3.0, 0.0, 1.0);
+  worldPosition.xz += (worldPosition.xz - vBase) * swell;
+  worldPosition.y += swell * 0.6;
+#endif
   vec3 wn = normalize(mat3(m) * normal);
   vec3 transformedNormal = mat3(viewMatrix) * wn;
   vWorld = worldPosition.xyz; vN = wn; vShade = aShade;
@@ -353,7 +369,7 @@ void main(){
   }
   // Stars at night: a hashed field on the dome, twinkling a little.
   if (uStars > 0.0 && d.y > 0.0) { vec2 sp = vec2(atan(d.z, d.x) * 120.0, d.y * 160.0); vec2 cell = floor(sp); float h = hash12(cell); float st = step(0.985, h) * smoothstep(0.35, 0.0, length(fract(sp) - 0.5)) * (0.6 + 0.4 * sin(uTime * 2.0 + h * 40.0)); col += vec3(st * 1.4 * uStars) * smoothstep(0.0, 0.25, d.y); }
-  col = mix(col, uGloom.rgb, uGloom.a * 0.85);
+  col = mix(col, uGloom.rgb, uGloom.a * 0.85 + uGloom.a * uGloom.a * 0.13);
   gl_FragColor = vec4(col, 1.0);
   ${FINISH}
 }`;

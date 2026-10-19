@@ -1,0 +1,19 @@
+
+  VITE v5.4.21  ready in 513 ms
+
+  ➜  Local:   http://localhost:5199/
+  ➜  Network: http://192.0.2.2:5199/
+3:59:32 AM [vite] page reload src/village.ts
+4:04:40 AM [vite] page reload src/villageWorld.ts
+4:04:40 AM [vite] page reload src/vistaWorld.ts
+4:04:40 AM [vite] page reload src/villageVista.ts
+4:04:56 AM [vite] page reload src/villageWorld.ts
+4:06:50 AM [vite] page reload src/villageVista.ts
+4:06:50 AM [vite] page reload src/villageWorld.ts
+4:09:29 AM [vite] page reload src/village.ts
+4:09:29 AM [vite] page reload src/villageVista.ts
+4:11:29 AM [vite] page reload src/villageVista.ts
+4:11:29 AM [vite] page reload src/village.ts
+4:14:41 AM [vite] page reload src/vistaWorld.ts
+4:34:00 AM [vite] page reload src/villageVista.ts
+4:34:00 AM [vite] page reload src/vistaShaders.ts

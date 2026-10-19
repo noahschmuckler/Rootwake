@@ -199,10 +199,12 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
   const solid = (hex: string | null, defines: Record<string, string>) => lit(solidVert, solidFrag, { uColor: { value: hex ? color(hex) : new THREE.Color() } }, defines);
   const rockMat = solid(null, { ROCK: '' });
   /** Per kind: the vista's three broadleaves and two conifers, then the village's tree (sized as flora.treeParts at size 1, so her climb meets its crown), dark and blighted. */
-  const LEAVES = ['#5c9a34', '#4f8a32', '#7aa83a', '#2f6a4a', '#3c7440', '#5f9a3a', '#3a2c4a', '#24162c', '#c97a3e'];
-  const BARK = ['#8a7058', '#8a7058', '#8a7058', '#8a7058', '#8a7058', '#87705a', '#3a3040', '#1a1218', '#87705a'];
-  const varied = (k: number): Record<string, string> => (k >= 5 ? { VARIED: '' } : {});
-  const foliage = LEAVES.map((c, k) => solid(c, { USE_SWAY: '', ...varied(k) })), farFoliage = LEAVES.map((c, k) => solid(c, varied(k))), barks = BARK.map(c => solid(c, {}));
+  /** 9 and 10 (MOTHER.md, the taint): the grey dead tree, brittle and twitching; the nursery's black vascular growth with its alveoli. */
+  const LEAVES = ['#5c9a34', '#4f8a32', '#7aa83a', '#2f6a4a', '#3c7440', '#5f9a3a', '#3a2c4a', '#24162c', '#c97a3e', '#6e6a66', '#4a1446'];
+  const BARK = ['#8a7058', '#8a7058', '#8a7058', '#8a7058', '#8a7058', '#87705a', '#3a3040', '#1a1218', '#87705a', '#9d988f', '#0c060e'];
+  const varied = (k: number): Record<string, string> => (k >= 5 && k < 9 ? { VARIED: '' } : {});
+  const motion = (k: number): Record<string, string> => (k === 9 ? { TWITCH: '' } : k === 10 ? { PULSE: '' } : {});
+  const foliage = LEAVES.map((c, k) => solid(c, k >= 9 ? motion(k) : { USE_SWAY: '', ...varied(k) })), farFoliage = LEAVES.map((c, k) => solid(c, { ...varied(k), ...motion(k) })), barks = BARK.map((c, k) => solid(c, motion(k)));
   interface Kind { trunk: THREE.BufferGeometry; crown: THREE.BufferGeometry; far: THREE.BufferGeometry; radius: number }
   const kinds: Kind[] = LEAVES.map((_, k) => treeKind(k));
   const mk = (geo: THREE.BufferGeometry, mat: THREE.Material, n: number, cast: boolean) => { const m = new THREE.InstancedMesh(geo, mat, Math.max(1, n)); m.count = 0; m.frustumCulled = false; m.castShadow = cast; m.receiveShadow = true; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(m); return m; };
@@ -328,6 +330,8 @@ function blob(r: number, at: THREE.Vector3, centre: THREE.Vector3, seed: number,
   return g;
 }
 function treeKind(kind: number): { trunk: THREE.BufferGeometry; crown: THREE.BufferGeometry; far: THREE.BufferGeometry; radius: number } {
+  if (kind === 9) return deadTree();
+  if (kind === 10) return growth();
   const r = rng(kind * 101 + 9), Y = new THREE.Vector3(0, 1, 0);
   if (kind < 3 || kind >= 5) {
     // Broadleaf: a trunk that forks into limbs under a crown of 7–9 lumps. The village's (5–7) is flora.treeParts' at size 1: trunk 3.2 m, 0.15–0.42 m thick, the crown about 3.5 m up, 1.7 m out and 1.2 m tall.
@@ -365,6 +369,44 @@ function treeKind(kind: number): { trunk: THREE.BufferGeometry; crown: THREE.Buf
   far = shaded(far, p => 0.55 + 0.45 * Math.min(1, p.y / H));
   void Y;
   return { trunk: shaded(trunk, p => 0.5 + 0.5 * Math.min(1, p.y / H)), crown, far, radius: 0.3 };
+}
+/** A tapered tube along points (no uv), for the taint's branches and vessels. */
+function limb(points: THREE.Vector3[], r0: number, r1: number, segs = 8, sides = 5): THREE.BufferGeometry {
+  const curve = new THREE.CatmullRomCurve3(points), g = new THREE.TubeGeometry(curve, segs, 1, sides, false), pos = g.getAttribute('position'), v = new THREE.Vector3(), c = new THREE.Vector3();
+  for (let i = 0; i <= segs; i++) { const u = i / segs, rad = r0 + (r1 - r0) * u; curve.getPointAt(u, c); for (let j = 0; j <= sides; j++) { const k = i * (sides + 1) + j; v.fromBufferAttribute(pos, k).sub(c).multiplyScalar(rad).add(c); pos.setXYZ(k, v.x, v.y, v.z); } }
+  g.deleteAttribute('uv'); g.computeVertexNormals(); return g;
+}
+/** MOTHER.md, the grey: a natural tree the taint has reached, stiff, grey and brittle: no leaves, a trunk forked into bare limbs that end in thin, crooked twigs (the crown slot holds the twigs). */
+function deadTree(): { trunk: THREE.BufferGeometry; crown: THREE.BufferGeometry; far: THREE.BufferGeometry; radius: number } {
+  const r = rng(9091), parts: THREE.BufferGeometry[] = [], twigs: THREE.BufferGeometry[] = [], H = 4.6;
+  parts.push(limb([new THREE.Vector3(0, -0.2, 0), new THREE.Vector3(0.05, H * 0.4, 0.03), new THREE.Vector3(-0.04, H * 0.75, 0.02), new THREE.Vector3(0.02, H, 0)], 0.36, 0.08, 8, 7));
+  for (let i = 0; i < 6; i++) {
+    const a = i / 6 * Math.PI * 2 + r() * 0.6, y0 = H * (0.45 + r() * 0.45), len = 1.4 + r() * 1.4, out = new THREE.Vector3(Math.cos(a), 0.55 + r() * 0.5, Math.sin(a)).normalize();
+    const p0 = new THREE.Vector3(0, y0, 0), p1 = p0.clone().addScaledVector(out, len * 0.5).add(new THREE.Vector3((r() - 0.5) * 0.4, -0.1, (r() - 0.5) * 0.4)), p2 = p0.clone().addScaledVector(out, len);
+    parts.push(limb([p0, p1, p2], 0.09, 0.03, 5, 4));
+    for (let k = 0; k < 3; k++) { const b = 2 * Math.PI * r(), t0 = p1.clone().lerp(p2, r()), t1 = t0.clone().add(new THREE.Vector3(Math.cos(b) * 0.6, 0.35 + r() * 0.4, Math.sin(b) * 0.6)), t2 = t1.clone().add(new THREE.Vector3(Math.cos(b + 0.9) * 0.3, 0.25, Math.sin(b + 0.9) * 0.3)); twigs.push(limb([t0, t1, t2], 0.03, 0.008, 3, 3)); }
+  }
+  const trunk = shaded(mergeGeometries(parts)!, p => 0.5 + 0.5 * Math.min(1, p.y / H)), crown = shaded(mergeGeometries(twigs)!, () => 0.85);
+  const far = shaded(mergeGeometries([limb([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0.1, H * 0.6, 0), new THREE.Vector3(0, H, 0)], 0.32, 0.06, 3, 4), limb([new THREE.Vector3(0, H * 0.55, 0), new THREE.Vector3(1.2, H * 0.85, 0.3), new THREE.Vector3(2, H * 1.05, 0.5)], 0.1, 0.03, 2, 3), limb([new THREE.Vector3(0, H * 0.65, 0), new THREE.Vector3(-1, H * 0.9, -0.5), new THREE.Vector3(-1.6, H * 1.15, -0.8)], 0.1, 0.03, 2, 3)])!, () => 0.55);
+  return { trunk, crown, far, radius: 0.3 };
+}
+/** MOTHER.md, the nursery: what stands where the trees were: a black stem dividing and dividing again into curling vessels, a bronchial tree, each end swelling into a cluster of alveoli (the crown slot), the whole breathing (PULSE). */
+function growth(): { trunk: THREE.BufferGeometry; crown: THREE.BufferGeometry; far: THREE.BufferGeometry; radius: number } {
+  const r = rng(1010), vessels: THREE.BufferGeometry[] = [], sacs: THREE.BufferGeometry[] = [];
+  const grow = (from: THREE.Vector3, dir: THREE.Vector3, len: number, rad: number, depth: number): void => {
+    const side = new THREE.Vector3(-dir.z, 0, dir.x).normalize(), bend = (r() - 0.5) * 0.8;
+    const mid = from.clone().addScaledVector(dir, len * 0.5).addScaledVector(side, bend * len * 0.3), end = from.clone().addScaledVector(dir, len).addScaledVector(side, bend * len * 0.5);
+    vessels.push(limb([from, mid, end], rad, rad * 0.62, 5, 5));
+    // Kept to a village tree's cost (a few hundred vertices): the nursery stands by the hundred.
+    if (depth === 0) { for (let i = 0; i < 3; i++) { const s = new THREE.IcosahedronGeometry(0.22 + r() * 0.16, 0); s.translate(end.x + (r() - 0.5) * 0.5, end.y + (r() - 0.3) * 0.45, end.z + (r() - 0.5) * 0.5); sacs.push(s); } return; }
+    const n = 2;
+    for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2 + r(), d = dir.clone().multiplyScalar(0.7).add(new THREE.Vector3(Math.cos(a) * 0.7, 0.15 + r() * 0.3, Math.sin(a) * 0.7)).normalize(); grow(end, d, len * (0.62 + r() * 0.15), rad * 0.6, depth - 1); }
+  };
+  grow(new THREE.Vector3(0, -0.3, 0), new THREE.Vector3(0, 1, 0), 3.0, 0.45, 2);
+  const trunk = shaded(mergeGeometries(vessels)!, p => 0.45 + 0.55 * Math.min(1, p.y / 6));
+  const crown = shaded(mergeGeometries(sacs)!, p => 0.55 + 0.45 * Math.min(1, p.y / 6));
+  const farG = mergeGeometries([limb([new THREE.Vector3(0, -0.3, 0), new THREE.Vector3(0.3, 2.5, 0), new THREE.Vector3(0, 4.6, 0.2)], 0.45, 0.2, 3, 5), ...[0, 1, 2].map(i => { const a = i * 2.1, s = new THREE.SphereGeometry(1.1, 7, 5); s.deleteAttribute('uv'); s.translate(Math.cos(a) * 1.2, 4.6 + i * 0.4, Math.sin(a) * 1.2); return s; })])!;
+  return { trunk, crown, far: shaded(farG, p => 0.45 + 0.55 * Math.min(1, p.y / 6)), radius: 0.42 };
 }
 /** A boulder: a lumpy icosahedron, flat-shaded for the chunky facets of a painted rock. */
 function rockGeometry(): THREE.BufferGeometry {
