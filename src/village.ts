@@ -52,6 +52,7 @@ import { Impact, type Blow } from './impact';
 import { FightSound } from './fightSound';
 import { createHitFx, type Flecks } from './hitFx';
 import { createTraverseLayer, type TraverseLayer } from './huldaTraverse';
+import { leanAt } from './parkour';
 import { createMoveLayer, MOVES, dodgeProgress, type MoveLayer, type MoveEvent } from './huldaMoves';
 import { createStaff, createTrail } from './huldaStaff';
 import { HULDA_PALETTE } from './huldaDress';
@@ -411,7 +412,7 @@ function presentHulda(dt: number): void {
   // F3: she faces the way she rolls, and in her guard, the foe she guards against.
   if (mode === 'ground' && dodge) heading = dodge.heading; else if (mode === 'ground' && guarding && locked) heading = Math.atan2(-(locked.x + ctx.ox - player.feet().x), -(locked.z + ctx.oz - player.feet().z));
   // Parkour: she faces the way the move goes (a hang drop turns her to the wall), and its clips pose her.
-  const move = mode === 'ground' || mode === 'catwalk' ? player.motor.traversal : null; if (move?.face !== undefined) heading = move.face;
+  const move = mode === 'ground' || mode === 'catwalk' ? player.motor.traversal : null; if (move?.face !== undefined) { heading = move.face; const l = leanAt(move, player.motor.traversalTime); visualPosition.x -= Math.sin(move.face) * l; visualPosition.z -= Math.cos(move.face) * l; }
   traverse?.update(dt, move, player.motor.traversalTime);
   visualRotation.setFromAxisAngle(up, heading);
   if (mode === 'trunk' && trunk) { form = 'burl'; visualPosition.copy(world.trunkPoint(trunk.tree, trunk.h, trunk.az)); visualRotation.setFromAxisAngle(up, Math.PI / 2 - trunk.az); }

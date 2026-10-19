@@ -8,6 +8,7 @@ import { createHuldaPresentation, HUMAN_CENTRE } from './huldaPresentation';
 import { installMobilityControls } from './mobilityControls';
 import { createTraverseLayer, type TraverseLayer } from './huldaTraverse';
 import { COURSE, RAMP, BOUNDS, START, courseWorld, groundAt } from './parkourCourse';
+import { leanAt } from './parkour';
 
 const query = new URLSearchParams(location.search);
 const el = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -72,7 +73,7 @@ import('./huldaModel').then(async ({ loadHuldaClips }) => {
 
 const toast = el('toast'); let toastTimer = 0;
 function say(text: string, s = 2.2): void { toast.textContent = text; toast.classList.add('on'); clearTimeout(toastTimer); toastTimer = window.setTimeout(() => toast.classList.remove('on'), s * 1000); }
-player.motor.onCommit = plan => say(plan.kind === 'hangDrop' ? 'hang drop' : plan.kind, 1.2);
+player.motor.onCommit = plan => { if (!player.motor.hanging) say(plan.kind === 'hangDrop' ? 'hang drop' : plan.kind, 1.2); };
 el('reset').onclick = reset;
 el('view').onclick = () => { player.view = player.view === 'third' ? 'first' : 'third'; el('view').textContent = player.view === 'third' ? '3rd' : '1st'; };
 const intro = el<HTMLDialogElement>('intro');
@@ -83,18 +84,21 @@ if (query.get('intro') !== '0') intro.showModal();
 
 const hud = el('hud'); hud.hidden = query.get('hud') !== '1';
 const visualPosition = new THREE.Vector3(), visualRotation = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
-let last = performance.now();
+let last = performance.now(), wasHanging = false, hangTips = 0;
 function frame(now: number): void {
   requestAnimationFrame(frame); const dt = Math.min(0.05, Math.max(0, (now - last) / 1000)); last = now; if (document.hidden || intro.open) return;
   player.update(now, [], undefined); player.applyCamera(camera);
   const move = player.motor.traversal;
   visualPosition.copy(player.feet()); visualPosition.y += HUMAN_CENTRE;
   let heading = player.yaw; if (player.motor.speed > 0.08 && !move) heading = Math.atan2(-player.motor.velocity.x, -player.motor.velocity.z);
-  if (move?.face !== undefined) heading = move.face;
+  if (move?.face !== undefined) { heading = move.face; const l = leanAt(move, player.motor.traversalTime); visualPosition.x -= Math.sin(move.face) * l; visualPosition.z -= Math.cos(move.face) * l; }
   traverse?.update(dt, move, player.motor.traversalTime);
   visualRotation.setFromAxisAngle(up, heading);
   presentation.update(dt, 'human', visualPosition, visualRotation, player.motor.speed, heading, player.motor.mode === 'grounded', player.view === 'third');
   player.avatar.visible = false;
+  // The braced hang waits for the stick: say how, the first times.
+  if (player.motor.hanging && !wasHanging && hangTips++ < 3) say('hanging: push toward the wall to climb, away to drop', 2.6);
+  wasHanging = !!player.motor.hanging;
   if (!hud.hidden) hud.textContent = `${move ? `${move.kind} · ${traverse?.stage ?? '-'}` : player.motor.mode}\nclips ${clipStatus}`;
   renderer.render(scene, camera);
 }

@@ -87,22 +87,50 @@ CLIMB_INTENT_S (0.12 s) of pressing, so sliding along a wall never climbs it. Ev
 traversal through the same swept body test as a jump (`validateTraversal`) and lands only on a full
 footprint, so it can take her nowhere the walk and the fan could not stand her.
 
-| Move | When (normal legs; tuning in `PARKOUR`) | What she does |
-|---|---|---|
-| step | a rise to 0.3 m | a knee up, no hands (the bridge's foot) |
-| step, on a slope | a sloped foot to 0.48 m (a ramp, the old bridge's deck and its curb, a bank: one that gains most of its rise over SHEER_W, 0.15 m, or more) | the step, not the clamber |
-| clamber | a sheer face to 0.48 m, about her waist | the mount: hands and her left knee on the top, then up into a crouch on it and standing |
-| mantle | to 1.25 m | a crouch, a hop that puts her hands on the lip, the press up |
-| climb | to `climbRise` (1.75 m; 3.2 with the powered legs) | a jump to a hang, a breath, the pull up and over |
-| vault | a top to 0.6 m high and no thicker than 0.9 m, ground beyond at about her height | over it without stopping |
-| hop | a drop to 0.95 m | a short arc down |
-| hangDrop | a sheer drop of 1.15 m or more (to `maxDrop`) | she turns to the wall, lowers to a hang off the lip, lets go |
-| leap | a gap she runs at (1.6 m/s or more), ground across it within `leapReach` (2.6 m; 4.5 powered) | a running jump |
+### The canonical obstacles
+
+Noah (2026-10-19): "each height she may meet matches an animation perfectly, instead of grey area".
+`CANON` in `parkour.ts` holds one height per obstacle, read off his clips (`parkourClips.ts`) at her
+scale, so an obstacle built to it plays its clip at its own size, hands and feet where the clip puts
+them. **Build only these** (the practice course does; anything authored should). Natural ground
+(eroded land, banks, the old bridge's foot) is met by the nearest move, stretched.
+
+| Obstacle | Height (m) | Read off | She |
+|---|---|---|---|
+| step | 0.19 | the step-up's rise | steps up, no hands (even though the walk could take it: a sheer rise of `STEP_FROM` 0.12 m or more) |
+| mount | 0.34 | the mount's hands and knee, 85 cm of the X Bot | the clamber: hands and her left knee on the top, then up and standing |
+| rail | 0.34 high, 0.3 deep | the mount's top; the vault's hand plant | vaults it at a run |
+| wall | 0.83 | the jump's rise, less the catch's settle, plus the hang below the lip (`HANG_BELOW`, 0.62) | jumps to the braced hang and **pauses** |
+| ledge | 1.13 | `HANG_BELOW` plus the hang drop's fall | lowers to the braced hang and **pauses** |
+| gap | 0.65 | the running jump's travel, less a footprint each end | leaps it at a run (1.6 m/s or more) |
+
+Between them, each move takes the heights nearer its own than its neighbour's (`PARKOUR`, the
+midpoints):
+- **Step:** a rise to 0.27 m. A sloped foot (one that gains most of its rise over `SHEER_W`, 0.15 m, or
+  more) is stepped up to 0.58 m.
+- **Clamber:** a sheer face to 0.58 m.
+- **Climb:** higher, to `climbRise` (1.75 m; 3.2 m with the powered legs).
+- **Vault:** a thin top to 0.58 m.
+- **Hang drop:** a sheer drop of 0.58 m or more, to `maxDrop`.
+- **Hop:** a lower drop.
+
+### The braced hang
+
+Jumping up to a wall and lowering off a ledge both stop in the braced hang (`motor.mode` `'hang'`,
+`motor.hanging`; the hang clip loops). A stick still held from the move that brought her there doesn't
+carry her on: it has to come back first. Then she takes the stick relative to the wall:
+- **Toward the wall:** she climbs on up, or back onto the ledge she lowered from.
+- **Away from it:** she drops to the ground below, where there is ground she can drop to.
+
+The lean must reach `HANG_LEAVE` (0.45 of the stick, along the wall's normal). Her body (radius and
+margins) keeps 0.29 m from the face. The clips have her feet 0.11 m in front of her root, so her figure
+is drawn `HANG_LEAN` (0.17 m) nearer the face through the catch, the hang and the pull (`leanAt`). That
+puts her hands on the face 0.12 m under the lip, the clip's own grip, and her feet on the face.
 
 A rise past `climbRise`, a drop past `maxDrop` and a gap past `leapReach` stop her as before. Water is
 never leapt (the plateau's `canOccupy` refuses the air over it), so the rivers stay barriers but at
 their crossings. The motor exposes the move (`motor.traversal`, `traversalTime`); each carries its
-stages (crouch, reach, hang, pull, over, land; turn, lower, fall) and the way she faces (`face`).
+stages (reach, catch, hang, pull; mount, rise, stand; lower, fall, land) and the way she faces (`face`).
 
 ### Parkour clips
 
@@ -112,9 +140,9 @@ Noah's Mixamo clips (2026-10-19) are in `public/models/clips` (FBX Binary, Witho
 |---|---|
 | `step-up.fbx` | the step |
 | `mount.fbx` | the clamber: hands and the left knee onto a waist-high top (its obstacle lies to her left; the layer turns it ahead), then the landing's crouch risen out of to standing |
-| `jump.fbx` | the crouch and spring of a mantle's or climb's reach |
-| `jump-to-hang.fbx` | the catch: hands on the lip, the feet finding the face |
-| `hang.fbx` | the hang, held (a climb's breath; before a hang drop lets go) |
+| `jump.fbx` | the crouch and spring of a climb's reach |
+| `jump-to-hang.fbx` | the catch (its last quarter second): hands on the lip, the feet finding the face |
+| `hang.fbx` | the braced hang, looped while she waits for the stick |
 | `climb-up.fbx` | the pull up and over; played backwards, lowering into a hang |
 | `vault.fbx` | the vault |
 | `hang-drop.fbx` | letting go from the hang, the fall and rising from the landing |
@@ -135,9 +163,9 @@ after a clip is replaced. `?parkourclips=0` turns the layer off in the village.
 ### The practice course
 
 `/parkour.html` (`parkourStudy.ts`, `parkourCourse.ts`; live at `/vista/parkour/`): Hulda in the
-village's third-person framing on one lane of each move. The left lane is a stair of rises (step 0.25,
-clamber 0.45, mantle 1.1, climb 1.6) ending in a sheer 3.4 m drop. The middle lane has three rails to
-vault, a block to clamber onto and hop off, and a pit to leap. The right lane has a wall too high and
+village's third-person framing on one lane of each move. Every obstacle is canonical. The left lane is a step, a mount and a wall, with a ledge at its far end.
+The middle lane has two rails to vault, a mount's block to clamber onto and hop off, a wall to climb and
+drop from, and a gap to leap. The right lane has a wall too high and
 a pit too wide. On the far right is the old bridge's foot, shaped as the plateau shapes its deck. `?hud=1` shows the move and its stage;
 ↺ goes back to the start. `scripts/browser-parkour.mjs` runs it in CI, and `npm run test:mobility`
 walks every lane with the motor alone.

@@ -3,17 +3,23 @@
 // world they make; parkourStudy.ts draws them. The lanes run side by side, 4 m apart.
 import { Vector3 } from 'three';
 import type { TraversalWorld } from './mobility';
+import { CANON } from './parkour';
 
 /** A solid block: its footprint (x0..x1, z0..z1), its top, and its floor (a pit's floor is below 0). */
 export interface Block { x0: number; x1: number; z0: number; z1: number; top: number; label?: string; kind: 'stone' | 'rail' | 'pit' | 'ramp' }
 const B = (x: number, w: number, zNear: number, zFar: number, top: number, kind: Block['kind'] = 'stone', label?: string): Block => ({ x0: x - w / 2, x1: x + w / 2, z0: zFar, z1: zNear, top, kind, label });
-/** The lanes. Tuning: heights straddle PARKOUR's limits, so each lane shows its moves and where they change. */
+const f = (m: number) => m.toFixed(2);
+/** The lanes, built only of CANON's obstacles (parkour.ts), so every move plays its clip at its own size. */
 export const COURSE: Block[] = [
-  // Up: a stair of rises, each one move: step 0.25, clamber +0.45, mantle +1.1, climb +1.6; the far end a sheer drop (a hang drop) to the ground.
-  B(0, 3, -4, -24, 0.25, 'stone', 'step 0.25'), B(0, 3, -7, -24, 0.7, 'stone', 'clamber 0.45'), B(0, 3, -10, -24, 1.8, 'stone', 'mantle 1.1'), B(0, 3, -13, -24, 3.4, 'stone', 'climb 1.6 · hang drop at its end'),
-  // Over: three rails to vault at a run, a low block to clamber onto and hop off, and a pit to leap.
-  B(4, 3, -4, -4.3, 0.55, 'rail', 'vault'), B(4, 3, -7, -7.3, 0.4, 'rail'), B(4, 3, -10, -10.4, 0.5, 'rail'),
-  B(4, 3, -13, -15, 0.45, 'stone', 'clamber, hop'), B(4, 3, -18, -19.6, -6, 'pit', 'leap the pit'),
+  // Up: a step, a clamber onto a mount's top, a wall climbed by the braced hang; at the far end a ledge, lowered from by
+  // the braced hang onto a low platform (a walk down from it).
+  B(0, 3, -4, -16, CANON.step, 'stone', `step ${f(CANON.step)}`), B(0, 3, -7, -16, CANON.step + CANON.clamber, 'stone', `clamber ${f(CANON.clamber)}`),
+  B(0, 3, -10, -16, CANON.step + CANON.clamber + CANON.wall, 'stone', `wall ${f(CANON.wall)} · ledge ${f(CANON.ledge)} at its end`),
+  B(0, 3, -16, -24, CANON.step + CANON.clamber + CANON.wall - CANON.ledge),
+  // Over: two rails to vault at a run, a mount's block to clamber onto and hop off, a wall to climb and drop from, a gap to leap.
+  B(4, 3, -4, -4 - CANON.vaultDepth, CANON.vault, 'rail', `vault ${f(CANON.vault)}`), B(4, 3, -7, -7 - CANON.vaultDepth, CANON.vault, 'rail'),
+  B(4, 3, -10, -12, CANON.clamber, 'stone', 'clamber, hop'), B(4, 3, -14.5, -17, CANON.wall, 'stone', 'climb, hang, drop'),
+  B(4, 3, -20, -20 - CANON.gap, -6, 'pit', `leap ${f(CANON.gap)}`),
   // Too high and too far: a wall past her climb and a pit past her leap stop her.
   B(8, 3, -6, -8, 2.3, 'stone', 'too high'), B(8, 3, -12, -15.5, -6, 'pit', 'too far'),
 ];

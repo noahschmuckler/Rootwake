@@ -1,5 +1,5 @@
 // Parkour (headless Chromium, SwiftShader; MOBILITY.md "Parkour"): the practice course loads with its clips, and
-// the stick alone (a held W) takes her onto a waist-high top by the mount, up a climb, over a rail and off a sheer drop by a hang, each posed by its
+// the stick alone (a held W) takes her onto a waist-high top by the mount, up a wall by the braced hang (where she waits for the stick), over a rail and off a sheer drop by a hang, each posed by its
 // clip, with no errors. Screenshots at a phone's portrait aspect land in artifacts/parkour.
 import {createRequire} from 'node:module';
 import {createServer} from 'node:http';
@@ -28,17 +28,21 @@ try{
     await page.evaluate(([x,z])=>{const P=window.__parkour;P.player.teleport(x,z,0);P.player.pitch=0.1;P.seen.moves.length=0;},[x,z]);
     await page.keyboard.down('w');
     for(let i=0;i<shots;i++){await page.waitForFunction(w=>window.__parkour.seen.moves.includes(w)||null,want,{timeout:120000}).catch(()=>{});await page.waitForTimeout(500);await page.screenshot({path:`${out}/${name}-${i}.png`,timeout:120000});}
-    await page.waitForFunction(()=>window.__parkour.player.motor.mode==='grounded'&&!window.__parkour.player.motor.traversal,null,{timeout:120000});
+    // At a braced hang she waits; a held stick doesn't carry her on: let go, and push again the same way.
+    const settled=()=>page.waitForFunction(()=>{const m=window.__parkour.player.motor;return (m.mode==='grounded'&&!m.traversal)||m.mode==='hang';},null,{timeout:120000});
+    await settled();
+    if(await page.evaluate(()=>window.__parkour.player.motor.mode==='hang')){report.paused=(report.paused??0)+1;await page.waitForTimeout(1500);assert.equal(await page.evaluate(()=>window.__parkour.player.motor.mode),'hang','she waits in the hang while the stick is held');await page.keyboard.up('w');await page.waitForTimeout(400);await page.keyboard.down('w');await page.waitForFunction(()=>window.__parkour.player.motor.mode!=='hang',null,{timeout:60000});await settled();}
     await page.keyboard.up('w');
     return page.evaluate(()=>[...window.__parkour.seen.moves]);
   };
   report.clamber=await run('clamber',0,-6.3,'clamber',3);assert.ok(report.clamber.includes('clamber'),`a clamber from the stick (${report.clamber})`);
   report.ramp=await run('ramp',12,-2,'step',1);assert.ok(report.ramp.includes('step')&&!report.ramp.includes('clamber'),`the bridge's foot is stepped, not clambered (${report.ramp})`);
-  report.climb=await run('climb',0,-11.6,'climb',3);assert.ok(report.climb.includes('climb'),`a climb from the stick (${report.climb})`);
+  report.climb=await run('climb',0,-9.3,'climb',3);assert.ok(report.climb.includes('climb'),`a climb from the stick (${report.climb})`);
   report.vault=await run('vault',4,-2,'vault',2);assert.ok(report.vault.includes('vault'),`a vault from the stick (${report.vault})`);
-  report.drop=await run('drop',0,-21.5,'hangDrop',3);assert.ok(report.drop.includes('hangDrop'),`a hang drop from the stick (${report.drop})`);
+  report.drop=await run('drop',0,-15,'hangDrop',3);assert.ok(report.drop.includes('hangDrop'),`a hang drop from the stick (${report.drop})`);
+  assert.ok(report.paused>=2,`she paused in the braced hang on the climb and on the drop (${report.paused})`);
   report.stages=await page.evaluate(()=>[...window.__parkour.seen.stages]);
-  for(const s of ['mount','stand','reach','hang','pull','vault','lower','fall'])assert.ok(report.stages.includes(s),`the ${s} stage played its clip (${report.stages})`);
+  for(const s of ['mount','stand','reach','catch','hang','pull','vault','lower','fall'])assert.ok(report.stages.includes(s),`the ${s} stage played its clip (${report.stages})`);
   assert.deepEqual(errors,[]);
   await writeFile(`${out}/report.json`,JSON.stringify(report,null,2));
   console.log('parkour browser checks passed');

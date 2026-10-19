@@ -1,6 +1,6 @@
 /** Shared, renderer-independent traversal. All coordinates here are absolute feet positions. */
 import { Vector3, MathUtils } from 'three';
-import { planParkour, CLIMB_INTENT_S } from './parkour';
+import { planParkour, holdPlan, planFromHang, CLIMB_INTENT_S, STEP_FROM } from './parkour';
 
 export const BODY_RADIUS = 0.25;
 export const BODY_HEIGHT = 0.72;
@@ -34,7 +34,10 @@ export interface TraversalWorld {
 /** 'drift' is the free-volume move: a straight line through a medium with no support, gravity or arc. */
 export type TraversalKind = 'walk' | 'jump' | 'drop' | 'drift'
   // Parkour (parkour.ts): the moves the stick alone makes over ground the walk cannot take.
-  | 'step' | 'clamber' | 'mantle' | 'climb' | 'vault' | 'hop' | 'hangDrop' | 'leap';
+  | 'step' | 'clamber' | 'climb' | 'vault' | 'hop' | 'hangDrop' | 'leap' | 'hang';
+/** The braced hang she pauses in (parkour.ts): where her feet hang, the way she faces (the wall), the lip, where the
+ * climb on up stands her, and the ground the drop lands her on (null when there is none she can drop to). */
+export interface HangSpot { at: Vector3; face: number; lip: number; top: Vector3; below: Vector3 | null }
 export interface Traversal {
   kind: TraversalKind;
   from: Vector3;
@@ -45,12 +48,14 @@ export interface Traversal {
   floorPath?: Vector3[];
   /** Parkour: the time of each floorPath point (else they are evenly spaced), what the body does from when, and the way she faces (a yaw). */
   times?: number[];
-  stages?: { name: string; at: number; clip?: string; from?: number; to?: number; fade?: number }[];
+  stages?: { name: string; at: number; clip?: string; from?: number; to?: number; fade?: number; lean?: [number, number] }[];
   face?: number;
+  /** Parkour: a move that ends in the braced hang, and where. */
+  hang?: HangSpot;
 }
 /** 'free' is the opt-in volume medium (Hulda's awareness in the soil): the body floats, steered by
  * yaw and pitch, and is bound only by what the world's canOccupy admits. */
-export type MotionMode = 'grounded' | 'traverse' | 'hover' | 'descending' | 'falling' | 'free';
+export type MotionMode = 'grounded' | 'traverse' | 'hover' | 'descending' | 'falling' | 'free' | 'hang';
 export interface MotionInput { right: number; forward: number; lift: number; turn: number; held: boolean; }
 const ZERO_INPUT: MotionInput = { right: 0, forward: 0, lift: 0, turn: 0, held: false };
 const clamp = MathUtils.clamp;
@@ -104,6 +109,7 @@ export function validateTraversal(world: TraversalWorld, plan: Traversal): boole
     traversalPoint(plan, i / samples * plan.duration, p);
     if (!world.canOccupy(p, BODY_RADIUS, BODY_HEIGHT)) return false;
   }
+  if (plan.hang) return true; // a move into the braced hang ends hanging, not standing
   const support = supportAt(world, plan.to.x, plan.to.z, plan.to.y + 0.03);
   return support !== null && Math.abs(support - plan.to.y) <= STEP_HEIGHT;
 }
@@ -171,12 +177,17 @@ export class MobilityMotor {
   /** Parkour (parkour.ts): the stick alone takes her over ground the walk cannot (opt in per world; the lab's measured courses leave it off). */
   parkour = false;
   private pushTime = 0;
+  private hangArmed = false;
   private probeWait = 0;
   private plan: Traversal | null = null;
   private planTime = 0;
-  /** The move under way and how far into it (seconds), for the presentation; null when none. */
-  get traversal(): Traversal | null { return this.mode === 'traverse' ? this.plan : null; }
+  /** The move under way and how far into it (seconds), for the presentation; null when none. In the braced hang, the hang held (its clip looping). */
+  get traversal(): Traversal | null { return this.mode === 'traverse' || this.mode === 'hang' ? this.plan : null; }
   get traversalTime(): number { return this.planTime; }
+  /** Parkour: the braced hang she is paused in, or null. Push toward the wall to climb on, away to drop. */
+  get hanging(): HangSpot | null { return this.mode === 'hang' ? this.plan?.hang ?? null : null; }
+  /** How far the stick must lean toward or away from the wall (its share along the wall's normal) to leave the hang. Tuning. */
+  static readonly HANG_LEAVE = 0.45;
   private idleTime = 0;
   private flightCeiling = Infinity;
   onTravel: (distance: number) => void = () => {};
@@ -300,13 +311,38 @@ export class MobilityMotor {
     const dx = wantedX / wanted, dz = wantedZ / wanted, ahead = new Vector3(this.feet.x + dx * 0.14, 0, this.feet.z + dz * 0.14);
     const s = supportAt(world, ahead.x, ahead.z, this.feet.y + STEP_HEIGHT);
     const down = s !== null && s < this.feet.y - STEP_HEIGHT;
-    if (s !== null && !down) { ahead.y = s; if (world.canOccupy(ahead, BODY_RADIUS, BODY_HEIGHT)) { this.pushTime = 0; return false; } }
+    if (s !== null && !down) {
+      ahead.y = s;
+      // (Unless the walk is refused anyway, a step short of the lookahead: she makes no way for CLIMB_INTENT_S.)
+      const stalled = this.speed < wanted * 0.2;
+      if (world.canOccupy(ahead, BODY_RADIUS, BODY_HEIGHT) && !(stalled && (this.pushTime += dt) >= CLIMB_INTENT_S)) {
+        if (!stalled) this.pushTime = 0;
+        // The walk could take it, but a sheer rise of STEP_FROM or more is the step-up clip's own size: step it.
+        if (s - this.feet.y < STEP_FROM || this.probeWait > 0) return false;
+        const plan = planParkour(world, this.feet, dx, dz, this.profile, Math.hypot(this.velocity.x, this.velocity.z), true);
+        if (!plan) { this.probeWait = 0.12; return false; }
+        this.plan = plan; this.planTime = 0; this.mode = 'traverse'; this.velocity.set(0, 0, 0); this.onCommit(plan); return true;
+      }
+    }
     this.pushTime += dt;
     if (this.probeWait > 0 || (!down && this.pushTime < CLIMB_INTENT_S && Math.hypot(this.velocity.x, this.velocity.z) < 1.5)) return false;
     const plan = planParkour(world, this.feet, dx, dz, this.profile, Math.max(Math.hypot(this.velocity.x, this.velocity.z), wanted * 0.6));
     if (!plan) { this.probeWait = 0.12; return false; }
     this.plan = plan; this.planTime = 0; this.mode = 'traverse'; this.velocity.set(0, 0, 0); this.pushTime = 0;
     this.onCommit(plan); return true;
+  }
+  /** The braced hang: still, the hang clip looping, until the stick leans toward the wall (the climb on up) or away
+   * from it (the drop, where there is ground to drop to). */
+  private hold(dt: number, world: TraversalWorld, input: MotionInput): void {
+    const plan = this.plan, spot = plan?.hang; if (!plan || !spot) { this.mode = 'falling'; return; }
+    this.planTime = (this.planTime + dt / Math.max(1, this.slowdown)) % plan.duration; this.velocity.set(0, 0, 0);
+    // She pauses: a stick still held from the move that brought her here doesn't carry her on; it must come back first.
+    const r = stickResponse(input.right, -input.forward); if (r.amount < 0.2) { this.hangArmed = true; return; } if (!this.hangArmed) return;
+    const right = r.x, forward = -r.y, wx = Math.cos(this.yaw) * right - Math.sin(this.yaw) * forward, wz = -Math.sin(this.yaw) * right - Math.cos(this.yaw) * forward;
+    const toWall = (wx * -Math.sin(spot.face) + wz * -Math.cos(spot.face)) / Math.max(1e-6, Math.hypot(wx, wz));
+    if (Math.abs(toWall) < MobilityMotor.HANG_LEAVE) return;
+    const next = planFromHang(world, spot, toWall > 0 ? 'up' : 'down'); if (!next) return;
+    this.plan = next; this.planTime = 0; this.mode = 'traverse'; this.onCommit(next);
   }
   private step(dt: number, world: TraversalWorld, input: MotionInput): void {
     if (this.plan && this.mode === 'traverse') {
@@ -320,6 +356,7 @@ export class MobilityMotor {
         this.plan = null; this.mode = 'falling'; return;
       }
       this.feet.copy(next); this.planTime = time;
+      if (time >= this.plan.duration && this.plan.hang) { this.feet.copy(this.plan.hang.at); this.plan = holdPlan(this.plan.hang); this.planTime = 0; this.mode = 'hang'; this.hangArmed = false; this.velocity.set(0, 0, 0); return; }
       if (time >= this.plan.duration && this.free) { this.plan = null; this.mode = 'free'; this.velocity.set(0, 0, 0); this.idleTime = 0; this.onLand(); return; }
       if (time >= this.plan.duration) {
         const support = supportAt(world, next.x, next.z, next.y + 0.05);
@@ -329,6 +366,7 @@ export class MobilityMotor {
       return;
     }
     if (this.mode === 'free') { this.drift(dt, world, input); return; }
+    if (this.mode === 'hang') { this.hold(dt, world, input); return; }
     if (this.flying) {
       if (input.held) { this.idleTime = 0; this.mode = 'hover'; }
       else { this.idleTime += dt; if (this.idleTime > HOVER_GRACE_S) this.mode = 'descending'; }

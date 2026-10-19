@@ -6,6 +6,7 @@ import { MobilityMotor, NORMAL_MOBILITY, POWERED_MOBILITY, BODY_RADIUS, BODY_HEI
 import { CourseGeometry, NORMAL_PADS, POWERED_PADS, COURSE_SPAWNS, FLIGHT_GATES, crossedGate } from '../src/mobilityCourseLayout';
 import { Arena } from '../src/arena';
 import { courseWorld } from '../src/parkourCourse';
+import { CANON, PARKOUR, HANG_BELOW } from '../src/parkour';
 import { OBJECT_TYPES } from '../src/objects';
 import { FORGE_PLANS } from '../src/forge';
 const near = (a: number, b: number, tolerance = 1e-4) => assert.ok(Math.abs(a - b) <= tolerance, `${a} != ${b} (tol ${tolerance})`);
@@ -231,50 +232,71 @@ const box = (x0: number, x1: number, top: number, base = 0): TraversalWorld => (
   surfacesAt: x => (x >= x0 && x <= x1 ? [top] : [base]),
   canOccupy: (p, r) => p.y >= base - 0.025 && !(p.x + r > x0 && p.x - r < x1 && p.y < top - 0.001),
 });
-function run(world: TraversalWorld, seconds: number, right = 1, fps = 60): { m: MobilityMotor; kinds: string[] } {
+/** Drive the stick into `world` from x=0; at a braced hang she pauses, so the stick is let go for RELEASE_S and pushed again the same way (toward the wall climbs on, away drops). */
+function run(world: TraversalWorld, seconds: number, right = 1, fps = 60, release = 0.3): { m: MobilityMotor; kinds: string[]; hung: number } {
   const m = new MobilityMotor(); m.parkour = true; m.reset(new Vector3(0, supportAt(world, 0, 0) ?? 0, 0)); const kinds: string[] = [];
-  m.onCommit = p => kinds.push(p.kind);
-  for (let i = 0; i < Math.round(seconds * fps); i++) { m.update(1 / fps, world, { ...idle, right, held: true }); assert.ok(world.canOccupy(m.feet, BODY_RADIUS, BODY_HEIGHT), `${m.mode} ${m.feet.toArray()}`); }
-  return { m, kinds };
+  m.onCommit = p => kinds.push(p.kind); let hung = 0, letGo = 0, was = false;
+  for (let i = 0; i < Math.round(seconds * fps); i++) {
+    if (m.hanging) { hung += 1 / fps; if (!was) letGo = release; } was = !!m.hanging;
+    const input = letGo > 0 ? idle : { ...idle, right, held: true }; letGo = Math.max(0, letGo - 1 / fps);
+    m.update(1 / fps, world, input); assert.ok(world.canOccupy(m.feet, BODY_RADIUS, BODY_HEIGHT), `${m.mode} ${m.feet.toArray()}`);
+  }
+  return { m, kinds, hung };
 }
-test('parkour: a rise past the step is stepped, clambered, mantled or climbed by height, landing on top', () => {
-  for (const [top, kind] of [[0.25, 'step'], [0.42, 'clamber'], [0.9, 'mantle'], [1.6, 'climb']] as const) {
-    const { m, kinds } = run(box(1, 30, top), 4);
-    assert.deepEqual(kinds, [kind], `${top}`); near(m.feet.y, top, 1e-3); assert.equal(m.mode, 'grounded'); assert.ok(m.feet.x > 1.5, `${m.feet.x}`);
+test('parkour: each canonical rise plays its own move, landing on top; a wall by the braced hang, paused in', () => {
+  for (const [top, want] of [[CANON.step, ['step']], [CANON.clamber, ['clamber']], [CANON.wall, ['climb', 'climb']], [1.6, ['climb', 'climb']]] as const) {
+    const { m, kinds, hung } = run(box(1, 30, top), 5);
+    assert.deepEqual(kinds, want, `${top}`); near(m.feet.y, top, 1e-3); assert.equal(m.mode, 'grounded'); assert.ok(m.feet.x > 1.5, `${m.feet.x}`);
+    if (want.length === 2) assert.ok(hung > 0.25, `she paused in the hang (${hung})`);
   }
   // Higher than she climbs: the wall stops her as before.
   const { m, kinds } = run(box(1, 30, 2.2), 3); assert.deepEqual(kinds, []); assert.ok(m.feet.x < 1); near(m.feet.y, 0);
 });
+test('parkour: the canonical heights are each its move\'s own, and the bands part them midway', () => {
+  assert.ok(CANON.step > 0.12 && CANON.step < CANON.clamber && CANON.clamber < CANON.wall && CANON.wall < CANON.ledge, JSON.stringify(CANON));
+  assert.ok(PARKOUR.stepUp > CANON.step && PARKOUR.stepUp < CANON.clamber && PARKOUR.clamber > CANON.clamber && PARKOUR.clamber < CANON.wall);
+  assert.ok(CANON.wall < NORMAL_MOBILITY.climbRise && CANON.ledge < NORMAL_MOBILITY.maxDrop && CANON.gap < NORMAL_MOBILITY.leapReach);
+});
 test('parkour: off by default (the lab courses keep their measured rules)', () => {
   const m = new MobilityMotor(); m.reset(new Vector3()); simulate(m, box(1, 9, 0.35), 3, { ...idle, right: 1, held: true }); assert.ok(m.feet.x < 1); near(m.feet.y, 0);
 });
-test('parkour: a thin top is vaulted, a broad one climbed onto', () => {
-  const thin = run(box(1, 1.4, 0.5), 3); assert.equal(thin.kinds[0], 'vault'); near(thin.m.feet.y, 0); assert.ok(thin.m.feet.x > 1.6);
-  const broad = run(box(1, 30, 0.45), 1.5); assert.equal(broad.kinds[0], 'clamber');
+test('parkour: a canonical rail is vaulted, a broad top of its height climbed onto', () => {
+  const thin = run(box(1, 1 + CANON.vaultDepth, CANON.vault), 3); assert.equal(thin.kinds[0], 'vault'); near(thin.m.feet.y, 0); assert.ok(thin.m.feet.x > 1.6);
+  const broad = run(box(1, 30, CANON.clamber), 2.5); assert.equal(broad.kinds[0], 'clamber');
 });
-test('parkour: a ledge is hopped down when low, lowered from by a hang when sheer, and its drop bound kept', () => {
-  const ledge = (h: number): TraversalWorld => ({ surfacesAt: x => [x < 1 ? h : 0], canOccupy: p => p.y >= (p.x < 1 ? h : 0) - 0.025 });
-  const low = run(ledge(0.6), 3); assert.equal(low.kinds[0], 'hop'); near(low.m.feet.y, 0);
-  const high = run(ledge(2.4), 4); assert.equal(high.kinds[0], 'hangDrop'); near(high.m.feet.y, 0); assert.equal(high.m.mode, 'grounded');
+const ledge = (h: number): TraversalWorld => ({ surfacesAt: x => [x < 1 ? h : 0], canOccupy: p => p.y >= (p.x < 1 ? h : 0) - 0.025 });
+test('parkour: a low edge is hopped; a canonical wall or ledge lowered from by the braced hang, paused in; the drop bound kept', () => {
+  const low = run(ledge(CANON.clamber), 3); assert.equal(low.kinds[0], 'hop'); near(low.m.feet.y, 0);
+  for (const h of [CANON.wall, CANON.ledge]) { const r = run(ledge(h), 5); assert.deepEqual(r.kinds, ['hangDrop', 'hangDrop'], `${h}`); near(r.m.feet.y, 0); assert.equal(r.m.mode, 'grounded'); assert.ok(r.hung > 0.25); }
   const cliff = run(ledge(6), 3); assert.deepEqual(cliff.kinds, []); near(cliff.m.feet.y, 6);
 });
-test('parkour: a gap is leapt only at a run, and only to ground she can land on', () => {
+test('parkour: in the braced hang she waits for the stick: away from the wall drops, toward it climbs back', () => {
+  // Off the ledge, the stick held on: she hangs and waits (a held stick doesn't carry her on).
+  const hold = run(ledge(CANON.ledge), 4, 1, 60, 1e9); assert.deepEqual(hold.kinds, ['hangDrop']); assert.ok(hold.m.hanging); near(hold.m.feet.y, CANON.ledge - HANG_BELOW, 1e-3);
+  // Let go and pushed back toward the wall (the way she came): she climbs back onto the ledge.
+  const m = hold.m; const kinds: string[] = []; m.onCommit = p => kinds.push(p.kind);
+  for (let i = 0; i < 20; i++) m.update(1 / 60, ledge(CANON.ledge), idle);
+  for (let i = 0; i < 180; i++) m.update(1 / 60, ledge(CANON.ledge), { ...idle, right: -1, held: true });
+  assert.deepEqual(kinds, ['climb']); near(m.feet.y, CANON.ledge, 1e-3); assert.equal(m.mode, 'grounded');
+});
+test('parkour: a canonical gap is leapt only at a run, and only to ground she can land on', () => {
   const gap = (w: number): TraversalWorld => { const g = (x: number) => (x > 1 && x < 1 + w ? -8 : 0); return { surfacesAt: x => [g(x)], canOccupy: p => p.y >= g(p.x) - 0.025 }; };
-  const leap = run(gap(1.6), 3); assert.equal(leap.kinds[0], 'leap'); assert.ok(leap.m.feet.x > 2.6);
-  const creep = run(gap(1.6), 3, 0.3); assert.deepEqual(creep.kinds, []); assert.ok(creep.m.feet.x < 1);
+  const leap = run(gap(CANON.gap), 3); assert.equal(leap.kinds[0], 'leap'); assert.ok(leap.m.feet.x > 1 + CANON.gap);
+  const creep = run(gap(CANON.gap), 3, 0.3); assert.deepEqual(creep.kinds, []); assert.ok(creep.m.feet.x < 1);
   const wide = run(gap(4), 3); assert.deepEqual(wide.kinds, []); assert.ok(wide.m.feet.x < 1);
 });
 test('parkour: a ramp steeper at its foot than the step allows (the old bridge) is stepped onto and walked', () => {
   const deck = (x: number) => (x < 0.5 ? 0 : 0.05 + 4.2 * Math.sin(Math.PI * Math.min(1, (x - 0.5) / 125)) ** 0.6);
   const world: TraversalWorld = { surfacesAt: x => [deck(x)], canOccupy: p => p.y >= deck(p.x) - 0.03 };
-  const { m, kinds } = run(world, 6); assert.ok(kinds.length >= 1 && kinds.length <= 3, kinds.join()); assert.ok(m.feet.x > 8, `${m.feet.x}`); near(m.feet.y, deck(m.feet.x), 0.05);
+  const { m, kinds } = run(world, 6); assert.ok(kinds.length >= 1 && kinds.length <= 3 && kinds.every(k => k === 'step'), `kinds ${kinds.join()}`); assert.ok(m.feet.x > 8, `${m.feet.x}`); near(m.feet.y, deck(m.feet.x), 0.05);
 });
-test('parkour: the practice course\'s lanes, from the stick alone, each move where its height says', () => {
-  const lane = (x: number, z: number, seconds: number) => { const m = new MobilityMotor(); m.parkour = true; m.reset(new Vector3(x, 0, z)); const kinds: string[] = []; m.onCommit = p => kinds.push(p.kind);
-    for (let i = 0; i < seconds * 60; i++) { m.update(1 / 60, courseWorld, { ...idle, forward: 1, held: true }); assert.ok(courseWorld.canOccupy(m.feet, BODY_RADIUS, BODY_HEIGHT), `${m.mode} ${m.feet.toArray()}`); }
+test('parkour: the practice course\'s lanes, from the stick alone, each canonical obstacle its own move', () => {
+  const lane = (x: number, z: number, seconds: number) => { const m = new MobilityMotor(); m.parkour = true; m.reset(new Vector3(x, 0, z)); const kinds: string[] = []; m.onCommit = p => kinds.push(p.kind); let letGo = 0, was = false;
+    for (let i = 0; i < seconds * 60; i++) { if (m.hanging && !was) letGo = 0.3; was = !!m.hanging; const input = letGo > 0 ? idle : { ...idle, forward: 1, held: true }; letGo = Math.max(0, letGo - 1 / 60);
+      m.update(1 / 60, courseWorld, input); assert.ok(courseWorld.canOccupy(m.feet, BODY_RADIUS, BODY_HEIGHT), `${m.mode} ${m.feet.toArray()}`); }
     return { m, kinds }; };
-  const stair = lane(0, -2.5, 20); assert.deepEqual(stair.kinds, ['step', 'clamber', 'mantle', 'climb', 'hangDrop']); assert.ok(stair.m.feet.z < -25); near(stair.m.feet.y, 0);
-  const rails = lane(4, -2, 15); assert.deepEqual(rails.kinds, ['vault', 'vault', 'vault', 'clamber', 'hop', 'leap']); assert.ok(rails.m.feet.z < -20);
+  const up = lane(0, -2.5, 20); assert.deepEqual(up.kinds, ['step', 'clamber', 'climb', 'climb', 'hangDrop', 'hangDrop']); assert.ok(up.m.feet.z < -25); near(up.m.feet.y, 0);
+  const over = lane(4, -2, 22); assert.deepEqual(over.kinds, ['vault', 'vault', 'clamber', 'hop', 'climb', 'climb', 'hangDrop', 'hangDrop', 'leap']); assert.ok(over.m.feet.z < -21);
   const too = lane(8, -3, 6); assert.deepEqual(too.kinds, []); assert.ok(too.m.feet.z > -6);
 });
 test('parkour: a sloped foot is stepped up even past a step\'s height; a sheer face that high is clambered', () => {
