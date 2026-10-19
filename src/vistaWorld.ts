@@ -68,6 +68,8 @@ export interface VistaWorld {
   /** Sun visibility (0..1) at a point, from the baked map: dims the sun on Hulda in a mountain's shadow. */
   sunAt(x: number, z: number): number;
   stats(): { tiles: number; nearTrees: number };
+  /** The shared uniforms (sun, haze, the maps): for water and other things drawn in the vista's light (the plateau's rivers). */
+  uniforms: Record<string, THREE.IUniform>;
 }
 
 export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks: Rock[], quality: Quality, opts: Partial<VistaOptions> = {}): VistaWorld {
@@ -280,6 +282,7 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
   }
 
   return {
+    uniforms: shared,
     root, setHour, setQuality, setTrees,
     setGround(bytes) { groundBytes.set(bytes); groundTex.needsUpdate = true; },
     setSoil(amount, x, z) {

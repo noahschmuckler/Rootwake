@@ -110,3 +110,9 @@ Open questions:
 - Dev: `__village.deep.stepOut()`, `.backIn()`, `.visit`.
 - **Checks:** `scripts/browser-village-vista.mjs` dives to the node, steps out, checks that she stands on layer R's floor under the drop, hears the snerk, and goes back into the drop and up to the pool. The screenshots are `catwalk-out.png` and `catwalk-snerk.png`.
 - **Open:** deepening is the only way deeper; there is no stair between catwalks yet. The summit rim is D2, and what the keepers ask of her is D3.
+
+## The portals (2026-10-19, PLATEAU.md T5)
+
+- Every catwalk has a portal to the outside world in an alcove of its own, the one nearest south-west of the gangway that no station uses (`Catwalk.portal`, `portalSpot`).
+- Clarity channelled into it on the board opens it. A passage through the rock follows, and she steps out of its twin at the island's foot.
+- The island's portal, opened the same way, brings her back to the catwalk at the node's depth.

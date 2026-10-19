@@ -10,6 +10,9 @@ export interface WorldState { thriving: number; groves: number; companions: numb
 export const TIER_CAP = 5, TIER_POINTS = [0, 0, 40, 60, 80, 100], TIER_CLARITY = 20, TIER_REACH = 200, TIER_VIEW = 0.25;
 export const NEED: WorldState[] = [{ thriving: 0, groves: 0, companions: 0 }, { thriving: 0, groves: 0, companions: 0 }, { thriving: 1, groves: 0, companions: 0 }, { thriving: 2, groves: 1, companions: 0 }, { thriving: 3, groves: 1, companions: 0 }, { thriving: 3, groves: 2, companions: 1 }];
 export const freshCultivation = (): Cultivation => ({ grown: 0, tier: 1 });
+/** PLATEAU.md (Noah, 2026-10-19): she wakes on the summit and must meditate (the dive's clarity) and cultivate before the first dive: FIRST_DIVE_GROWTH gems of growth, or any tier past the first. Tuning. */
+export const FIRST_DIVE_GROWTH = 20;
+export const mayFirstDive = (c: Cultivation): boolean => c.tier > 1 || c.grown >= FIRST_DIVE_GROWTH;
 const meets = (w: WorldState, n: number): boolean => w.thriving >= NEED[n].thriving && w.groves >= NEED[n].groves && w.companions >= NEED[n].companions;
 /** The tier the land allows: the highest whose needs the world meets. */
 export function worldTier(w: WorldState): number { let t = 1; for (let n = 2; n <= TIER_CAP; n++) if (meets(w, n)) t = n; else break; return t; }

@@ -6,6 +6,7 @@
 // at the archive, a hollowed at a power node, a greeblin at a machine. Cel-shaded like Hulda (toon ramp),
 // the glow left to bloom. Built from `catwalk(depth)` (descentModel.ts); rebuilt per depth.
 import * as THREE from 'three';
+import { makePortal } from './portalFigure';
 import { catwalk, ALCOVE_D, ALCOVE_H, ALCOVE_W, DROP_VIS_R, GANGWAY_HALF, SPOKE_HALF, INNER_W, BANDS, type Catwalk, type Station } from './descentModel';
 import { toonRamp } from './huldaDress';
 import { mulberry32 } from './colors';
@@ -84,6 +85,8 @@ export interface DescentWorld {
   readonly root: THREE.Group; readonly catwalk: Catwalk; readonly keepers: Keeper[];
   /** The drop's centre and radius (to step back into). */ readonly drop: THREE.Vector3;
   update(t: number, her: THREE.Vector3): void;
+  /** The portal's group, and how open it stands (0 shut, 1 open: the channelling's progress). */
+  portal: THREE.Group; setPortalOpen(k: number): void;
   dispose(): void;
 }
 /** Build catwalk `depth` into `scene` (the beam, the drop, the chamber, its keepers and stations, its lights). */
@@ -142,7 +145,7 @@ export function buildDescent(scene: THREE.Scene, depth: number): DescentWorld {
   { const down = new THREE.CylinderGeometry(c.ringIn, c.ringIn * 1.15, 40, 48, 1, true); down.translate(0, -20.2, 0); add(down, new THREE.MeshToonMaterial({ color: P.rock, gradientMap: ramp, side: THREE.BackSide }));
     const next = BANDS[Math.min(BANDS.length - 1, depth + 1)], glow = new THREE.CircleGeometry(c.ringIn * 1.1, 48); glow.rotateX(-Math.PI / 2); glow.translate(0, -38, 0); add(glow, keep(new THREE.MeshBasicMaterial({ color: new THREE.Color(next).multiplyScalar(0.6) }))); }
   // ── the alcoves: a niche each, a crystal sconce in the empty ones ──
-  const stationAt = new Map(c.stations.map(s => [s.alcove, s]));
+  const stationAt = new Map<number, unknown>(c.stations.map(s => [s.alcove, s])); stationAt.set(c.portal.alcove, 'portal');
   for (let i = 0; i < c.alcoves.length; i++) {
     const a = c.alcoves[i], niche = new THREE.Group(); niche.position.set(Math.cos(a) * R, 0, Math.sin(a) * R); niche.rotation.y = -a; root.add(niche);
     // In the niche's frame +x is outward (into the rock), z across it.
@@ -219,6 +222,9 @@ export function buildDescent(scene: THREE.Scene, depth: number): DescentWorld {
   veins.position.copy(dropC); veins.name = 'drop-veins';
   // One draw per material for everything that does not move (a phone's budget is draw calls).
   mergeStatic(root, keep);
+  // ── the portal (PLATEAU.md): in its alcove, facing the ring ──
+  const portal = makePortal(1.5); { const a = c.portal.angle; portal.group.position.set(Math.cos(a) * (R + ALCOVE_D * 0.55), 0, Math.sin(a) * (R + ALCOVE_D * 0.55)); portal.group.rotation.y = Math.atan2(-Math.cos(a), -Math.sin(a)); root.add(portal.group); }
+  let portalOpen = 0;
   // ── the light ──
   const hemi = new THREE.HemisphereLight('#8a96c0', '#2a241c', 2.0 + depth * 0.15); root.add(hemi);
   const beamLight = new THREE.PointLight(band.clone().lerp(new THREE.Color('#ffffff'), 0.75), 18 + depth * 3, R * 2.6, 1.0); beamLight.position.set(0, 1.6, 0); root.add(beamLight);
@@ -231,9 +237,10 @@ export function buildDescent(scene: THREE.Scene, depth: number): DescentWorld {
     runeTex.offset.x = (t * 0.01) % 1;
     root.traverse(o => { if (o.name === 'node-core') { const k = 1 + Math.sin(t * 2.4) * 0.12; o.scale.setScalar(k); } else if (o.name === 'machine-gear') o.rotation.x = t * 0.6; else if (o.name === 'archive-screen') { const mat = (o as THREE.Mesh).material as THREE.MeshBasicMaterial; if (mat.map) mat.map.offset.y = Math.floor(t * 2) * 0.125; } });
     for (const k of keepers) k.update(t, her.x, her.z);
+    portal.update(t, portalOpen);
   }
-  function dispose(): void { root.removeFromParent(); for (const d of disposables) d.dispose(); }
-  return { root, catwalk: c, keepers, drop: dropC, update, dispose };
+  function dispose(): void { portal.dispose(); root.removeFromParent(); for (const d of disposables) d.dispose(); }
+  return { root, catwalk: c, keepers, drop: dropC, portal: portal.group, setPortalOpen(k: number) { portalOpen = k; }, update, dispose };
 }
 const RING_SEAM_W = 0.035;
 /** Merge the static meshes under `root` (not the keepers, nothing named, no instanced or point meshes) into one mesh per material. */

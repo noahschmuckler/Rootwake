@@ -24,6 +24,8 @@ export interface Catwalk {
   /** The gangway from the drop to the ring, along this angle. */ gangway: number;
   /** Spokes across the shaft (angles) to an inner ring of radius innerR (none at depth 0). */ spokes: number[]; innerR: number;
   stations: Station[];
+  /** PLATEAU.md: the portal to the outside world, in an alcove of its own (opened with clarity on the board; it leads out to the island's foot). */
+  portal: { angle: number; alcove: number };
 }
 
 /** The catwalk at a depth (0 .. LAYERS-1): each a little larger than the last, the deeper ones built out with spokes and an inner ring, and more keepers. */
@@ -41,10 +43,12 @@ export function catwalk(depth: number): Catwalk {
   const stations: Station[] = [{ kind: 'archive', keeper: 'snerk', angle: alcoves[across], alcove: across }];
   if (d >= 1) { const i = nearestAlcove(alcoves, Math.PI / 2); stations.push({ kind: 'power', keeper: 'hollowed', angle: alcoves[i], alcove: i }); }
   if (d >= 3) { const i = nearestAlcove(alcoves, -Math.PI / 2); stations.push({ kind: 'machine', keeper: 'greeblin', angle: alcoves[i], alcove: i }); }
-  return { depth: d, letter: LETTERS[d], band: BANDS[d], wallR, ringIn, height: ROOM_H + ROOM_GROW * d, alcoves, gangway, spokes, innerR, stations };
+  // The portal: the alcove nearest south-west of the gangway that no station has.
+  const used = new Set(stations.map(s => s.alcove)), pi = nearestAlcove(alcoves, -Math.PI * 0.75, used);
+  return { depth: d, letter: LETTERS[d], band: BANDS[d], wallR, ringIn, height: ROOM_H + ROOM_GROW * d, alcoves, gangway, spokes, innerR, stations, portal: { angle: alcoves[pi], alcove: pi } };
 }
-function nearestAlcove(alcoves: number[], angle: number): number {
-  let best = 0, bd = Infinity; for (let i = 0; i < alcoves.length; i++) { const d = Math.abs(Math.atan2(Math.sin(alcoves[i] - angle), Math.cos(alcoves[i] - angle))); if (d < bd) { bd = d; best = i; } } return best;
+function nearestAlcove(alcoves: number[], angle: number, skip?: Set<number>): number {
+  let best = 0, bd = Infinity; for (let i = 0; i < alcoves.length; i++) { if (skip?.has(i)) continue; const d = Math.abs(Math.atan2(Math.sin(alcoves[i] - angle), Math.cos(alcoves[i] - angle))); if (d < bd) { bd = d; best = i; } } return best;
 }
 const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
 /** Whether (x, z) is somewhere she can stand on catwalk c (the floor is at y = 0): the ring, an alcove's floor, the gangway, a spoke, the inner ring. */
@@ -68,6 +72,8 @@ function onBeam(x: number, z: number, a: number, half: number): boolean {
 export function stepOut(c: Catwalk): { x: number; z: number; yaw: number } {
   const r = DROP_VIS_R + 0.45, a = c.gangway; return { x: Math.cos(a) * r, z: Math.sin(a) * r, yaw: Math.atan2(-Math.cos(a), -Math.sin(a)) };
 }
+/** The portal's standing spot: in front of its alcove on the ring. */
+export function portalSpot(c: Catwalk): { x: number; z: number } { const r = c.wallR - 0.6; return { x: Math.cos(c.portal.angle) * r, z: Math.sin(c.portal.angle) * r }; }
 /** A station's standing spot: in front of its alcove on the ring. */
 export function stationSpot(c: Catwalk, s: Station): { x: number; z: number } { const r = c.wallR - 0.6; return { x: Math.cos(s.angle) * r, z: Math.sin(s.angle) * r }; }
 

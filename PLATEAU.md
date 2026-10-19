@@ -60,17 +60,59 @@ The overworld is a large plateau bounded by mountains, the summit of DiggyDwarve
     - a footbridge in each other village;
     - stepping stones and footbridges by turns every `CROSS_EVERY` m along every river.
   - **Places:** dens, ruins, warrens, wallows and the moot all stand on dry plateau ground (`onLand`).
-- **T2:** the land drawn.
-  - The plateau eroded with the vista's droplets.
-  - Channels and banks carved after, water surfaces for the lake and the rivers.
-  - The ford's stones and gravel, the footbridges and stepping stones, the old bridge's arches.
-- **T3:** into the village.
-  - Rivers block walking except at crossings.
-  - She starts on the summit. The first dive is gated on meditation and cultivation.
-  - Saves reset (every place moved).
-- **T5:** the portals.
-  - On the first catwalk, a portal opened by clarity and a match-3 session.
-  - A short passage out to a ground-level portal at the island's foot, and the same back in.
+- **T2, done:** the land drawn (`src/plateauLand.ts`, `src/plateauWorld.ts`).
+  - **Erosion over the whole plateau:** the vista's droplets (110k on a 1025-sample grid, 6.4 m cells) erode the plateau's shape everywhere but the villages' greens, the island and the lake's bed. The shape is the bowl, ridged hills (`HILL_M` 24, `RIDGE_M` 22), and valleys roughed in toward every river.
+  - **The carving:** terraces, lake, island and channels are carved after erosion. The vista's finer near mesh (`fineLod`) is on, so a channel survives on screen.
+  - **Rivers:** `RIVER_HALF` is 3.6–8 m.
+  - **Grass:** the rivers' banks are marked in the land's flow map, so they read as gravel and grow no grass.
+  - **The bake:**
+    - The seed is fixed, so `vite build` bakes the eroded grid (the `plateau-bake` plugin) to `land/plateau-1.bin.gz`, 3.6 MB.
+    - Heights are delta-coded 16-bit; the flow, sediment and occlusion maps are bytes.
+    - `loadVillageLand` fetches it, gunzips it and checks its fingerprint, which is the shape sampled, the grid and the erosion. A missing or stale bake erodes in place, about 7 s on a desktop.
+    - The village awaits it at the top of its module, so the build targets es2022.
+  - **What is drawn:**
+    - each river's water: a five-across ribbon at its surface, the vista's water shader with its depth from the channel, flowing downstream, white where shallow;
+    - stepping stones;
+    - the ford's gravel and stones;
+    - plank footbridges on logs with rails;
+    - the island's old bridge: an arcade of stone piers with cutwaters, arched spans and parapets.
+  - **The old stream:** the village layout's own stream ribbon and banks are gone; the river is the stream now.
+  - **Terrain everywhere:** `worldTerrain.createTerrain` is the plateau's unaroded ground, so the plain look and the villages' houses stand on the same terraces.
+  - **Trees:** chunk trees keep out of the water and off the rim (`onLand`).
+- **T3, done:**
+  - **She wakes on the summit,** by the pool, facing the first village. The fight's practice clearing places her itself.
+  - **The first dive** waits on her cultivation: `FIRST_DIVE_GROWTH` 20 gems, or any tier past the first.
+    - Meditation already pays the dive's clarity.
+    - At the pool the dive button reads "cultivate first" until then.
+  - **Rivers are barriers:** walking and grass travel refuse water deeper than `WADE_DEPTH` 0.35 m (`walkable`). The decks are walked on.
+  - **Roots pass under the rivers:** root travel is unchanged.
+  - **Not yet:** hobbits, wolves and the Dark Young still walk through rivers.
+- **T5, done:** the portals (`src/portalFigure.ts`; the portal alcove and `portalSpot` in `descentModel.ts`; the wiring in `village.ts`).
+  - **The catwalk portal:** every catwalk has a portal in an alcove of its own, a stone arch with a swirling film.
+    - "Open the portal" sits her down to the board.
+    - `PORTAL_GEMS` (12) gems of clarity channelled into it open it, as a quickening is opened. The film brightens with the channelling.
+    - A 3.2 s passage on the deep roots' bore runs through the rock, out to the island's portal at the karst's foot, 26 m out toward the bridge.
+  - **The island portal:** opened the same way, it takes her back to the catwalk at the node's depth.
+  - **Dev:** `__village.deep.openPortal`, `islandPortal()`, `cult.grow`.
+- **Checks:**
+  - `tests/plateau.test.ts` covers:
+    - the island and lake;
+    - the bridge;
+    - rivers that never climb and pass through every village;
+    - fords and barriers;
+    - places on dry land;
+    - the bake's round trip.
+  - `scripts/browser-village-vista.mjs` checks:
+    - she wakes on the summit;
+    - the land was baked;
+    - no first dive before cultivating;
+    - the catwalk portal, out to the island;
+    - the island portal, back in.
+
+## Notes for the phone
+
+- **Load time:** the land now loads from the bake. The old in-page erosion would have cost a phone about 15–20 s.
+- **Cost:** the vista draws about 700–950k triangles around the villages, and 35k of that is the finer near mesh.
 
 ## Open
 

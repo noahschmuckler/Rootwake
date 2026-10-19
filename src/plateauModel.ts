@@ -15,16 +15,18 @@ const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
 
 /** The plateau's radius about the karst; the lake's mean radius and its shore's wobble; the island's; the water's surface (the karst's floor and the island are at 0). Tuning. */
 export const PLATEAU_R = 1800, LAKE_R = 215, LAKE_WOBBLE = 12, ISLAND_R = 104, WATER_Y = -1.2, LAKE_DEPTH = 9;
-/** The plateau's rise from the lake's shore to its rim (m), the hills over it (m), the mountains past the rim: their climb (m) and how much of a ring they take to rise. Tuning. */
-export const RIM_RISE = 62, HILL_M = 11, MOUNTAIN_RISE = 650;
+/** The plateau's rise from the lake's shore to its rim (m), the hills over it (m) and their ridged crests (m), the mountains past the rim: their climb (m) and how much of a ring they take to rise. Tuning. */
+export const RIM_RISE = 85, HILL_M = 24, RIDGE_M = 22, MOUNTAIN_RISE = 650;
 /** A village's ground: flat within TERRACE_R of its green (the layouts' meadow), blending out over TERRACE_FADE; it stands BANK_H above its river. Tuning. */
 export const TERRACE_R = 90, TERRACE_FADE = 70, BANK_H = 1.6;
 /** Rivers: half width at the source and at the mouth (m), the channel's depth below the surface, the valley's half width from source to mouth, how far upstream of the rim a river rises. Tuning. */
-export const RIVER_HALF: [number, number] = [2.0, 4.6], RIVER_DEPTH = 1.6, VALLEY: [number, number] = [14, 46], SOURCE_PAST = 140;
+export const RIVER_HALF: [number, number] = [3.6, 8], RIVER_DEPTH = 1.6, VALLEY: [number, number] = [45, 150], SOURCE_PAST = 140;
 /** Crossings: a river is crossed every CROSS_EVERY m of its course (stepping stones and footbridges by turns), never within CROSS_CLEAR of the lake or of another crossing; a ford's water is FORD_DEPTH deep, walkable (below WADE_DEPTH). Tuning. */
 export const CROSS_EVERY = 420, CROSS_CLEAR = 90, FORD_DEPTH = 0.22, WADE_DEPTH = 0.35, FORD_HALF_LEN = 7;
 /** The island's bridge: its width and the height of its deck's crown over the water. Tuning. */
 export const BRIDGE_HALF_W = 1.6, BRIDGE_CROWN = 4.2;
+/** A footbridge: how far past each bank it reaches, its half width, its arch's rise. Tuning. */
+export const FOOTBRIDGE_OVER = 2.2, FOOTBRIDGE_HALF_W = 0.7, FOOTBRIDGE_RISE = 0.55;
 
 export interface P { x: number; z: number }
 export type CrossingKind = 'ford' | 'stones' | 'footbridge';
@@ -66,7 +68,7 @@ function build(seed: number): Plateau {
   const polar = (x: number, z: number) => ({ r: Math.hypot(x - C.x, z - C.z), a: Math.atan2(z - C.z, x - C.x) });
   const lakeR = (a: number): number => LAKE_R + LAKE_WOBBLE * (nLake(Math.cos(a) * 1.7, Math.sin(a) * 1.7) * 0.7 + nLake(Math.cos(a) * 4 + 9, Math.sin(a) * 4) * 0.3);
   const into = (x: number, z: number): number => polar(x, z).r + 90 * fbm(nWarp, x * 0.0012, z * 0.0012, 3) - PLATEAU_R;
-  const hills = (x: number, z: number): number => HILL_M * (fbm(nHill, x * 0.0035, z * 0.0035, 4) + 0.35 * fbm(nDetail, x * 0.012, z * 0.012, 3));
+  const hills = (x: number, z: number): number => HILL_M * (fbm(nHill, x * 0.0032, z * 0.0032, 4) + 0.3 * fbm(nDetail, x * 0.011, z * 0.011, 3)) + RIDGE_M * (ridged(nWarp, x * 0.0021 + 3.1, z * 0.0021 - 7.7, 4) - 0.35);
   /** The bowl: the lake's shore at the water, rising to the rim, hills over it (calmer near the lake), the mountains beyond. */
   const bowl = (x: number, z: number): number => {
     const { r } = polar(x, z), k = smooth(LAKE_R, PLATEAU_R, r), d = into(x, z);
@@ -144,14 +146,20 @@ function build(seed: number): Plateau {
     return { id, name, village, points, half, surface, length };
   }
 
-  // ── where rivers are near: a hash of their points ──
-  const HASH = 32, hash = new Map<string, { r: River; i: number }[]>();
-  for (const r of rivers) for (let i = 0; i < r.points.length; i++) { const p = r.points[i], k = `${Math.floor(p.x / HASH)},${Math.floor(p.z / HASH)}`; (hash.get(k) ?? hash.set(k, []).get(k)!).push({ r, i }); }
-  function nearRiver(x: number, z: number, reach = VALLEY[1] + 8): { river: River; i: number; d: number; half: number } | null {
-    const cx = Math.floor(x / HASH), cz = Math.floor(z / HASH), span = Math.ceil(reach / HASH); let best: { river: River; i: number; d: number; half: number } | null = null;
-    for (let a = -span; a <= span; a++) for (let b = -span; b <= span; b++) for (const e of hash.get(`${cx + a},${cz + b}`) ?? []) {
+  // ── where rivers are near: a field of the nearest river point, FIELD_CELL m a cell, out to the widest valley (a multi-source flood from every point) ──
+  const FIELD_CELL = 6, REACH = VALLEY[1] + 12, fx0 = C.x - PLATEAU_R - SOURCE_PAST - REACH - 20, fz0 = C.z - PLATEAU_R - SOURCE_PAST - REACH - 20, FN = Math.ceil((2 * (PLATEAU_R + SOURCE_PAST + REACH + 20)) / FIELD_CELL);
+  const pts: { r: River; i: number }[] = []; for (const r of rivers) for (let i = 0; i < r.points.length; i++) pts.push({ r, i });
+  const field = new Int32Array(FN * FN).fill(-1), fd = new Float32Array(FN * FN).fill(Infinity);
+  // Every point stamps the cells within reach that it is nearest to (5 rivers of some 500 points, a disc of about 2300 cells each).
+  { const rc = Math.ceil(REACH / FIELD_CELL);
+    pts.forEach((e, k) => { const p = e.r.points[e.i], ci = Math.floor((p.x - fx0) / FIELD_CELL), cj = Math.floor((p.z - fz0) / FIELD_CELL);
+      for (let jj = Math.max(0, cj - rc); jj <= Math.min(FN - 1, cj + rc); jj++) for (let ii = Math.max(0, ci - rc); ii <= Math.min(FN - 1, ci + rc); ii++) { const c = jj * FN + ii, d = Math.hypot((ii + 0.5) * FIELD_CELL + fx0 - p.x, (jj + 0.5) * FIELD_CELL + fz0 - p.z); if (d <= REACH + FIELD_CELL && d < fd[c]) { fd[c] = d; field[c] = k; } } }); }
+  function nearRiver(x: number, z: number, reach = REACH): { river: River; i: number; d: number; half: number } | null {
+    const ci = Math.floor((x - fx0) / FIELD_CELL), cj = Math.floor((z - fz0) / FIELD_CELL); if (ci < 1 || cj < 1 || ci >= FN - 1 || cj >= FN - 1) return null;
+    let best: { river: River; i: number; d: number; half: number } | null = null, seen = -2;
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+      const k = field[(cj + dj) * FN + ci + di]; if (k < 0 || k === seen) continue; seen = k; const e = pts[k], p = e.r.points[e.i];
       // The distance to the segment on either side of the point, so the channel's edge is smooth between samples.
-      const p = e.r.points[e.i];
       for (const j of [e.i - 1, e.i + 1]) { if (j < 0 || j >= e.r.points.length) continue; const q = e.r.points[j], dx = q.x - p.x, dz = q.z - p.z, t = Math.min(1, Math.max(0, ((x - p.x) * dx + (z - p.z) * dz) / (dx * dx + dz * dz || 1))), d = Math.hypot(x - p.x - dx * t, z - p.z - dz * t);
         if (d <= reach && (!best || d < best.d)) best = { river: e.r, i: t < 0.5 ? e.i : j, d, half: lerp(e.r.half[e.i], e.r.half[j], t) }; }
     }
@@ -180,6 +188,7 @@ function build(seed: number): Plateau {
   const ba = angleOf({ x: 0, z: 0 }), bridge: Bridge = { from: onCircle(ba, ISLAND_R - 4), to: onCircle(ba, lakeR(ba) + 8), halfW: BRIDGE_HALF_W, crown: BRIDGE_CROWN };
   let shoreY: number | undefined;
   const deckAt = (x: number, z: number): number | null => {
+    for (const c of crossings) if (c.kind === 'footbridge' && Math.abs(x - c.x) < 14 && Math.abs(z - c.z) < 14) { const y = footDeck(c, x, z); if (y !== null) return y; }
     const dx = bridge.to.x - bridge.from.x, dz = bridge.to.z - bridge.from.z, len = Math.hypot(dx, dz), t = ((x - bridge.from.x) * dx + (z - bridge.from.z) * dz) / (len * len); if (t < 0 || t > 1) return null;
     const off = Math.abs(-(x - bridge.from.x) * dz + (z - bridge.from.z) * dx) / len; if (off > bridge.halfW) return null;
     // The deck rises from the island (0) to its crown and down to the shore, a long shallow hump over the arches.
@@ -190,7 +199,7 @@ function build(seed: number): Plateau {
   const base = (x: number, z: number): number => {
     let h = bowl(x, z); const nr = nearRiver(x, z);
     // The valleys roughed in before erosion: the land falls toward each river.
-    if (nr) { const s = nr.river.surface[nr.i] + 0.8, k = nr.i / nr.river.points.length, w = lerp(VALLEY[0], VALLEY[1], k); if (h > s) h = lerp(s, h, smooth(nr.half, nr.half + w, nr.d)); }
+    if (nr) { const s = nr.river.surface[nr.i] + 0.8, k = nr.i / nr.river.points.length, w = lerp(VALLEY[0], VALLEY[1], k); if (h > s) h = lerp(s, h, Math.pow(smooth(nr.half, nr.half + w, nr.d), 0.8)); }
     return h;
   };
   function ground(x: number, z: number, grid: (x: number, z: number) => number = base): number {
@@ -204,11 +213,19 @@ function build(seed: number): Plateau {
     // The channels: the bank a little over the water, the bed under it; a ford's bed just under.
     const nr = nearRiver(x, z, RIVER_HALF[1] + 12);
     if (nr && r > ISLAND_R + 20) {
-      const s = nr.river.surface[nr.i], ford = crossingNear(nr.river.id, x, z, 'ford'), depth = ford ? FORD_DEPTH : RIVER_DEPTH, half = ford ? nr.half * 1.6 : nr.half;
+      const s = nr.river.surface[nr.i], ford = crossingNear(nr.river.id, x, z, 'ford') ?? crossingNear(nr.river.id, x, z, 'stones'), depth = ford ? FORD_DEPTH : RIVER_DEPTH, half = ford ? nr.half * 1.6 : nr.half;
       if (nr.d < half) h = Math.min(h, s - depth * (1 - (nr.d / half) ** 2) - (ford ? 0 : 0.15));
       else { const bank = s + 0.45 + (nr.d - half) * 0.12; if (h > bank) h = lerp(bank, h, smooth(half, half + 10, nr.d)); else h = Math.max(h, Math.min(bank, s + 0.3)); }
     }
     return h;
+  }
+  /** A footbridge's deck: across the river (perpendicular to it), FOOTBRIDGE_OVER past each bank, ends at the ground and a low arch between. */
+  const decks = new Map<string, { y0: number; y1: number }>();
+  function footDeck(c: Crossing, x: number, z: number): number | null {
+    const ux = -Math.sin(c.along), uz = Math.cos(c.along), len = c.half + FOOTBRIDGE_OVER, t = (x - c.x) * ux + (z - c.z) * uz, off = Math.abs((x - c.x) * Math.cos(c.along) + (z - c.z) * Math.sin(c.along));
+    if (Math.abs(t) > len || off > FOOTBRIDGE_HALF_W) return null;
+    let e = decks.get(c.id); if (!e) { e = { y0: ground(c.x - ux * len, c.z - uz * len), y1: ground(c.x + ux * len, c.z + uz * len) }; decks.set(c.id, e); }
+    const k = (t + len) / (2 * len); return lerp(e.y0, e.y1, k) + FOOTBRIDGE_RISE * Math.sin(Math.PI * k);
   }
   function crossingNear(river: string, x: number, z: number, kind: CrossingKind): Crossing | null {
     for (const c of crossings) if (c.river === river && c.kind === kind) { const ux = Math.cos(c.along), uz = Math.sin(c.along), along = (x - c.x) * ux + (z - c.z) * uz; if (Math.abs(along) < FORD_HALF_LEN && Math.hypot(x - c.x, z - c.z) < c.half * 2 + FORD_HALF_LEN) return c; }

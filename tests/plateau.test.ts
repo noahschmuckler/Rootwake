@@ -46,5 +46,13 @@ test('every place stands on dry land on the plateau, off the water', () => {
     assert.ok(Math.hypot(pl.x - KARST_AT.x, pl.z - KARST_AT.z) < PLATEAU_R - 20, `${pl.id} on the plateau`);
     if (pl.kind !== 'village' && pl.kind !== 'lair') assert.ok(onLand(1, pl.x, pl.z, 4), `${pl.id} on dry land`);
   }
-  for (const v of [{ x: 0, z: 0 }, ...villageSites(1)]) for (let a = 0; a < 6.28; a += 0.7) { const x = v.x + Math.cos(a) * (TERRACE_R - 10), z = v.z + Math.sin(a) * (TERRACE_R - 10); if (Math.abs(z - v.z - STREAM_Z(x - v.x)) < 8) continue; assert.ok(!p.water(x, z), 'the green is dry off the stream'); }
+  for (const v of [{ x: 0, z: 0 }, ...villageSites(1)]) for (let a = 0; a < 6.28; a += 0.7) { const x = v.x + Math.cos(a) * (TERRACE_R - 10), z = v.z + Math.sin(a) * (TERRACE_R - 10); if (Math.abs(z - v.z - STREAM_Z(x - v.x)) < 14 || (p.nearRiver(x, z, 30)?.d ?? 99) < 24) continue; assert.ok(!p.water(x, z), 'the green is dry off its river'); }
+});
+test('the baked land round-trips: heights to 1.6 cm, the maps to a 255th, its fingerprint checked', async () => {
+  const { encodeLand, decodeLand, VILLAGE_LAND_N } = await import('../src/plateauLand');
+  const n = VILLAGE_LAND_N, N = n * n, h = new Float32Array(N), m = new Float32Array(N);
+  for (let k = 0; k < N; k++) { h[k] = -12 + ((k * 7919) % 97000) / 100; m[k] = (k % 256) / 255; }
+  const e = { n, half: 0, h, flow: m, sediment: m, ao: m }, back = decodeLand(1, encodeLand(1, e))!;
+  assert.ok(back); for (let k = 0; k < N; k += 997) { assert.ok(Math.abs(back.h[k] - h[k]) < 0.01, `height ${k}`); assert.ok(Math.abs(back.ao[k] - m[k]) < 0.003); }
+  assert.equal(decodeLand(2, encodeLand(1, e)), null, 'another seed’s bake is not this one');
 });

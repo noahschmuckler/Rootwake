@@ -540,7 +540,7 @@ test('G4: two more villages by the seed, on the karst\'s safe side, past the fir
   }
   assert.deepEqual(villageSites(1), villageSites(1), 'deterministic'); assert.notDeepEqual(villageSites(1).map(s => s.x), villageSites(2).map(s => s.x), 'by the seed');
   const s1 = villageSites(1)[0]; assert.equal(islands(1).length, 3); assert.equal(beyondAt(s1.x + 10, s1.z, 1), 0, 'an island'); assert.equal(hills(s1.x + 10, s1.z, 1), 0, 'flat'); assert.ok(chunkTrees(Math.floor(s1.x / CHUNK), Math.floor(s1.z / CHUNK), 1).every(t => Math.hypot(t.x - s1.x, t.z - s1.z) > MEADOW_ISLAND), 'no chunk trees on it');
-  const t = terrainOf(1); assert.deepEqual(t.colour(s1.x + 3, s1.z + 3), t.colour(3, 3), 'the meadow\'s colour'); assert.ok(Math.abs(t.height(s1.x + 3, s1.z + 3)) < 0.2, 'level ground');
+  const t = terrainOf(1); assert.deepEqual(t.colour(s1.x + 3, s1.z + 3), t.colour(3, 3), 'the meadow\'s colour'); assert.ok(Math.abs(t.height(s1.x + 3, s1.z + 3) - t.height(s1.x - 3, s1.z - 3)) < 0.2, 'level ground (PLATEAU.md: at its own terrace\'s height, over its river)');
   const o = freshOverworld(1); assert.ok(!o.known.has('village-1')); explore(o, s1.x, s1.z); assert.ok(o.known.has('village-1'), 'known when she comes to it'); const back = parseOverworld(serializeOverworld(o)); assert.ok(back.known.has('village-1'), 'saved');
   assert.ok(addHint(o, { about: 'village-2', bearing: 40, text: 'folk live at the pines to the north-east', from: { x: s1.x, z: s1.z } })); assert.deepEqual(hintFrom(parseOverworld(serializeOverworld(o)).hints[0]), { x: s1.x, z: s1.z }, 'a hint keeps the green it was said from'); assert.deepEqual(hintFrom({ about: 'x', bearing: 0, text: '' }), { x: 0, z: 0 });
 });

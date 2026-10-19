@@ -10,8 +10,8 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
-import { TERRAIN_STEP, type Terrain } from './worldTerrain';
-import { generate, heightAt, gradientNoise, ridged, fbm, rng, type Land, type Tree as VTree, type Rock } from './vistaTerrain';
+import type { Terrain } from './worldTerrain';
+import { rng, type Land, type Tree as VTree, type Rock } from './vistaTerrain';
 import { buildVista, QUALITIES, CASTER_LAYER, sunDirection, type Hour, type Quality, type VistaWorld } from './vistaWorld';
 import { places, dens, ruins, warrens, wallows, ownWarrens, moot, FOREST_RADIUS as DARK_RADIUS, KARST_AT } from './overworldModel';
 import { convergences, beyond, noise, CHUNK } from './chunkModel';
@@ -23,44 +23,9 @@ import { TAINT, ringAt, veinAt } from './taintModel';
 /** The squarish norm the mountains rise by: the dens lie on a square grid, so the range follows a rounded square. */
 const norm4 = (x: number, z: number): number => Math.sqrt(Math.sqrt(x ** 4 + z ** 4));
 const smooth = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
-/** Tuning: clear ground past the farthest place before the foothills start (m), the climb to full height (m), the samples per side of the map. */
-export const MOUNTAIN_CLEAR = 260, MOUNTAIN_RISE = 650, VILLAGE_LAND_N = 1025;
-/** Tuning: erosion droplets over the mountain belt (the load's main cost on a phone). */
-export const VILLAGE_DROPLETS = 45000;
-
-export interface VillageLand { terrain: Terrain; land: Land; edge: number; ms: number }
-/** The village's land with mountains round it, as the village's Terrain (every height the game reads) and the vista's Land (what is drawn). */
-export function villageLand(seed: number, base: Terrain): VillageLand {
-  const t0 = performance.now();
-  const spots = [...places(seed), ...dens(seed), ...ruins(seed), ...warrens(seed), ...wallows(seed), ...ownWarrens(seed), moot(seed), ...convergences(seed), KARST_AT];
-  const edge = Math.max(...spots.map(p => norm4(p.x, p.z))) + MOUNTAIN_CLEAR;
-  const n1 = gradientNoise(seed * 11 + 1), n2 = gradientNoise(seed * 11 + 2), n3 = gradientNoise(seed * 11 + 3);
-  const warp = (x: number, z: number) => 100 * fbm(n2, x * 0.0012, z * 0.0012, 3);
-  /** How far into the mountains (m past the edge), warped so the range is not a ruled square. */
-  const into = (x: number, z: number) => norm4(x, z) + warp(x, z) - edge;
-  const rise = (x: number, z: number): number => {
-    const d = into(x, z); if (d <= 0) return 0;
-    const m = smooth(0, MOUNTAIN_RISE, d), r = ridged(n1, x * 0.0016, z * 0.0016, 6);
-    return m ** 1.25 * (50 + 520 * r) + m * fbm(n3, x * 0.004, z * 0.004, 4) * 18;
-  };
-  const vtx = (x: number, z: number) => base.vertex(x, z) + rise(x, z);
-  /** Where the eroded grid is the ground (the mountains); inside it the village's own triangulated relief is. */
-  const gridOwns = (x: number, z: number) => smooth(-40, 160, into(x, z));
-  const half = Math.ceil((edge + MOUNTAIN_RISE + 450) / 64) * 64;
-  const tri = (x: number, z: number): number => {
-    const ax = Math.floor(x / TERRAIN_STEP) * TERRAIN_STEP, az = Math.floor(z / TERRAIN_STEP) * TERRAIN_STEP, u = (x - ax) / TERRAIN_STEP, v = (z - az) / TERRAIN_STEP;
-    const b = vtx(ax, az + TERRAIN_STEP), d = vtx(ax + TERRAIN_STEP, az);
-    return u + v <= 1 ? vtx(ax, az) * (1 - u - v) + d * u + b * v : vtx(ax + TERRAIN_STEP, az + TERRAIN_STEP) * (u + v - 1) + b * (1 - u) + d * (1 - v);
-  };
-  let land: Land | null = null;
-  const height = (x: number, z: number): number => { const m = land ? gridOwns(x, z) : 0; if (m <= 0) return tri(x, z); const g = heightAt(land!, x, z); return m >= 1 ? g : tri(x, z) * (1 - m) + g * m; };
-  land = generate(seed, { droplets: VILLAGE_DROPLETS }, { size: half * 2, n: VILLAGE_LAND_N, shape: { base: vtx, seed }, waterY: -Infinity, snowY: 340, erodeMask: gridOwns, surface: undefined });
-  // The near mesh draws the walked surface, a hair lower on the karst's island, whose own forest floor lies over it.
-  land.surface = (x, z) => height(x, z) - 0.22 * (1 - smooth(KARST_FOREST + 20, KARST_FOREST + 34, Math.hypot(x - KARST_AT.x, z - KARST_AT.z)));
-  const normal = (x: number, z: number): [number, number, number] => { const dx = height(x - 1, z) - height(x + 1, z), dz = height(x, z - 1) - height(x, z + 1), l = Math.hypot(dx, 2, dz); return [dx / l, 2 / l, dz / l]; };
-  const terrain: Terrain = { seed, vertex: (x, z) => (gridOwns(x, z) > 0 ? height(x, z) : vtx(x, z)), height, colour: base.colour, normal };
-  return { terrain, land, edge, ms: performance.now() - t0 };
-}
+// The land itself is the plateau's (PLATEAU.md): plateauLand.ts.
+export { villageLand, VILLAGE_LAND_N, VILLAGE_DROPLETS, type VillageLand } from './plateauLand';
+import type { VillageLand } from './plateauLand';
 
 // ── the taint (MOTHER.md, M1) ──────────────────────────────────────────────
 /** The breach's centre and the root lines her infection runs along (world polylines, as sampled points). */
@@ -226,7 +191,7 @@ export function createVillageLook(inp: LookInputs): VillageLook {
   const coarse = matchMedia('(pointer: coarse)').matches, qName = new URLSearchParams(location.search).get('q')?.toLowerCase();
   let quality = inp.quality ?? QUALITIES.find(q => q.name.toLowerCase() === qName) ?? QUALITIES[coarse ? 1 : 2];
   const trees = () => villageTrees(vl.land, vl.edge, vl.terrain, inp.treesOf, inp.villages().map(v => ({ x: v.x, z: v.z })), inp.dark, inp.blighted, inp.taint);
-  const world = buildVista(scene, vl.land, trees(), villageRocks(vl, seed), quality, { hazeBase: 0, ground: groundTint(vl.land, seed, inp.blighted, inp.taint), fine: vl.terrain.height, bladeH: BLADE_H, nearTreesScale: NEAR_TREES, treeReach: TREE_REACH });
+  const world = buildVista(scene, vl.land, trees(), villageRocks(vl, seed), quality, { hazeBase: 0, ground: groundTint(vl.land, seed, inp.blighted, inp.taint), fine: vl.terrain.height, fineLod: true, bladeH: BLADE_H, nearTreesScale: NEAR_TREES, treeReach: TREE_REACH });
   renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.toneMapping = THREE.ACESFilmicToneMapping;
   sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.05; sun.shadow.camera.near = 1; sun.shadow.camera.far = 900; sun.shadow.camera.layers.enable(CASTER_LAYER); scene.add(sun.target);
 

@@ -20,6 +20,8 @@ try{
   const errors=[];page.on('console',m=>{if(m.type()==='error'||/THREE\.WebGLProgram|Shader Error/.test(m.text()))errors.push(m.text());});page.on('pageerror',e=>errors.push(String(e)));
   await page.goto(`http://127.0.0.1:4193${BASE}village/?q=${process.env.VILLAGE_VISTA_Q??"medium"}&hud=1`);await page.click('#begin');
   await page.waitForFunction(()=>window.__village&&window.__village.character.status!=='loading'&&window.__look,null,{timeout:180000});
+  // PLATEAU.md: she wakes on the karst's summit.
+  report.start=await page.evaluate(()=>({zone:window.__village.karst.zone,mode:window.__village.mode,baked:window.__plateau.land}));assert.equal(report.start.zone,'summit',`she wakes on the summit (${JSON.stringify(report.start)})`);assert.ok(report.start.baked?.baked,'the land was baked at build');
   const shot=async(name,js)=>{await page.evaluate(js);await page.waitForTimeout(2500);await page.screenshot({path:`${out}/${name}.png`,timeout:180000});};
   await shot('noon-green',()=>{const v=window.__village;v.jumpTo('noon');v.standAt(6,34,0.15);});
   report.state=await page.evaluate(()=>{const v=window.__village,s=v.scene,vista=s.getObjectByName('vista');let chunkGround=0,chunkTrees=0;s.traverse(o=>{if(o.visible&&o.name==='world-ground'){let p=o,seen=true;while(p){if(!p.visible)seen=false;p=p.parent;}if(seen)chunkGround++;}if(o.visible&&(o.name==='tree-leaves')){let p=o,seen=true;while(p){if(!p.visible)seen=false;p=p.parent;}if(seen)chunkTrees++;}});return {vista:!!vista&&vista.visible,chunkGround,chunkTrees,far:v.camera.far,height:v.relief(3000,0)};});
@@ -33,7 +35,9 @@ try{
   await shot('dusk-karst',()=>{const v=window.__village;v.jumpTo('dusk');v.standAt(-60+160,-330+60,Math.atan2(160,60));});
   await shot('wood-noon',()=>{const v=window.__village;v.jumpTo('noon');v.standAt(120,60,0.4);});
   // D1 (DESCENT.md): down to the node, out onto the catwalk of its depth, a keeper heard, back into the drop.
-  await page.evaluate(()=>{const v=window.__village;v.jumpTo('noon');v.karst.standOn('summit',-1.3,0.5,0);v.deep.clarity=v.deep.costs.dive+v.deep.costs.back+5;v.deep.dive();});
+  // PLATEAU.md: she wakes on the summit; the first dive waits on her cultivation, however much clarity she has.
+  assert.equal(await page.evaluate(()=>{const v=window.__village;v.jumpTo('noon');v.karst.standOn('summit',-1.3,0.5,0);v.deep.clarity=v.deep.costs.dive+v.deep.costs.back+5;return v.deep.dive();}),false,'no first dive before she has cultivated');
+  await page.evaluate(()=>{const v=window.__village;v.cult.grow(25);v.deep.dive();});
   await page.waitForFunction(()=>window.__village.mode==='deep'&&!document.getElementById('deepOut').closest('#deep').hidden,null,{timeout:120000});
   await page.click('#deepOut');await page.waitForFunction(()=>window.__village.mode==='catwalk',null,{timeout:10000});
   report.catwalk=await page.evaluate(()=>{const v=window.__village,w=v.deep.visit,n=v.deep.node(),f=v.player.feet();return {active:w.active,letter:w.catwalk.letter,feetY:f.y,dropY:n.y,deepHidden:document.getElementById('deep').hidden,interior:!v.scene.getObjectByName('vista')?.visible};});
@@ -45,6 +49,19 @@ try{
   report.keeper=await page.evaluate(()=>({act:document.getElementById('descentAct').textContent,said:document.getElementById('descentBubble').textContent,mode:window.__village.mode}));
   assert.equal(report.keeper.act,'listen to the snerk');assert.ok(report.keeper.said.length>10,'the snerk speaks');assert.equal(report.keeper.mode,'catwalk','she is still on the catwalk');
   await page.waitForTimeout(1500);await page.screenshot({path:`${out}/catwalk-snerk.png`,timeout:180000});
+  // T5 (PLATEAU.md): the catwalk's portal to the outside world, opened with clarity on the board, a passage, and out at the island's foot; and back in by the island's portal.
+  await page.evaluate(()=>{const v=window.__village,w=v.deep.visit,c=w.catwalk,o=w.world.root.position,a=c.portal.angle,r=c.wallR-0.6;v.deep.clarity=60;v.player.teleport(o.x+Math.cos(a)*r,o.z+Math.sin(a)*r,Math.atan2(Math.cos(a),Math.sin(a)),o.y);});
+  await page.waitForFunction(()=>window.__village.deep.visit.near==='portal'&&document.getElementById('descentAct').textContent==='open the portal',null,{timeout:20000});
+  await page.click('#descentAct');await page.waitForFunction(()=>window.__village.mode==='meditate'&&window.__village.deep.boardShown,null,{timeout:10000});
+  await page.waitForTimeout(1500);await page.screenshot({path:`${out}/catwalk-portal.png`,timeout:180000});
+  await page.evaluate(()=>window.__village.deep.feed(window.__village.deep.portalGems));
+  await page.waitForFunction(()=>window.__village.mode==='ground'&&window.__village.karst.zone==='floor',null,{timeout:90000});
+  report.island=await page.evaluate(()=>{const v=window.__village,f=v.player.feet(),p=v.deep.islandPortal().world;return {d:Math.hypot(f.x-p.x,f.z-p.z),y:f.y,visit:v.deep.visit.active};});
+  assert.ok(report.island.d<5&&!report.island.visit,`out of the portal at the island's foot (${JSON.stringify(report.island)})`);
+  await page.waitForTimeout(2500);await page.screenshot({path:`${out}/island-portal.png`,timeout:180000});
+  await page.waitForFunction(()=>!document.getElementById('portalAct').hidden,null,{timeout:20000});await page.click('#portalAct');
+  await page.waitForFunction(()=>window.__village.mode==='meditate',null,{timeout:10000});await page.evaluate(()=>window.__village.deep.feed(window.__village.deep.portalGems));
+  await page.waitForFunction(()=>window.__village.mode==='catwalk'&&window.__village.deep.visit.active,null,{timeout:90000});
   await page.evaluate(()=>{const v=window.__village,w=v.deep.visit,o=w.world.root.position,r=1.75;v.player.teleport(o.x+r,o.z,Math.PI/2,o.y);});
   await page.waitForFunction(()=>window.__village.deep.visit.near==='drop',null,{timeout:20000});await page.click('#descentAct');
   await page.waitForFunction(()=>window.__village.mode==='deep'&&!document.getElementById('deep').hidden,null,{timeout:10000});

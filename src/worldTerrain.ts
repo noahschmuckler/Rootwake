@@ -1,6 +1,7 @@
 // One surface for mesh vertices, feet, grass and vegetation. Authored patches are
 // constraints in the field, not overlapping meshes. Heights use the world seed.
-import { biomeAt, hills, islands, MEADOW_ISLAND, ISLAND_FADE, KARST_ISLAND, KARST_FADE } from './chunkModel';
+import { biomeAt, islands, MEADOW_ISLAND, ISLAND_FADE, KARST_ISLAND, KARST_FADE } from './chunkModel';
+import { plateau } from './plateauModel';
 import { KARST_AT } from './overworldModel';
 export const TERRAIN_STEP = 2;
 export const smoothBand = (inner: number, outer: number, distance: number): number => {
@@ -15,18 +16,16 @@ export interface Terrain {
   normal(x: number, z: number): [number, number, number];
 }
 export function createTerrain(seed: number): Terrain {
-  const meadow = (x: number, z: number) => 0.05 * Math.sin(x * 0.5) * Math.cos(z * 0.45);
-  const vertex = (x: number, z: number): number => {
-    const kx = x - KARST_AT.x, kz = z - KARST_AT.z;
-    const k = 1 - smoothBand(KARST_ISLAND, KARST_ISLAND + KARST_FADE, Math.hypot(kx, kz));
-    return (meadow(x, z) + hills(x, z, seed)) * (1 - k) + 0.05 * Math.sin(kx * 0.9) * Math.cos(kz * 0.8) * k;
-  };
+  // The plateau (PLATEAU.md): its shape before erosion, with the terraces, the lake, the island and the channels (the vista's look erodes it: plateauLand).
+  const p = plateau(seed), vertex = (x: number, z: number): number => p.ground(x, z);
   // Same diagonal as PlaneGeometry; the collision surface is the rendered surface.
   const height = (x: number, z: number): number => {
     const ax = Math.floor(x / TERRAIN_STEP) * TERRAIN_STEP, az = Math.floor(z / TERRAIN_STEP) * TERRAIN_STEP;
     const u = (x - ax) / TERRAIN_STEP, v = (z - az) / TERRAIN_STEP;
     const b = vertex(ax, az + TERRAIN_STEP), d = vertex(ax + TERRAIN_STEP, az);
-    return u + v <= 1 ? vertex(ax, az) * (1 - u - v) + d * u + b * v : vertex(ax + TERRAIN_STEP, az + TERRAIN_STEP) * (u + v - 1) + b * (1 - u) + d * (1 - v);
+    const g = u + v <= 1 ? vertex(ax, az) * (1 - u - v) + d * u + b * v : vertex(ax + TERRAIN_STEP, az + TERRAIN_STEP) * (u + v - 1) + b * (1 - u) + d * (1 - v);
+    // The decks (the island's bridge, the footbridges) are walked on.
+    const deck = p.deckAt(x, z); return deck !== null && deck > g ? deck : g;
   };
   const colour = (x: number, z: number): [number, number, number] => {
     const b = biomeAt(x, z, seed);

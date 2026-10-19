@@ -4,7 +4,7 @@
 // included) is an island the chunks defer to: no hills and no chunk trees within MEADOW_ISLAND of the
 // village, and the karst stands on an island of its own (KARST_ISLAND), its clearing kept free of chunk trees.
 import { mulberry32 } from './colors';
-import { places, villageSites, FOREST_RADIUS, KARST_AT } from './overworldModel';
+import { places, villageSites, onLand, FOREST_RADIUS, KARST_AT } from './overworldModel';
 import { TAINT } from './taintModel';
 import type { Tree } from './villageModel';
 
@@ -37,7 +37,7 @@ export const chunkOf = (x: number, z: number): { cx: number; cz: number } => ({ 
 export function chunkTrees(cx: number, cz: number, seed = 1): Tree[] {
   const rand = mulberry32((seed * 92821 + cx * 7919 + cz * 104729 + 1) >>> 0), out: Tree[] = [], a = cx >= 0 ? cx * 2 : -cx * 2 - 1, b = cz >= 0 ? cz * 2 : -cz * 2 - 1, base = 100000 + ((a + b) * (a + b + 1) / 2 + b) * 64;
   for (let i = 0; i < 40 && out.length < 16; i++) {
-    const x = (cx + rand()) * CHUNK, z = (cz + rand()) * CHUNK; if (beyond(x, z, seed) < 0.35 || Math.hypot(x - KARST_AT.x, z - KARST_AT.z) < KARST_CLEARING) continue;
+    const x = (cx + rand()) * CHUNK, z = (cz + rand()) * CHUNK; if (beyond(x, z, seed) < 0.35 || Math.hypot(x - KARST_AT.x, z - KARST_AT.z) < KARST_CLEARING || !onLand(seed, x, z, 2.5)) continue; // PLATEAU.md: none in the rivers or the lake, nor past the plateau's rim
     const b = biomeAt(x, z, seed), keep = b === 'meadow' ? 0.12 : b === 'wood' ? 0.8 : 0.9; if (rand() > keep) continue;
     if (out.some(t => Math.hypot(t.x - x, t.z - z) < 4.5)) continue;
     out.push({ id: base + out.length, x, z, size: b === 'dark' ? 1.1 + rand() * 0.7 : 0.8 + rand() * 0.7 });
