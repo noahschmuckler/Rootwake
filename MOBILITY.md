@@ -105,28 +105,39 @@ stages (crouch, reach, hang, pull, over, land; turn, lower, fall) and the way sh
 
 ### Parkour clips
 
-`huldaTraverse.ts` plays each stage as a window of a Mixamo clip stretched over the stage's seconds,
-whole body (the gait gives way, as it does to the fight's moves); the fan's own jumps and drops now
-play the jump too. Until a clip is downloaded its stages stand in with windows of `jump.fbx`, and a
-step keeps the stride. Download each with the settings of the clips already in `public/models/clips`
-(FBX Binary, Without Skin, 30 fps, In Place where offered; the X Bot is fine) and drop it in with the
-file name below; the build finds it. Mixamo's search terms are in quotes; any clip with the same action
-works. `?parkourclips=0` turns the layer off.
+Noah's Mixamo clips (2026-10-19) are in `public/models/clips` (FBX Binary, Without Skin, 30 fps):
 
-| File | Search Mixamo for | Plays |
-|---|---|---|
-| `step-up.fbx` | "Step Up" (or "Climbing Stairs") | the step |
-| `clamber.fbx` | "Climbing Up Wall" (a short, standing one) | the clamber |
-| `jump-to-hang.fbx` | "Jump To Hang" | the mantle's and climb's reach |
-| `hang.fbx` | "Hanging Idle" (or "Braced Hang") | the hang, held |
-| `climb-up.fbx` | "Braced Hang To Crouch" (or "Freehang Climb") | the pull up and over; backwards, lowering into a hang |
-| `vault.fbx` | "Jump Over" (or "Vault", "Over Obstacle Jumping") | the vault |
-| `hang-drop.fbx` | "Braced Hang Drop" (or "Freehang Drop") | letting go |
-| `running-jump.fbx` | "Running Jump" | the hop, the leap, the fan's jumps |
-| `landing.fbx` | "Falling To Landing" (or "Hard Landing") | landing a drop or a leap |
+| File | Plays |
+|---|---|
+| `step-up.fbx` | the step |
+| `clamber.fbx` | the clamber (a short wall climb: a foot on the face, hands on the top) |
+| `jump.fbx` | the crouch and spring of a mantle's or climb's reach |
+| `jump-to-hang.fbx` | the catch: hands on the lip, the feet finding the face |
+| `hang.fbx` | the hang, held (a climb's breath; before a hang drop lets go) |
+| `climb-up.fbx` | the pull up and over; played backwards, lowering into a hang |
+| `vault.fbx` | the vault |
+| `hang-drop.fbx` | letting go from the hang, the fall and rising from the landing |
+| `running-jump.fbx` | the hop, the leap and the fan's own jumps and drops |
+| `landing.fbx` | landing a hop or a leap (deep and slow past BIG_LANDING, 1.6 m) |
 
-Each clip's travel (its hips' rise and drift) is taken out: the motor moves her, the clip poses her.
-Once they are in, the windows in `SEGS` want tuning against the clips' own frames.
+Each stage of a move names its clip window (`WINDOWS` in `parkour.ts`: clip seconds and pace). The
+planner shapes the stage's path on the clip's own motion (`parkourClips.ts`: the lowest foot's height
+and the hips' travel forward, every 0.05 s): up and down with the foot, forward with the hips,
+stretched to the real heights and distances. The layer (`huldaTraverse.ts`) takes that travel back out
+of the clip: the hips are pinned across and kept at their height over the lowest foot, so her feet stand
+on the path. On sheer blocks, where the shaped path would cut a face's top, the same stages are keyed
+safe (up, then over; or out, then down). `node scripts/parkour-clips.mjs` rewrites `parkourClips.ts`
+after a clip is replaced. `?parkourclips=0` turns the layer off in the village.
+
+### The practice course
+
+`/parkour.html` (`parkourStudy.ts`, `parkourCourse.ts`; live at `/vista/parkour/`): Hulda in the
+village's third-person framing on one lane of each move. The left lane is a stair of rises (step 0.35,
+clamber 0.7, mantle 1.1, climb 1.6) ending in a sheer 3.75 m drop. The middle lane has three rails to
+vault, a block to clamber onto and hop off, and a pit to leap. The right lane has a wall too high and
+a pit too wide. On the far right is the old bridge's steep foot. `?hud=1` shows the move and its stage;
+↺ goes back to the start. `scripts/browser-parkour.mjs` runs it in CI, and `npm run test:mobility`
+walks every lane with the motor alone.
 
 ## Courses and measurements
 

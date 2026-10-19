@@ -45,7 +45,7 @@ export interface Traversal {
   floorPath?: Vector3[];
   /** Parkour: the time of each floorPath point (else they are evenly spaced), what the body does from when, and the way she faces (a yaw). */
   times?: number[];
-  stages?: { name: string; at: number }[];
+  stages?: { name: string; at: number; clip?: string; from?: number; to?: number }[];
   face?: number;
 }
 /** 'free' is the opt-in volume medium (Hulda's awareness in the soil): the body floats, steered by
@@ -97,7 +97,8 @@ export function traversalPoint(plan: Traversal, time: number, out = new Vector3(
 
 /** The same swept body test is used by previews and by the committed move. */
 export function validateTraversal(world: TraversalWorld, plan: Traversal): boolean {
-  const samples = Math.max(12, Math.ceil(plan.duration * 90), Math.ceil(plan.from.distanceTo(plan.to) / 0.06));
+  // A keyed (parkour) path turns sharp corners round a face's top: as densely as the motor's substeps walk it.
+  const samples = Math.max(12, Math.ceil(plan.duration * (plan.times ? 240 : 90)), Math.ceil(plan.from.distanceTo(plan.to) / 0.06));
   const p = new Vector3();
   for (let i = 0; i <= samples; i++) {
     traversalPoint(plan, i / samples * plan.duration, p);

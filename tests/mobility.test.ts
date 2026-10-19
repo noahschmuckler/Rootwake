@@ -5,6 +5,7 @@ import { MovementGesture, TARGET_HOLD_MS, IGNITION_HOLD_MS } from '../src/moveme
 import { MobilityMotor, NORMAL_MOBILITY, POWERED_MOBILITY, BODY_RADIUS, BODY_HEIGHT, HOVER_GRACE_S, stickResponse, planDrift, planTraversal, supportAt, traversalPoint, validateTraversal, type TraversalWorld, type MotionInput } from '../src/mobility';
 import { CourseGeometry, NORMAL_PADS, POWERED_PADS, COURSE_SPAWNS, FLIGHT_GATES, crossedGate } from '../src/mobilityCourseLayout';
 import { Arena } from '../src/arena';
+import { courseWorld } from '../src/parkourCourse';
 import { OBJECT_TYPES } from '../src/objects';
 import { FORGE_PLANS } from '../src/forge';
 const near = (a: number, b: number, tolerance = 1e-4) => assert.ok(Math.abs(a - b) <= tolerance, `${a} != ${b} (tol ${tolerance})`);
@@ -267,4 +268,12 @@ test('parkour: a ramp steeper at its foot than the step allows (the old bridge) 
   const deck = (x: number) => (x < 0.5 ? 0 : 0.05 + 4.2 * Math.sin(Math.PI * Math.min(1, (x - 0.5) / 125)) ** 0.6);
   const world: TraversalWorld = { surfacesAt: x => [deck(x)], canOccupy: p => p.y >= deck(p.x) - 0.03 };
   const { m, kinds } = run(world, 6); assert.ok(kinds.length >= 1 && kinds.length <= 3, kinds.join()); assert.ok(m.feet.x > 8, `${m.feet.x}`); near(m.feet.y, deck(m.feet.x), 0.05);
+});
+test('parkour: the practice course\'s lanes, from the stick alone, each move where its height says', () => {
+  const lane = (x: number, z: number, seconds: number) => { const m = new MobilityMotor(); m.parkour = true; m.reset(new Vector3(x, 0, z)); const kinds: string[] = []; m.onCommit = p => kinds.push(p.kind);
+    for (let i = 0; i < seconds * 60; i++) { m.update(1 / 60, courseWorld, { ...idle, forward: 1, held: true }); assert.ok(courseWorld.canOccupy(m.feet, BODY_RADIUS, BODY_HEIGHT), `${m.mode} ${m.feet.toArray()}`); }
+    return { m, kinds }; };
+  const stair = lane(0, -2.5, 20); assert.deepEqual(stair.kinds, ['step', 'clamber', 'mantle', 'climb', 'hangDrop']); assert.ok(stair.m.feet.z < -25); near(stair.m.feet.y, 0);
+  const rails = lane(4, -2, 15); assert.deepEqual(rails.kinds, ['vault', 'vault', 'vault', 'clamber', 'hop', 'leap']); assert.ok(rails.m.feet.z < -20);
+  const too = lane(8, -3, 6); assert.deepEqual(too.kinds, []); assert.ok(too.m.feet.z > -6);
 });

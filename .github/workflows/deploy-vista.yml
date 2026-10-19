@@ -49,6 +49,9 @@ jobs:
       - run: node scripts/browser-descent.mjs
         env:
           STUDY_BASE: /Rootwake/vista/
+      - run: node scripts/browser-parkour.mjs
+        env:
+          STUDY_BASE: /Rootwake/vista/
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -75,6 +78,8 @@ jobs:
           cp dist/dire-wolf.html "$study_checkout/vista/dire-wolf/index.html"
           mkdir -p "$study_checkout/vista/descent"
           cp dist/descent.html "$study_checkout/vista/descent/index.html"
+          mkdir -p "$study_checkout/vista/parkour"
+          cp dist/parkour.html "$study_checkout/vista/parkour/index.html"
           cp dist/assets/* "$study_checkout/vista/assets/"
           cp -r dist/models "$study_checkout/vista/models"
           printf '{"sourceCommit":"%s","study":"vista-v0"}\n' "$GITHUB_SHA" > "$study_checkout/vista/revision.json"
