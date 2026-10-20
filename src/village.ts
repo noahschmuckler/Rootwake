@@ -172,7 +172,8 @@ const firstWard = wardList.slice().sort((a, b) => Math.hypot(a.x, a.z) - Math.hy
 const QUEST_KEY = 'rootwake-ward-r2';
 let wardQuest: Quest = ((): Quest => { try { return parseQuest(localStorage.getItem(QUEST_KEY), firstWard.id); } catch { return parseQuest(null, firstWard.id); } })();
 const saveQuest = (): void => { try { localStorage.setItem(QUEST_KEY, JSON.stringify(wardQuest)); } catch { /* Storage is optional. */ } };
-const wardInterior = createWardInterior(look ? look.world.root : scene, firstWard);
+// On the scene, not the look's world: the look hides its world (the land) in an interior.
+const wardInterior = createWardInterior(scene, firstWard);
 let inWard = false, wardTalk = { snerk: false, crew: false, waiting: false, snerkWoken: false }; const fixClock = { t: 0 };
 const syncWard = (): void => wardField.setState(firstWard.id, { cut: wardQuest.door / DOOR_CUTS, open: wardQuest.stage !== 'sealed', woken: wardQuest.stage === 'woken' });
 syncWard();

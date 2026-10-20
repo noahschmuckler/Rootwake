@@ -76,19 +76,19 @@ export function createWardInterior(parent: THREE.Object3D, w: Ward): WardInterio
   const cab = SOLIDS.find(s => s.kind === 'cabinet')!, lampMat = new THREE.MeshBasicMaterial({ color: '#ff3020' });
   const lamp = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), lampMat); lamp.position.set(cab.x1 + 0.03, ROOMS[1].floor + 1.4, (cab.z0 + cab.z1) / 2); root.add(lamp);
   for (let i = 0; i < 3; i++) { const d = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.03, 12), brass); d.rotation.z = Math.PI / 2; d.position.set(cab.x1 + 0.02, ROOMS[1].floor + 0.9, cab.z0 + 0.35 + i * 0.35); root.add(d); }
-  const boxLight = new THREE.PointLight('#ff6040', 1.4, 7, 1.6); boxLight.position.set(cab.x1 + 0.6, ROOMS[1].floor + 1.6, (cab.z0 + cab.z1) / 2); root.add(boxLight);
+  const boxLight = new THREE.PointLight('#ff6040', 5, 7, 1.6); boxLight.position.set(cab.x1 + 0.6, ROOMS[1].floor + 1.6, (cab.z0 + cab.z1) / 2); root.add(boxLight);
   // The way out: the door's light in the vestibule's end wall.
   const out = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 1.2), new THREE.MeshBasicMaterial({ color: '#e9f2e2' })); out.position.set(EXIT.x, 0.6, EXIT.z - 0.01); out.rotation.y = Math.PI; root.add(out);
   // ── the figures ──
   const snerk = makeSnerk(); snerk.group.position.set(SNERK_AT.x, 0, SNERK_AT.z); snerk.group.rotation.y = SNERK_AT.yaw; root.add(snerk.group);
-  const lantern = new THREE.PointLight('#ffc070', 2.2, 8, 1.4); lantern.position.set(SNERK_AT.x, 1.1, SNERK_AT.z); root.add(lantern);
+  const lantern = new THREE.PointLight('#ffc070', 8, 9, 1.4); lantern.position.set(SNERK_AT.x, 1.1, SNERK_AT.z); root.add(lantern);
   const crew = CREW_AT.map(p => { const m = makeGreeblin(); m.group.position.set(p.x, ROOMS[1].floor, p.z); root.add(m.group); return { ...m, home: p }; });
   // ── the light ──
   const chamberFloor = ROOMS.find(r => r.id === 'chamber')!.floor, beamY = chamberFloor + BEAM_Y;
   const crystalMat = new THREE.MeshStandardMaterial({ color: '#7fd6ff', emissive: '#7fd6ff', emissiveIntensity: 0.08, roughness: 0.2, transparent: true, opacity: 0.9 });
   const crystal = new THREE.Mesh(new THREE.OctahedronGeometry(0.32), crystalMat); crystal.scale.y = 1.6; crystal.position.set(EMITTER.x + 0.1, beamY, EMITTER.z); root.add(crystal);
   const plinth = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.32, beamY - chamberFloor - 0.45, 8), stone); plinth.position.set(EMITTER.x + 0.1, chamberFloor + (beamY - chamberFloor - 0.45) / 2, EMITTER.z); root.add(plinth);
-  const crystalLight = new THREE.PointLight('#8fe0ff', 0, 12, 1.4); crystalLight.position.set(EMITTER.x + 0.6, beamY, EMITTER.z); root.add(crystalLight);
+  const crystalLight = new THREE.PointLight('#8fe0ff', 0, 14, 1.3); crystalLight.position.set(EMITTER.x + 0.6, beamY, EMITTER.z); root.add(crystalLight);
   const mirrorMat = new THREE.MeshStandardMaterial({ color: '#dfe8f0', roughness: 0.08, metalness: 0.95, emissive: '#3a5a6a', emissiveIntensity: 0.4, side: THREE.DoubleSide });
   const mirrors = MIRRORS.map((m, i) => {
     const foot = MIRROR_FOOT[i], post = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.05, beamY - foot - 0.25, 6), brass); post.position.set(m.x, foot + (beamY - foot - 0.25) / 2, m.z); root.add(post);
@@ -102,8 +102,9 @@ export function createWardInterior(parent: THREE.Object3D, w: Ward): WardInterio
   const daisTop = SOLIDS.find(s => s.id === 'dais')!.top, coreMat = new THREE.MeshStandardMaterial({ color: '#d8f4ff', emissive: '#9fe8ff', emissiveIntensity: 0.05, roughness: 0.3 });
   const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.28, 1), coreMat); core.position.set(CORE.x, beamY, CORE.z); root.add(core);
   const cage = new THREE.Mesh(new THREE.CylinderGeometry(0.42, 0.5, beamY - daisTop + 0.4, 8, 1, true), new THREE.MeshStandardMaterial({ color: '#a3824a', wireframe: true })); cage.position.set(CORE.x, daisTop + (beamY - daisTop + 0.4) / 2, CORE.z); root.add(cage);
-  const coreLight = new THREE.PointLight('#e8fbff', 0, 14, 1.3); coreLight.position.set(CORE.x, beamY + 0.4, CORE.z); root.add(coreLight);
-  const fill = new THREE.PointLight('#b8a8c8', 1.0, 22, 1.2); fill.position.set(0, 2.6, -14); root.add(fill);
+  const coreLight = new THREE.PointLight('#e8fbff', 0, 16, 1.2); coreLight.position.set(CORE.x, beamY + 0.4, CORE.z); root.add(coreLight);
+  // A cool fill in each room, as the descent's chambers have, so the stone reads before the crystal wakes.
+  for (const [x, y, z, i] of [[0, 2.4, 0.5, 5], [0, 2.7, -7.5, 7], [0, 3.9, -20, 9]]) { const l = new THREE.PointLight('#a8b4d8', i, 16, 1.4); l.position.set(x, y, z); root.add(l); }
 
   let beamKey = '';
   function drawBeam(q: Quest): void {
@@ -121,9 +122,9 @@ export function createWardInterior(parent: THREE.Object3D, w: Ward): WardInterio
     if (knot) { const left = q.stage === 'open' || q.stage === 'sealed' ? 1 - q.knot / KNOT_CUTS : 0; knot.visible = left > 0; knot.children.forEach((c, i) => { c.visible = i / knot!.children.length < 0.25 + left * 0.75; c.scale.setScalar(1 + 0.03 * Math.sin(t * 1.4 + i)); }); }
     // The box's lamp: red while dead, a flare at each try, green once it hums.
     const humming = q.stage === 'powered' || q.stage === 'woken', trying = q.stage === 'fixing';
-    lampMat.color.set(humming ? '#40ff70' : trying && Math.sin(t * 23) > 0.2 ? '#ffd040' : '#ff3020'); boxLight.color.set(humming ? '#60ff90' : '#ff6040'); boxLight.intensity = trying ? 0.6 + Math.random() * 2.2 : 1.4;
-    crystalMat.emissiveIntensity = humming ? 1.6 + 0.3 * Math.sin(t * 4) : 0.08; crystalLight.intensity = humming ? 2.6 : 0;
-    coreMat.emissiveIntensity = q.stage === 'woken' ? 2.2 + 0.4 * Math.sin(t * 2.2) : 0.05; coreLight.intensity = q.stage === 'woken' ? 3 : 0;
+    lampMat.color.set(humming ? '#40ff70' : trying && Math.sin(t * 23) > 0.2 ? '#ffd040' : '#ff3020'); boxLight.color.set(humming ? '#60ff90' : '#ff6040'); boxLight.intensity = trying ? 2 + Math.random() * 8 : 5;
+    crystalMat.emissiveIntensity = humming ? 1.6 + 0.3 * Math.sin(t * 4) : 0.08; crystalLight.intensity = humming ? 14 : 0;
+    coreMat.emissiveIntensity = q.stage === 'woken' ? 2.2 + 0.4 * Math.sin(t * 2.2) : 0.05; coreLight.intensity = q.stage === 'woken' ? 18 : 0;
     core.rotation.y += dt * (q.stage === 'woken' ? 1.2 : 0.1);
     mirrors.forEach((m, i) => { const want = -(q.mirrors[i] * Math.PI) / 4; let d = want - m.turn; d = Math.atan2(Math.sin(d), Math.cos(d)); m.turn += d * Math.min(1, dt * 8); m.head.rotation.y = m.turn; });
     drawBeam(q);
