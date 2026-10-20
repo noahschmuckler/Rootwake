@@ -34,6 +34,8 @@ import { createTerrain } from './worldTerrain';
 import { createDenField } from './denWorld';
 import { createWardField } from './ruinWorld';
 import { wards, WARD } from './ruinsModel';
+import { createWardInterior } from './wardInteriorWorld';
+import { parseQuest, blowInside, blowOutside, stepFix, SNERK_AT, CREW_AT, SNERK_LINES, CREW_LINES, WAKE_LINE, DOOR_LINES, DOOR_CUTS, type Quest } from './wardInterior';
 import { createVillageLook, type VillageLook } from './villageVista';
 import { loadVillageLand } from './plateauLand';
 import { freshCultivation, parseCultivation, serializeCultivation, worldTier, power, lacking, grow, grownEnough, mayFirstDive, canRaise, raise, reachBonus, viewScale, TIER_POINTS, TIER_CLARITY, TIER_CAP, type Cultivation, type WorldState } from './cultivationModel';
@@ -165,7 +167,19 @@ const WARDS_KEY = 'rootwake-wards-read';
 const wardRead = ((): Set<string> => { try { return new Set(JSON.parse(localStorage.getItem(WARDS_KEY) ?? '[]') as string[]); } catch { return new Set(); } })();
 const wardField = createWardField(look ? look.world.root : scene, wardList, relief, wardRead, ids => { try { localStorage.setItem(WARDS_KEY, JSON.stringify([...ids])); } catch { /* Storage is optional. */ } });
 let wardHere: string | null = null; const tmpWard = new THREE.Vector3();
-Object.assign(window, { __wards: { list: wardList, field: wardField } });
+// R2 (RUINS.md): the first way in, the ward nearest her village; its quest kept in its own save, its interior an instance under it.
+const firstWard = wardList.slice().sort((a, b) => Math.hypot(a.x, a.z) - Math.hypot(b.x, b.z))[0];
+const QUEST_KEY = 'rootwake-ward-r2';
+let wardQuest: Quest = ((): Quest => { try { return parseQuest(localStorage.getItem(QUEST_KEY), firstWard.id); } catch { return parseQuest(null, firstWard.id); } })();
+const saveQuest = (): void => { try { localStorage.setItem(QUEST_KEY, JSON.stringify(wardQuest)); } catch { /* Storage is optional. */ } };
+const wardInterior = createWardInterior(look ? look.world.root : scene, firstWard);
+let inWard = false, wardTalk = { snerk: false, crew: false, waiting: false, snerkWoken: false }; const fixClock = { t: 0 };
+const syncWard = (): void => wardField.setState(firstWard.id, { cut: wardQuest.door / DOOR_CUTS, open: wardQuest.stage !== 'sealed', woken: wardQuest.stage === 'woken' });
+syncWard();
+/** Within this many metres of a woken ward the Colour falls back (its share at the ward). Tuning. */
+const WARD_CALM_R = 170, WARD_CALM = 0.7;
+const wardCalm = (x: number, z: number): number => { if (wardQuest.stage !== 'woken') return 0; const d = Math.hypot(x - firstWard.x, z - firstWard.z), k = Math.min(1, Math.max(0, (WARD_CALM_R - d) / (WARD_CALM_R - 50))); return WARD_CALM * k * k * (3 - 2 * k); };
+Object.assign(window, { __wards: { list: wardList, field: wardField, get first() { return firstWard; }, get quest() { return wardQuest; }, get inside() { return inWard; }, interior: () => wardInterior, /** Dev: stand before the first ward's door. */ toDoor: () => { const d = firstWard.door, ox = -Math.sin(d.yaw), oz = -Math.cos(d.yaw); player.teleport(d.x - ox * 1.0, d.z - oz * 1.0, d.yaw, d.y); }, resetQuest: () => { wardQuest = parseQuest(null, firstWard.id); saveQuest(); syncWard(); } } });
 Object.assign(window, { __plateau: { model: plateau(home.seed), waterworks, land: vistaLand ? { baked: vistaLand.baked, ms: Math.round(vistaLand.ms) } : null } });
 let lookHuts = ctxs.reduce((n, c) => n + c.v.huts, 0);
 // S4c (SETTLEMENTS.md §6): the steward's waking is answered: one den's pack turns dire, black and red-eyed, until it is slain asleep in its den.
@@ -190,8 +204,8 @@ let karst: ReturnType<typeof createKarstFeature>;
 const groundWorld: TraversalWorld = {
   // The land is unbounded: the meadow, and past it the chunks (chunkWorld), whose trees the model's lookups see through setTreeProvider.
   // The land is unbounded: the meadow, and past it the chunks (chunkWorld), whose trees the model's lookups see through setTreeProvider; where the karst stands, its own zone worlds are her ground (karstFeature).
-  surfacesAt: (x, z) => (karst.owns(x, z) ? karst.traversal().surfacesAt(x, z) : wardField.surfacesAt(x, z) ?? denField.surfacesAt(x, z) ?? [relief(x, z)]),
-  canOccupy: (p, radius, height) => { if (karst.owns(p.x, p.z)) return karst.traversal().canOccupy(p, radius, height); const ward = wardField.canOccupy(p, radius, height); if (ward !== null) return ward && walkable(plateau(home.seed), p.x, p.z); const den = denField.canOccupy(p, radius, height); if (den !== null) return den; return p.y >= relief(p.x, p.z) - 0.03 && !houseNear(p.x, p.z, radius) && !treesNear(p.x, p.z, 6).some(t => Math.hypot(p.x - t.x, p.z - t.z) < trunkRadius(t) + radius) && walkable(plateau(home.seed), p.x, p.z); },
+  surfacesAt: (x, z) => (inWard ? wardInterior.surfacesAt(x, z) : karst.owns(x, z) ? karst.traversal().surfacesAt(x, z) : wardField.surfacesAt(x, z) ?? denField.surfacesAt(x, z) ?? [relief(x, z)]),
+  canOccupy: (p, radius, height) => { if (inWard) return wardInterior.canOccupy(p, radius, height); if (karst.owns(p.x, p.z)) return karst.traversal().canOccupy(p, radius, height); const ward = wardField.canOccupy(p, radius, height); if (ward !== null) return ward && walkable(plateau(home.seed), p.x, p.z); const den = denField.canOccupy(p, radius, height); if (den !== null) return den; return p.y >= relief(p.x, p.z) - 0.03 && !houseNear(p.x, p.z, radius) && !treesNear(p.x, p.z, 6).some(t => Math.hypot(p.x - t.x, p.z - t.z) < trunkRadius(t) + radius) && walkable(plateau(home.seed), p.x, p.z); },
 };
 // PLATEAU.md (Noah): the rivers are barriers, crossed at their fords, stepping stones and bridges; the lake rings the island, crossed by its old bridge. Underground (the roots) she passes beneath them.
 /** While she is a bulge, a figure of leaves or a knot in a root, the shared motor stays put but the stick still speaks. */
@@ -203,7 +217,7 @@ const presentation = createHuldaPresentation(scene, home_().world.figure, home_(
 karst = createKarstFeature(scene, player, camera, KARST_AT, { orbit: (t, back, up, ease) => orbitCamera(t, back, up, ease), want: () => want(), ground: () => groundWorld, locked: lockedWorld, height: relief, portal: openPortal });
 // The vista look draws the karst's trees itself (villageVista.villageTrees); the karst keeps their climbing and colliders.
 if (look) scene.traverse(o => { if (o.name === 'karst-wood' || o.name.startsWith('karst-leaves-')) o.visible = false; });
-{ const karstClear = player.cameraClear; player.cameraClear = p => (!karstClear || karstClear(p)) && denField.cameraClear(p); }
+{ const karstClear = player.cameraClear; player.cameraClear = p => (inWard ? wardInterior.cameraClear(p) : (!karstClear || karstClear(p)) && denField.cameraClear(p)); }
 const hulda = presentation.hulda;
 // Hulda and the hobbits share the skeleton, so the Mixamo clips drive all nine (public/models/README.md).
 const query = new URLSearchParams(location.search), clipUrls = query.get('clips')?.split(',').filter(Boolean) ?? __HULDA_CLIPS__, base = (c: string) => import.meta.env.BASE_URL + c;
@@ -586,11 +600,47 @@ function faceFoe(): void {
   for (const r of village.raiders) { if (r.state === 'dead' || r.state === 'melting') continue; const dx = r.x - l.x, dz = r.z - l.z, d = Math.hypot(dx, dz); if (d < bd && (d < 0.6 || (dx * hx + dz * hz) / d > FACE_COS)) { bd = d; best = r; } }
   if (!best) return; const yaw = Math.atan2(-(best.x - l.x), -(best.z - l.z)); player.yaw += Math.atan2(Math.sin(yaw - player.yaw), Math.cos(yaw - player.yaw)) * FACE_TURN;
 }
+/** R2: a blow at the ward's door or within it; whether it struck something there. */
+function wardBlow(f: THREE.Vector3, hx: number, hz: number, cuts: number): boolean {
+  const at = new THREE.Vector3(f.x + hx * 0.9, f.y + 0.4, f.z + hz * 0.9), dir = new THREE.Vector3(hx, 0, hz);
+  if (inWard) {
+    const o = wardInterior.origin, r = blowInside(wardQuest, { x: f.x - o.x, y: f.y - o.y, z: f.z - o.z }, hx, hz, cuts); if (!r) return false;
+    fx.blow(at, dir, r.kind === 'knot' ? 'ichor' : 'soil', !!r.done || cuts > 1); impact.hit(r.done ? 'heavy' : 'light'); sound.thud(cuts > 1);
+    if (r.kind === 'knot' && r.done) tellBanner(CREW_LINES.cut); if (r.kind === 'mirror' && r.done) { tellBanner(WAKE_LINE); impact.hit('kill'); }
+    saveQuest(); syncWard(); return true;
+  }
+  const w = wardField.atDoor(f, 1.4); if (!w || (f.x - w.door.x) * hx + (f.z - w.door.z) * hz > 0.3) return false;
+  if (w.id !== firstWard.id) { say(DOOR_LINES.thick, 3); impact.hit('light', 0.5); return true; }
+  const r = blowOutside(wardQuest, cuts); if (!r) return false;
+  fx.blow(at, dir, 'ichor', cuts > 1); impact.hit(r.done ? 'heavy' : 'light'); sound.thud(cuts > 1);
+  if (r.done) tellBanner(DOOR_LINES.open); else say(DOOR_LINES.cut, 2.5); saveQuest(); syncWard(); return true;
+}
+/** R2: in by the ward's door once its growth is cut; out by the vestibule's. */
+function enterWard(): void { inWard = true; wardInterior.setVisible(true); wardInterior.update(wardQuest, player.feet(), time, 0); const e = wardInterior.entry(); player.teleport(e.x, e.z, e.yaw, e.y); say(`inside ${firstWard.name}`, 3); }
+function leaveWard(): void { inWard = false; wardInterior.setVisible(false); const d = firstWard.door, ox = -Math.sin(d.yaw), oz = -Math.cos(d.yaw); player.teleport(d.x - ox * 0.85, d.z - oz * 0.85, d.yaw + Math.PI, d.y); say(firstWard.name, 3); }
+function stepWard(dt: number): void {
+  const f = player.feet();
+  if (!inWard && wardQuest.stage !== 'sealed' && wardField.atDoor(f)?.id === firstWard.id) { enterWard(); return; }
+  if (inWard && wardInterior.atExit(f)) { leaveWard(); return; }
+  const before = wardQuest.stage, tr = stepFix(wardQuest, dt, fixClock);
+  if (tr) { tellBanner(CREW_LINES.tries[tr - 1]); if (wardQuest.stage === 'woken') setTimeout(() => tellBanner(WAKE_LINE), 4000); saveQuest(); syncWard(); }
+  if (before !== wardQuest.stage) { saveQuest(); syncWard(); }
+  if (!inWard) return;
+  wardInterior.update(wardQuest, f, time, dt);
+  const o = wardInterior.origin, lx = f.x - o.x, lz = f.z - o.z, nearSnerk = Math.hypot(lx - SNERK_AT.x, lz - SNERK_AT.z) < 1.8, nearCrew = CREW_AT.some(c => Math.hypot(lx - c.x, lz - c.z) < 2.4);
+  if (nearSnerk && !wardTalk.snerk) { wardTalk.snerk = true; tellBanner(wardQuest.stage === 'woken' ? SNERK_LINES.woken! : SNERK_LINES.first); wardQuest.met.snerk = true; saveQuest(); }
+  if (!nearSnerk && wardTalk.snerk && wardQuest.stage === 'woken' && !wardTalk.snerkWoken) { wardTalk.snerkWoken = true; wardTalk.snerk = false; }
+  if (nearCrew && !wardTalk.crew && (wardQuest.stage === 'open' || wardQuest.stage === 'woken')) { wardTalk.crew = true; tellBanner(wardQuest.stage === 'woken' ? CREW_LINES.woken : CREW_LINES.first); wardQuest.met.crew = true; saveQuest(); }
+  if (nearCrew && !wardTalk.waiting && wardQuest.stage === 'powered') { wardTalk.waiting = true; tellBanner(CREW_LINES.waiting); }
+  if (!nearCrew) { wardTalk.waiting = false; if (wardQuest.stage !== 'open') wardTalk.crew = false; }
+}
 /** The blow itself, at the moment it lands. */
 function land(k: Act, mult = 1, heavy = false): void {
   if (mode !== 'ground' || village.hero.faint > 0) return; const f = player.feet(), her = herLocal(), { fx: hx, fz: hz } = herFacing();
   const before = new Map(village.raiders.map(r => [r.id, r.hp]));
   if ((k === 'strike' || k === 'heavy') && !moves) { swingSide = -swingSide; fx.slash(f, player.yaw, swingSide, SLASH_LIFT); sound.whoosh(swingSide); }
+  // R2 (RUINS.md): a blow at a ward's door cuts its growth (the first ward's; the others' is too thick), and inside, the knot or a mirror.
+  if ((k === 'strike' || k === 'heavy') && wardBlow(f, hx, hz, heavy ? 2 : 1)) return;
   // In a den by day the strike falls on the pack asleep (the delve's payoff): a wolf slain there is the den's loss and her level's gain.
   if ((k === 'strike' || k === 'heavy') && denField.inside && denField.current) { const r = denField.strikeAsleep(f, hx, hz, strikeDamage(village.hero) * mult); if (r.hit) { const at = new THREE.Vector3(f.x + hx * 1.1, f.y + 0.35, f.z + hz * 1.1), dir = new THREE.Vector3(hx, 0, hz); fx.blow(at, dir, 'fur', r.killed || heavy); impact.hit(r.killed ? 'kill' : heavy ? 'heavy' : 'light'); if (r.killed) sound.kill(); else sound.thud(heavy); } if (r.killed) { const known = denKnownBy(denField.current.id); if (known && slayAsleep(known.c.v, known.d)) { say('a wolf slain asleep in its den', 4); save(); } } return; }
   if (k === 'strike' || k === 'heavy') { strike(village, her, hx, hz, mult); landBlows(before, heavy); }
@@ -1208,6 +1258,7 @@ function frame(now: number) {
   // RUINS.md: the ward she stands on is named; a glyph-plate she reaches is read.
   { const f = player.feet(), w = wardField.wardAt(f.x, f.z); if ((w?.id ?? null) !== wardHere) { wardHere = w?.id ?? null; if (w) say(w.name, 3); }
     camera.getWorldDirection(tmpWard); wardField.face(Math.atan2(-tmpWard.x, -tmpWard.z)); const plate = wardField.update(f, time); if (plate) tellBanner(plate.lore); }
+  stepWard(dt);
   // G4: the village she is in is the one her hands and her panel belong to; the ones near enough are presented in full.
   pickActive(); { const f = player.feet(); for (const c of ctxs) { const d = Math.hypot(f.x - c.ox, f.z - c.oz), near = d <= (c.i === 0 ? HOME_NEAR_M : NEAR_M); if (near && !c.near) syncShown(c); if (!near && c.near) hideShown(c); c.near = near; c.world.root.visible = d <= SHOW_M; } }
   // D4: the blight moved (at dawn): the land's trees and the roots drawn again under it.
@@ -1298,9 +1349,10 @@ function frame(now: number) {
   if (inCatwalk()) { colour.set(CATWALK_FOG.colour); scene.background = colour; scene.fog = new THREE.FogExp2(colour, CATWALK_FOG.density); }
   if (inDeep(mode) && mode !== 'meditate') { colour.set(mode === 'deep' ? '#070a10' : '#14100a'); scene.background = colour; scene.fog = new THREE.FogExp2(colour, mode === 'deep' ? 0.05 : 0.22); }
   // M1 (MOTHER.md): her breath, quicker the more she attends to Hulda; the taint's sky by depth, magenta drawn in on the in-breath.
-  { const att = home_().v.lair.attention; breath = stepBreath(breath, att, dt); const f = player.feet(), depth = depthAt(Math.hypot(f.x - breach.x, f.z - breach.z)); taintNow = { depth, colour: colourAt(depth, att), exhale: exhaleAt(breath), flare: flareAt(depth, att, exhaleAt(breath)) }; if (depth > 0) { colour.lerp(forestSky, 0.25 + depth * 0.6).lerp(taintSky, taintNow.colour * (1 - taintNow.exhale) * 0.4); scene.background = colour; scene.fog = new THREE.FogExp2(colour, (0.011 + depth * 0.03) * fogScale); hemi.intensity *= 1 - depth * 0.6; sun.intensity *= 1 - depth * 0.7; } }
+  { const att = home_().v.lair.attention; breath = stepBreath(breath, att, dt); const f = player.feet(), depth = depthAt(Math.hypot(f.x - breach.x, f.z - breach.z)) * (1 - wardCalm(f.x, f.z)); taintNow = { depth, colour: colourAt(depth, att), exhale: exhaleAt(breath), flare: flareAt(depth, att, exhaleAt(breath)) }; if (depth > 0) { colour.lerp(forestSky, 0.25 + depth * 0.6).lerp(taintSky, taintNow.colour * (1 - taintNow.exhale) * 0.4); scene.background = colour; scene.fog = new THREE.FogExp2(colour, (0.011 + depth * 0.03) * fogScale); hemi.intensity *= 1 - depth * 0.6; sun.intensity *= 1 - depth * 0.7; } }
   if (denField.inside && !inDeep(mode)) { colour.set('#120c06'); scene.background = colour; scene.fog = new THREE.FogExp2(colour, 0.14); }
-  hemi.intensity = 0.5 + 1.9 * light; sun.intensity = 2.3 * light; if (denField.inside) { hemi.intensity *= 0.3; sun.intensity *= 0.08; } if (inCatwalk()) { hemi.intensity = 0.25; sun.intensity = 0; } for (const c of ctxs) { if (c.near) c.world.updateLand(c.v); c.world.setHouses(c.v); c.world.setSite(c.v); c.world.setHedges(c.v.hedges); c.world.update(light, time, under); } setLayouts(ctxs.map(c => ({ x: c.ox, z: c.oz, huts: c.v.huts }))); chunks.setUnder(under, player.feet().x, player.feet().z); networkScene.vision(under);
+  if (inWard) { colour.set('#0d0b12'); scene.background = colour; scene.fog = new THREE.FogExp2(colour, 0.045); }
+  hemi.intensity = 0.5 + 1.9 * light; sun.intensity = 2.3 * light; if (denField.inside) { hemi.intensity *= 0.3; sun.intensity *= 0.08; } if (inWard) { hemi.intensity = 0.35; sun.intensity = 0; } if (inCatwalk()) { hemi.intensity = 0.25; sun.intensity = 0; } for (const c of ctxs) { if (c.near) c.world.updateLand(c.v); c.world.setHouses(c.v); c.world.setSite(c.v); c.world.setHedges(c.v.hedges); c.world.update(light, time, under); } setLayouts(ctxs.map(c => ({ x: c.ox, z: c.oz, huts: c.v.huts }))); chunks.setUnder(under, player.feet().x, player.feet().z); networkScene.vision(under);
   // What happened is told: the latest as a tip, and (Noah: the bleat was not warning enough) the ones that matter as a banner across the top.
   // G2: what the villagers say of places she has not found goes to the map as a hint.
   // G4 (Noah: marks came from villages she had never been to): only the village she is in is heard. Its talk goes to the map, the fan from its green; talk elsewhere is not heard. Another village's banners reach her only once she has been there (it is known), named.
@@ -1311,11 +1363,11 @@ function frame(now: number) {
   exploreClock += dt; if (exploreClock > 0.5) { exploreClock = 0; chunks.refreshRabbits(); chunks.refreshBoars(); const f = player.feet(); if (explore(overworld, f.x, f.z, EXPLORE_RADIUS * viewScale(powerNow())) > 0 && mapOpen) drawMap(); }
   saveClock += dt; if (saveClock > 5) { saveClock = 0; save(); }
   drawCompass(); if (miniOpen && !mapOpen) { miniClock += dt; if (miniClock >= 1 / MINI_HZ) { miniClock = 0; drawMini(); } }
-  const taintFx = stepTaintFx(dt); mist.update(camera, (x, z) => terrain.height(x, z), { depth: taintNow.depth, flare: taintNow.flare, on: !underCap(mode) && !denField.inside && !atm?.inCavern }, dt);
+  const taintFx = stepTaintFx(dt); mist.update(camera, (x, z) => terrain.height(x, z), { depth: taintNow.depth, flare: taintNow.flare, on: !underCap(mode) && !denField.inside && !inWard && !atm?.inCavern }, dt);
   if (look) {
     const huts = ctxs.reduce((n, c) => n + c.v.huts, 0); if (huts !== lookHuts) { lookHuts = huts; look.refreshClearing(); }
     const f = player.feet(), ck = clockOf(village.tick);
-    look.frame({ clockHour: ck.hour + ck.minute / 60, feet: f, under, interior: underCap(mode) || denField.inside || !!atm?.inCavern, gloom: taintNow.depth, colour: taintNow.colour, exhale: taintNow.exhale, ...taintFx });
+    look.frame({ clockHour: ck.hour + ck.minute / 60, feet: f, under, interior: underCap(mode) || denField.inside || inWard || !!atm?.inCavern, gloom: taintNow.depth, colour: taintNow.colour, exhale: taintNow.exhale, ...taintFx });
     impact.push(camera); look.render(); impact.pop(camera);
   } else { impact.push(camera); renderer.render(scene, camera); impact.pop(camera); }
 }

@@ -357,3 +357,37 @@ test('wards: placed about the breach on its ring, apart, on walkable ground, cle
   for (const a of list) for (const b of list) if (a !== b) { const d = Math.abs(Math.atan2(a.z - breach.z, a.x - breach.x) - Math.atan2(b.z - breach.z, b.x - breach.x)) % (Math.PI * 2); assert.ok(Math.min(d, Math.PI * 2 - d) >= WARD_APART - 1e-6); }
   assert.deepEqual(new Set(list.map(w => w.name)).size, list.length, list.map(w => w.name).join());
 });
+
+// R2, the first way in (wardInterior.ts): the rooms, the light and the quest.
+import { ROOMS, ENTRY, MIRRORS, MIRROR_START, MIRROR_SOLVED, MIRROR_FOOT, KNOT_CUTS, DOOR_CUTS, FIX_TRIES, FIX_TRY_S, freshQuest, groundIn, occupyIn, traceBeam, blowInside, blowOutside, stepFix } from '../src/wardInterior';
+const interiorWorld = (q: ReturnType<typeof freshQuest>): TraversalWorld => ({ surfacesAt: (x, z) => { const y = groundIn(q, x, z); return y === null ? [] : [y]; }, canOccupy: (p, r, h) => occupyIn(q, p, r, h) });
+test('ward interior: the light reaches the core only with the mirrors set, from one setting of the 64', () => {
+  assert.equal(traceBeam(MIRROR_START).hitsCore, false); assert.equal(traceBeam(MIRROR_SOLVED).hitsCore, true);
+  let n = 0; for (let a = 0; a < 4; a++) for (let b = 0; b < 4; b++) for (let c = 0; c < 4; c++) if (traceBeam([a, b, c]).hitsCore) n++;
+  assert.equal(n, 1);
+});
+test('ward interior: every sheer face in the rooms is canonical, and the stick takes her from the door down to the chamber once the knot is cut', () => {
+  const q = freshQuest('w'); q.stage = 'cut'; const world = interiorWorld(q), canon = [CANON.step, CANON.clamber, CANON.wall];
+  for (const r of ROOMS) for (let x = r.x0; x < r.x1; x += 0.05) for (let z = r.z0; z < r.z1; z += 0.05) for (const [dx, dz] of [[0.05, 0], [0, 0.05]]) {
+    const a = groundIn(q, x, z), b = groundIn(q, x + dx, z + dz); if (a === null || b === null) continue; const d = Math.abs(a - b); if (d > 0.12 && d < NORMAL_MOBILITY.climbRise) assert.ok(canon.some(c => Math.abs(c - d) < 0.005), `${x.toFixed(2)},${z.toFixed(2)} ${d}`);
+  }
+  const walk = (qq: ReturnType<typeof freshQuest>, seconds: number) => { const w = interiorWorld(qq), m = new MobilityMotor(); m.parkour = true; m.reset(new Vector3(ENTRY.x, 0, ENTRY.z)); const kinds: string[] = []; m.onCommit = p => kinds.push(p.kind); let letGo = 0, was = false;
+    for (let i = 0; i < seconds * 60; i++) { if (m.hanging && !was) letGo = 0.3; was = !!m.hanging; m.update(1 / 60, w, letGo > 0 ? idle : { ...idle, forward: 1, held: true }); letGo = Math.max(0, letGo - 1 / 60); assert.ok(w.canOccupy(m.feet, BODY_RADIUS, BODY_HEIGHT), `${m.mode} ${m.feet.toArray()}`); }
+    return { m, kinds }; };
+  const through = walk(q, 14); assert.deepEqual(through.kinds.slice(0, 2), ['hangDrop', 'hangDrop'], through.kinds.join()); assert.ok(through.m.feet.z < -15.5, `${through.m.feet.z}`);
+  const q2 = freshQuest('w'); q2.stage = 'open'; const held = walk(q2, 14); assert.ok(held.m.feet.z > -12.6, `the knot holds her (${held.m.feet.z})`);
+});
+test('ward interior: the quest from the door\'s growth to the ward woken', () => {
+  const q = freshQuest('w');
+  for (let i = 0; i < DOOR_CUTS - 1; i++) assert.equal(blowOutside(q)!.done, false); assert.equal(blowOutside(q)!.done, true); assert.equal(q.stage, 'open');
+  // The knot, from the gallery facing it.
+  const gal = { x: 0, y: -CANON.wall, z: -11.6 };
+  for (let i = 0; i < KNOT_CUTS - 1; i++) assert.equal(blowInside(q, gal, 0, -1)!.kind, 'knot'); assert.equal(blowInside(q, gal, 0, -1)!.done, true); assert.equal(q.stage, 'cut');
+  // The crew: FIX_TRIES tries, then the crystal is powered (the mirrors unset).
+  const clock = { t: 0 }; let tries = 0; for (let i = 0; i < (FIX_TRIES * FIX_TRY_S + 1) * 10; i++) if (stepFix(q, 0.1, clock)) tries++;
+  assert.equal(tries, FIX_TRIES); assert.equal(q.stage, 'powered');
+  // The ledge's mirror can't be reached from the chamber floor; from the ledge it turns.
+  const m3 = MIRRORS[2], below = { x: m3.x - 1.0, y: -CANON.wall, z: m3.z - 0.9 }; assert.equal(blowInside(q, below, 0.7, 0.7), null);
+  for (let i = 0; i < 3; i++) { const m = MIRRORS[i], at = { x: m.x - 0.6, y: MIRROR_FOOT[i], z: m.z }; while (q.mirrors[i] !== MIRROR_SOLVED[i]) { const r = blowInside(q, at, 1, 0)!; assert.equal(r.kind, 'mirror'); assert.equal(r.i, i); } }
+  assert.equal(q.stage, 'woken');
+});

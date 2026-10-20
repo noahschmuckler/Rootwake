@@ -29,7 +29,7 @@ function minus(r: Rect, cuts: Rect[]): Rect[] {
 }
 
 /** A stone texture: courses of dressed blocks, worn and stained. */
-function stoneTexture(): THREE.CanvasTexture {
+export function stoneTexture(): THREE.CanvasTexture {
   const c = document.createElement('canvas'); c.width = c.height = 256; const g = c.getContext('2d')!, rand = mulberry32(77);
   g.fillStyle = '#8d8a7c'; g.fillRect(0, 0, 256, 256);
   for (let row = 0; row < 8; row++) {
@@ -89,6 +89,10 @@ export interface WardField {
   group: THREE.Group;
   /** The light over each unread plate turns to face the view about its upright: the camera's yaw, each frame. */
   face(yaw: number): void;
+  /** R2: a ward's door growth cut (0..1), its door open, the ward woken. */
+  setState(id: string, s: { cut: number; open: boolean; woken: boolean }): void;
+  /** The ward whose door she stands before (on the keep, within `r` m of it). */
+  atDoor(feet: THREE.Vector3, r?: number): Ward | null;
 }
 
 export function createWardField(parent: THREE.Object3D, wards: Ward[], land: (x: number, z: number) => number, read: Set<string> = new Set(), onRead?: (ids: Set<string>) => void): WardField {
@@ -104,6 +108,8 @@ export function createWardField(parent: THREE.Object3D, wards: Ward[], land: (x:
   const beamTex = (() => { const c = document.createElement('canvas'); c.width = 16; c.height = 128; const g = c.getContext('2d')!; const gr = g.createLinearGradient(0, 128, 0, 0); gr.addColorStop(0, 'rgba(190,245,255,0.85)'); gr.addColorStop(1, 'rgba(190,245,255,0)'); g.fillStyle = gr; g.fillRect(0, 0, 16, 128); const h = g.createLinearGradient(0, 0, 16, 0); h.addColorStop(0, 'rgba(0,0,0,1)'); h.addColorStop(0.5, 'rgba(0,0,0,0)'); h.addColorStop(1, 'rgba(0,0,0,1)'); g.globalCompositeOperation = 'destination-out'; g.fillStyle = h; g.fillRect(0, 0, 16, 128); return new THREE.CanvasTexture(c); })();
   const beamMat = new THREE.MeshBasicMaterial({ map: beamTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide });
   const plates: { plate: Plate; mesh: THREE.Mesh; beam: THREE.Mesh }[] = [], growths: THREE.Mesh[] = [];
+  /** Each ward's own: its door's growth, its runes, and the light that rises from its tower once it wakes (R2). */
+  const own = new Map<string, { growth: THREE.Mesh; rune: THREE.MeshBasicMaterial; pillar: THREE.Mesh; cut: number; open: boolean; woken: boolean }>();
 
   for (const w of wards) {
     const g = new THREE.Group(); g.name = `ward:${w.id}`; group.add(g); const rand = mulberry32((w.x * 31 + w.z * 17) >>> 0);
@@ -121,12 +127,16 @@ export function createWardField(parent: THREE.Object3D, wards: Ward[], land: (x:
     const door = new THREE.Group(); door.position.set(w.door.x, w.door.y, w.door.z); door.rotation.y = w.door.yaw; g.add(door);
     const hole = new THREE.Mesh(new THREE.PlaneGeometry(0.85, 1.1), dark); hole.position.set(0, 0.56, 0.008); door.add(hole);
     const gm = new THREE.Mesh(merge(growth(rand)), grow); door.add(gm); growths.push(gm);
+    const myRune = rune.clone(), tw0 = w.blocks.find(b => b.kind === 'tower')!;
+    const pillar = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.9, 120, 12, 1, true), new THREE.MeshBasicMaterial({ color: '#c8f6ff', transparent: true, opacity: 0.32, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide }));
+    pillar.position.set((tw0.x0 + tw0.x1) / 2, tw0.top + 60, (tw0.z0 + tw0.z1) / 2); pillar.visible = false; g.add(pillar);
+    own.set(w.id, { growth: gm, rune: myRune, pillar, cut: 0, open: false, woken: false });
     for (const [x, wd] of [[-0.52, 0.18], [0.52, 0.18]] as const) { const post = new THREE.Mesh(block({ x0: x - wd / 2, x1: x + wd / 2, z0: -0.1, z1: 0.06 }, 0, 1.25, 0.9), stone); door.add(post); }
     door.add(new THREE.Mesh(block({ x0: -0.62, x1: 0.62, z0: -0.1, z1: 0.06 }, 1.12, 1.32, 0.9), stone));
     // Runes in the tower's four faces: faint strips that hum.
     const tw = w.blocks.find(b => b.kind === 'tower')!;
     for (let k = 0; k < 4; k++) for (let j = 0; j < 3; j++) {
-      const s = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 0.32 + rand() * 0.25), rune), cx = (tw.x0 + tw.x1) / 2, cz = (tw.z0 + tw.z1) / 2, hw = (tw.x1 - tw.x0) / 2 + 0.006, a = (k * Math.PI) / 2, off = (j - 1) * 0.55;
+      const s = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 0.32 + rand() * 0.25), own.get(w.id)!.rune), cx = (tw.x0 + tw.x1) / 2, cz = (tw.z0 + tw.z1) / 2, hw = (tw.x1 - tw.x0) / 2 + 0.006, a = (k * Math.PI) / 2, off = (j - 1) * 0.55;
       s.position.set(cx + Math.sin(a) * hw + Math.cos(a) * off, w.y0 + (tw.top - w.y0) - 0.55 + rand() * 0.2, cz + Math.cos(a) * hw - Math.sin(a) * off); s.rotation.y = a; g.add(s);
     }
     // The glyph-plates, and a pillar of light over each unread one.
@@ -144,8 +154,11 @@ export function createWardField(parent: THREE.Object3D, wards: Ward[], land: (x:
   const camQ = new THREE.Quaternion();
   function update(feet: THREE.Vector3, time: number): Plate | null {
     let found: Plate | null = null; const t = time / 1000;
-    for (const g of growths) { const s = 1 + 0.04 * Math.sin(t * 1.3 + g.id); g.scale.set(s, 1 + 0.03 * Math.sin(t * 0.9 + g.id * 2), s); }
-    rune.opacity = 0.22 + 0.12 * Math.sin(t * 2.1) + 0.05 * Math.sin(t * 13.7);
+    for (const o of own.values()) {
+      const g = o.growth, k = (1 - o.cut * 0.55) * (o.open ? 0 : 1), s = k * (1 + 0.04 * Math.sin(t * 1.3 + g.id)); g.visible = k > 0; g.scale.set(s, k * (1 + 0.03 * Math.sin(t * 0.9 + g.id * 2)), s);
+      o.rune.opacity = o.woken ? 0.85 + 0.15 * Math.sin(t * 3.1) : 0.22 + 0.12 * Math.sin(t * 2.1) + 0.05 * Math.sin(t * 13.7);
+      o.pillar.visible = o.woken; if (o.woken) (o.pillar.material as THREE.MeshBasicMaterial).opacity = 0.26 + 0.08 * Math.sin(t * 1.1);
+    }
     for (const e of plates) {
       const seen = read.has(e.plate.id), m = e.mesh.material as THREE.MeshBasicMaterial, bm = e.beam.material as THREE.MeshBasicMaterial;
       m.opacity = seen ? 0.45 : 0.75 + 0.25 * Math.sin(t * 2.4 + e.plate.x);
@@ -156,5 +169,7 @@ export function createWardField(parent: THREE.Object3D, wards: Ward[], land: (x:
     return found;
   }
   const up = new THREE.Vector3(0, 1, 0);
-  return { wards, surfacesAt, canOccupy, update, read, wardAt, group, face: yaw => { camQ.setFromAxisAngle(up, yaw); } };
+  function setState(id: string, st: { cut: number; open: boolean; woken: boolean }): void { const o = own.get(id); if (o) Object.assign(o, st); }
+  function atDoor(feet: THREE.Vector3, r = 0.55): Ward | null { for (const w of wards) if (Math.hypot(feet.x - w.door.x, feet.z - w.door.z) < r && Math.abs(feet.y - w.door.y) < 0.3) return w; return null; }
+  return { wards, surfacesAt, canOccupy, update, read, wardAt, group, face: yaw => { camQ.setFromAxisAngle(up, yaw); }, setState, atDoor };
 }

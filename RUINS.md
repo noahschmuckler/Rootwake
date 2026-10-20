@@ -64,7 +64,7 @@ Noah, 2026-10-19, after playing the parkour. His direction is recorded first, th
 - **R1, the surface wards. Built.**
   - Five wards ring the breach just inside the taint's edge. Each is a stepped ruin on a level earthwork, built only of the canonical heights.
   - Glyph-plates hold the lore, and the tower's door is clogged by her growth. Details below.
-- **R2, the first way in.**
+- **R2, the first way in. Built** (end of this file).
   - One ward's door opens: an instanced interior using the dens' delve pattern, its own ground under the land.
   - A greblin crew stymied by a tentacle knot gives the first quest (SEALED, with a FIX valve). A snerk at the threshold trades and points.
   - One light puzzle routes the ward's power, and waking it is the first reactivation.
@@ -119,3 +119,36 @@ Noah, 2026-10-19, after playing the parkour. His direction is recorded first, th
   - the wards on the map and compass;
   - the folk, wolves and Dark Young treat the ward's stone as open ground (as they do the rivers, PLATEAU.md T3);
   - the vista's grass can show through the earthwork where it stands lowest over the land.
+
+## R2, as built (2026-10-20)
+
+- **The ward.** The first way in is the ward nearest her village (`firstWard` in `village.ts`). Its door's growth is thinned: a greblin's chalk on the lintel says "soon".
+  - Three of her blows at the door (`DOOR_CUTS`) cut the growth away. A heavy blow counts twice.
+  - Every other ward's growth is "too thick to cut. Another ward first."
+  - Walking into the opened door takes her inside.
+- **The interior** (`wardInterior.ts`, pure; `wardInteriorWorld.ts`, drawn): an instance `INTERIOR_DEPTH` 40 m under the ward, its rooms built of the canonical heights.
+  - **The vestibule.** A snerk sits there (the descent's figure) by its lantern. The way out is the door of light behind her.
+  - **The gallery,** a wall's drop below (the braced hang down, a climb back). It has a fallen block to mount, the junction box (too tall to climb) and the greblin crew.
+  - **The passage.** It is choked by a knot of her growth (`KNOT_CUTS` 5 blows). Until it is cut she can't pass.
+  - **The crystal chamber,** with three mirrors on brass posts. One stands up on a ledge, so she must climb to it; a blow from below doesn't reach it.
+    - Each blow turns a mirror 45°.
+    - The crystal's light, once powered, must be turned to the ward's core on its dais, a wall up.
+    - Exactly one of the 64 settings reaches the core (tested).
+- **The quest** (`Quest`, saved as `rootwake-ward-r2`):
+  1. `sealed`: cut the door's growth.
+  2. `open`: inside, the snerk speaks; the crew asks for the knot to be cut.
+  3. `cut` and `fixing`: the crew walks to the box and fixes it, badly twice (`FIX_TRIES` 3, `FIX_TRY_S` 2.6 s each). The lamp flares, then goes green.
+  4. `powered`: the crystal lights and throws its beam.
+  5. `woken`: the mirrors bring the light to the core.
+  - The mirrors can be set before the power comes; the ward then wakes on the crew's last try.
+- **A woken ward.**
+  - Its runes burn bright, a pillar of pale light rises from its tower, and its door stands open.
+  - Within `WARD_CALM_R` 170 m the Colour falls back. The taint's depth, as the sky, fog, breath and flares read it, is lowered by up to `WARD_CALM` 0.7 at the ward.
+  - The land's baked grey is unchanged.
+- **The words** (`SNERK_LINES`, `CREW_LINES`, `WAKE_LINE`, `DOOR_LINES`) are placeholder for Noah. The snerk trades nothing yet ("when you have anything worth trading").
+- **Dev handle:** `__wards`: `first`, `quest`, `inside`, `interior()`, `toDoor()`, `resetQuest()`.
+- **Not yet:**
+  - the snerk's trade, and what it knows of the other doors;
+  - the crew or the woken ward doing anything for her afterward;
+  - foes and traps (R3).
+

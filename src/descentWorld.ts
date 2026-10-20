@@ -38,7 +38,7 @@ function letterSigil(letter: string): THREE.CanvasTexture {
 
 export interface Keeper { group: THREE.Group; kind: Station['keeper']; station: Station; update(t: number, herX: number, herZ: number): void }
 /** A snerk: hunched in a purple hooded cloak, a long pink beak of a nose in a green face, a huge pack with a lantern. About her height bent over. */
-function makeSnerk(): { group: THREE.Group; head: THREE.Group; lantern: THREE.Object3D } {
+export function makeSnerk(): { group: THREE.Group; head: THREE.Group; lantern: THREE.Object3D } {
   const g = new THREE.Group(), cloak = toon('#5b3c7c'), face = toon('#6f8f4c'), nose = toon('#d98e9c'), pack = toon('#5e4630'), strap = toon('#4a3422');
   const body = new THREE.Mesh(new THREE.ConeGeometry(0.28, 0.62, 9), cloak); body.position.y = 0.31; g.add(body);
   const head = new THREE.Group(); head.position.set(0, 0.6, 0.1); g.add(head);
@@ -56,7 +56,7 @@ function makeSnerk(): { group: THREE.Group; head: THREE.Group; lantern: THREE.Ob
   return { group: g, head, lantern };
 }
 /** A hollowed: tall, gaunt, hooded and robed, a beaked bone mask, eyes like coals, grey clawed hands. */
-function makeHollowed(): { group: THREE.Group; head: THREE.Group } {
+export function makeHollowed(): { group: THREE.Group; head: THREE.Group } {
   const g = new THREE.Group(), robe = toon('#2b2433'), bone = toon('#d9d0bc'), skin = toon('#7a7a80');
   const body = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.3, 1.0, 9), robe); body.position.y = 0.5; g.add(body);
   const head = new THREE.Group(); head.position.set(0, 1.08, 0.03); g.add(head);
@@ -67,7 +67,7 @@ function makeHollowed(): { group: THREE.Group; head: THREE.Group } {
   return { group: g, head };
 }
 /** A greeblin: small, green, big ears and tusks, a mohawk, a wrench. */
-function makeGreeblin(): { group: THREE.Group; head: THREE.Group } {
+export function makeGreeblin(): { group: THREE.Group; head: THREE.Group } {
   const g = new THREE.Group(), skin = toon('#5f9a3c'), hide = toon('#7a5a3a'), tusk = toon('#efe6cf'), iron = toon(DESCENT_PALETTE.iron);
   const body = new THREE.Mesh(new THREE.SphereGeometry(0.17, 9, 7), skin); body.scale.set(1, 1.2, 0.9); body.position.y = 0.3; g.add(body);
   const cloth = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.2, 0.12, 9), hide); cloth.position.y = 0.16; g.add(cloth);
