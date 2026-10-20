@@ -57,6 +57,10 @@ vec4 mapData(vec2 xz){
   m.r = texture2D(uSunTex, ((xz + uMapHalf) / (uCell * sc) + 0.5) / uSunN).r; return m;
 }
 vec4 groundTint(vec2 xz){ return onMap(xz) ? texture2D(uGround, mapUV(xz)) : vec4(0.0); }
+/** FOREST: how closed the canopy is overhead (0..1; the map's own red, which mapData lends the sun): the grass thins under it to leaf mould. */
+float canopyAt(vec2 xz){ return onMap(xz) ? texture2D(uMapData, mapUV(xz)).r : 0.0; }
+/** How much of the sun a closed canopy takes from what stands beneath it (the ground, the grass, the understory, the trunks). Tuning. */
+const float CANOPY_SHADE = 0.62;
 /** The same bilinear the near mesh and the walking use (vistaTerrain heightAt). */
 float heightAt(vec2 xz){
   vec2 f = clamp((xz + uMapHalf) / uCell, vec2(0.0), vec2(uN - 1.001)); ivec2 i = ivec2(floor(f)); vec2 t = f - vec2(i);
@@ -168,7 +172,7 @@ void main(){
   if (trail > 0.01) { float rag = vnoise(p * 1.7) * 0.35 + vnoise(p * 6.0) * 0.15; float k = smoothstep(0.25, 0.6, trail + rag - 0.25);
     vec3 earth = mix(srgb(vec3(0.55, 0.45, 0.31)), srgb(vec3(0.70, 0.61, 0.44)), smoothstep(0.6, 1.0, trail)) * (0.9 + 0.2 * vnoise(p * 3.1));
     albedo = mix(albedo, earth, k); }
-  float vis = min(md.r, getShadowMask());
+  float vis = min(md.r * (1.0 - CANOPY_SHADE * canopyAt(p)), getShadowMask());
   vec3 col = toon(albedo, n, vis, mix(0.55, 1.0, md.g));
   float soil = 1.0 - 0.78 * uSoil.z * (1.0 - smoothstep(14.0, 28.0, distance(vWorld.xz, uSoil.xy)));
   gl_FragColor = vec4(applyHaze(col, vWorld), soil);
@@ -200,7 +204,7 @@ void main(){
   vec3 base = terrainAlbedo(vec3(xz.x, h, xz.y), n, md, g);
   float fade = 1.0 - smoothstep(uPatch * 0.3, uPatch * 0.5, dist);
   h = fineHeight(xz, h);
-  float hgt = uBladeH * (0.45 + 0.55 * aBlade.z) * smoothstep(0.3, 0.7, g) * fade * (1.0 + md.b * 0.8) * (0.7 + 0.6 * vnoise(xz * 0.08)) * (1.0 - smoothstep(0.2, 0.5, max(clearAt(xz).x, clearAt(xz).y)));
+  float hgt = uBladeH * (0.45 + 0.55 * aBlade.z) * smoothstep(0.3, 0.7, g) * fade * (1.0 + md.b * 0.8) * (0.7 + 0.6 * vnoise(xz * 0.08)) * (1.0 - smoothstep(0.2, 0.5, max(clearAt(xz).x, clearAt(xz).y))) * (1.0 - 0.88 * smoothstep(0.15, 0.75, canopyAt(xz)));
   if (hgt < 0.015 || h < uWaterY + 0.2) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
   float y = position.y, ang = aBlade.w + aTuft.x, c = cos(ang), s = sin(ang), cr = cos(aBlade.w), sr = sin(aBlade.w);
   hgt *= aTuft.w;
@@ -212,7 +216,7 @@ void main(){
   vec2 bend = uWind * (0.18 + gust * 0.75) + vec2(flutter, flutter * 0.6) + vec2(c, s) * 0.12 * (aBlade.z - 0.5);
   local.xz += bend * y * y * hgt; local.y -= dot(bend, bend) * y * y * hgt * 0.25;
   vec4 worldPosition = vec4(xz.x + local.x, h - 0.05 + local.y, xz.y + local.z, 1.0);
-  vWorld = worldPosition.xyz; vY = y; vGust = gust; vMd = md.rg;
+  vWorld = worldPosition.xyz; vY = y; vGust = gust; vMd = vec2(md.r * (1.0 - CANOPY_SHADE * canopyAt(xz)), md.g);
   vN = normalize(mix(n, vec3(0.0, 1.0, 0.0), 0.35));
   vCol = base * (0.92 + 0.16 * aBlade.z);
   vec3 transformedNormal = normalMatrix * vN;
@@ -302,6 +306,9 @@ void main(){
   albedo *= 0.82 + 0.36 * fbm3(vWorld.xz * 1.7 + vWorld.y * 1.3);
 #endif
   float vis = min(md.r, getShadowMask());
+#ifdef UNDER
+  vis *= 1.0 - CANOPY_SHADE * canopyAt(vBase);
+#endif
 #ifdef ROCK
   vec3 col = toon(albedo, n, vis, vShade);
 #else

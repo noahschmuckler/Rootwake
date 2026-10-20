@@ -13,8 +13,9 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import type { Terrain } from './worldTerrain';
 import { rng, type Land, type Tree as VTree, type Rock } from './vistaTerrain';
 import { buildVista, QUALITIES, CASTER_LAYER, sunDirection, type Hour, type Quality, type VistaWorld } from './vistaWorld';
-import { places, dens, ruins, warrens, wallows, ownWarrens, moot, FOREST_RADIUS as DARK_RADIUS, KARST_AT } from './overworldModel';
-import { convergences, beyond, noise, CHUNK } from './chunkModel';
+import { places, dens, ruins, warrens, wallows, ownWarrens, moot, onLand, FOREST_RADIUS as DARK_RADIUS, KARST_AT } from './overworldModel';
+import { convergences, beyond, noise, CHUNK, forestField, forestAt } from './chunkModel';
+import { createUnderstory, type Understory } from './understory';
 import { FOREST_RADIUS as KARST_FOREST, NODES as KARST_NODES, nodeFrame } from './karstFlowModel';
 import { TREES, type Tree } from './villageModel';
 import { TAINT, ringAt, veinAt } from './taintModel';
@@ -45,8 +46,24 @@ const VEIN_TREE_M = 8;
 // ── the woods, the dark forest and the blight, as a tint on the land ───────
 /** Tuning: linear colours laid over the vista's grass, and how much. */
 const WOOD = [0.06, 0.13, 0.04, 0.35], DARK = [0.05, 0.035, 0.07, 0.9], BLIGHT = [0.035, 0.012, 0.045, 0.95], MEADOW = [0.1, 0.26, 0.05, 0.7];
+/** FOREST (Noah, 2026-10-20): each cell's depth in a stand of forest (chunkModel.forestField), once per land. */
+const forestCells = new WeakMap<Land, Float32Array>();
+function forestOf(land: Land, seed: number): Float32Array {
+  let f = forestCells.get(land); if (f) return f;
+  const { n, cell, half } = land, at = forestField(seed); f = new Float32Array(n * n);
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) f[j * n + i] = at(i * cell - half, j * cell - half);
+  forestCells.set(land, f); return f;
+}
+/** Leaf mould under a stand's canopy, with moss where the light comes through; how much it covers the wood's own green past FOREST_LITTER_FROM. Tuning. */
+const LITTER = [0.055, 0.035, 0.02], MOSS = [0.035, 0.055, 0.016], LITTER_A: [number, number] = [0.35, 0.9];
+/** The canopy (0..255 a cell) the grass thins under: a stand's depth, opened here and there by gaps of light. */
+export function canopyMap(land: Land, seed: number): Uint8Array {
+  const { n, cell, half } = land, f = forestOf(land, seed), out = new Uint8Array(n * n);
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const k = j * n + i, v = f[k]; if (v <= 0) continue; const gap = noise(i * cell - half, j * cell - half, 22, seed + 73); out[k] = Math.round(255 * Math.min(1, Math.max(0, v * (0.7 + 0.5 * gap)))); }
+  return out;
+}
 export function groundTint(land: Land, seed: number, blighted: (x: number, z: number) => boolean, taint?: TaintLook): Uint8Array {
-  const { n, cell, half } = land, out = new Uint8Array(n * n * 4), lair = places(seed).find(p => p.id === 'lair')!;
+  const { n, cell, half } = land, out = new Uint8Array(n * n * 4), lair = places(seed).find(p => p.id === 'lair')!, forest = forestOf(land, seed);
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
     const x = i * cell - half, z = j * cell - half, b = Math.min(1, beyond(x, z, seed) * 1.6), k = (j * n + i) * 4;
     // The villages' meadows are kept: a lush green, whatever pale patch of the vista's grass they fall in.
@@ -57,6 +74,8 @@ export function groundTint(land: Land, seed: number, blighted: (x: number, z: nu
     // The taint: black at the heart and in the nursery, the dead grey of poisoned soil, grey streaks thinning through the mild ring.
     if (taint) { const d = Math.hypot(x - taint.at.x, z - taint.at.z), ring = ringAt(d); if (ring === 'heart') c = T_HEART; else if (ring === 'nursery') c = T_NURSERY; else if (ring === 'grey') c = T_GREY; else if (ring === 'mild' && noise(x, z, 14, seed + 61) > 0.3 + 0.55 * (d - TAINT.grey) / (TAINT.edge - TAINT.grey)) c = T_STREAK; }
     if (!c) continue;
+    // FOREST: under a stand the wood's green gives way to leaf mould, mossy where the canopy opens.
+    if (c === WOOD) { const fv = forest[j * n + i]; if (fv > 0.02) { const lit = Math.min(1, fv * (0.8 + 0.4 * noise(x, z, 7, seed + 71))), moss = smooth(0.55, 0.75, noise(x, z, 13, seed + 72)) * 0.7, a = LITTER_A[0] + (LITTER_A[1] - LITTER_A[0]) * lit; out[k] = (WOOD[0] + ((LITTER[0] + (MOSS[0] - LITTER[0]) * moss) - WOOD[0]) * lit) * 255; out[k + 1] = (WOOD[1] + ((LITTER[1] + (MOSS[1] - LITTER[1]) * moss) - WOOD[1]) * lit) * 255; out[k + 2] = (WOOD[2] + ((LITTER[2] + (MOSS[2] - LITTER[2]) * moss) - WOOD[2]) * lit) * 255; out[k + 3] = a * b * 255; continue; } }
     out[k] = c[0] * 255; out[k + 1] = c[1] * 255; out[k + 2] = c[2] * 255; out[k + 3] = c[3] * b * 255;
   }
   // The veins: her infection along the root lines, black through the grey, grey out into the living wood, fading VEIN_REACH past the edge.
@@ -139,6 +158,8 @@ export function hourAtClock(h: number): Hour {
 export interface LookFrame { clockHour: number; feet: THREE.Vector3; under: number; interior: boolean; gloom: number; hidden?: boolean; /** MOTHER.md: the Colour's strength (0..1) and how far into her out-breath (0..1); a tree's flare on screen (uv x, y, radius, strength; hue 0..1); the grey fog thinning (0..1). */ colour?: number; exhale?: number; spot?: [number, number, number, number]; spotHue?: number; clear?: number }
 export interface VillageLook {
   world: VistaWorld; quality: Quality;
+  /** FOREST: what grows under the trees (understory.ts). */
+  understory: Understory;
   frame(f: LookFrame): void;
   render(): void;
   /** Where grass gives way to the village (its paths, floors and fields), drawn from above; again when huts are built. */
@@ -192,6 +213,16 @@ export function createVillageLook(inp: LookInputs): VillageLook {
   let quality = inp.quality ?? QUALITIES.find(q => q.name.toLowerCase() === qName) ?? QUALITIES[coarse ? 1 : 2];
   const trees = () => villageTrees(vl.land, vl.edge, vl.terrain, inp.treesOf, inp.villages().map(v => ({ x: v.x, z: v.z })), inp.dark, inp.blighted, inp.taint);
   const world = buildVista(scene, vl.land, trees(), villageRocks(vl, seed), quality, { hazeBase: 0, ground: groundTint(vl.land, seed, inp.blighted, inp.taint), fine: vl.terrain.height, fineLod: true, bladeH: BLADE_H, nearTreesScale: NEAR_TREES, treeReach: TREE_REACH });
+  world.setCanopy(canopyMap(vl.land, seed));
+  // FOREST: the understory, kept from the places (as the rocks are) and the trunks.
+  const lairAt = places(seed).find(p => p.id === 'lair')!, keep = [...places(seed), ...dens(seed), ...ruins(seed), ...warrens(seed), ...wallows(seed), ...ownWarrens(seed), moot(seed), ...convergences(seed)];
+  const understory = createUnderstory(world.root, world.uniforms, {
+    forest: (x, z) => forestAt(x, z, seed),
+    wooded: (x, z) => beyond(x, z, seed) > 0.6 && noise(x, z, 110, seed + 3) <= 0.58 && Math.hypot(x - lairAt.x, z - lairAt.z) > Math.max(DARK_RADIUS, TAINT.edge) && Math.hypot(x - KARST_AT.x, z - KARST_AT.z) > KARST_FOREST + 30,
+    onLand: (x, z) => onLand(seed, x, z, 1.5),
+    trunks: (x0, z0, x1, z1) => { const out: { x: number; z: number; r: number }[] = []; for (let cz = Math.floor(z0 / CHUNK); cz <= Math.floor(z1 / CHUNK); cz++) for (let cx = Math.floor(x0 / CHUNK); cx <= Math.floor(x1 / CHUNK); cx++) for (const t of inp.treesOf(cx, cz)) if (t.x > x0 && t.x < x1 && t.z > z0 && t.z < z1) out.push({ x: t.x, z: t.z, r: 0.32 * t.size }); return out; },
+    clear: (x, z) => !keep.some(p => Math.hypot(x - p.x, z - p.z) < 10 + ((p as { radius?: number }).radius ?? 0)),
+  }, vl.terrain.height, seed, quality.name);
   renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.toneMapping = THREE.ACESFilmicToneMapping;
   sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.05; sun.shadow.camera.near = 1; sun.shadow.camera.far = 900; sun.shadow.camera.layers.enable(CASTER_LAYER); scene.add(sun.target);
 
@@ -241,7 +272,7 @@ export function createVillageLook(inp: LookInputs): VillageLook {
   const GREY_FOG = new THREE.Color('#77746f'), GLOOM = new THREE.Color('#1a1020'), GLOOM_IN = new THREE.Color('#4a0c40'), gloomColour = new THREE.Color('#1a1020'), fogColour = new THREE.Color(), dir = new THREE.Vector3();
   let lastClock = -1;
   function setQuality(q: Quality): void {
-    quality = q; world.setQuality(q);
+    quality = q; world.setQuality(q); understory?.setQuality(q.name);
     const shadows = q.shadow > 0;
     if (renderer.shadowMap.enabled !== shadows) { renderer.shadowMap.enabled = shadows; scene.traverse(o => { const m = (o as THREE.Mesh).material; if (m) (Array.isArray(m) ? m : [m]).forEach(x => (x.needsUpdate = true)); }); }
     sun.castShadow = shadows;
@@ -250,7 +281,7 @@ export function createVillageLook(inp: LookInputs): VillageLook {
   }
   setQuality(quality);
   return {
-    world, get quality() { return quality; }, setQuality, refreshClearing,
+    world, understory, get quality() { return quality; }, setQuality, refreshClearing,
     refreshTrees() { world.setTrees(trees()); },
     refreshGround() { world.setGround(groundTint(vl.land, seed, inp.blighted, inp.taint)); },
     frame(f) {
@@ -267,7 +298,7 @@ export function createVillageLook(inp: LookInputs): VillageLook {
       renderer.toneMappingExposure = h.exposure;
       world.setSoil(f.under, f.feet.x, f.feet.z);
       world.setGloom(gloomColour, Math.min(1, (0.25 + f.gloom * 0.9) * Math.min(1, f.gloom * 8)) * (1 - 0.8 * clear), (0.012 + f.gloom * 0.03) * (1 - 0.85 * clear));
-      world.update(camera, performance.now() / 1000);
+      world.update(camera, performance.now() / 1000); understory.update(camera);
       // The village's figures and houses: the same sun (dimmed in a mountain's baked shadow), shadows near her, fog of the hour's horizon.
       dir.copy(sunDirection(h)); const lit = world.sunAt(f.feet.x, f.feet.z);
       sun.color.set(h.sun); sun.intensity = h.sunI * 0.9 * (0.25 + 0.75 * lit) * (1 - f.gloom * 0.6); sun.target.position.copy(f.feet); sun.position.copy(f.feet).addScaledVector(dir, 400);

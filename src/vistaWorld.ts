@@ -56,6 +56,8 @@ export interface VistaWorld {
   setHour(h: Hour, bake?: boolean): void;
   setTrees(trees: Tree[]): void;
   setGround(bytes: Uint8Array): void;
+  /** FOREST: the canopy over each cell of the land (n×n, 0..255): the grass thins beneath it. */
+  setCanopy(bytes: Uint8Array): void;
   /** The view through soil while she is beneath it (groundVision's rule). */
   setSoil(amount: number, x: number, z: number): void;
   /** A dark fog over everything (the dark forest). */
@@ -206,7 +208,7 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
   const BARK = ['#8a7058', '#8a7058', '#8a7058', '#8a7058', '#8a7058', '#87705a', '#3a3040', '#1a1218', '#87705a', '#9d988f', '#0c060e'];
   const varied = (k: number): Record<string, string> => (k >= 5 && k < 9 ? { VARIED: '' } : {});
   const motion = (k: number): Record<string, string> => (k === 9 ? { TWITCH: '' } : k === 10 ? { PULSE: '' } : {});
-  const foliage = LEAVES.map((c, k) => solid(c, k >= 9 ? motion(k) : { USE_SWAY: '', ...varied(k) })), farFoliage = LEAVES.map((c, k) => solid(c, { ...varied(k), ...motion(k) })), barks = BARK.map((c, k) => solid(c, motion(k)));
+  const foliage = LEAVES.map((c, k) => solid(c, k >= 9 ? motion(k) : { USE_SWAY: '', ...varied(k) })), farFoliage = LEAVES.map((c, k) => solid(c, { ...varied(k), ...motion(k) })), barks = BARK.map((c, k) => solid(c, { ...motion(k), UNDER: '' }));
   interface Kind { trunk: THREE.BufferGeometry; crown: THREE.BufferGeometry; far: THREE.BufferGeometry; radius: number }
   const kinds: Kind[] = LEAVES.map((_, k) => treeKind(k));
   const mk = (geo: THREE.BufferGeometry, mat: THREE.Material, n: number, cast: boolean) => { const m = new THREE.InstancedMesh(geo, mat, Math.max(1, n)); m.count = 0; m.frustumCulled = false; m.castShadow = cast; m.receiveShadow = true; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(m); return m; };
@@ -224,6 +226,8 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
   }
   const matrixOf = (t: Tree, m: THREE.Matrix4) => t.frame ? m.fromArray(t.frame) : m.compose(new THREE.Vector3(t.x, t.y - 0.15, t.z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), t.rot), new THREE.Vector3(t.scale, t.scale, t.scale));
   let partitionAt = new THREE.Vector3(1e9, 0, 0), nearCount = 0, near: Tree[] = [];
+  /** Tuning (FOREST): a tree smaller than YOUNG_FAR is not drawn past YOUNG_REACH m. */
+  const YOUNG_FAR = 1.25, YOUNG_REACH = 260;
   /** Tuning: past this a tree is not drawn at all (the haze has it). */
   const TREE_REACH = opts.treeReach ?? 1400;
   function partitionTrees(cam: THREE.Vector3): void {
@@ -235,7 +239,8 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
         const d2 = (t.x - cam.x) ** 2 + (t.z - cam.z) ** 2; if (d2 > f2) continue;
         matrixOf(t, m);
         if (d2 < r2) { nearTrunk[k].setMatrixAt(a, m); nearCrown[k].setMatrixAt(a, m); a++; near.push(t); }
-        else farCrown[k].setMatrixAt(b++, m);
+        // FOREST: far off, a young tree's crown is lost among the older ones about it; not drawn.
+        else if (t.scale >= YOUNG_FAR || d2 < YOUNG_REACH * YOUNG_REACH) farCrown[k].setMatrixAt(b++, m);
         if (d2 < s2) { ct.setMatrixAt(c, m); cc.setMatrixAt(c, m); c++; }
       }
       nearTrunk[k].count = nearCrown[k].count = a; farCrown[k].count = b; ct.count = cc.count = c; nearCount += a;
@@ -285,6 +290,7 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
     uniforms: shared,
     root, setHour, setQuality, setTrees,
     setGround(bytes) { groundBytes.set(bytes); groundTex.needsUpdate = true; },
+    setCanopy(bytes) { for (let k = 0; k < N * N; k++) mapBytes[k * 4] = bytes[k]; mapTex.needsUpdate = true; },
     setSoil(amount, x, z) {
       terrainMat.uniforms.uSoil.value.set(x, z, amount, 0);
       const glass = amount > 0.01; if (terrainMat.transparent !== glass) { terrainMat.transparent = glass; terrainMat.needsUpdate = true; }

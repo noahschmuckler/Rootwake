@@ -87,6 +87,22 @@ The overworld is a large plateau bounded by mountains, the summit of DiggyDwarve
   - **Rivers are barriers:** walking and grass travel refuse water deeper than `WADE_DEPTH` 0.35 m (`walkable`). The decks are walked on.
   - **Roots pass under the rivers:** root travel is unchanged.
   - **Not yet:** hobbits, wolves and the Dark Young still walk through rivers.
+- **T4, the forests (the creature session), first pass done 2026-10-20.** Noah: denser forests of different ages, saplings, leaf mould under dense canopy, shrubs and undergrowth, so a forest reads apart from the wooded plains and feels impenetrable without being harder to walk.
+  - **Stands** (`chunkModel.forestField` / `forestAt`, 0..1): a slow noise (`FOREST_WAVE` 170 m) broken by a quicker one runs stands of true forest through the wood. It is 0 on the meadows, on the karst's island and in her taint (her wood keeps its own rule). About two fifths of the wood is forest; the rest is wooded plains.
+  - **The trees** (`chunkTrees`): the plains' trees stand where they always stood (the old draw is untouched). A second draw adds a stand's trees, up to `FOREST_CAP` 60 a chunk, closer the deeper in (`SPACING` 4.5 → 2.1 m, scaled by size).
+    - They come in `AGES`: old giants 1.7–2.4 (14%), mature 1.0–1.6 (50%), young 0.55–0.95 (36%).
+    - They are real trees: climbed, rooted, colliding. Trunks never crowd her way shut (tested).
+  - **The understory** (`understory.ts`): saplings (1–2.7 m), shrubs (0.4–1.6 m, at her chest and over her head) and ferns, drawn and not stood on, so she pushes through.
+    - Each 24 m tile grows the same whenever it comes near, clear of the trunks, the water and the places. It is thickest at a stand's edge (shrubs, saplings) and in its shade (ferns), with a few shrubs out on the plains.
+    - They are drawn instanced, in the vista's own light and sway, within `UNDER_REACH` (Low 32 m, Medium 44 m, High 62 m).
+  - **The floor:** leaf mould (`LITTER`, mossy where the canopy opens) over the wood's green in the ground tint.
+    - The canopy (`canopyMap`, in the map texture's spare red) thins the grass beneath it and takes `CANOPY_SHADE` 0.62 of the sun from the ground, the grass, the understory and the trunks. The stand is dim inside; the plains stay bright and grassy.
+  - **Cost** at Medium (`?hud=1`, the same spots), against about 810k triangles before: deep forest about 1.14M, a stand's edge 1.15M, wooded plains 0.93M. Far off, a crown smaller than `YOUNG_FAR` 1.25 is not drawn past `YOUNG_REACH` 260 m. At Low, deep forest is about 790k.
+  - **Not yet:**
+    - fallen and mouldering logs, as low canonical step and vault obstacles (PLATEAU's ask, the parkour's ground);
+    - irregular ground under the litter;
+    - the plain (non-vista) look's understory;
+    - a phone judgement of the cost.
 - **T5, done:** the portals (`src/portalFigure.ts`; the portal alcove and `portalSpot` in `descentModel.ts`; the wiring in `village.ts`).
   - **The catwalk portal:** every catwalk has a portal in an alcove of its own, a stone arch with a swirling film.
     - "Open the portal" sits her down to the board.

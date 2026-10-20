@@ -194,14 +194,15 @@ test('the overworld: the village at the origin, the karst north, the lair placed
   assert.equal(zoomElevation(ZOOM_MIN), ELEV_LOW); assert.equal(zoomElevation(ZOOM_MAX), ELEV_HIGH); assert.ok(zoomElevation(20) > ELEV_LOW && zoomElevation(20) < ELEV_HIGH);
 });
 
-import { CHUNK, LOAD_RING, MEADOW_ISLAND, KARST_CLEARING, noise, hills, beyond, biomeAt, chunkTrees, chunksAround, chunkOf } from '../src/chunkModel';
+import { CHUNK, LOAD_RING, MEADOW_ISLAND, KARST_CLEARING, noise, hills, beyond, biomeAt, chunkTrees, chunksAround, chunkOf, forestAt, FOREST_CAP, SPACING, AGES } from '../src/chunkModel';
+import { underTile, UNDER_TILE, type UnderLand } from '../src/understory';
 import { treesNear, setTreeProvider, nearestTree as nearest, hopTargets as hops } from '../src/villageModel';
 test('the land beyond the meadow: noise in range and seeded, no hills on the island, the dark forest about the lair, a chunk\'s trees the same each time and never on the island or in the karst\'s clearing; the model sees chunk trees through the provider', () => {
   for (let i = 0; i < 50; i++) { const v = noise(i * 13.7, i * 7.1, 100, 1); assert.ok(v >= 0 && v <= 1); } assert.notEqual(noise(50, 50, 100, 1), noise(50, 50, 100, 2), 'seeded');
   assert.equal(hills(10, 10), 0, 'the village is flat'); assert.equal(beyond(0, MEADOW_ISLAND - 1), 0); assert.equal(beyond(0, MEADOW_ISLAND + 200), 1); assert.ok(Math.abs(hills(300, 300)) <= 7.1, 'hills within their height');
   const lair = places(1)[2]; assert.equal(biomeAt(lair.x, lair.z, 1), 'dark'); assert.notEqual(biomeAt(0, 0, 1), 'dark'); { const fx = KARST_AT.x - (lair.x - KARST_AT.x) * 0.5, fz = KARST_AT.z - (lair.z - KARST_AT.z) * 0.5; assert.ok(['meadow', 'wood'].includes(biomeAt(fx, fz, 1)), 'across the karst from her, living wood or meadow'); }
-  const a = chunkTrees(3, 3, 1), b = chunkTrees(3, 3, 1); assert.deepEqual(a, b, 'the same whenever loaded'); assert.ok(a.length > 0 && a.length <= 16); assert.ok(a.every(t => t.x >= 3 * CHUNK && t.x < 4 * CHUNK && t.z >= 3 * CHUNK && t.z < 4 * CHUNK), 'within the chunk'); assert.ok(a.every(t => t.id >= 100000), 'ids apart from the village\'s');
-  for (let i = 0; i < a.length; i++) for (let k = i + 1; k < a.length; k++) assert.ok(Math.hypot(a[i].x - a[k].x, a[i].z - a[k].z) >= 4.5, 'spaced');
+  const a = chunkTrees(3, 3, 1), b = chunkTrees(3, 3, 1); assert.deepEqual(a, b, 'the same whenever loaded'); assert.ok(a.length > 0 && a.length <= FOREST_CAP); assert.ok(a.every(t => t.x >= 3 * CHUNK && t.x < 4 * CHUNK && t.z >= 3 * CHUNK && t.z < 4 * CHUNK), 'within the chunk'); assert.ok(a.every(t => t.id >= 100000), 'ids apart from the village\'s');
+  for (let i = 0; i < a.length; i++) for (let k = i + 1; k < a.length; k++) assert.ok(Math.hypot(a[i].x - a[k].x, a[i].z - a[k].z) >= SPACING[1] * 0.55, 'spaced (a stand\'s heart the closest)');
   assert.equal(chunkTrees(0, 0, 1).length, 0, 'none on the island'); const kc = chunkOf(KARST_AT.x, KARST_AT.z); assert.ok(chunkTrees(kc.cx, kc.cz, 1).every(t => Math.hypot(t.x - KARST_AT.x, t.z - KARST_AT.z) >= KARST_CLEARING), 'the karst\'s clearing kept');
   assert.equal(chunksAround(0, 0).length, (2 * LOAD_RING + 1) ** 2);
   assert.equal(hills(KARST_AT.x + 10, KARST_AT.z - 10), 0, 'the karst stands on flat ground'); assert.equal(hills(KARST_AT.x, KARST_AT.z + 90), 0);
@@ -646,3 +647,27 @@ test('S1: the pack eats at its warren first, a rabbit a wolf, and goes home fed;
 import './den.test';
 import './steward.test';
 import './cultivation.test';
+
+// FOREST (Noah, 2026-10-20): stands of true forest through the wood, its trees of every age, its understory drawn, not stood on.
+test('forest: stands through the wood, none in the meadow or her taint; denser and of every age in a stand, the plains\' trees where they stood', () => {
+  const lair = places(1).find(p => p.id === 'lair')!; assert.equal(forestAt(lair.x, lair.z, 1), 0, 'her wood keeps its own rule'); assert.equal(forestAt(0, 0, 1), 0, 'not the village');
+  let deep = 0, plain = 0, n = 0; for (let x = -1500; x < 1500; x += 50) for (let z = -1500; z < 1500; z += 50) { if (biomeAt(x, z, 1) !== 'wood') continue; n++; const f = forestAt(x, z, 1); assert.ok(f >= 0 && f <= 1); if (f > 0.8) deep++; if (f < 0.05) plain++; }
+  assert.ok(deep / n > 0.15 && plain / n > 0.25, `the wood is both forest and wooded plains (${deep}/${plain}/${n})`);
+  // A deep stand's chunk against a plains chunk.
+  const ch = (x: number, z: number) => chunkTrees(Math.floor(x / CHUNK), Math.floor(z / CHUNK), 1);
+  const stand = ch(-160, 0), open = ch(169, 62); assert.ok(stand.length >= 2 * open.length && stand.length >= 30, `${stand.length} vs ${open.length}`);
+  const sizes = stand.map(t => t.size); assert.ok(sizes.some(s => s >= AGES[0].size[0]) && sizes.some(s => s <= AGES[2].size[1]), 'old giants and young trees together');
+  for (let i = 0; i < stand.length; i++) for (let k = i + 1; k < stand.length; k++) assert.ok(Math.hypot(stand[i].x - stand[k].x, stand[i].z - stand[k].z) > 0.32 * (stand[i].size + stand[k].size) + 0.5, 'trunks never crowd her way shut');
+  assert.equal(new Set(stand.map(t => t.id)).size, stand.length);
+});
+test('forest: the understory grows thick in a stand, thin on the plains, none on the meadow, clear of trunks and water, the same each time', () => {
+  const land: UnderLand = { forest: (x, z) => forestAt(x, z, 1), wooded: (x, z) => biomeAt(x, z, 1) === 'wood' && beyond(x, z, 1) > 0.6, onLand: () => true, trunks: (x0, z0, x1, z1) => { const out: { x: number; z: number; r: number }[] = []; for (let cz = Math.floor(z0 / CHUNK); cz <= Math.floor(z1 / CHUNK); cz++) for (let cx = Math.floor(x0 / CHUNK); cx <= Math.floor(x1 / CHUNK); cx++) for (const t of chunkTrees(cx, cz, 1)) out.push({ x: t.x, z: t.z, r: 0.32 * t.size }); return out; }, clear: () => true };
+  const tileOf = (x: number, z: number) => underTile(Math.floor(x / UNDER_TILE), Math.floor(z / UNDER_TILE), 1, land);
+  const deep = tileOf(-160, 0), open = tileOf(169, 62), meadow = tileOf(5, 5);
+  assert.deepEqual(deep, tileOf(-160, 0)); assert.equal(meadow.length, 0);
+  assert.ok(deep.length > 3 * Math.max(1, open.length) && deep.length > 60, `${deep.length} vs ${open.length}`);
+  for (const k of ['sapling', 'shrub', 'fern']) assert.ok(deep.some(i => i.kind === k), k);
+  const trunks = land.trunks(-200, -40, -120, 40); for (const it of deep) assert.ok(trunks.every(t => Math.hypot(t.x - it.x, t.z - it.z) >= t.r + 0.2), 'clear of the trunks');
+  assert.equal(underTile(Math.floor(-160 / UNDER_TILE), 0, 1, { ...land, onLand: () => false }).length, 0, 'none in the water');
+});
+

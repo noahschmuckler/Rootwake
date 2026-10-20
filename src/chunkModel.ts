@@ -31,6 +31,29 @@ export function biomeAt(x: number, z: number, seed = 1): Biome {
   const lair = places(seed).find(p => p.id === 'lair')!; if (Math.hypot(x - lair.x, z - lair.z) <= Math.max(FOREST_RADIUS, TAINT.edge)) return 'dark';
   return noise(x, z, 110, seed + 3) > 0.58 ? 'meadow' : 'wood';
 }
+/** FOREST (Noah, 2026-10-20): the wood is not one wood. Through it run stands of true forest, dense, old and young
+ * together, dark underfoot with leaf mould; between them the wooded plains keep their scattered trees and grass. How deep in
+ * a stand a point lies: 0 on the plains, the meadow and her taint (her wood has its own rule), 1 at a stand's heart. The
+ * stands are a slow noise (FOREST_WAVE m) broken by a quicker one, and thin out toward the meadow. Tuning. */
+export const FOREST_WAVE = 170, FOREST_EDGE: [number, number] = [0.42, 0.6];
+const smooth01 = (t: number): number => { const c = Math.min(1, Math.max(0, t)); return c * c * (3 - 2 * c); };
+/** The forest field for a seed, the lair looked up once (for the land's every cell). */
+export function forestField(seed = 1): (x: number, z: number) => number {
+  const lair = places(seed).find(p => p.id === 'lair')!, dark = Math.max(FOREST_RADIUS, TAINT.edge);
+  return (x, z) => {
+    if (Math.hypot(x - lair.x, z - lair.z) <= dark) return 0;
+    const m = noise(x, z, 110, seed + 3); if (m > 0.58) return 0;
+    const f = noise(x, z, FOREST_WAVE, seed + 11) * 0.7 + noise(x, z, 48, seed + 12) * 0.3;
+    // Never on the villages' meadows nor the karst's island: the stands thin out as the meadow comes.
+    return smooth01((f - FOREST_EDGE[0]) / (FOREST_EDGE[1] - FOREST_EDGE[0])) * smooth01((0.58 - m) / 0.1) * Math.min(1, beyond(x, z, seed) * 1.6);
+  };
+}
+const fields = new Map<number, (x: number, z: number) => number>();
+export const forestAt = (x: number, z: number, seed = 1): number => { let f = fields.get(seed); if (!f) { f = forestField(seed); fields.set(seed, f); } return f(x, z); };
+/** A forest tree's size by its age: the old giants a few, the mature most, the young filling the gaps. Tuning. */
+export const AGES: { share: number; size: [number, number] }[] = [{ share: 0.14, size: [1.7, 2.4] }, { share: 0.5, size: [1.0, 1.6] }, { share: 0.36, size: [0.55, 0.95] }];
+/** How many trees a chunk may hold, how hard the forest pass tries, and the spacing between trunks (m) on the plains and in a stand's heart (scaled by the trees' sizes). Tuning. */
+export const FOREST_CAP = 60, FOREST_TRIES = 220, SPACING: [number, number] = [4.5, 2.1];
 export const chunkKey = (cx: number, cz: number): string => `${cx},${cz}`;
 export const chunkOf = (x: number, z: number): { cx: number; cz: number } => ({ cx: Math.floor(x / CHUNK), cz: Math.floor(z / CHUNK) });
 /** A chunk's trees, from its own seed: by biome's density, none on the island or in the karst's clearing, spaced. Ids are unique per chunk so a chunk tree is never confused with the village's. */
@@ -41,6 +64,23 @@ export function chunkTrees(cx: number, cz: number, seed = 1): Tree[] {
     const b = biomeAt(x, z, seed), keep = b === 'meadow' ? 0.12 : b === 'wood' ? 0.8 : 0.9; if (rand() > keep) continue;
     if (out.some(t => Math.hypot(t.x - x, t.z - z) < 4.5)) continue;
     out.push({ id: base + out.length, x, z, size: b === 'dark' ? 1.1 + rand() * 0.7 : 0.8 + rand() * 0.7 });
+  }
+  // FOREST: the stands, on a second draw so the plains' trees stand where they always stood. Trees of every age, closer the
+  // deeper in, a giant's crown wider apart from its neighbours than a sapling's.
+  // The field sampled on the chunk's 8 m grid and read between (most chunks have no stand at all and are passed over).
+  const G = 8, gs = CHUNK / G, grid = new Float32Array((G + 1) * (G + 1)); let most = 0;
+  for (let j = 0; j <= G; j++) for (let i = 0; i <= G; i++) { const v = forestAt((cx * G + i) * gs, (cz * G + j) * gs, seed); grid[j * (G + 1) + i] = v; most = Math.max(most, v); }
+  if (most < 0.12) return out;
+  const fieldAt = (x: number, z: number): number => { const u = x / gs - cx * G, v = z / gs - cz * G, i = Math.min(G - 1, Math.floor(u)), j = Math.min(G - 1, Math.floor(v)), tu = u - i, tv = v - j, k = j * (G + 1) + i; return (grid[k] * (1 - tu) + grid[k + 1] * tu) * (1 - tv) + (grid[k + G + 1] * (1 - tu) + grid[k + G + 2] * tu) * tv; };
+  const r2 = mulberry32((seed * 48271 + cx * 15485863 + cz * 32452843 + 5) >>> 0);
+  for (let i = 0; i < FOREST_TRIES && out.length < FOREST_CAP; i++) {
+    const x = (cx + r2()) * CHUNK, z = (cz + r2()) * CHUNK, f = fieldAt(x, z), roll = r2(), age = r2(), grow = r2();
+    if (f < 0.12 || roll > f) continue;
+    if (beyond(x, z, seed) < 0.6 || Math.hypot(x - KARST_AT.x, z - KARST_AT.z) < KARST_CLEARING || !onLand(seed, x, z, 2.5)) continue;
+    const a = age < AGES[0].share ? AGES[0] : age < AGES[0].share + AGES[1].share ? AGES[1] : AGES[2], size = a.size[0] + grow * (a.size[1] - a.size[0]);
+    const gap = (SPACING[0] + (SPACING[1] - SPACING[0]) * f) * (0.55 + 0.45 * size);
+    if (out.some(t => Math.hypot(t.x - x, t.z - z) < gap * 0.5 + (SPACING[0] + (SPACING[1] - SPACING[0]) * f) * (0.55 + 0.45 * t.size) * 0.5)) continue;
+    out.push({ id: base + out.length, x, z, size });
   }
   return out;
 }
