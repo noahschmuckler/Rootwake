@@ -19,7 +19,7 @@ const report={};
 try{
   const page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1,hasTouch:true});
   const errors=[];page.on('console',m=>{if(m.type()==='error'||/THREE\.WebGLProgram|Shader Error/.test(m.text()))errors.push(m.text());});page.on('pageerror',e=>errors.push(String(e)));
-  await page.goto(`http://127.0.0.1:4194${BASE}fight/?q=${process.env.FIGHT_Q??'low'}`);await page.click('#begin');
+  await page.goto(`http://127.0.0.1:4194${BASE}fight/?q=${process.env.FIGHT_Q??'low'}`);/* The village builds its whole land on load: under CI's SwiftShader that can run past a click's default 30 s. */await page.click('#begin',{timeout:180000});
   await page.waitForFunction(()=>window.__village&&window.__village.character.status!=='loading'&&window.__look,null,{timeout:180000});
   report.storage=await page.evaluate(()=>!(window.localStorage instanceof Storage));
   assert.ok(report.storage,'the practice saves nothing to the real storage');

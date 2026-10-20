@@ -95,6 +95,7 @@ The overworld is a large plateau bounded by mountains, the summit of DiggyDwarve
   - **The understory** (`understory.ts`): saplings (1–2.7 m), shrubs (0.4–1.6 m, at her chest and over her head) and ferns, drawn and not stood on, so she pushes through.
     - Each 24 m tile grows the same whenever it comes near, clear of the trunks, the water and the places. It is thickest at a stand's edge (shrubs, saplings) and in its shade (ferns), with a few shrubs out on the plains.
     - They are drawn instanced, in the vista's own light and sway, within `UNDER_REACH` (Low 32 m, Medium 44 m, High 62 m).
+    - Tiles grow a few milliseconds a frame, nearest first, never all at once. The forest map is sampled every third land cell. Ferns carry both faces so all the understory shares one shader.
   - **The floor:** leaf mould (`LITTER`, mossy where the canopy opens) over the wood's green in the ground tint.
     - The canopy (`canopyMap`, in the map texture's spare red) thins the grass beneath it and takes `CANOPY_SHADE` 0.62 of the sun from the ground, the grass, the understory and the trunks. The stand is dim inside; the plains stay bright and grassy.
   - **Cost** at Medium (`?hud=1`, the same spots), against about 810k triangles before: deep forest about 1.14M, a stand's edge 1.15M, wooded plains 0.93M. Far off, a crown smaller than `YOUNG_FAR` 1.25 is not drawn past `YOUNG_REACH` 260 m. At Low, deep forest is about 790k.

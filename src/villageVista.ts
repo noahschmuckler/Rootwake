@@ -50,8 +50,10 @@ const WOOD = [0.06, 0.13, 0.04, 0.35], DARK = [0.05, 0.035, 0.07, 0.9], BLIGHT =
 const forestCells = new WeakMap<Land, Float32Array>();
 function forestOf(land: Land, seed: number): Float32Array {
   let f = forestCells.get(land); if (f) return f;
-  const { n, cell, half } = land, at = forestField(seed); f = new Float32Array(n * n);
-  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) f[j * n + i] = at(i * cell - half, j * cell - half);
+  // Sampled every STEP cells and read between: the stands are tens of metres across, and the full map took a quarter-second on a desktop.
+  const { n, cell, half } = land, at = forestField(seed), STEP = 3, m = Math.ceil((n - 1) / STEP) + 1, g = new Float32Array(m * m); f = new Float32Array(n * n);
+  for (let j = 0; j < m; j++) for (let i = 0; i < m; i++) g[j * m + i] = at(Math.min(n - 1, i * STEP) * cell - half, Math.min(n - 1, j * STEP) * cell - half);
+  for (let j = 0; j < n; j++) { const v = j / STEP, j0 = Math.min(m - 2, Math.floor(v)), tv = v - j0; for (let i = 0; i < n; i++) { const u = i / STEP, i0 = Math.min(m - 2, Math.floor(u)), tu = u - i0, k = j0 * m + i0; f[j * n + i] = (g[k] * (1 - tu) + g[k + 1] * tu) * (1 - tv) + (g[k + m] * (1 - tu) + g[k + m + 1] * tu) * tv; } }
   forestCells.set(land, f); return f;
 }
 /** Leaf mould under a stand's canopy, with moss where the light comes through; how much it covers the wood's own green past FOREST_LITTER_FROM. Tuning. */

@@ -95,8 +95,9 @@ function fernShape(seed: number): THREE.BufferGeometry {
     const pt = (t: number, side: number): number[] => { const r = t * len, y = Math.sin(t * Math.PI * 0.8) * lift * (1 - t * 0.35), w = 0.06 * Math.sin(Math.min(1, t * 1.6) * Math.PI) * (1 - t * 0.6); return [ca * r - sa * w * side, y, sa * r + ca * w * side]; };
     for (let s = 0; s < segs; s++) {
       const t0 = s / segs, t1 = (s + 1) / segs, a0 = pt(t0, -1), b0 = pt(t0, 1), a1 = pt(t1, -1), b1 = pt(t1, 1);
-      p.push(...a0, ...b0, ...a1, ...b0, ...b1, ...a1);
-      for (let k = 0; k < 6; k++) nrm.push(ca * 0.25, 0.95, sa * 0.25);
+      // Both faces, so the fern shares the shrubs' one-sided material (and its shader).
+      p.push(...a0, ...b0, ...a1, ...b0, ...b1, ...a1, ...a0, ...a1, ...b0, ...b0, ...a1, ...b1);
+      for (let k = 0; k < 12; k++) nrm.push(ca * 0.25, 0.95, sa * 0.25);
     }
   }
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
@@ -119,13 +120,13 @@ const KINDS_DRAWN = [
 export interface Understory { update(camera: THREE.Camera): void; setQuality(name: string): void; stats(): { tiles: number; items: number }; group: THREE.Group }
 export function createUnderstory(parent: THREE.Object3D, shared: Record<string, THREE.IUniform>, land: UnderLand, height: (x: number, z: number) => number, seed: number, quality = 'Medium'): Understory {
   const group = new THREE.Group(); group.name = 'understory'; parent.add(group);
-  const lit = (hex: string, defines: Record<string, string>, side: THREE.Side = THREE.FrontSide) => new THREE.ShaderMaterial({ uniforms: { ...THREE.UniformsUtils.merge([THREE.UniformsLib.lights]), ...shared, uColor: { value: new THREE.Color(hex) } }, vertexShader: solidVert, fragmentShader: solidFrag, lights: true, defines, side });
+  const lit = (hex: string, defines: Record<string, string>) => new THREE.ShaderMaterial({ uniforms: { ...THREE.UniformsUtils.merge([THREE.UniformsLib.lights]), ...shared, uColor: { value: new THREE.Color(hex) } }, vertexShader: solidVert, fragmentShader: solidFrag, lights: true, defines });
   /** Each drawn bucket: a shape, a material, and the items it draws (rebuilt as she moves). */
   interface Bucket { mesh: THREE.InstancedMesh; kind: UnderKind; pick: (v: number) => boolean; part?: 'stem' | 'crown' }
   const buckets: Bucket[] = [], CAP = 9000;
   const mk = (geo: THREE.BufferGeometry, mat: THREE.Material): THREE.InstancedMesh => { const m = new THREE.InstancedMesh(geo, mat, CAP); m.count = 0; m.frustumCulled = false; m.receiveShadow = true; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); group.add(m); return m; };
   for (const d of KINDS_DRAWN) for (let s = 0; s < d.shapes; s++) {
-    const geo = d.kind === 'shrub' ? shrubShape(seed * 13 + s) : fernShape(seed * 17 + s), mat = lit(d.colours[s % d.colours.length], { USE_SWAY: '', VARIED: '', UNDER: '' }, d.kind === 'fern' ? THREE.DoubleSide : THREE.FrontSide);
+    const geo = d.kind === 'shrub' ? shrubShape(seed * 13 + s) : fernShape(seed * 17 + s), mat = lit(d.colours[s % d.colours.length], { USE_SWAY: '', VARIED: '', UNDER: '' });
     buckets.push({ mesh: mk(geo, mat), kind: d.kind, pick: v => Math.floor(v * d.shapes) === s });
   }
   for (let s = 0; s < 2; s++) {
@@ -136,17 +137,25 @@ export function createUnderstory(parent: THREE.Object3D, shared: Record<string, 
   let q = UNDER_REACH[quality] ?? UNDER_REACH.Medium;
   const tiles = new Map<string, UnderItem[]>(), at = new THREE.Vector3(1e9, 0, 0), m = new THREE.Matrix4(), pos = new THREE.Vector3(), rot = new THREE.Quaternion(), scl = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   let items = 0;
-  function tile(tx: number, tz: number): UnderItem[] {
-    const key = `${tx},${tz}`; let t = tiles.get(key);
-    if (!t) { t = underTile(tx, tz, seed, land); tiles.set(key, t); if (tiles.size > 400) for (const k of [...tiles.keys()].slice(0, 100)) tiles.delete(k); }
-    return t;
+  /** A tile's growth if it has grown; the tiles still to grow are grown a few milliseconds a frame (BUDGET_MS), never all at once. */
+  const BUDGET_MS = 4, pending: string[] = [];
+  function tile(tx: number, tz: number): UnderItem[] | null {
+    const key = `${tx},${tz}`, t = tiles.get(key); if (t) return t;
+    if (!pending.includes(key)) pending.push(key); return null;
+  }
+  let sinceShown = 0;
+  function grow(): boolean {
+    if (!pending.length) return false; const t0 = performance.now();
+    while (pending.length && performance.now() - t0 < BUDGET_MS) { const key = pending.shift()!, [tx, tz] = key.split(',').map(Number); tiles.set(key, underTile(tx, tz, seed, land)); sinceShown++; }
+    if (tiles.size > 400) for (const k of [...tiles.keys()].slice(0, 100)) tiles.delete(k);
+    return true;
   }
   function rebuild(c: THREE.Vector3): void {
     for (const b of buckets) b.mesh.count = 0;
     const R = q.reach, t0x = Math.floor((c.x - R) / UNDER_TILE), t1x = Math.floor((c.x + R) / UNDER_TILE), t0z = Math.floor((c.z - R) / UNDER_TILE), t1z = Math.floor((c.z + R) / UNDER_TILE);
     items = 0;
     for (let tz = t0z; tz <= t1z; tz++) for (let tx = t0x; tx <= t1x; tx++) {
-      for (const it of tile(tx, tz)) {
+      for (const it of tile(tx, tz) ?? []) {
         const d2 = (it.x - c.x) ** 2 + (it.z - c.z) ** 2, lim = it.kind === 'fern' ? R * 0.65 : R;
         if (it.v > q.share || d2 > lim * lim) continue;
         const y = height(it.x, it.z) - (it.kind === 'shrub' ? 0.06 : 0.02);
@@ -157,11 +166,15 @@ export function createUnderstory(parent: THREE.Object3D, shared: Record<string, 
       }
     }
     for (const b of buckets) b.mesh.instanceMatrix.needsUpdate = true;
+    // The nearest tiles grow first.
+    const key = (k: string) => { const [tx, tz] = k.split(',').map(Number); return ((tx + 0.5) * UNDER_TILE - c.x) ** 2 + ((tz + 0.5) * UNDER_TILE - c.z) ** 2; };
+    pending.sort((a, b) => key(a) - key(b)); sinceShown = 0;
     at.copy(c);
   }
   return {
     group,
-    update(camera) { const c = camera.position; if ((c.x - at.x) ** 2 + (c.z - at.z) ** 2 > 36) rebuild(c); },
+    // Shown as it grows: once a few tiles have grown, and when the last has.
+    update(camera) { const c = camera.position; if (grow() && (!pending.length || sinceShown >= 4)) at.set(1e9, 0, 0); if ((c.x - at.x) ** 2 + (c.z - at.z) ** 2 > 36) rebuild(c); },
     setQuality(name) { q = UNDER_REACH[name] ?? UNDER_REACH.Medium; at.set(1e9, 0, 0); },
     stats: () => ({ tiles: tiles.size, items }),
   };

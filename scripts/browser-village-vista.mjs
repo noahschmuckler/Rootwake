@@ -18,7 +18,7 @@ const report={};
 try{
   const page=await browser.newPage({viewport:{width:390,height:844},deviceScaleFactor:1,hasTouch:true});
   const errors=[];page.on('console',m=>{if(m.type()==='error'||/THREE\.WebGLProgram|Shader Error/.test(m.text()))errors.push(m.text());});page.on('pageerror',e=>errors.push(String(e)));
-  await page.goto(`http://127.0.0.1:4193${BASE}village/?q=${process.env.VILLAGE_VISTA_Q??"medium"}&hud=1`);await page.click('#begin');
+  await page.goto(`http://127.0.0.1:4193${BASE}village/?q=${process.env.VILLAGE_VISTA_Q??"medium"}&hud=1`);/* The village builds its whole land on load: under CI's SwiftShader that can run past a click's default 30 s. */await page.click('#begin',{timeout:180000});
   await page.waitForFunction(()=>window.__village&&window.__village.character.status!=='loading'&&window.__look,null,{timeout:180000});
   // PLATEAU.md: she wakes on the karst's summit.
   report.start=await page.evaluate(()=>({zone:window.__village.karst.zone,mode:window.__village.mode,baked:window.__plateau.land}));assert.equal(report.start.zone,'summit',`she wakes on the summit (${JSON.stringify(report.start)})`);assert.ok(report.start.baked?.baked,'the land was baked at build');
