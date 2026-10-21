@@ -174,15 +174,18 @@ Each answers one question on the phone, in the order every study here has used.
 - **Phase 2 and after**: the surface, cities, politics, the pantheon, Delvira; then space. Not planned
   in detail; held as the direction.
 
-## Open calls for Noah
+## Noah's calls (2026-10-21)
 
-- **Pace.** The daily step and `STARVE_DAYS`; how many days the first village has before the front
-  touches it if she does nothing (proposed: about twelve).
-- **What captures a village**: folk below a count, infants all taken, stores fouled, or any of them.
-- **Whether captured villagers die, flee to the next village, or are turned** (V6's possession is on
-  paper).
-- **Whether the ward's calm is a push from C1** or only from C3.
-- **Whether the breach itself can ever be starved to nothing**, or always keeps M1's rings (proposed:
-  keeps them; the heart is M2's and the finale's).
-- **The split of work**: the front, the taint map and the places are the land session's; the raids,
-  snatchers and sacs from new points, the knot regrowing and the industrial ruins the creature session's.
+- **Pace:** about twelve days from the breach's edge to the first village if she does nothing. Agreed.
+- **What captures a village:** the front reaching it fouls its stores; their only meals are then the dark
+  foodstuff; **three days eating only dark food turns the village.**
+- **A turned village:** its villagers eat dark food, are unnaturally fertile (a raised birthrate), and do
+  not resist their infants being taken. The Dark Young keep a ratio of themselves to villagers and let
+  some infants grow up, so the population rises and the birthrate with it. They build no more houses;
+  turned villagers sleep three to a bed without complaint.
+- **The ward's calm:** read as the simpler of the two: from C1 a woken ward is an irritant the hyphae
+  avoid and wither inside, not only a calming of the Colour.
+- **The breach always keeps M1's rings.** New germination points can be starved out of existence; the
+  original mother cannot, in this development phase.
+- **The work:** the land session orchestrates agents for the contagion, pass by pass, each judged on the
+  phone before the next. The industrial ruins catalogue stays offered to the creature session.
