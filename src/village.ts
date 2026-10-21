@@ -160,7 +160,7 @@ function taintVeins(): { x: number; z: number }[][] {
 /** In the taint the soil is poisoned: the grass will not take her (the roots are closed with the blight, below). */
 const grassOpen = (x: number, z: number): boolean => grassCan(x, z) && !inTaint(breach, x, z) && walkable(plateau(home.seed), x, z);
 const look: VillageLook | null = vistaLand ? createVillageLook({ taint: { at: { x: breach.x, z: breach.z }, veins: taintVeins() }, renderer, scene, camera, sun, hemi, vl: vistaLand, seed: home.seed, treesOf: chunks.treesOf, villages: () => ctxs.map(c => ({ root: c.world.root, x: c.ox, z: c.oz })), dark: (x, z) => biomeAt(x, z, home.seed) === 'dark', blighted: (x, z) => isBlighted(home_().v, x, z) }) : null;
-if (look) { Object.assign(window, { __look: look }); chunks.setLook({ ground: false, trees: false }); for (const c of ctxs) c.world.root.traverse(o => { if (o.name === 'tree-wood' || o.name === 'tree-leaves') o.visible = false; }); look.refreshClearing(); }
+if (look) { Object.assign(window, { __look: look }); chunks.setLook({ ground: false, trees: false }); for (const c of ctxs) c.world.root.traverse(o => { if (o.name === 'tree-wood' || o.name === 'tree-leaves' || o.name === 'tree-collar') o.visible = false; }); look.refreshClearing(); }
 // PLATEAU.md: the rivers' water, the crossings and the island's old bridge.
 const waterworks = buildWaterworks(look ? look.world.root : scene, plateau(home.seed), look ? look.world.uniforms : null);
 const WARDS_KEY = 'rootwake-wards-read';

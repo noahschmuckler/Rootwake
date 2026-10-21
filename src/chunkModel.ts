@@ -53,7 +53,8 @@ export const forestAt = (x: number, z: number, seed = 1): number => { let f = fi
 /** A forest tree's size by its age: the old giants a few, the mature most, the young filling the gaps. Tuning. */
 export const AGES: { share: number; size: [number, number] }[] = [{ share: 0.14, size: [1.7, 2.4] }, { share: 0.5, size: [1.0, 1.6] }, { share: 0.36, size: [0.55, 0.95] }];
 /** How many trees a chunk may hold, how hard the forest pass tries, and the spacing between trunks (m) on the plains and in a stand's heart (scaled by the trees' sizes). Tuning. */
-export const FOREST_CAP = 60, FOREST_TRIES = 220, SPACING: [number, number] = [4.5, 2.1];
+// PINE BARRENS (Noah, 2026-10-21): pitch pines stand farther apart than the broadleaf stands did (their crowns are narrow and the floor is lit), so a stand is tall and open, not a wall.
+export const FOREST_CAP = 48, FOREST_TRIES = 220, SPACING: [number, number] = [5.0, 2.8];
 export const chunkKey = (cx: number, cz: number): string => `${cx},${cz}`;
 export const chunkOf = (x: number, z: number): { cx: number; cz: number } => ({ cx: Math.floor(x / CHUNK), cz: Math.floor(z / CHUNK) });
 /** A chunk's trees, from its own seed: by biome's density, none on the island or in the karst's clearing, spaced. Ids are unique per chunk so a chunk tree is never confused with the village's. */

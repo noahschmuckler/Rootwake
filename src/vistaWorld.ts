@@ -6,7 +6,8 @@ import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { CircleCollider } from './player';
 import { surfaceAt, normalAt, bakeSun, rng, type Land, type Tree, type Rock } from './vistaTerrain';
-import { terrainVert, terrainFrag, grassVert, grassFrag, solidVert, solidFrag, waterVert, waterFrag, skyVert, skyFrag } from './vistaShaders';
+import { terrainVert, terrainFrag, grassVert, grassFrag, solidVert, solidFrag, cardVert, cardFrag, waterVert, waterFrag, skyVert, skyFrag } from './vistaShaders';
+import { spriteTexture, standees, type Standee } from './sprites';
 
 // ── the hour ────────────────────────────────────────────────────────────
 export interface Hour { name: string; elevation: number; azimuth: number; sun: string; sunI: number; zenith: string; horizon: string; ambSky: string; ambGround: string; ambI: number; haze: number; hazeFall: number; cloud: number; exposure: number; stars?: number }
@@ -49,6 +50,8 @@ export interface VistaOptions {
   nearTreesScale: number; treeReach: number;
   /** A finer LOD 0 (half a cell) near her where the land has an exact surface. */
   fineLod: boolean;
+  /** PINE BARRENS: the renderer, to draw the far pines' impostor once (without it, the far pine is a card of needles). */
+  renderer: THREE.WebGLRenderer;
 }
 export interface VistaWorld {
   root: THREE.Group;
@@ -204,11 +207,19 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
   const rockMat = solid(null, { ROCK: '' });
   /** Per kind: the vista's three broadleaves and two conifers, then the village's tree (sized as flora.treeParts at size 1, so her climb meets its crown), dark and blighted. */
   /** 9 and 10 (MOTHER.md, the taint): the grey dead tree, brittle and twitching; the nursery's black vascular growth with its alveoli. */
-  const LEAVES = ['#5c9a34', '#4f8a32', '#7aa83a', '#2f6a4a', '#3c7440', '#5f9a3a', '#3a2c4a', '#24162c', '#c97a3e', '#6e6a66', '#4a1446'];
-  const BARK = ['#8a7058', '#8a7058', '#8a7058', '#8a7058', '#8a7058', '#87705a', '#3a3040', '#1a1218', '#87705a', '#9d988f', '#0c060e'];
+  /** 11 (PINE BARRENS, Noah, 2026-10-21): the pitch pine, its needles yellow-green, its bark dark and platy. */
+  const LEAVES = ['#5c9a34', '#4f8a32', '#7aa83a', '#2f6a4a', '#3c7440', '#5f9a3a', '#3a2c4a', '#24162c', '#c97a3e', '#6e6a66', '#4a1446', '#5d8f36'];
+  const BARK = ['#8a7058', '#8a7058', '#8a7058', '#8a7058', '#8a7058', '#87705a', '#3a3040', '#1a1218', '#87705a', '#9d988f', '#0c060e', '#4e3c30'];
+  const PINE = 11, needleTex = spriteTexture('pine');
+  /** A card material: the sprite's texture, alpha-tested, both faces. */
+  const card = (hex: string, map: THREE.Texture, defines: Record<string, string>) => { const m = lit(cardVert, cardFrag, { uColor: { value: color(hex) }, uMap: { value: map } }, defines); m.side = THREE.DoubleSide; return m; };
+  /** The far pine: an impostor of the near one, drawn once by the renderer (below); until then (or without a renderer) the needle sprite. */
+  const impostor = opts.renderer ? pineImpostor(opts.renderer, needleTex, LEAVES[PINE], BARK[PINE]) : needleTex;
+  /** What the card crowns' shadows are cut from (the caster's depth pass reads the texture's alpha). */
+  const depthCard = new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking, map: needleTex, alphaTest: 0.5, side: THREE.DoubleSide });
   const varied = (k: number): Record<string, string> => (k >= 5 && k < 9 ? { VARIED: '' } : {});
   const motion = (k: number): Record<string, string> => (k === 9 ? { TWITCH: '' } : k === 10 ? { PULSE: '' } : {});
-  const foliage = LEAVES.map((c, k) => solid(c, k >= 9 ? motion(k) : { USE_SWAY: '', ...varied(k) })), farFoliage = LEAVES.map((c, k) => solid(c, { ...varied(k), ...motion(k) })), barks = BARK.map((c, k) => solid(c, { ...motion(k), UNDER: '' }));
+  const foliage = LEAVES.map((c, k) => k === PINE ? card(c, needleTex, { USE_SWAY: '' }) : solid(c, k >= 9 ? motion(k) : { USE_SWAY: '', ...varied(k) })), farFoliage = LEAVES.map((c, k) => k === PINE ? card('#ffffff', impostor, {}) : solid(c, { ...varied(k), ...motion(k) })), barks = BARK.map((c, k) => solid(c, { ...motion(k), UNDER: '' }));
   interface Kind { trunk: THREE.BufferGeometry; crown: THREE.BufferGeometry; far: THREE.BufferGeometry; radius: number }
   const kinds: Kind[] = LEAVES.map((_, k) => treeKind(k));
   const mk = (geo: THREE.BufferGeometry, mat: THREE.Material, n: number, cast: boolean) => { const m = new THREE.InstancedMesh(geo, mat, Math.max(1, n)); m.count = 0; m.frustumCulled = false; m.castShadow = cast; m.receiveShadow = true; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(m); return m; };
@@ -221,9 +232,12 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
     // Only the trees inside the shadow box cast: copies on CASTER_LAYER, which the sun's shadow camera sees and the view does not.
     casters = kinds.flatMap((k, i) => [mk(k.trunk, barks[i], byKind[i].length, true), mk(k.crown, foliage[i], byKind[i].length, true)]);
     for (const c of casters) c.layers.set(CASTER_LAYER);
+    casters[PINE * 2 + 1].customDepthMaterial = depthCard;
     farCrown = kinds.map((k, i) => mk(k.far, farFoliage[i], byKind[i].length, false));
     partitionAt.set(1e9, 0, 0);
   }
+  /** Only the instances in use go to the GPU (the buffers hold every tree of the kind; the land's are thousands). */
+  const upload = (x: THREE.InstancedMesh): void => { const a = x.instanceMatrix; a.clearUpdateRanges(); if (x.count > 0) a.addUpdateRange(0, x.count * 16); a.needsUpdate = true; };
   const matrixOf = (t: Tree, m: THREE.Matrix4) => t.frame ? m.fromArray(t.frame) : m.compose(new THREE.Vector3(t.x, t.y - 0.15, t.z), new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), t.rot), new THREE.Vector3(t.scale, t.scale, t.scale));
   let partitionAt = new THREE.Vector3(1e9, 0, 0), nearCount = 0, near: Tree[] = [];
   /** Tuning (FOREST): a tree smaller than YOUNG_FAR is not drawn past YOUNG_REACH m. */
@@ -244,7 +258,7 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
         if (d2 < s2) { ct.setMatrixAt(c, m); cc.setMatrixAt(c, m); c++; }
       }
       nearTrunk[k].count = nearCrown[k].count = a; farCrown[k].count = b; ct.count = cc.count = c; nearCount += a;
-      for (const x of [nearTrunk[k], nearCrown[k], farCrown[k], ct, cc]) x.instanceMatrix.needsUpdate = true;
+      for (const x of [nearTrunk[k], nearCrown[k], farCrown[k], ct, cc]) upload(x);
     });
     partitionAt.copy(cam);
   }
@@ -255,7 +269,7 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
   const ROCK_REACH = 650;
   const rockMesh = new THREE.InstancedMesh(rockGeometry(), rockMat, Math.max(1, rocks.length)), rockMats = rocks.map(r => new THREE.Matrix4().compose(new THREE.Vector3(r.x, r.y - r.scale * 0.25, r.z), new THREE.Quaternion().setFromEuler(new THREE.Euler(r.tilt, r.rot, r.tilt * 0.5)), new THREE.Vector3(r.scale, r.scale * 0.7, r.scale * 0.9)));
   rockMesh.castShadow = true; rockMesh.receiveShadow = true; rockMesh.frustumCulled = false; rockMesh.name = 'rocks'; rockMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); rockMesh.count = 0; scene.add(rockMesh);
-  function partitionRocks(cam: THREE.Vector3): void { let n = 0; rocks.forEach((r, i) => { if ((r.x - cam.x) ** 2 + (r.z - cam.z) ** 2 < ROCK_REACH ** 2) rockMesh.setMatrixAt(n++, rockMats[i]); }); rockMesh.count = n; rockMesh.instanceMatrix.needsUpdate = true; }
+  function partitionRocks(cam: THREE.Vector3): void { let n = 0; rocks.forEach((r, i) => { if ((r.x - cam.x) ** 2 + (r.z - cam.z) ** 2 < ROCK_REACH ** 2) rockMesh.setMatrixAt(n++, rockMats[i]); }); rockMesh.count = n; upload(rockMesh); }
 
   // ── quality and hour ──
   let q = quality;
@@ -341,6 +355,7 @@ function blob(r: number, at: THREE.Vector3, centre: THREE.Vector3, seed: number,
 function treeKind(kind: number): { trunk: THREE.BufferGeometry; crown: THREE.BufferGeometry; far: THREE.BufferGeometry; radius: number } {
   if (kind === 9) return deadTree();
   if (kind === 10) return growth();
+  if (kind === 11) return pitchPine();
   const r = rng(kind * 101 + 9), Y = new THREE.Vector3(0, 1, 0);
   if (kind < 3 || kind >= 5) {
     // Broadleaf: a trunk that forks into limbs under a crown of 7–9 lumps. The village's (5–7) is flora.treeParts' at size 1: trunk 3.2 m, 0.15–0.42 m thick, the crown about 3.5 m up, 1.7 m out and 1.2 m tall.
@@ -416,6 +431,68 @@ function growth(): { trunk: THREE.BufferGeometry; crown: THREE.BufferGeometry; f
   const crown = shaded(mergeGeometries(sacs)!, p => 0.55 + 0.45 * Math.min(1, p.y / 6));
   const farG = mergeGeometries([limb([new THREE.Vector3(0, -0.3, 0), new THREE.Vector3(0.3, 2.5, 0), new THREE.Vector3(0, 4.6, 0.2)], 0.45, 0.2, 3, 5), ...[0, 1, 2].map(i => { const a = i * 2.1, s = new THREE.SphereGeometry(1.1, 7, 5); s.deleteAttribute('uv'); s.translate(Math.cos(a) * 1.2, 4.6 + i * 0.4, Math.sin(a) * 1.2); return s; })])!;
   return { trunk, crown, far: shaded(farG, p => 0.45 + 0.55 * Math.min(1, p.y / 6)), radius: 0.42 };
+}
+/** PINE BARRENS (Noah, 2026-10-21): the pitch pine, the land's tree outside the villages' woods and her taint, after the New Jersey Pine Barrens.
+ * At size 1 it is PINE_H m tall: a crooked trunk bare to the crown's foot at 3.4 m (villageModel.crownHeight: her climb meets the lowest
+ * limbs there, 1.1 m out), then a few twisted limbs reaching out and up, each ending in needle tufts (sprites' 'pine' cards, crossed,
+ * so sky shows between them), and a ragged top. Giants (size 2.4) stand 15 m; the young (0.55) are scrubby 3.5 m trees. The crown's
+ * normals lean out from its heart so it shades as one mass; the far tree is two crossed cards of the impostor (pineImpostor). Tuning. */
+const PINE_H = 6.4, PINE_CROWN = 3.4;
+function pitchPine(): { trunk: THREE.BufferGeometry; crown: THREE.BufferGeometry; far: THREE.BufferGeometry; radius: number } {
+  const r = rng(1111), H = PINE_H, parts: THREE.BufferGeometry[] = [], tufts: Standee[] = [];
+  // The trunk: tapered, with a lean that turns back (pitch pines seldom grow straight).
+  const lean = new THREE.Vector3(r() - 0.5, 0, r() - 0.5).normalize().multiplyScalar(0.28);
+  const spine = [0, 0.3, 0.62, 1].map(u => new THREE.Vector3(lean.x * Math.sin(u * Math.PI) * 1.4 + lean.z * u * 0.3, -0.2 + (H * 0.97 + 0.2) * u, lean.z * Math.sin(u * Math.PI) * 1.4 - lean.x * u * 0.3));
+  parts.push(limb(spine, 0.3, 0.05, 7, 6));
+  const curve = new THREE.CatmullRomCurve3(spine), at = (y: number) => curve.getPoint(Math.min(1, Math.max(0, (y + 0.2) / (H * 0.97 + 0.2))));
+  const centre = new THREE.Vector3(0, PINE_CROWN + (H - PINE_CROWN) * 0.55, 0);
+  const tuft = (p: THREE.Vector3, k: number, flat = true) => tufts.push({ position: p.clone().sub(new THREE.Vector3(0, k * 0.45, 0)), yaw: r() * Math.PI, width: k, height: k * (0.85 + r() * 0.3), flat });
+  // The limbs: the lowest the longest, each kinked once, out and up, a tuft midway and one or two at its end.
+  const limbs = 5;
+  for (let i = 0; i < limbs; i++) {
+    const u = i / (limbs - 1), y0 = PINE_CROWN - 0.1 + u * (H - PINE_CROWN - 0.9), a = i * 2.4 + r() * 0.8, len = (1.9 - u * 0.8) * (0.85 + r() * 0.3), up = 0.35 + u * 0.35 + r() * 0.2;
+    const d = new THREE.Vector3(Math.cos(a), up, Math.sin(a)).normalize(), p0 = at(y0), p1 = p0.clone().addScaledVector(d, len * 0.5).add(new THREE.Vector3((r() - 0.5) * 0.4, (r() - 0.6) * 0.3, (r() - 0.5) * 0.4)), p2 = p0.clone().addScaledVector(d, len).add(new THREE.Vector3(0, 0.15 + r() * 0.3, 0));
+    parts.push(limb([p0, p1, p2], 0.09 - u * 0.03, 0.025, 3, 4));
+    tuft(p1.clone().lerp(p2, 0.35).add(new THREE.Vector3(0, 0.25, 0)), 0.95 + r() * 0.3, false);
+    tuft(p2.clone().add(new THREE.Vector3(0, 0.3, 0)), 1.25 + r() * 0.4);
+    if (r() < 0.6) tuft(p2.clone().add(new THREE.Vector3((r() - 0.5) * 0.9, 0.55 + r() * 0.3, (r() - 0.5) * 0.9)), 0.9 + r() * 0.3);
+  }
+  // The top: a few tufts about the leader.
+  for (let i = 0; i < 3; i++) { const p = at(H * 0.97 - i * 0.55); tuft(p.clone().add(new THREE.Vector3((r() - 0.5) * 0.7, 0.35, (r() - 0.5) * 0.7)), 1.0 + r() * 0.3, i === 0); }
+  const trunk = shaded(mergeGeometries(parts)!, p => 0.5 + 0.5 * Math.min(1, p.y / H));
+  const crown = standees(tufts), pos = crown.getAttribute('position'), nor = crown.getAttribute('normal'), v = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+  for (let i = 0; i < pos.count; i++) { v.fromBufferAttribute(pos, i).sub(centre); v.y *= 0.7; v.normalize().lerp(up, 0.3).normalize(); nor.setXYZ(i, v.x, v.y, v.z); }
+  const crownShaded = shadedCard(crown, p => Math.min(1, 0.55 + 0.3 * (p.y - PINE_CROWN) / (H - PINE_CROWN) + 0.25 * Math.hypot(p.x, p.z) / 2.2));
+  // The far card: the impostor's frame (pineImpostor draws the same W × H).
+  const [W, FH] = PINE_FRAME, cards: THREE.BufferGeometry[] = [];
+  for (const turn of [0, Math.PI / 2]) { const q = new THREE.PlaneGeometry(W, FH); q.translate(0, FH / 2 - 0.25, 0); q.rotateY(turn); cards.push(q); }
+  const far = mergeGeometries(cards)!, fn = far.getAttribute('normal'); for (let i = 0; i < fn.count; i++) { v.set(fn.getX(i), 0, fn.getZ(i)).multiplyScalar(0.5).add(up).normalize(); fn.setXYZ(i, v.x, v.y, v.z); }
+  return { trunk, crown: crownShaded, far: shadedCard(far, p => 0.6 + 0.4 * Math.min(1, Math.max(0, p.y / FH))), radius: 0.32 };
+}
+/** The far pine's frame (m): width and height of the card, and of the impostor's view. */
+const PINE_FRAME: [number, number] = [5.0, 7.2];
+/** Strip a card geometry to position, normal and uv, with the baked occlusion `aShade`. */
+function shadedCard(g: THREE.BufferGeometry, shade: (p: THREE.Vector3) => number): THREE.BufferGeometry {
+  for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'normal' && name !== 'uv') g.deleteAttribute(name);
+  const pos = g.getAttribute('position'), a = new Float32Array(pos.count), v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) a[i] = shade(v.fromBufferAttribute(pos, i));
+  g.setAttribute('aShade', new THREE.BufferAttribute(a, 1)); return g;
+}
+/** The far pine as the near one seen from the side: drawn once into a texture, lit from above, over nothing (the card's alpha). */
+function pineImpostor(renderer: THREE.WebGLRenderer, needles: THREE.Texture, leaf: string, bark: string): THREE.Texture {
+  const [W, FH] = PINE_FRAME, size = 256, rt = new THREE.WebGLRenderTarget(Math.round(size * W / FH), size, { format: THREE.RGBAFormat, colorSpace: THREE.LinearSRGBColorSpace });
+  rt.texture.minFilter = THREE.LinearMipmapLinearFilter; rt.texture.generateMipmaps = true;
+  const scene = new THREE.Scene(), kind = pitchPine();
+  scene.add(new THREE.Mesh(kind.trunk, new THREE.MeshLambertMaterial({ color: bark, toneMapped: false })));
+  scene.add(new THREE.Mesh(kind.crown, new THREE.MeshLambertMaterial({ color: leaf, map: needles, alphaTest: 0.5, side: THREE.DoubleSide, toneMapped: false })));
+  // Lit as its albedo (the card shader lights the far tree as it lights the near one): the sky's light alone, a little sun for the trunk's roundness.
+  scene.add(new THREE.HemisphereLight('#ffffff', '#8a8a80', 1.0)); const sun = new THREE.DirectionalLight('#fff4e0', 0.35); sun.position.set(0.5, 1, 1); scene.add(sun);
+  const cam = new THREE.OrthographicCamera(-W / 2, W / 2, FH - 0.25, -0.25, -20, 20); cam.position.set(0, 0, 10); cam.lookAt(0, 0, 0);
+  const target = renderer.getRenderTarget(), clear = renderer.getClearColor(new THREE.Color()), alpha = renderer.getClearAlpha();
+  renderer.setRenderTarget(rt); renderer.setClearColor('#000000', 0); renderer.clear(); renderer.render(scene, cam);
+  renderer.setRenderTarget(target); renderer.setClearColor(clear, alpha);
+  kind.trunk.dispose(); kind.crown.dispose(); kind.far.dispose();
+  return rt.texture;
 }
 /** A boulder: a lumpy icosahedron, flat-shaded for the chunky facets of a painted rock. */
 function rockGeometry(): THREE.BufferGeometry {

@@ -52,10 +52,13 @@ export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain 
   const setUnder = (under: number, x = 0, z = 0) => vision.update(under, x, z);
   const colourOf = terrain.colour;
   /** A chunk's trees as built: its own, less any too near a den, ring, ruin, warren or the moot, or within a clearing's square (the wards' earthworks, RUINS.md). */
-  const treesFor = (cx: number, cz: number): Tree[] => chunkTrees(cx, cz, seed).filter(t => !dens.some(d => Math.hypot(t.x - d.x, t.z - d.z) < 14) && !rings.some(r => Math.hypot(t.x - r.x, t.z - r.z) < 5) && !ruinList.some(r => Math.hypot(t.x - r.x, t.z - r.z) < 7) && !warrenList.some(w => Math.hypot(t.x - w.x, t.z - w.z) < 9) && !(mootAt && Math.hypot(t.x - mootAt.x, t.z - mootAt.z) < 9) && !clearings.some(c => Math.max(Math.abs(t.x - c.x), Math.abs(t.z - c.z)) < c.r));
+  // PINE BARRENS (Noah, 2026-10-21): a chunk's trees are kept once drawn (the understory and the tree lookups ask for them many times a second); the places they keep clear of are fixed for the land.
+  const treeCache = new Map<string, Tree[]>();
+  const treesFor = (cx: number, cz: number): Tree[] => { const key = chunkKey(cx, cz); let t = treeCache.get(key); if (!t) { t = treesUncached(cx, cz); treeCache.set(key, t); } return t; };
+  const treesUncached = (cx: number, cz: number): Tree[] => chunkTrees(cx, cz, seed).filter(t => !dens.some(d => Math.hypot(t.x - d.x, t.z - d.z) < 14) && !rings.some(r => Math.hypot(t.x - r.x, t.z - r.z) < 5) && !ruinList.some(r => Math.hypot(t.x - r.x, t.z - r.z) < 7) && !warrenList.some(w => Math.hypot(t.x - w.x, t.z - w.z) < 9) && !(mootAt && Math.hypot(t.x - mootAt.x, t.z - mootAt.z) < 9) && !clearings.some(c => Math.max(Math.abs(t.x - c.x), Math.abs(t.z - c.z)) < c.r));
   /** Another renderer (the vista look) may draw the ground and the trees itself: the chunks keep their trees, colliders and the rest, unseen. */
   const look = { ground: true, trees: true };
-  const applyLook = (o: THREE.Object3D): void => { o.traverse(m => { if (m.name === 'world-ground' || m.name === 'far-ground') m.visible = look.ground; else if (m.name === 'tree-wood' || m.name === 'tree-leaves') m.visible = look.trees; }); };
+  const applyLook = (o: THREE.Object3D): void => { o.traverse(m => { if (m.name === 'world-ground' || m.name === 'far-ground') m.visible = look.ground; else if (m.name === 'tree-wood' || m.name === 'tree-leaves' || m.name === 'tree-collar') m.visible = look.trees; }); };
   function build(cx: number, cz: number): Chunk {
     const group = new THREE.Group(), geometries: THREE.BufferGeometry[] = [], n = CHUNK / TERRAIN_STEP;
     const geo = new THREE.PlaneGeometry(CHUNK, CHUNK, n, n); geo.rotateX(-Math.PI / 2); geo.translate((cx + 0.5) * CHUNK, 0, (cz + 0.5) * CHUNK);
@@ -115,9 +118,10 @@ export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain 
       const light = new THREE.PointLight('#bfe8ff', 0.9, 6, 1.8); light.position.y = 0.6; g.add(light);
     }
     const wood: THREE.BufferGeometry[] = [], cards: Standee[] = [], collars: THREE.BufferGeometry[] = [], dwood: THREE.BufferGeometry[] = [], dcards: Standee[] = [], bwood: THREE.BufferGeometry[] = [], bcards: Standee[] = [];
-    for (const t of trees) { const dark = biomeAt(t.x, t.z, seed) === 'dark', blight = blighted(t.x, t.z), parts = treeParts(rand, t.x, relief(t.x, t.z), t.z, t.size); (blight ? bwood : dark ? dwood : wood).push(...parts.wood); (blight ? bcards : dark ? dcards : cards).push(...parts.cards.filter((_, i) => !blight || i % 3 === 0)); collars.push(...parts.roots); colliders.push({ x: t.x, z: t.z, radius: trunkRadius(t), minY: relief(t.x, t.z) - 0.2, maxY: relief(t.x, t.z) + crownHeight(t) }); }
+    // PINE BARRENS: under another look (the vista's) the trees are drawn there; only their colliders are built here (the look is chosen before any chunk loads, and never changes).
+    for (const t of trees) { colliders.push({ x: t.x, z: t.z, radius: trunkRadius(t), minY: relief(t.x, t.z) - 0.2, maxY: relief(t.x, t.z) + crownHeight(t) }); if (!look.trees) continue; const dark = biomeAt(t.x, t.z, seed) === 'dark', blight = blighted(t.x, t.z), parts = treeParts(rand, t.x, relief(t.x, t.z), t.z, t.size); (blight ? bwood : dark ? dwood : wood).push(...parts.wood); (blight ? bcards : dark ? dcards : cards).push(...parts.cards.filter((_, i) => !blight || i % 3 === 0)); collars.push(...parts.roots); }
     const add = (gs: THREE.BufferGeometry[], st: Standee[], b: THREE.Material, l: THREE.Material): void => { if (gs.length) { const g = mergeGeometries(gs)!, m = new THREE.Mesh(g, b); m.name = 'tree-wood'; group.add(m); geometries.push(g); } if (st.length) { const g = standees(st), m = new THREE.Mesh(g, l); m.name = 'tree-leaves'; group.add(m); geometries.push(g); } };
-    add(wood, cards, bark, leaf); add(dwood, dcards, darkBark, darkLeaf); add(bwood, bcards, blightBark, blightLeaf); if (collars.length) { const g = mergeGeometries(collars)!; group.add(new THREE.Mesh(g, collar)); geometries.push(g); }
+    add(wood, cards, bark, leaf); add(dwood, dcards, darkBark, darkLeaf); add(bwood, bcards, blightBark, blightLeaf); if (collars.length) { const g = mergeGeometries(collars)!, m = new THREE.Mesh(g, collar); m.name = 'tree-collar'; group.add(m); geometries.push(g); }
     applyLook(group); scene.add(group); return { key: chunkKey(cx, cz), group, trees, colliders, geometries };
   }
   /** The far land: past the loaded ring, ground alone out to FAR_RING chunks at FAR_STEP m, one merged mesh rebuilt when she crosses into another chunk, so that from a height the land goes on to the horizon instead of ending at the loaded ring (the summit had no view: Noah's playtest). No trees, no blight out there. Tuning. */

@@ -5,9 +5,9 @@
 // (its own seed), clear of the trunks, the water and the places; the vista draws the tiles about the camera, instanced, in
 // its own light (vistaShaders' solid, swaying), and only near (the haze and the trees have it past that).
 import * as THREE from 'three';
-import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mulberry32 } from './colors';
-import { solidVert, solidFrag } from './vistaShaders';
+import { solidVert, solidFrag, cardVert, cardFrag } from './vistaShaders';
+import { spriteTexture, standees, type Standee, type SpriteKind } from './sprites';
 
 export type UnderKind = 'sapling' | 'shrub' | 'fern';
 export interface UnderItem { kind: UnderKind; x: number; z: number; s: number; rot: number; v: number }
@@ -57,96 +57,80 @@ export function underTile(tx: number, tz: number, seed: number, land: UnderLand,
 }
 
 // ── drawn ──
-function shadeBy(g: THREE.BufferGeometry, f: (p: THREE.Vector3) => number): THREE.BufferGeometry {
-  for (const name of Object.keys(g.attributes)) if (name !== 'position' && name !== 'normal') g.deleteAttribute(name);
-  const pos = g.getAttribute('position'), a = new Float32Array(pos.count), v = new THREE.Vector3();
-  for (let i = 0; i < pos.count; i++) a[i] = f(v.fromBufferAttribute(pos, i));
+// PINE BARRENS (Noah, 2026-10-21): the understory as crossed cards (sprites.ts), as the plain look always drew its foliage: a shrub is three
+// textured cards, not a hundred and forty triangles of leaf mass, and its leaves and needles are drawn, not implied. What grows: the
+// barrens' knee-high carpet of lowbush blueberry and huckleberry (most of the shrubs, the small ones), scrub oak at her chest and over
+// her head (the big ones), bracken in the shade, and young pitch pines in the gaps. All through the card shader's light (cardFrag).
+function shadeCards(g: THREE.BufferGeometry, f: (p: THREE.Vector3) => number): THREE.BufferGeometry {
+  const pos = g.getAttribute('position'), a = new Float32Array(pos.count), v = new THREE.Vector3(), nor = g.getAttribute('normal'), up = new THREE.Vector3(0, 1, 0);
+  // The cards' normals lean up and out from the plant's foot, so a clump shades as a mound whichever way its cards face.
+  for (let i = 0; i < pos.count; i++) { a[i] = f(v.fromBufferAttribute(pos, i)); v.y = 0; v.normalize().multiplyScalar(0.5).add(up).normalize(); nor.setXYZ(i, v.x, v.y, v.z); }
   g.setAttribute('aShade', new THREE.BufferAttribute(a, 1)); return g;
 }
-const mergeAll = (gs: THREE.BufferGeometry[]): THREE.BufferGeometry => {
-  const ng = gs.map(g => (g.index ? g.toNonIndexed() : g)), out = new THREE.BufferGeometry();
-  for (const k of ['position', 'normal']) { const size = ng[0].attributes[k].itemSize, arr = new Float32Array(ng.reduce((n, g) => n + g.attributes[k].count, 0) * size); let o = 0; for (const g of ng) { arr.set(g.attributes[k].array as Float32Array, o); o += g.attributes[k].count * size; } out.setAttribute(k, new THREE.BufferAttribute(arr, size)); }
-  return out;
-};
-/** A lumpy leaf mass whose normals lean out from `centre` (as the vista's crowns), low-poly. */
-function lump(r: number, at: THREE.Vector3, centre: THREE.Vector3, seed: number, squash = 1, detail = 0): THREE.BufferGeometry {
-  let g: THREE.BufferGeometry = new THREE.IcosahedronGeometry(r, detail); g.deleteAttribute('uv'); g = mergeVertices(g);
-  const pos = g.getAttribute('position'), nor = g.getAttribute('normal'), v = new THREE.Vector3(), rr = mulberry32(seed);
-  for (let i = 0; i < pos.count; i++) {
-    v.fromBufferAttribute(pos, i); const d = v.clone().normalize(), k = 0.82 + rr() * 0.36;
-    v.copy(d).multiplyScalar(r * k); v.y *= squash; v.add(at); pos.setXYZ(i, v.x, v.y, v.z);
-    const n = v.clone().sub(centre).normalize().multiplyScalar(0.7).add(d.multiplyScalar(0.3)).normalize(); nor.setXYZ(i, n.x, n.y, n.z);
-  }
-  return g;
+/** A clump of cards about a foot: `n` crossed pairs scattered within `spread`, each `w` wide and `h` tall (a flat card over every other). */
+function clump(rr: () => number, n: number, spread: number, w: number, h: number, lift = 0): THREE.BufferGeometry {
+  const cards: Standee[] = [];
+  for (let i = 0; i < n; i++) { const a = rr() * Math.PI * 2, d = rr() * spread, k = 0.8 + rr() * 0.4; cards.push({ position: new THREE.Vector3(Math.cos(a) * d, lift + (rr() - 0.5) * 0.1 * h, Math.sin(a) * d), yaw: rr() * Math.PI, width: w * k, height: h * k, flat: i % 2 === 0 }); }
+  return shadeCards(standees(cards), p => 0.45 + 0.55 * Math.min(1, Math.max(0, p.y / (lift + h))));
 }
-/** A shrub ~0.6 m tall and as wide: a few leaf masses about a low centre. */
-function shrubShape(seed: number): THREE.BufferGeometry {
-  const rr = mulberry32(seed), c = new THREE.Vector3(0, 0.22, 0), parts: THREE.BufferGeometry[] = [];
-  const n = 3 + Math.floor(rr() * 2);
-  for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2 + rr(), out = 0.12 + rr() * 0.12; parts.push(lump(0.2 + rr() * 0.1, new THREE.Vector3(Math.cos(a) * out, 0.2 + rr() * 0.16, Math.sin(a) * out), c, seed * 7 + i, 0.85)); }
-  parts.push(lump(0.24, new THREE.Vector3(0, 0.38, 0), c, seed * 7 + 9, 0.9, 1));
-  return shadeBy(mergeAll(parts), p => 0.45 + 0.55 * Math.min(1, Math.max(0, p.y / 0.6)));
-}
-/** A fern ~0.45 m: fronds arching out and down from the crown, each a tapering strip. */
-function fernShape(seed: number): THREE.BufferGeometry {
-  const rr = mulberry32(seed), p: number[] = [], nrm: number[] = [], fronds = 7;
-  for (let f = 0; f < fronds; f++) {
-    const a = (f / fronds) * Math.PI * 2 + rr() * 0.5, ca = Math.cos(a), sa = Math.sin(a), len = 0.38 + rr() * 0.16, lift = 0.32 + rr() * 0.12, segs = 5;
-    const pt = (t: number, side: number): number[] => { const r = t * len, y = Math.sin(t * Math.PI * 0.8) * lift * (1 - t * 0.35), w = 0.06 * Math.sin(Math.min(1, t * 1.6) * Math.PI) * (1 - t * 0.6); return [ca * r - sa * w * side, y, sa * r + ca * w * side]; };
-    for (let s = 0; s < segs; s++) {
-      const t0 = s / segs, t1 = (s + 1) / segs, a0 = pt(t0, -1), b0 = pt(t0, 1), a1 = pt(t1, -1), b1 = pt(t1, 1);
-      // Both faces, so the fern shares the shrubs' one-sided material (and its shader).
-      p.push(...a0, ...b0, ...a1, ...b0, ...b1, ...a1, ...a0, ...a1, ...b0, ...b0, ...a1, ...b1);
-      for (let k = 0; k < 12; k++) nrm.push(ca * 0.25, 0.95, sa * 0.25);
-    }
-  }
-  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(p, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
-  return shadeBy(g, q => 0.5 + 0.5 * Math.min(1, q.y / 0.35));
-}
-/** A sapling ~1.6 m: a thin stem and a small crown, its leaves and its bark drawn apart. */
-function saplingShape(seed: number): { stem: THREE.BufferGeometry; crown: THREE.BufferGeometry } {
-  const rr = mulberry32(seed), stem = new THREE.CylinderGeometry(0.012, 0.03, 1.25, 5, 1, true); stem.translate(0, 0.62, 0);
-  const c = new THREE.Vector3(0, 1.3, 0), parts: THREE.BufferGeometry[] = [];
-  for (let i = 0; i < 3; i++) { const a = i * 2.1 + rr(); parts.push(lump(0.28 + rr() * 0.1, new THREE.Vector3(Math.cos(a) * 0.2, 1.15 + rr() * 0.3, Math.sin(a) * 0.2), c, seed * 11 + i, 0.85)); }
-  return { stem: shadeBy(stem, q => 0.55 + 0.45 * q.y / 1.25), crown: shadeBy(mergeAll(parts), q => 0.5 + 0.5 * Math.min(1, (q.y - 0.95) / 0.6)) };
+/** Scrub oak ~0.85 m at scale 1 (drawn at 1.5–2.7, SIZES.shrub): a few leafy cards, taller than wide. */
+const scrubOak = (seed: number) => clump(mulberry32(seed), 3, 0.18, 0.62, 0.85);
+/** Blueberry ~0.45 m: a low wide clump of twiggy small-leaved cards. */
+const blueberry = (seed: number) => clump(mulberry32(seed), 3, 0.3, 0.6, 0.45);
+/** Bracken ~0.5 m: two crossed fronds. */
+const bracken = (seed: number) => clump(mulberry32(seed), 1, 0, 0.75, 0.55);
+/** A young pitch pine ~1.6 m: a thin stem (drawn solid) and a few needle tufts up it. */
+function pineSapling(seed: number): { stem: THREE.BufferGeometry; crown: THREE.BufferGeometry } {
+  const rr = mulberry32(seed), stem = new THREE.CylinderGeometry(0.012, 0.035, 1.3, 5, 1, true); stem.translate(0, 0.65, 0);
+  for (const name of Object.keys(stem.attributes)) if (name !== 'position' && name !== 'normal') stem.deleteAttribute(name);
+  { const pos = stem.getAttribute('position'), a = new Float32Array(pos.count); for (let i = 0; i < pos.count; i++) a[i] = 0.55 + 0.45 * pos.getY(i) / 1.3; stem.setAttribute('aShade', new THREE.BufferAttribute(a, 1)); }
+  const cards: Standee[] = [];
+  for (let i = 0; i < 3; i++) { const a = i * 2.1 + rr(), k = 0.5 + rr() * 0.25; cards.push({ position: new THREE.Vector3(Math.cos(a) * 0.12, 0.75 + i * 0.3 - k * 0.45, Math.sin(a) * 0.12), yaw: rr() * Math.PI, width: k, height: k, flat: i === 2 }); }
+  return { stem, crown: shadeCards(standees(cards), p => 0.5 + 0.5 * Math.min(1, Math.max(0, (p.y - 0.5) / 1.1))) };
 }
 
 /** How far (m) each quality draws the understory, and the share of it it draws. Tuning. */
-export const UNDER_REACH: Record<string, { reach: number; share: number }> = { Low: { reach: 32, share: 0.55 }, Medium: { reach: 44, share: 0.8 }, High: { reach: 62, share: 1 } };
-const KINDS_DRAWN = [
-  { kind: 'shrub' as const, colours: ['#2c5022', '#38592a', '#26461f'], shapes: 3 },
-  { kind: 'fern' as const, colours: ['#46743a', '#3a662f'], shapes: 2 },
-];
+export const UNDER_REACH: Record<string, { reach: number; share: number }> = { Low: { reach: 36, share: 0.6 }, Medium: { reach: 50, share: 0.85 }, High: { reach: 70, share: 1 } };
+/** The shrubs' split: a shrub smaller than this (its scale, SIZES.shrub) is blueberry, knee-high; bigger, scrub oak at her chest and over her head. Tuning. */
+const BERRY_BELOW = 1.5;
 export interface Understory { update(camera: THREE.Camera): void; setQuality(name: string): void; stats(): { tiles: number; items: number }; group: THREE.Group }
 export function createUnderstory(parent: THREE.Object3D, shared: Record<string, THREE.IUniform>, land: UnderLand, height: (x: number, z: number) => number, seed: number, quality = 'Medium'): Understory {
   const group = new THREE.Group(); group.name = 'understory'; parent.add(group);
-  const lit = (hex: string, defines: Record<string, string>) => new THREE.ShaderMaterial({ uniforms: { ...THREE.UniformsUtils.merge([THREE.UniformsLib.lights]), ...shared, uColor: { value: new THREE.Color(hex) } }, vertexShader: solidVert, fragmentShader: solidFrag, lights: true, defines });
+  const uniforms = (own: Record<string, THREE.IUniform>) => ({ ...THREE.UniformsUtils.merge([THREE.UniformsLib.lights]), ...shared, ...own });
+  const cardMat = (hex: string, kind: SpriteKind) => new THREE.ShaderMaterial({ uniforms: uniforms({ uColor: { value: new THREE.Color(hex) }, uMap: { value: spriteTexture(kind) } }), vertexShader: cardVert, fragmentShader: cardFrag, lights: true, defines: { USE_SWAY: '', UNDER: '' }, side: THREE.DoubleSide });
+  const solidMat = (hex: string) => new THREE.ShaderMaterial({ uniforms: uniforms({ uColor: { value: new THREE.Color(hex) } }), vertexShader: solidVert, fragmentShader: solidFrag, lights: true, defines: { UNDER: '' } });
   /** Each drawn bucket: a shape, a material, and the items it draws (rebuilt as she moves). */
-  interface Bucket { mesh: THREE.InstancedMesh; kind: UnderKind; pick: (v: number) => boolean; part?: 'stem' | 'crown' }
-  const buckets: Bucket[] = [], CAP = 9000;
+  interface Bucket { mesh: THREE.InstancedMesh; kind: UnderKind; pick: (v: number, s: number) => boolean; part?: 'stem' | 'crown' }
+  /** The most instances a bucket draws (a High tile ring at the heart's density holds a few thousand items over every bucket). Tuning. */
+  const buckets: Bucket[] = [], CAP = 2400;
   const mk = (geo: THREE.BufferGeometry, mat: THREE.Material): THREE.InstancedMesh => { const m = new THREE.InstancedMesh(geo, mat, CAP); m.count = 0; m.frustumCulled = false; m.receiveShadow = true; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); group.add(m); return m; };
-  for (const d of KINDS_DRAWN) for (let s = 0; s < d.shapes; s++) {
-    const geo = d.kind === 'shrub' ? shrubShape(seed * 13 + s) : fernShape(seed * 17 + s), mat = lit(d.colours[s % d.colours.length], { USE_SWAY: '', VARIED: '', UNDER: '' });
-    buckets.push({ mesh: mk(geo, mat), kind: d.kind, pick: v => Math.floor(v * d.shapes) === s });
-  }
+  // Shrubs: the small ones (most: underTile skews them small) are blueberry, the big ones scrub oak, two shapes each.
+  for (let s = 0; s < 2; s++) buckets.push({ mesh: mk(blueberry(seed * 13 + s), cardMat(s ? '#3f6b33' : '#45703a', 'berry')), kind: 'shrub', pick: (v, sz) => sz < BERRY_BELOW && Math.floor(v * 2) === s });
+  for (let s = 0; s < 2; s++) buckets.push({ mesh: mk(scrubOak(seed * 17 + s), cardMat(s ? '#3d6628' : '#476f2c', 'leaf')), kind: 'shrub', pick: (v, sz) => sz >= BERRY_BELOW && Math.floor(v * 2) === s });
+  for (let s = 0; s < 2; s++) buckets.push({ mesh: mk(bracken(seed * 19 + s), cardMat(s ? '#5a8a30' : '#52822e', 'frond')), kind: 'fern', pick: v => Math.floor(v * 2) === s });
   for (let s = 0; s < 2; s++) {
-    const sh = saplingShape(seed * 19 + s);
-    buckets.push({ mesh: mk(sh.stem, lit('#6a5644', { UNDER: '' })), kind: 'sapling', pick: v => Math.floor(v * 2) === s, part: 'stem' });
-    buckets.push({ mesh: mk(sh.crown, lit(s ? '#3f7430' : '#4a8034', { USE_SWAY: '', VARIED: '', UNDER: '' })), kind: 'sapling', pick: v => Math.floor(v * 2) === s, part: 'crown' });
+    const sh = pineSapling(seed * 23 + s);
+    buckets.push({ mesh: mk(sh.stem, solidMat('#5a4636')), kind: 'sapling', pick: v => Math.floor(v * 2) === s, part: 'stem' });
+    buckets.push({ mesh: mk(sh.crown, cardMat(s ? '#557f30' : '#5c8a34', 'pine')), kind: 'sapling', pick: v => Math.floor(v * 2) === s, part: 'crown' });
   }
   let q = UNDER_REACH[quality] ?? UNDER_REACH.Medium;
-  const tiles = new Map<string, UnderItem[]>(), at = new THREE.Vector3(1e9, 0, 0), m = new THREE.Matrix4(), pos = new THREE.Vector3(), rot = new THREE.Quaternion(), scl = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+  /** A grown tile: its items and their ground heights (looked up once). */
+  const tiles = new Map<string, { items: UnderItem[]; ys: Float32Array }>(), at = new THREE.Vector3(1e9, 0, 0), m = new THREE.Matrix4(), pos = new THREE.Vector3(), rot = new THREE.Quaternion(), scl = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   let items = 0;
   /** A tile's growth if it has grown; the tiles still to grow are grown a few milliseconds a frame (BUDGET_MS), never all at once. */
   const BUDGET_MS = 4, pending: string[] = [];
-  function tile(tx: number, tz: number): UnderItem[] | null {
+  function tile(tx: number, tz: number): { items: UnderItem[]; ys: Float32Array } | null {
     const key = `${tx},${tz}`, t = tiles.get(key); if (t) return t;
     if (!pending.includes(key)) pending.push(key); return null;
   }
   let sinceShown = 0;
   function grow(): boolean {
     if (!pending.length) return false; const t0 = performance.now();
-    while (pending.length && performance.now() - t0 < BUDGET_MS) { const key = pending.shift()!, [tx, tz] = key.split(',').map(Number); tiles.set(key, underTile(tx, tz, seed, land)); sinceShown++; }
+    while (pending.length && performance.now() - t0 < BUDGET_MS) {
+      const key = pending.shift()!, [tx, tz] = key.split(',').map(Number), its = underTile(tx, tz, seed, land), ys = new Float32Array(its.length);
+      its.forEach((it, i) => { ys[i] = height(it.x, it.z) - (it.kind === 'shrub' ? 0.05 : 0.02); });
+      tiles.set(key, { items: its, ys }); sinceShown++;
+    }
     if (tiles.size > 400) for (const k of [...tiles.keys()].slice(0, 100)) tiles.delete(k);
     return true;
   }
@@ -155,17 +139,18 @@ export function createUnderstory(parent: THREE.Object3D, shared: Record<string, 
     const R = q.reach, t0x = Math.floor((c.x - R) / UNDER_TILE), t1x = Math.floor((c.x + R) / UNDER_TILE), t0z = Math.floor((c.z - R) / UNDER_TILE), t1z = Math.floor((c.z + R) / UNDER_TILE);
     items = 0;
     for (let tz = t0z; tz <= t1z; tz++) for (let tx = t0x; tx <= t1x; tx++) {
-      for (const it of tile(tx, tz) ?? []) {
+      const t = tile(tx, tz); if (!t) continue;
+      t.items.forEach((it, i) => {
         const d2 = (it.x - c.x) ** 2 + (it.z - c.z) ** 2, lim = it.kind === 'fern' ? R * 0.65 : R;
-        if (it.v > q.share || d2 > lim * lim) continue;
-        const y = height(it.x, it.z) - (it.kind === 'shrub' ? 0.06 : 0.02);
-        pos.set(it.x, y, it.z); rot.setFromAxisAngle(up, it.rot); scl.setScalar(it.s); m.compose(pos, rot, scl);
+        if (it.v > q.share || d2 > lim * lim) return;
+        pos.set(it.x, t.ys[i], it.z); rot.setFromAxisAngle(up, it.rot); scl.setScalar(it.s); m.compose(pos, rot, scl);
         const pv = Math.min(0.999, it.v / q.share);
-        for (const b of buckets) if (b.kind === it.kind && b.pick(pv) && b.mesh.count < CAP) b.mesh.setMatrixAt(b.mesh.count++, m);
+        for (const b of buckets) if (b.kind === it.kind && b.pick(pv, it.s) && b.mesh.count < CAP) b.mesh.setMatrixAt(b.mesh.count++, m);
         items++;
-      }
+      });
     }
-    for (const b of buckets) b.mesh.instanceMatrix.needsUpdate = true;
+    // Only the instances in use go to the GPU.
+    for (const b of buckets) { const a = b.mesh.instanceMatrix; a.clearUpdateRanges(); if (b.mesh.count > 0) a.addUpdateRange(0, b.mesh.count * 16); a.needsUpdate = true; }
     // The nearest tiles grow first.
     const key = (k: string) => { const [tx, tz] = k.split(',').map(Number); return ((tx + 0.5) * UNDER_TILE - c.x) ** 2 + ((tz + 0.5) * UNDER_TILE - c.z) ** 2; };
     pending.sort((a, b) => key(a) - key(b)); sinceShown = 0;

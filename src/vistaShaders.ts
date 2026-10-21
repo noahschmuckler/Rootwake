@@ -204,7 +204,7 @@ void main(){
   vec3 base = terrainAlbedo(vec3(xz.x, h, xz.y), n, md, g);
   float fade = 1.0 - smoothstep(uPatch * 0.3, uPatch * 0.5, dist);
   h = fineHeight(xz, h);
-  float hgt = uBladeH * (0.45 + 0.55 * aBlade.z) * smoothstep(0.3, 0.7, g) * fade * (1.0 + md.b * 0.8) * (0.7 + 0.6 * vnoise(xz * 0.08)) * (1.0 - smoothstep(0.2, 0.5, max(clearAt(xz).x, clearAt(xz).y))) * (1.0 - 0.88 * smoothstep(0.15, 0.75, canopyAt(xz)));
+  float hgt = uBladeH * (0.45 + 0.55 * aBlade.z) * smoothstep(0.3, 0.7, g) * fade * (1.0 + md.b * 0.8) * (0.7 + 0.6 * vnoise(xz * 0.08)) * (1.0 - smoothstep(0.2, 0.5, max(clearAt(xz).x, clearAt(xz).y))) * (1.0 - 0.94 * smoothstep(0.06, 0.55, canopyAt(xz)));
   if (hgt < 0.015 || h < uWaterY + 0.2) { gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }
   float y = position.y, ang = aBlade.w + aTuft.x, c = cos(ang), s = sin(ang), cr = cos(aBlade.w), sr = sin(aBlade.w);
   hgt *= aTuft.w;
@@ -316,6 +316,61 @@ void main(){
   vec3 col = toon(albedo, n, vis, vShade) + albedo * uAmbSky * 0.35 * vShade;
 #endif
 #ifdef USE_SWAY
+  vec3 v = normalize(vWorld - cameraPosition);
+  col += uSunCol * albedo * pow(max(dot(v, uSunDir), 0.0), 4.0) * 0.45 * vis;
+#endif
+  gl_FragColor = vec4(applyHaze(col, vWorld), 1.0);
+  ${FINISH}
+}`;
+
+// ── cards: textured, alpha-tested standees (PINE BARRENS, Noah, 2026-10-21) ──
+/** The pitch pines' needle tufts, the far trees' impostors and the understory, drawn as crossed cards (sprites.ts' standees) through
+ * the vista's own light: the texture gives the needle and leaf detail a lumpy mesh never had, at a few triangles a card; the per-pixel
+ * noise the solid foliage pays is replaced by a per-instance tint (a wood is not one colour, but one tree is). `aShade` is baked
+ * occlusion, `normal` the crown-volume normal the card was given (not the card's face), so a crown shades as one soft mass. */
+export const cardVert = /* glsl */`
+${SHADOW_VERT}
+${NOISE}
+uniform float uTime;
+attribute float aShade;
+varying vec3 vWorld; varying vec3 vN; varying float vShade; varying vec2 vBase; varying vec2 vUv;
+void main(){
+  mat4 m = modelMatrix * instanceMatrix;
+  vec4 worldPosition = m * vec4(position, 1.0);
+  vBase = m[3].xz;
+#ifdef USE_SWAY
+  float k = max(position.y, 0.0) * 0.012;
+  worldPosition.x += sin(uTime * 1.1 + vBase.x * 0.37 + position.y * 0.4) * k * (1.0 + sin(uTime * 0.3 + vBase.y));
+  worldPosition.z += cos(uTime * 0.9 + vBase.y * 0.31 + position.x * 0.5) * k;
+#endif
+  vec3 wn = normalize(mat3(m) * normal);
+  vec3 transformedNormal = mat3(viewMatrix) * wn;
+  vWorld = worldPosition.xyz; vN = wn; vShade = aShade; vUv = uv;
+  #include <shadowmap_vertex>
+  gl_Position = projectionMatrix * viewMatrix * worldPosition;
+}`;
+export const cardFrag = /* glsl */`
+${SHADOW_FRAG}
+${NOISE}${ATMOS}${MAP}
+uniform vec3 uColor; uniform sampler2D uMap;
+varying vec3 vWorld; varying vec3 vN; varying float vShade; varying vec2 vBase; varying vec2 vUv;
+void main(){
+  vec4 t = texture2D(uMap, vUv);
+  if (t.a < 0.5) discard;
+  // A card she is standing in (the understory is walked through) dissolves within arm's reach of the camera rather than filling the view.
+  if (distance(vWorld.xz, cameraPosition.xz) < 0.9 + hash12(gl_FragCoord.xy) * 0.7) discard;
+  vec3 n = normalize(vN);
+  // Per tree: a little lighter or darker, warmer or cooler (the texture is drawn in pale neutral tones: the colour is the material's).
+  float tint = hash12(floor(vBase * 0.37)), warm = hash12(floor(vBase * 0.37) + 5.0);
+  vec3 albedo = uColor * t.rgb * (0.8 + 0.4 * tint) * mix(vec3(1.08, 1.02, 0.86), vec3(0.9, 1.0, 1.08), warm);
+  vec4 md = mapData(vBase);
+  float vis = min(md.r, getShadowMask());
+#ifdef UNDER
+  vis *= 1.0 - CANOPY_SHADE * canopyAt(vBase);
+#endif
+  vec3 col = toon(albedo, n, vis, vShade) + albedo * uAmbSky * 0.2 * vShade;
+#ifdef USE_SWAY
+  // Needles and leaves let the low sun through.
   vec3 v = normalize(vWorld - cameraPosition);
   col += uSunCol * albedo * pow(max(dot(v, uSunDir), 0.0), 4.0) * 0.45 * vis;
 #endif

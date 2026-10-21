@@ -56,8 +56,9 @@ function forestOf(land: Land, seed: number): Float32Array {
   for (let j = 0; j < n; j++) { const v = j / STEP, j0 = Math.min(m - 2, Math.floor(v)), tv = v - j0; for (let i = 0; i < n; i++) { const u = i / STEP, i0 = Math.min(m - 2, Math.floor(u)), tu = u - i0, k = j0 * m + i0; f[j * n + i] = (g[k] * (1 - tu) + g[k + 1] * tu) * (1 - tv) + (g[k + m] * (1 - tu) + g[k + m + 1] * tu) * tv; } }
   forestCells.set(land, f); return f;
 }
-/** Leaf mould under a stand's canopy, with moss where the light comes through; how much it covers the wood's own green past FOREST_LITTER_FROM. Tuning. */
-const LITTER = [0.055, 0.035, 0.02], MOSS = [0.035, 0.055, 0.016], LITTER_A: [number, number] = [0.35, 0.9];
+/** PINE BARRENS (Noah, 2026-10-21): under a stand the floor is needle litter, and where the canopy opens, the barrens' pale sugar sand (MOSS is
+ * the sand now: the noise that opened the mould to moss opens the needles to sand); how much it covers the wood's own green. Linear rgb. Tuning. */
+const LITTER = [0.2, 0.11, 0.05], MOSS = [0.5, 0.42, 0.27], LITTER_A: [number, number] = [0.4, 0.92];
 /** The canopy (0..255 a cell) the grass thins under: a stand's depth, opened here and there by gaps of light. */
 export function canopyMap(land: Land, seed: number): Uint8Array {
   const { n, cell, half } = land, f = forestOf(land, seed), out = new Uint8Array(n * n);
@@ -103,8 +104,9 @@ export function villageTrees(land: Land, edge: number, terrain: Terrain, treesOf
     if (ring === 'mild') return h < 0.15 + 0.8 * (TAINT.edge - d) / (TAINT.edge - TAINT.grey) || vein(x, z) < VEIN_TREE_M ? 9 : 6;
     return veinAt(d) > 0 && vein(x, z) < VEIN_TREE_M && h < veinAt(d) * 1.2 ? 9 : base;
   };
-  const add = (x: number, z: number, size: number, id: number) => out.push({ x, z, y: terrain.height(x, z), kind: kindAt(x, z, id), scale: size, rot: (id * 2.399963) % (Math.PI * 2) });
-  for (let cz = -reach; cz <= reach; cz++) for (let cx = -reach; cx <= reach; cx++) for (const t of treesOf(cx, cz)) if (norm4(t.x, t.z) < edge - 40) add(t.x, t.z, t.size, t.id);
+  // PINE BARRENS: the chunks' living trees are pitch pines (kind 11); the villages' own woods keep their broadleaves (5), as do the dark wood and the taint.
+  const add = (x: number, z: number, size: number, id: number, pine = false) => { const k = kindAt(x, z, id); out.push({ x, z, y: terrain.height(x, z), kind: pine && k === 5 ? 11 : k, scale: size, rot: (id * 2.399963) % (Math.PI * 2) }); };
+  for (let cz = -reach; cz <= reach; cz++) for (let cx = -reach; cx <= reach; cx++) for (const t of treesOf(cx, cz)) if (norm4(t.x, t.z) < edge - 40) add(t.x, t.z, t.size, t.id, true);
   for (const o of origins) for (const t of TREES) add(t.x + o.x, t.z + o.z, t.size, t.id + o.x * 7 + o.z * 13);
   // The karst's own trees (its forest floor, its ledges, the helix on its faces): framed as the free flow frames them, so a trunk climb meets its crown; pines as the vista's conifer (a tenth of its height per size: the karst's pine is 5 m at size 1); ferns stay the karst's.
   const at = new THREE.Matrix4().makeTranslation(KARST_AT.x, 0, KARST_AT.z), m = new THREE.Matrix4();
@@ -214,7 +216,7 @@ export function createVillageLook(inp: LookInputs): VillageLook {
   const coarse = matchMedia('(pointer: coarse)').matches, qName = new URLSearchParams(location.search).get('q')?.toLowerCase();
   let quality = inp.quality ?? QUALITIES.find(q => q.name.toLowerCase() === qName) ?? QUALITIES[coarse ? 1 : 2];
   const trees = () => villageTrees(vl.land, vl.edge, vl.terrain, inp.treesOf, inp.villages().map(v => ({ x: v.x, z: v.z })), inp.dark, inp.blighted, inp.taint);
-  const world = buildVista(scene, vl.land, trees(), villageRocks(vl, seed), quality, { hazeBase: 0, ground: groundTint(vl.land, seed, inp.blighted, inp.taint), fine: vl.terrain.height, fineLod: true, bladeH: BLADE_H, nearTreesScale: NEAR_TREES, treeReach: TREE_REACH });
+  const world = buildVista(scene, vl.land, trees(), villageRocks(vl, seed), quality, { hazeBase: 0, ground: groundTint(vl.land, seed, inp.blighted, inp.taint), fine: vl.terrain.height, fineLod: true, renderer, bladeH: BLADE_H, nearTreesScale: NEAR_TREES, treeReach: TREE_REACH });
   world.setCanopy(canopyMap(vl.land, seed));
   // FOREST: the understory, kept from the places (as the rocks are) and the trunks.
   const lairAt = places(seed).find(p => p.id === 'lair')!, keep = [...places(seed), ...dens(seed), ...ruins(seed), ...warrens(seed), ...wallows(seed), ...ownWarrens(seed), moot(seed), ...convergences(seed)];

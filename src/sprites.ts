@@ -5,14 +5,14 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mulberry32 } from './colors';
 
-export type SpriteKind = 'grass' | 'leaf' | 'needle' | 'frond' | 'bloom';
+export type SpriteKind = 'grass' | 'leaf' | 'needle' | 'frond' | 'bloom' | 'pine' | 'berry';
 const textures = new Map<SpriteKind, THREE.CanvasTexture>();
 /** Drawn in pale neutral tones so the material's colour sets the hue; alpha does the shaping. */
 export function spriteTexture(kind: SpriteKind): THREE.CanvasTexture {
   const cached = textures.get(kind); if (cached) return cached;
   const size = 256, canvas = document.createElement('canvas'); canvas.width = size; canvas.height = size;
   const ctx = canvas.getContext('2d')!; ctx.clearRect(0, 0, size, size);
-  const rand = mulberry32(kind === 'grass' ? 42 : kind === 'leaf' ? 7 : kind === 'needle' ? 11 : kind === 'bloom' ? 23 : 19);
+  const rand = mulberry32(kind === 'grass' ? 42 : kind === 'leaf' ? 7 : kind === 'needle' ? 11 : kind === 'bloom' ? 23 : kind === 'pine' ? 29 : kind === 'berry' ? 31 : 19);
   const tone = () => { const v = 170 + Math.floor(rand() * 85); return `rgb(${v - 20}, ${v}, ${v - 30})`; };
   if (kind === 'grass' || kind === 'frond') {
     const blades = kind === 'grass' ? 13 : 9;
@@ -42,6 +42,23 @@ export function spriteTexture(kind: SpriteKind): THREE.CanvasTexture {
       ctx.fillStyle = tone(); ctx.beginPath(); ctx.ellipse(x, y, len, wid, rand() * Math.PI, 0, Math.PI * 2); ctx.fill();
       ctx.strokeStyle = 'rgba(90,110,80,0.35)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(x - len * 0.8, y); ctx.lineTo(x + len * 0.8, y); ctx.stroke();
     }
+  } else if (kind === 'pine') {
+    // PINE BARRENS (Noah, 2026-10-21): a pitch pine's needle tuft, the bottle-brush at a limb's end: stiff needles in threes radiating from a few
+    // short twigs about the middle, thick at the heart and ragged at the rim, so a crown of these reads as needle masses with sky between them.
+    const twigs = 7;
+    ctx.strokeStyle = 'rgba(95, 75, 55, 0.9)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    for (let t = 0; t < twigs; t++) { const a = (t / twigs) * Math.PI * 2 + rand() * 0.6, len = size * (0.12 + rand() * 0.14); ctx.beginPath(); ctx.moveTo(size / 2, size / 2); ctx.lineTo(size / 2 + Math.cos(a) * len, size / 2 + Math.sin(a) * len); ctx.stroke(); }
+    for (let i = 0; i < 340; i++) {
+      // Each needle grows from a point on a twig (near the heart) outward, a little past the twig's end; the heart is in its own shade.
+      const t = Math.floor(rand() * twigs), ta = (t / twigs) * Math.PI * 2 + 0.3, along = rand() * size * 0.2, bx = size / 2 + Math.cos(ta) * along, by = size / 2 + Math.sin(ta) * along;
+      const a = ta + (rand() - 0.5) * 2.2, len = size * (0.12 + rand() * 0.15), v = 115 + Math.floor(rand() * 90) + Math.floor(along / size * 160);
+      ctx.strokeStyle = `rgb(${v - 30}, ${v}, ${v - 45})`; ctx.lineWidth = 1.6 + rand() * 1.4; ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + Math.cos(a) * len, by + Math.sin(a) * len); ctx.stroke();
+    }
+  } else if (kind === 'berry') {
+    // Lowbush blueberry and huckleberry, the barrens' knee-high carpet: a thicket of fine twigs with small oval leaves, open enough to see through.
+    ctx.lineCap = 'round';
+    for (let t = 0; t < 9; t++) { const x0 = size * (0.3 + rand() * 0.4), lean = (rand() - 0.5) * 0.9, top = size * (0.12 + rand() * 0.25); ctx.strokeStyle = 'rgba(110, 80, 60, 0.9)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(x0, size); ctx.quadraticCurveTo(x0 + lean * size * 0.2, size * 0.6, x0 + lean * size * 0.35, top); ctx.stroke();
+      for (let k = 0; k < 9; k++) { const u = 0.15 + rand() * 0.8, px = x0 + lean * size * 0.3 * u + (rand() - 0.5) * 14, py = size - (size - top) * u, v = 165 + Math.floor(rand() * 80); ctx.fillStyle = `rgb(${v - 25}, ${v}, ${v - 40})`; ctx.beginPath(); ctx.ellipse(px, py, 5 + rand() * 4, 3 + rand() * 2, rand() * Math.PI, 0, Math.PI * 2); ctx.fill(); } }
   } else {
     // Needles: a spray of thin triangles fanning out and down from a stem.
     for (let i = 0; i < 70; i++) {
