@@ -23,12 +23,13 @@ export const isShrined = (v: { prayed: number }): boolean => v.prayed >= SHRINE_
 export const canDeepen = (d: Deep, shrined: number): boolean => shrined >= DEEPEN_VILLAGES * (d.depth + 1) && d.clarity >= DEEPEN_COST;
 export function deepen(d: Deep, shrined: number): boolean { if (!canDeepen(d, shrined)) return false; d.clarity -= DEEPEN_COST; d.depth += 1; d.deepened += 1; return true; }
 /** A destination of the deep roots: where on the surface it comes out, and what it is. */
-export type DeepKind = 'pool' | 'shrine' | 'convergence' | 'grove';
+/** T6: a 'brink' is a pass's end at the belt's crest, the deep root to it hers from the first (Noah: the edge viewpoints reachable by default). */
+export type DeepKind = 'pool' | 'shrine' | 'convergence' | 'grove' | 'brink';
 /** G3b: sanctifying a ruin into a grove is a channelling of SANCTIFY_GEMS gems of clarity into its basin; done, the grove's water fills her clarity to the cap. Tuning. */
 export const SANCTIFY_GEMS = 20;
 export interface DeepPlace { id: string; kind: DeepKind; name: string; x: number; z: number }
 /** Which destinations the node's roots reach from the karst: all within its reach; the pool always. */
-export function reachable(d: Deep, karst: { x: number; z: number }, places: DeepPlace[]): DeepPlace[] { const r = deepReach(d); return places.filter(p => p.kind === 'pool' || Math.hypot(p.x - karst.x, p.z - karst.z) <= r); }
+export function reachable(d: Deep, karst: { x: number; z: number }, places: DeepPlace[]): DeepPlace[] { const r = deepReach(d); return places.filter(p => p.kind === 'pool' || p.kind === 'brink' || Math.hypot(p.x - karst.x, p.z - karst.z) <= r); }
 /** How long a launch takes, by the deep root's length (down from the surface to the node's depth and across). */
 export function launchSeconds(d: Deep, karst: { x: number; z: number }, to: { x: number; z: number }): number { const across = Math.hypot(to.x - karst.x, to.z - karst.z); return Math.max(2.5, Math.hypot(across, nodeDepth(d)) / DEEP_SPEED); }
 /** The view from the node (Noah, 2026-09-27: the true angles put every place near the horizon, too spread; the karst's peak is the focus straight up and the villages should sit about midway up from the horizontal). A surface point at distance r lies VIEW_MAX × √(r / reach) from the zenith: the reach's edge at VIEW_MAX (63°), a village 330 m out at 36°, one 560 m out at 47°; beyond the reach the angle goes on to VIEW_HORIZON and stops. Tuning. */

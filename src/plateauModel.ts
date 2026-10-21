@@ -18,6 +18,12 @@ const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
 export const PLATEAU_R = 1800, LAKE_R = 215, LAKE_WOBBLE = 12, ISLAND_R = 104, WATER_Y = -1.2, LAKE_DEPTH = 9;
 /** The plateau's rise from the lake's shore to its rim (m), the hills over it (m) and their ridged crests (m), the mountains past the rim: their climb (m) and how much of a ring they take to rise. Tuning. */
 export const RIM_RISE = 85, HILL_M = 24, RIDGE_M = 22, MOUNTAIN_RISE = 650;
+/** T6, the brink (Noah, 2026-10-21): the mountains are a belt, not a wall. They rise over MOUNTAIN_RISE to their crest and past it the land falls away
+ * as an escarpment, ESCARP m of run to a lowland LOW_Y below, into a sea of cloud at CLOUD_Y: far below the rim's foot (RIM_RISE over the lake), far
+ * above the lowland, so a break in it is a long way down. PASS_N passes cross the belt, each a saddle PASS_RISE above the rim, PASS_HALF m wide
+ * (walkable only there past PASS_FOOT into the belt), ending at a brink BRINK_PAST past the crest where she may stand and look down; the rest is
+ * too steep. PEAK_N outer peaks stand through the cloud beyond. Tuning. */
+export const ESCARP = 950, RIDGE_FALL = 180, LOW_Y = -2300, CLOUD_Y = -260, PASS_N = 3, PASS_RISE = 190, PASS_HALF = 11, PASS_FOOT = 40, BRINK_PAST = 6, PEAK_N = 6;
 /** A village's ground: flat within TERRACE_R of its green (the layouts' meadow), blending out over TERRACE_FADE; it stands BANK_H above its river. Tuning. */
 export const TERRACE_R = 90, TERRACE_FADE = 70, BANK_H = 1.6;
 /** Rivers: half width at the source and at the mouth (m), the channel's depth below the surface, the valley's half width from source to mouth, how far upstream of the rim a river rises. Tuning. */
@@ -39,6 +45,8 @@ export interface River {
   length: number;
 }
 export interface Bridge { from: P; to: P; halfW: number; crown: number }
+/** T6: a pass through the belt (its bearing from the centre) and the brink at its end, where she can stand at the lip. */
+export interface Brink { id: string; name: string; x: number; z: number; angle: number }
 export interface Plateau {
   seed: number; centre: P; radius: number;
   lakeR(angle: number): number; islandR: number; waterY: number;
@@ -57,6 +65,8 @@ export interface Plateau {
   deckAt(x: number, z: number): number | null;
   /** How far into the mountains (m past the rim; negative inside). */
   into(x: number, z: number): number;
+  /** T6: the passes' brinks, and how far inside a pass a point lies (0 off it, 1 on its line). */
+  brinks: Brink[]; passAt(x: number, z: number): number;
 }
 
 const RIVER_STEP = 4;
@@ -70,11 +80,36 @@ function build(seed: number): Plateau {
   const lakeR = (a: number): number => LAKE_R + LAKE_WOBBLE * (nLake(Math.cos(a) * 1.7, Math.sin(a) * 1.7) * 0.7 + nLake(Math.cos(a) * 4 + 9, Math.sin(a) * 4) * 0.3);
   const into = (x: number, z: number): number => polar(x, z).r + 90 * fbm(nWarp, x * 0.0012, z * 0.0012, 3) - PLATEAU_R;
   const hills = (x: number, z: number): number => HILL_M * (fbm(nHill, x * 0.0032, z * 0.0032, 4) + 0.3 * fbm(nDetail, x * 0.011, z * 0.011, 3)) + RIDGE_M * (ridged(nWarp, x * 0.0021 + 3.1, z * 0.0021 - 7.7, 4) - 0.35);
-  /** The bowl: the lake's shore at the water, rising to the rim, hills over it (calmer near the lake), the mountains beyond. */
+  // T6: the passes, each a bearing; set after the rivers (they keep clear of the rivers' sources), read by the bowl.
+  const passAngles: number[] = [];
+  const wrapA = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
+  /** How far inside a pass (0..1): within PASS_HALF of its line (measured across, at the point's radius) it is 1, fading out over 30 m more; only through the belt, from a little inside the rim to the brink. */
+  const passAt = (x: number, z: number): number => {
+    const { r, a } = polar(x, z), d = into(x, z); if (d < -140 || d > MOUNTAIN_RISE + 400) return 0;
+    let best = 0; for (const pa of passAngles) { const across = Math.abs(wrapA(a - pa)) * r; best = Math.max(best, 1 - smooth(PASS_HALF, PASS_HALF + 30, across)); }
+    // The notch runs on through the crest and down the fall (nothing stands over the brink); walkable() ends the pass at the brink itself.
+    return best * smooth(-140, -60, d) * (1 - smooth(MOUNTAIN_RISE + 200, MOUNTAIN_RISE + 400, d));
+  };
+  /** The lowland far below the belt: a great plain with its own slow hills, and the outer peaks that stand through the cloud. */
+  const peaks = Array.from({ length: PEAK_N }, (_, i) => { const rand = rng(seed * 331 + i * 17 + 5); const a = (i / PEAK_N) * Math.PI * 2 + rand() * 0.8, dist = 3500 + rand() * 1900; return { x: C.x + Math.cos(a) * dist, z: C.z + Math.sin(a) * dist, r: 950 + rand() * 500, top: CLOUD_Y + 260 + rand() * 420 }; });
+  const lowland = (x: number, z: number): number => {
+    let h = LOW_Y + 220 * fbm(nHill, x * 0.0005 + 3, z * 0.0005 - 2, 4) + 70 * (ridged(nRidge, x * 0.0012 + 1, z * 0.0012 + 1, 4) - 0.4);
+    for (const pk of peaks) { const dd = Math.hypot(x - pk.x, z - pk.z); if (dd < pk.r) { const t = 1 - smooth(0, 1, dd / pk.r); const ph = LOW_Y + (pk.top - LOW_Y) * Math.pow(t, 0.8) + 110 * ridged(nRidge, x * 0.003, z * 0.003, 4) * t; h = Math.max(h, ph); } }
+    return h;
+  };
+  /** The bowl: the lake's shore at the water, rising to the rim, hills over it (calmer near the lake), the belt of mountains beyond, and past the crest the fall to the lowland (T6). */
   const bowl = (x: number, z: number): number => {
     const { r } = polar(x, z), k = smooth(LAKE_R, PLATEAU_R, r), d = into(x, z);
     let h = WATER_Y + 1.4 + RIM_RISE * Math.pow(k, 1.35) + hills(x, z) * smooth(LAKE_R, LAKE_R + 420, r);
-    if (d > 0) { const m = smooth(0, MOUNTAIN_RISE, d), rr = ridged(nRidge, x * 0.0016, z * 0.0016, 6); h += m ** 1.25 * (50 + 520 * rr) + m * fbm(nDetail, x * 0.004, z * 0.004, 4) * 18; }
+    if (d > 0) {
+      const dm = Math.min(d, MOUNTAIN_RISE), m = smooth(0, MOUNTAIN_RISE, dm), rr = ridged(nRidge, x * 0.0016, z * 0.0016, 6);
+      let mt = m ** 1.25 * (50 + 520 * rr) + m * fbm(nDetail, x * 0.004, z * 0.004, 4) * 18;
+      // A pass: the ridge notched to a saddle, a steady climb from the rim.
+      const pw = passAt(x, z); if (pw > 0) mt = mt * (1 - pw) + (PASS_RISE * smooth(0, MOUNTAIN_RISE, dm) + m * fbm(nDetail, x * 0.004, z * 0.004, 4) * 6) * pw;
+      // Past the crest the ridge collapses within RIDGE_FALL m (the brink looks out, not at a wall) and the escarpment takes the land down to the lowland, steepest at the top.
+      if (d > MOUNTAIN_RISE) { h += mt * (1 - smooth(0, RIDGE_FALL, d - MOUNTAIN_RISE)); const e = Math.pow(smooth(0, ESCARP, d - MOUNTAIN_RISE), 0.72); h = h + (lowland(x, z) - h) * e; }
+      else h += mt;
+    }
     return h;
   };
 
@@ -240,7 +275,16 @@ function build(seed: number): Plateau {
     const s = nr.river.surface[nr.i], g = ground(x, z); if (g >= s) return null;
     return { kind: 'river', surface: s, depth: s - g, river: nr.river.id };
   }
-  return { seed, centre: C, radius: PLATEAU_R, lakeR, islandR: ISLAND_R, waterY: WATER_Y, rivers, crossings, bridge, terraces, base, ground, water, nearRiver, deckAt, into };
+  // ── T6: the passes and their brinks ──
+  // PASS_N bearings spread round the plateau, each nudged off any river's source (a pass is a dry saddle, a river's source a wet valley); the brink is where the pass line crosses BRINK_PAST past the crest.
+  { const rand = rng(seed * 577 + 31), start = rand() * Math.PI * 2, sources = rivers.map(r => angleOf(r.points[0]));
+    for (let i = 0; i < PASS_N; i++) { let a = wrapA(start + (i / PASS_N) * Math.PI * 2 + (rand() - 0.5) * 0.5); for (let k = 0; k < 8; k++) { const near = sources.find(sa => Math.abs(wrapA(a - sa)) < 0.26); if (near === undefined) break; a = wrapA(near + (wrapA(a - near) >= 0 ? 0.3 : -0.3)); } passAngles.push(a); } }
+  const brinks: Brink[] = passAngles.map((a, i) => {
+    let rr = PLATEAU_R; for (; rr < PLATEAU_R + MOUNTAIN_RISE + ESCARP; rr += 2) { const q = onCircle(a, rr); if (into(q.x, q.z) >= MOUNTAIN_RISE + BRINK_PAST) break; }
+    const q = onCircle(a, rr), bearing = ((Math.atan2(Math.cos(a), -Math.sin(a)) * 180 / Math.PI) + 360) % 360, oct = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'][Math.round(bearing / 45) % 8];
+    return { id: `brink:${i}`, name: `the ${oct} brink`, x: q.x, z: q.z, angle: a };
+  });
+  return { seed, centre: C, radius: PLATEAU_R, lakeR, islandR: ISLAND_R, waterY: WATER_Y, rivers, crossings, bridge, terraces, base, ground, water, nearRiver, deckAt, into, brinks, passAt };
 }
 
 /** A polyline resampled every `step` m. */
@@ -257,6 +301,8 @@ export function resample(pts: P[], step: number): P[] {
 /** Can she stand here without wading deeper than WADE_DEPTH (a ford, the shallows), and is it on the plateau? The bridge's deck counts. */
 export function walkable(p: Plateau, x: number, z: number): boolean {
   if (p.deckAt(x, z) !== null) return true;
+  // T6: the belt is too steep but at its passes, and a pass ends at the brink: past it is the fall.
+  const d = p.into(x, z); if (d > PASS_FOOT && (d > MOUNTAIN_RISE + BRINK_PAST + 8 || p.passAt(x, z) < 0.5)) return false;
   const w = p.water(x, z); return !w || w.depth < WADE_DEPTH;
 }
 export type { Noise };

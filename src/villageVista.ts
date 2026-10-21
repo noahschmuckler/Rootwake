@@ -27,6 +27,13 @@ const smooth = (a: number, b: number, x: number) => { const t = Math.min(1, Math
 // The land itself is the plateau's (PLATEAU.md): plateauLand.ts.
 export { villageLand, VILLAGE_LAND_N, VILLAGE_DROPLETS, type VillageLand } from './plateauLand';
 import type { VillageLand } from './plateauLand';
+import { PLATEAU_R, MOUNTAIN_RISE, CLOUD_Y, LOW_Y } from './plateauModel';
+/** T6: how far the lowland and the cloud sea run out from the brink before the haze has them (m from the map's middle). Tuning. */
+const FAR_REACH = 18000;
+/** T6: how much of the lowland the cloud sea hides (0..1); the rest is the breaks. Tuning. */
+const CLOUD_COVER = 0.5;
+/** T6: the air below the plateau's level, as a share of the haze at its base: thin enough that the lowland shows through the breaks. Tuning. */
+const HAZE_BELOW = 0.07;
 
 // ── the taint (MOTHER.md, M1) ──────────────────────────────────────────────
 /** The breach's centre and the root lines her infection runs along (world polylines, as sampled points). */
@@ -239,7 +246,7 @@ export function createVillageLook(inp: LookInputs): VillageLook {
   const coarse = matchMedia('(pointer: coarse)').matches, qName = new URLSearchParams(location.search).get('q')?.toLowerCase();
   let quality = inp.quality ?? QUALITIES.find(q => q.name.toLowerCase() === qName) ?? QUALITIES[coarse ? 1 : 2];
   const trees = () => villageTrees(vl.land, vl.edge, vl.terrain, inp.treesOf, inp.villages().map(v => ({ x: v.x, z: v.z })), inp.dark, inp.blighted, inp.taint, seed);
-  const world = buildVista(scene, vl.land, trees(), villageRocks(vl, seed), quality, { hazeBase: 0, ground: groundTint(vl.land, seed, inp.blighted, inp.taint), fine: vl.terrain.height, fineLod: true, renderer, bladeH: BLADE_H, nearTreesScale: NEAR_TREES, treeReach: TREE_REACH });
+  const world = buildVista(scene, vl.land, trees(), villageRocks(vl, seed), quality, { hazeBase: 0, hazeBelow: HAZE_BELOW, ground: groundTint(vl.land, seed, inp.blighted, inp.taint), fine: vl.terrain.height, fineLod: true, renderer, waterDisc: { x: KARST_AT.x, z: KARST_AT.z, r: PLATEAU_R + 40 }, cloudSea: { x: KARST_AT.x, z: KARST_AT.z, y: CLOUD_Y, inner: PLATEAU_R + MOUNTAIN_RISE + 120, outer: FAR_REACH, cover: CLOUD_COVER }, farReach: FAR_REACH, lowY: LOW_Y, bladeH: BLADE_H, nearTreesScale: NEAR_TREES, treeReach: TREE_REACH });
   world.setCanopy(canopyMap(vl.land, seed)); world.setFloor(floorMap(vl.land, seed));
   // FOREST: the understory, kept from the places (as the rocks are) and the trunks.
   const lairAt = places(seed).find(p => p.id === 'lair')!, keep = [...places(seed), ...dens(seed), ...ruins(seed), ...warrens(seed), ...wallows(seed), ...ownWarrens(seed), moot(seed), ...convergences(seed)];
@@ -333,7 +340,7 @@ export function createVillageLook(inp: LookInputs): VillageLook {
       hemi.color.set(h.ambSky); hemi.groundColor.set(h.ambGround); hemi.intensity = h.ambI * 2.2 * (1 - f.gloom * 0.5);
       fogColour.set(h.horizon).lerp(gloomColour, Math.min(1, f.gloom > 0 ? 0.3 + f.gloom * 0.6 + f.gloom * f.gloom * 0.1 : 0) * (1 - 0.6 * clear)); scene.background = fogColour.clone();
       scene.fog = new THREE.FogExp2(fogColour.getHex(), h.haze * 1.3 + (f.gloom > 0 ? 0.008 + f.gloom * 0.03 : 0) * (1 - 0.92 * clear));
-      if (camera.far !== 9000) { camera.far = 9000; camera.updateProjectionMatrix(); }
+      if (camera.far !== FAR_REACH * 1.3) { camera.far = FAR_REACH * 1.3; camera.updateProjectionMatrix(); }
     },
     render() {
       composer.render();

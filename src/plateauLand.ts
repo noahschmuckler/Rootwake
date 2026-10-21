@@ -19,7 +19,7 @@ const smooth = (a: number, b: number, x: number) => { const t = Math.min(1, Math
 export const VILLAGE_LAND_N = 1025, VILLAGE_DROPLETS = 110000;
 /** Tuning: how far past a river's water its gravel bank runs (m). */
 const BANK_GRAVEL = 5;
-const SNOW_Y = 340;
+const SNOW_Y = 470;
 
 /** The eroded grid before the carving: heights, where water ran, where sediment lay, the cavity occlusion. */
 export interface Eroded { n: number; half: number; h: Float32Array; flow: Float32Array; sediment: Float32Array; ao: Float32Array }
@@ -31,7 +31,8 @@ export function bakeLand(seed: number): Eroded {
   const erodeMask = (x: number, z: number): number => {
     let m = smooth(ISLAND_R + 20, p.lakeR(Math.atan2(z - C.z, x - C.x)) + 60, Math.hypot(x - C.x, z - C.z));
     for (const t of p.terraces) m = Math.min(m, smooth(TERRACE_R, TERRACE_R + TERRACE_FADE + 40, Math.hypot(x - t.x, z - t.z)));
-    return m;
+    // T6: the belt's top and the escarpment are bare rock: the droplets stop short of the crest (over the lip they dug the passes' ends into gullies and heaped the brinks, and they would carve a kilometre's fall into more).
+    return m * (1 - smooth(MOUNTAIN_RISE - 150, MOUNTAIN_RISE - 70, p.into(x, z)));
   };
   const land = generate(seed, { droplets: VILLAGE_DROPLETS }, { size: half * 2, n: VILLAGE_LAND_N, shape: { base: p.base, seed }, waterY: WATER_Y, snowY: SNOW_Y, erodeMask, surface: undefined });
   return { n: land.n, half, h: land.h, flow: land.flow, sediment: land.sediment, ao: land.ao };
@@ -39,14 +40,15 @@ export function bakeLand(seed: number): Eroded {
 /** What a bake was made from: the shape at a few points, the grid and the erosion. A bake whose fingerprint differs from the code's is stale. */
 export function fingerprint(seed: number): string {
   const p = plateau(seed), pts = [[0, 0], [400, -900], [-1300, 200], [900, 700], [-60, -330 - PLATEAU_R - 300]];
-  return JSON.stringify({ v: 3, seed, n: VILLAGE_LAND_N, d: VILLAGE_DROPLETS, half: halfOf(seed), s: pts.map(([x, z]) => Math.round(p.base(x, z) * 100)), r: p.rivers.map(r => r.points.length) });
+  return JSON.stringify({ v: 4, seed, n: VILLAGE_LAND_N, d: VILLAGE_DROPLETS, half: halfOf(seed), s: pts.map(([x, z]) => Math.round(p.base(x, z) * 100)), r: p.rivers.map(r => r.points.length) });
 }
-/** A bake as bytes: a JSON header (its fingerprint), then the heights in 1.6 cm steps as 16-bit differences along each row (smooth land compresses well so), and the three maps as bytes. */
+/** A bake as bytes: a JSON header (its fingerprint), then the heights in 1.6 cm steps as 32-bit differences along each row (smooth land compresses well so; T6: the map now falls 3 km past the brink, past a 16-bit range), and the three maps as bytes. */
+const H_OFFSET = 4000;
 export function encodeLand(seed: number, e: Eroded): Uint8Array {
-  const head = new TextEncoder().encode(fingerprint(seed)), N = e.n * e.n, out = new Uint8Array(4 + head.length + N * 2 + N * 3), dv = new DataView(out.buffer);
+  const head = new TextEncoder().encode(fingerprint(seed)), N = e.n * e.n, out = new Uint8Array(4 + head.length + N * 4 + N * 3), dv = new DataView(out.buffer);
   dv.setUint32(0, head.length, true); out.set(head, 4); let o = 4 + head.length;
-  // Differences modulo 2^16: exact for any height in range, small where the land is smooth.
-  for (let k = 0, prev = 0; k < N; k++, o += 2) { const q = Math.max(0, Math.min(65535, Math.round((e.h[k] + 50) * 64))); dv.setUint16(o, (q - prev) & 0xffff, true); prev = q; }
+  // Differences modulo 2^32: exact for any height in range, small where the land is smooth.
+  for (let k = 0, prev = 0; k < N; k++, o += 4) { const q = Math.max(0, Math.min(0x7fffffff, Math.round((e.h[k] + H_OFFSET) * 64))); dv.setInt32(o, (q - prev) | 0, true); prev = q; }
   for (const a of [e.flow, e.sediment, e.ao]) for (let k = 0; k < N; k++) out[o++] = Math.round(Math.max(0, Math.min(1, a[k])) * 255);
   return out;
 }
@@ -55,8 +57,8 @@ export function decodeLand(seed: number, bytes: Uint8Array): Eroded | null {
   try {
     const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength), hl = dv.getUint32(0, true); if (hl > 4096) return null;
     if (new TextDecoder().decode(bytes.subarray(4, 4 + hl)) !== fingerprint(seed)) return null;
-    const n = VILLAGE_LAND_N, N = n * n; let o = 4 + hl; if (bytes.length !== o + N * 5) return null;
-    const h = new Float32Array(N); for (let k = 0, q = 0; k < N; k++, o += 2) { q = (q + dv.getUint16(o, true)) & 0xffff; h[k] = q / 64 - 50; }
+    const n = VILLAGE_LAND_N, N = n * n; let o = 4 + hl; if (bytes.length !== o + N * 7) return null;
+    const h = new Float32Array(N); for (let k = 0, q = 0; k < N; k++, o += 4) { q = (q + dv.getInt32(o, true)) | 0; h[k] = q / 64 - H_OFFSET; }
     const maps = [new Float32Array(N), new Float32Array(N), new Float32Array(N)]; for (const a of maps) for (let k = 0; k < N; k++) a[k] = bytes[o++] / 255;
     return { n, half: halfOf(seed), h, flow: maps[0], sediment: maps[1], ao: maps[2] };
   } catch { return null; }

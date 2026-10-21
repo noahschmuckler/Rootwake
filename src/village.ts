@@ -116,7 +116,7 @@ const mootPlace = moot(home.seed);
 const wallowPlaces = wallows(home.seed); setWallows(wallowPlaces.map(w => ({ id: w.id, x: w.x, z: w.z })));
 // RUINS.md (Noah, 2026-10-19): the wards, the old containment's ruins ringing the breach just inside the taint's edge, each on a level earthwork cleared of trees.
 const wardList = wards(home.seed, places(home.seed).find(p => p.id === 'lair')!, relief, (x, z) => walkable(plateau(home.seed), x, z), places(home.seed).filter(p => p.id !== 'lair').map(p => ({ x: p.x, z: p.z, r: p.radius })));
-const chunks = createChunks(scene, home.seed, terrain, dens(home.seed), convergences(home.seed), ruins(home.seed), [...warrenPlaces, ...ownWarrenPlaces], mootPlace, wallowPlaces, wardList.map(w => ({ x: w.x, z: w.z, r: WARD.court + w.skirt + 1 })));
+const chunks = createChunks(scene, home.seed, terrain, dens(home.seed), [...convergences(home.seed), ...plateau(home.seed).brinks], ruins(home.seed), [...warrenPlaces, ...ownWarrenPlaces], mootPlace, wallowPlaces, wardList.map(w => ({ x: w.x, z: w.z, r: WARD.court + w.skirt + 1 })));
 const ownerOf = (w: { x: number; z: number }): Ctx => ctxs.slice().sort((a, b) => Math.hypot(a.ox - w.x, a.oz - w.z) - Math.hypot(b.ox - w.x, b.oz - w.z))[0];
 const rabbitStock = (id: string): number => { const own = ownWarrenPlaces.find(x => x.id === id); if (own) return ownerOf(own).v.ownRabbits; const w = warrenPlaces.find(x => x.id === id); if (!w) return 0; const k = denKnownBy(w.den); return k ? rabbitsAt(k.c.v, k.d) : WARREN_CAP; }; chunks.setRabbits(rabbitStock);
 chunks.setBoars(id => { const w = wallowPlaces.find(x => x.id === id); return w ? ctxs.find(c => c.id === w.village)?.v.boars ?? 0 : 0; });
@@ -858,7 +858,9 @@ const deepBtn = el<HTMLButtonElement>('deepBtn'), diveBtn = el<HTMLButtonElement
 const SHRINE_R = 2.8, CONV_R = 3.5, DIVE_S = 5;
 /** The board on the phone: scaled to BOARD_FIT of its fit and lifted to BOARD_LIFT (camera space) so its bottom rows clear the stick and the fight button and its top the meditation panel. Tuning. */
 const BOARD_FIT = 0.82, BOARD_LIFT = 0.05;
-type Still = { kind: 'pool' } | { kind: 'shrine'; c: Ctx } | { kind: 'convergence'; place: DeepPlace } | { kind: 'grove'; place: DeepPlace } | { kind: 'ruin'; ruin: Ruin } | { kind: 'moot' };
+type Still = { kind: 'pool' } | { kind: 'shrine'; c: Ctx } | { kind: 'convergence'; place: DeepPlace } | { kind: 'grove'; place: DeepPlace } | { kind: 'brink'; place: DeepPlace } | { kind: 'ruin'; ruin: Ruin } | { kind: 'moot' };
+/** T6: how near a brink's ring she must stand to take its deep root back down. Tuning. */
+const BRINK_R = 7;
 /** G3b: how near a ruin's basin she stands to sanctify it, or to meditate at the grove. Tuning. */
 const RUIN_R = 3.5;
 type Miracle = { kind: 'quicken'; site: YieldSite } | { kind: 'purify'; target: PurifyTarget } | { kind: 'spirit'; keeps: SiteKind } | { kind: 'hedge'; x: number; z: number } | { kind: 'dispel'; x: number; z: number } | /** S1: the warren she stands at, quickened for clarity alone (Noah: no prayer). */ { kind: 'warren'; id: string; den: string };
@@ -872,6 +874,8 @@ function deepPlaces(): DeepPlace[] {
   for (const c of convergences(home.seed)) if (overworld.known.has(c.about)) out.push({ id: c.id, kind: 'convergence', name: c.name, x: c.x, z: c.z });
   // G3b: the groves: every ruin she has sanctified.
   for (const r of groves(overworld)) out.push({ id: `grove:${r.id}`, kind: 'grove', name: `the grove at ${r.name}`, x: r.x, z: r.z });
+  // T6: the brinks, where the passes end at the belt's crest: hers from the first.
+  for (const b of plateau(home.seed).brinks) out.push({ id: b.id, kind: 'brink', name: b.name, x: b.x, z: b.z });
   return out;
 }
 const nodeAt = (): THREE.Vector3 => new THREE.Vector3(KARST_AT.x, terrain.height(KARST_AT.x, KARST_AT.z) - nodeDepth(deep), KARST_AT.z);
@@ -879,6 +883,7 @@ function stillPlace(): Still | null {
   if (mode !== 'ground') return null; const f = player.feet(); if (karst.atPool(f)) return { kind: 'pool' };
   for (const c of ctxs) if (isShrined(c.v) && Math.hypot(f.x - c.ox - SITES.shrine.x, f.z - c.oz - SITES.shrine.z) <= SHRINE_R) return { kind: 'shrine', c };
   const conv = deepPlaces().find(p => p.kind === 'convergence' && Math.hypot(p.x - f.x, p.z - f.z) <= CONV_R); if (conv) return { kind: 'convergence', place: conv };
+  const brink = deepPlaces().find(p => p.kind === 'brink' && Math.hypot(p.x - f.x, p.z - f.z) <= BRINK_R); if (brink) return { kind: 'brink', place: brink };
   if (!steward.woken && Math.hypot(f.x - mootPlace.x, f.z - mootPlace.z) <= MOOT_R) return { kind: 'moot' };
   const ru = ruins(home.seed).find(r => Math.hypot(r.x - f.x, r.z - f.z) <= RUIN_R); if (!ru) return null; const grove = deepPlaces().find(p => p.id === `grove:${ru.id}`); return grove ? { kind: 'grove', place: grove } : { kind: 'ruin', ruin: ru };
 }
@@ -931,7 +936,7 @@ function openDeep(): void {
   deepEl.hidden = false; deepGo.hidden = true; deepAimed = null; closeDeepLabels();
   const places = deepPlaces(), reach = new Set(reachable(deep, KARST_AT, places).map(p => p.id)), list: { id: string; dir: THREE.Vector3; colour: string; size: number; reachable: boolean; faint?: boolean }[] = [];
   const dirOf = (p: { x: number; z: number }): THREE.Vector3 => { const d = deepDirection(deep, KARST_AT, p); return new THREE.Vector3(d.x, d.y, d.z); };
-  for (const p of places) { const ok = reach.has(p.id); list.push({ id: p.id, dir: dirOf(p), colour: p.kind === 'pool' ? '#d8f07a' : p.kind === 'shrine' ? '#e8dcff' : p.kind === 'grove' ? '#c8f0a0' : '#cfeeff', size: p.kind === 'pool' ? 0.9 : 0.7, reachable: ok }); const e = document.createElement('div'); e.className = 'name deep'; e.hidden = true; labels.append(e); deepLabels.set(p.id, { el: e, place: p, reach: ok }); }
+  for (const p of places) { const ok = reach.has(p.id); list.push({ id: p.id, dir: dirOf(p), colour: p.kind === 'pool' ? '#d8f07a' : p.kind === 'shrine' ? '#e8dcff' : p.kind === 'grove' ? '#c8f0a0' : p.kind === 'brink' ? '#ffe2a8' : '#cfeeff', size: p.kind === 'pool' ? 0.9 : p.kind === 'brink' ? 0.8 : 0.7, reachable: ok }); const e = document.createElement('div'); e.className = 'name deep'; e.hidden = true; labels.append(e); deepLabels.set(p.id, { el: e, place: p, reach: ok }); }
   for (const p of knownPlaces(overworld)) { if (p.kind === 'karst' || places.some(q => q.id === `conv:${p.id}`)) continue; list.push({ id: `faint:${p.id}`, dir: dirOf(p), colour: p.kind === 'village' ? villageColour(p.id) : p.id === 'lair' ? '#c070c0' : p.kind === 'warren' ? '#d8b890' : '#c8b8a0', size: 0.4, reachable: false, faint: true }); }
   deepWorld.clearBore(); deepWorld.setPoints(list); deepWorld.setReach(reachAngle(deep)); deepWorld.showDrop(true); deepKey = places.map(p => p.id).join('|') + '#' + deepReach(deep);
 }
@@ -1091,7 +1096,7 @@ function renderMap(c: CanvasRenderingContext2D, w: number, h: number, s: number,
   for (const hnt of overworld.hints) { const a = (hnt.bearing - 90) * Math.PI / 180, r = HINT_REACH * s, sp = HINT_SPREAD * Math.PI / 180, o = hintFrom(hnt), fx = sx(o.x), fz = sz(o.z); c.fillStyle = '#e0a0f02a'; c.strokeStyle = '#e0a0f0'; c.lineWidth = 1 * devicePixelRatio; c.setLineDash([4 * devicePixelRatio, 4 * devicePixelRatio]); c.beginPath(); c.moveTo(fx, fz); c.arc(fx, fz, r, a - sp, a + sp); c.closePath(); c.fill(); c.stroke(); c.setLineDash([]); c.fillStyle = '#e0a0f0'; c.textAlign = 'center'; const [what, way] = hnt.text.split(/ to the (?=[a-z-]+$)/), tx = fx + Math.cos(a) * r * 0.4, ty = fz + Math.sin(a) * r * 0.4; c.fillText(what, tx, ty); if (way) c.fillText(`to the ${way}`, tx, ty + 14 * devicePixelRatio); }
   for (const p of knownPlaces(overworld)) { const x = sx(p.x), y = sz(p.z); c.strokeStyle = p.id === 'lair' ? '#c070c0' : p.kind === 'village' ? villageColour(p.id) : p.kind === 'den' ? '#c8b8a0' : p.kind === 'ruin' ? (overworld.sanctified.has(p.id) ? '#d8f07a' : '#b8c0a8') : p.kind === 'warren' ? '#d8b890' : p.kind === 'moot' ? '#e8d088' : '#f1edcf'; c.lineWidth = 2 * devicePixelRatio; c.beginPath(); if (p.kind === 'village') c.arc(x, y, 7 * devicePixelRatio, 0, Math.PI * 2); else if (p.kind === 'ruin') { const r = 6 * devicePixelRatio; c.moveTo(x, y - r); c.lineTo(x + r, y); c.lineTo(x, y + r); c.lineTo(x - r, y); c.closePath(); } else if (p.kind === 'den') { c.fillStyle = '#c8b8a0'; c.arc(x, y, 5 * devicePixelRatio, 0, Math.PI * 2); c.fill(); } else if (p.kind === 'warren') { c.arc(x, y, 4 * devicePixelRatio, 0, Math.PI * 2); } else if (p.kind === 'moot') { const r = 5 * devicePixelRatio; c.rect(x - r, y - r, r * 2, r * 2); } else if (p.id === 'karst') { c.moveTo(x, y - 9 * devicePixelRatio); c.lineTo(x + 8 * devicePixelRatio, y + 7 * devicePixelRatio); c.lineTo(x - 8 * devicePixelRatio, y + 7 * devicePixelRatio); c.closePath(); } else { c.moveTo(x - 7 * devicePixelRatio, y - 7 * devicePixelRatio); c.lineTo(x + 7 * devicePixelRatio, y + 7 * devicePixelRatio); c.moveTo(x + 7 * devicePixelRatio, y - 7 * devicePixelRatio); c.lineTo(x - 7 * devicePixelRatio, y + 7 * devicePixelRatio); } c.stroke(); c.fillStyle = c.strokeStyle; c.fillText(p.name, x, y + 24 * devicePixelRatio); }
   // G4: the fairy rings she can use, as small pale rings.
-  for (const p of deepPlaces()) if (p.kind === 'convergence') { const x = sx(p.x), y = sz(p.z); c.strokeStyle = '#cfeeff'; c.lineWidth = 1.5 * devicePixelRatio; c.beginPath(); c.arc(x, y, 4 * devicePixelRatio, 0, Math.PI * 2); c.stroke(); }
+  for (const p of deepPlaces()) if (p.kind === 'convergence' || p.kind === 'brink') { const x = sx(p.x), y = sz(p.z); c.strokeStyle = p.kind === 'brink' ? '#ffe2a8' : '#cfeeff'; c.lineWidth = 1.5 * devicePixelRatio; c.beginPath(); c.arc(x, y, 4 * devicePixelRatio, 0, Math.PI * 2); c.stroke(); }
   // Incidents: a red mark where it happened, with what it was.
   for (const inc of allIncidents()) { const x = sx(inc.x), y = sz(inc.z); c.fillStyle = INCIDENT_FOE; c.strokeStyle = INCIDENT_FOE; c.lineWidth = 2 * devicePixelRatio; c.beginPath(); c.arc(x, y, 4 * devicePixelRatio, 0, Math.PI * 2); c.fill(); c.beginPath(); c.arc(x, y, 9 * devicePixelRatio, 0, Math.PI * 2); c.stroke(); c.fillStyle = INCIDENT_VICTIM; c.textAlign = 'center'; c.fillText(inc.text, x, y - 14 * devicePixelRatio); }
   if (course) { c.strokeStyle = '#f0d060'; c.lineWidth = 2 * devicePixelRatio; c.beginPath(); for (const r of course.roots) for (let i = 0; i < r.samples.length; i++) { const p = r.samples[i]; if (i === 0) c.moveTo(sx(p.x), sz(p.z)); else c.lineTo(sx(p.x), sz(p.z)); } c.stroke(); const e = network.nodeAt(course.entry); if (e) { c.beginPath(); c.arc(sx(e.x), sz(e.z), 5 * devicePixelRatio, 0, Math.PI * 2); c.stroke(); } }

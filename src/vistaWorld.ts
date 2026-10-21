@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { CircleCollider } from './player';
 import { surfaceAt, normalAt, bakeSun, rng, type Land, type Tree, type Rock } from './vistaTerrain';
-import { terrainVert, terrainFrag, grassVert, grassFrag, solidVert, solidFrag, cardVert, cardFrag, waterVert, waterFrag, skyVert, skyFrag } from './vistaShaders';
+import { terrainVert, terrainFrag, grassVert, grassFrag, solidVert, solidFrag, cardVert, cardFrag, waterVert, waterFrag, skyVert, skyFrag, cloudVert, cloudFrag } from './vistaShaders';
 import { spriteTexture, standees, crownStandees, type Standee, type SpriteKind } from './sprites';
 import { floorTexture, type FloorName } from './groundTextures';
 
@@ -41,6 +41,8 @@ export const CASTER_LAYER = 1;
 export interface VistaOptions {
   /** The haze's base height (the lake for the vista; the meadow for the village). */
   hazeBase: number;
+  /** T6: the air's density below that base as a share of the base's (1 by default: the vista's valley has nothing beneath it; the plateau's brink looks down 3 km). */
+  hazeBelow: number;
   /** The ground tint (rgb colour, a amount) per map sample, as bytes n×n×4: the village's woods and dark forest. */
   ground: Uint8Array;
   /** The exact surface near her, sampled into a fine window the grass stands on. */
@@ -53,6 +55,14 @@ export interface VistaOptions {
   fineLod: boolean;
   /** PINE BARRENS: the renderer, to draw the far pines' impostor once (without it, the far pine is a card of needles). */
   renderer: THREE.WebGLRenderer;
+  /** T6: the water plane as a disc (the plateau's lake and rivers), so no water lies over the lowland far below. */
+  waterDisc: { x: number; z: number; r: number };
+  /** T6: the sea of cloud under the brink: its height, where it begins (m from the centre) and how far it reaches, and how much of the lowland it hides (0..1). */
+  cloudSea: { x: number; z: number; y: number; inner: number; outer: number; cover: number };
+  /** T6: how far the far ring runs (m from the map's middle); the sky dome and the camera's far plane must reach it. */
+  farReach: number;
+  /** T6: below this height the land is the lowland far under the brink, coloured as country seen from a great height (uLowY). */
+  lowY: number;
 }
 export interface VistaWorld {
   root: THREE.Group;
@@ -101,7 +111,7 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
   const floorBytes = new Uint8Array(N * N * 4), floorTex = new THREE.DataTexture(floorBytes, N, N, THREE.RGBAFormat, THREE.UnsignedByteType); floorTex.magFilter = floorTex.minFilter = THREE.LinearFilter; floorTex.needsUpdate = true;
   const shared = {
     uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color() }, uZenith: { value: new THREE.Color() }, uHorizon: { value: new THREE.Color() },
-    uAmbSky: { value: new THREE.Color() }, uAmbGround: { value: new THREE.Color() }, uHaze: { value: 0.0005 }, uHazeFall: { value: 1 / 200 }, uHazeBase: { value: opts.hazeBase ?? land.waterY }, uTime: { value: 0 },
+    uAmbSky: { value: new THREE.Color() }, uAmbGround: { value: new THREE.Color() }, uHaze: { value: 0.0005 }, uHazeFall: { value: 1 / 200 }, uHazeBase: { value: opts.hazeBase ?? land.waterY }, uHazeBelow: { value: opts.hazeBelow ?? 1 }, uLowY: { value: opts.lowY ?? -1e5 }, uTime: { value: 0 },
     uMapData: { value: mapTex }, uSunTex: { value: sunTex }, uGround: { value: groundTex }, uFloor: { value: floorTex }, uHeight: { value: heightTex }, uMapHalf: { value: HALF }, uCell: { value: CELL }, uN: { value: N }, uSunN: { value: SN },
     uWaterY: { value: Number.isFinite(land.waterY) ? land.waterY : -1e4 }, uSnowY: { value: land.snowY },
     uGloom: { value: new THREE.Vector4(0, 0, 0, 0) }, uGloomD: { value: 0.03 }, uStars: { value: 0 },
@@ -153,9 +163,9 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
   }
 
   // ── the far ring: the unaroded shape out to the horizon ──
-  {
-    /** Tuning: reach and spacing of the ring (m). It overlaps the map's outer cells, sunk a little, so no seam opens. */
-    const R = Math.max(7000, HALF + 4500), S = 80, n = Math.round(2 * R / S), pos: number[] = [], nor: number[] = [], idx: number[] = [], inner = HALF - S;
+  /** A square ring of the base shape from `inner` to `R` at spacing S (m); within the map it sits sunk a little, so no seam opens. */
+  const ringMesh = (inner: number, R: number, S: number, name: string): void => {
+    const n = Math.round(2 * R / S), pos: number[] = [], nor: number[] = [], idx: number[] = [];
     const id = new Int32Array((n + 1) * (n + 1)).fill(-1);
     const need = (i: number, j: number) => { const x0 = -R + i * S, z0 = -R + j * S; return !(x0 >= -inner && x0 + S <= inner && z0 >= -inner && z0 + S <= inner); };
     const vert = (i: number, j: number): number => {
@@ -167,15 +177,28 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
     };
     for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) if (need(i, j)) { const a = vert(i, j), b = vert(i + 1, j), c = vert(i, j + 1), d = vert(i + 1, j + 1); idx.push(a, c, b, b, c, d); }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); g.setIndex(idx); g.computeBoundingSphere();
-    const ring = new THREE.Mesh(g, terrainMat); ring.name = 'far-ring'; ring.frustumCulled = false; scene.add(ring);
-  }
+    const ring = new THREE.Mesh(g, terrainMat); ring.name = name; ring.frustumCulled = false; scene.add(ring);
+  };
+  /** Tuning: reach and spacing of the ring (m); T6: a second, coarser ring runs on to FAR_REACH so the lowland under the brink ends in haze, not at an edge. */
+  const R1 = Math.max(7000, HALF + 4500), FAR_REACH = opts.farReach ?? R1;
+  ringMesh(HALF - 80, R1, 80, 'far-ring');
+  if (FAR_REACH > R1) ringMesh(R1 - 320, FAR_REACH, 320, 'far-ring-2');
 
   // ── sky and water ──
   const skyMat = new THREE.ShaderMaterial({ uniforms: { ...shared, uCloud: { value: 0.5 } }, vertexShader: skyVert, fragmentShader: skyFrag, side: THREE.BackSide, depthWrite: false });
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(8000, 48, 24), skyMat); sky.name = 'sky'; sky.frustumCulled = false; sky.renderOrder = -10; scene.add(sky);
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(Math.max(8000, (opts.farReach ?? 0) * 1.25), 48, 24), skyMat); sky.name = 'sky'; sky.frustumCulled = false; sky.renderOrder = -10; scene.add(sky);
   const waterMat = new THREE.ShaderMaterial({ uniforms: { ...shared }, vertexShader: waterVert, fragmentShader: waterFrag, transparent: true, depthWrite: false });
-  const waterGeo = new THREE.PlaneGeometry(SIZE, SIZE, 8, 8); waterGeo.rotateX(-Math.PI / 2);
+  const waterGeo = opts.waterDisc ? new THREE.CircleGeometry(opts.waterDisc.r, 64) : new THREE.PlaneGeometry(SIZE, SIZE, 8, 8); waterGeo.rotateX(-Math.PI / 2); if (opts.waterDisc) waterGeo.translate(opts.waterDisc.x, 0, opts.waterDisc.z);
   const water = new THREE.Mesh(waterGeo, waterMat); water.position.y = land.waterY; water.name = 'lake'; water.visible = Number.isFinite(land.waterY); scene.add(water);
+  // T6: the cloud sea, two sheets a little apart (the lower fills the upper's breaks a little, and the two drift against each other), never written to depth.
+  if (opts.cloudSea) {
+    const cs = opts.cloudSea;
+    for (const [dy, drift, cover] of [[0, 0, cs.cover], [-90, 37, cs.cover]] as [number, number, number][]) {
+      const mat = new THREE.ShaderMaterial({ uniforms: { ...shared, uCloudSea: { value: new THREE.Vector3(cs.x, cs.z, cs.inner) }, uCloudCover: { value: cover }, uCloudDrift: { value: drift } }, vertexShader: cloudVert, fragmentShader: cloudFrag, transparent: true, depthWrite: false, side: THREE.DoubleSide });
+      const g = new THREE.RingGeometry(Math.max(1, cs.inner - 500), cs.outer, 96, 6); g.rotateX(-Math.PI / 2); g.translate(cs.x, 0, cs.z);
+      const m = new THREE.Mesh(g, mat); m.position.y = cs.y + dy; m.name = 'cloud-sea'; m.frustumCulled = false; m.renderOrder = 2; scene.add(m);
+    }
+  }
 
   // ── grass ──
   const grassMat = lit(grassVert, grassFrag, { uCenter: { value: new THREE.Vector2() }, uPatch: { value: 60 }, uBladeH: { value: opts.bladeH ?? 0.34 }, uBladeW: { value: 0.045 }, uWind: { value: new THREE.Vector2(0.94, 0.34) },

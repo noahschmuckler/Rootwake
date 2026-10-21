@@ -1,9 +1,28 @@
 import { test } from 'node:test'; import assert from 'node:assert/strict';
-import { plateau, walkable, PLATEAU_R, ISLAND_R, WATER_Y, WADE_DEPTH, TERRACE_R } from '../src/plateauModel';
+import { plateau, walkable, PLATEAU_R, ISLAND_R, WATER_Y, WADE_DEPTH, TERRACE_R, PASS_N, MOUNTAIN_RISE, CLOUD_Y } from '../src/plateauModel';
 import { places, villageSites, KARST_AT, onLand } from '../src/overworldModel';
 import { STREAM_Z } from '../src/villageModel';
 
 const p = plateau(1);
+test('T6: the belt is a belt: past the crest the land falls to a lowland far below the cloud; three passes climb to brinks she can stand at, and nowhere else is the belt walkable', () => {
+  const p = plateau(1);
+  assert.equal(p.brinks.length, PASS_N);
+  for (const b of p.brinks) {
+    assert.ok(walkable(p, b.x, b.z), `${b.name} is stood at`); assert.ok(p.into(b.x, b.z) >= MOUNTAIN_RISE, `${b.name} past the crest`);
+    // Up the pass from the rim: walkable all the way, never a step down, and the saddle well under the ridge beside it.
+    let last = -1e9, saddle = 0; for (let r = PLATEAU_R - 30; r <= Math.hypot(b.x - p.centre.x, b.z - p.centre.z) - 4; r += 6) { const x = p.centre.x + Math.cos(b.angle) * r, z = p.centre.z + Math.sin(b.angle) * r, h = p.base(x, z); assert.ok(walkable(p, x, z), `${b.name}'s pass is walkable at ${r - PLATEAU_R}`); assert.ok(h >= last - 3, `${b.name}'s pass climbs (${r - PLATEAU_R})`); last = h; saddle = Math.max(saddle, h); }
+    const beside = Math.max(...[-0.22, -0.15, -0.09, 0.09, 0.15, 0.22].map(da => p.base(p.centre.x + Math.cos(b.angle + da) * (PLATEAU_R + 560), p.centre.z + Math.sin(b.angle + da) * (PLATEAU_R + 560)))); assert.ok(beside > saddle + 30, `the ridge beside ${b.name} stands over its saddle (${beside.toFixed(0)} vs ${saddle.toFixed(0)})`);
+    // Past the brink: the fall, into the cloud and far below it.
+    const q = (d: number) => { const r = Math.hypot(b.x - p.centre.x, b.z - p.centre.z) + d; return p.base(p.centre.x + Math.cos(b.angle) * r, p.centre.z + Math.sin(b.angle) * r); };
+    assert.ok(!walkable(p, p.centre.x + Math.cos(b.angle) * (Math.hypot(b.x - p.centre.x, b.z - p.centre.z) + 40), p.centre.z + Math.sin(b.angle) * (Math.hypot(b.x - p.centre.x, b.z - p.centre.z) + 40)), 'no step past the brink');
+    assert.ok(q(400) < CLOUD_Y, 'the fall goes under the cloud'); assert.ok(q(1400) < CLOUD_Y - 1500, 'and far below it');
+  }
+  // Off the passes the belt refuses her; the lowland has peaks through the cloud.
+  let refused = 0, n = 0; for (let a = 0; a < 6.28; a += 0.05) { const x = p.centre.x + Math.cos(a) * (PLATEAU_R + 300), z = p.centre.z + Math.sin(a) * (PLATEAU_R + 300); n++; if (!walkable(p, x, z)) refused++; }
+  assert.ok(refused > n * 0.9, `the belt is closed but at the passes (${refused}/${n})`);
+  let above = 0; for (let x = -6000; x <= 6000; x += 150) for (let z = -6000; z <= 6000; z += 150) if (Math.hypot(x - p.centre.x, z - p.centre.z) > PLATEAU_R + MOUNTAIN_RISE + 950 && p.base(x, z) > CLOUD_Y) above++;
+  assert.ok(above > 40, `peaks stand through the cloud (${above})`);
+});
 test('one karst at the centre of the plateau, on an island in a lake (Noah, 2026-10-19)', () => {
   assert.deepEqual(p.centre, { x: KARST_AT.x, z: KARST_AT.z });
   assert.ok(Math.abs(p.ground(KARST_AT.x + 30, KARST_AT.z)) < 0.2, 'the island is the karst’s floor, at 0');

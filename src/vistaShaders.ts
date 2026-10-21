@@ -17,6 +17,7 @@ vec3 srgb(vec3 c){ return pow(c, vec3(2.2)); }
 export const ATMOS = /* glsl */`
 uniform vec3 uSunDir; uniform vec3 uSunCol; uniform vec3 uZenith; uniform vec3 uHorizon;
 uniform vec3 uAmbSky; uniform vec3 uAmbGround; uniform float uHaze; uniform float uHazeFall; uniform float uHazeBase; uniform float uTime;
+uniform float uHazeBelow; // T6: the air's density below the haze's base, as a share of the density at the base (1: as thick as at the base; less, and the brink sees down to the lowland)
 uniform vec4 uGloom; // a dark fog over everything (rgb, amount): the dark forest; its density is uGloomD
 uniform float uGloomD; uniform float uStars;
 vec3 skyColour(vec3 d){
@@ -29,9 +30,13 @@ vec3 skyColour(vec3 d){
 /** Aerial perspective: height fog integrated along the view ray, coloured by the sky toward the view. */
 vec3 applyHaze(vec3 col, vec3 wp){
   vec3 v = wp - cameraPosition; float dist = length(v); vec3 d = v / max(dist, 1e-3);
-  float h0 = max(cameraPosition.y - uHazeBase, 0.0), dy = v.y, e0 = exp(-h0 * uHazeFall);
-  float integ = abs(dy) > 0.5 ? (e0 - exp(-max(h0 + dy, 0.0) * uHazeFall)) / (uHazeFall * dy) : e0;
-  float amount = 1.0 - exp(-uHaze * dist * max(integ, 0.0));
+  // Above the base the air thins with height (integrated along the ray); below it (T6) it is uHazeBelow of the base's, over the part of the ray that runs there.
+  float y0 = cameraPosition.y - uHazeBase, y1 = wp.y - uHazeBase;
+  float ya = max(y0, 0.0), yb = max(y1, 0.0), dy = yb - ya, e0 = exp(-ya * uHazeFall);
+  float share = abs(y1 - y0) > 0.5 ? clamp((max(y0, 0.0) - max(y1, 0.0)) / (y0 - y1) * sign(y0 - y1) * sign(y0 - y1), 0.0, 1.0) : (y0 > 0.0 ? 1.0 : 0.0);
+  float above = abs(dy) > 0.5 ? (e0 - exp(-yb * uHazeFall)) / (uHazeFall * dy) : e0;
+  float integ = max(above, 0.0) * share + uHazeBelow * (1.0 - share);
+  float amount = 1.0 - exp(-uHaze * dist * integ);
   vec3 hc = skyColour(normalize(vec3(d.x, clamp(d.y, 0.0, 1.0) * 0.35 + 0.03, d.z)));
   col = mix(col, hc, clamp(amount, 0.0, 1.0));
   return mix(col, uGloom.rgb, uGloom.a * (1.0 - exp(-dist * uGloomD)));
@@ -96,6 +101,14 @@ vec3 rockColour(vec3 wp){
   r = mix(r, srgb(vec3(0.46, 0.44, 0.42)), smoothstep(0.7, 0.98, abs(strata)) * 0.4);
   return r * (0.86 + 0.24 * n3);
 }
+/** T6: the lowland far under the brink, as country looks from kilometres up: dark woods and paler plains in great patches, lakes and a wide water in the lowest ground. */
+uniform float uLowY;
+vec3 lowlandColour(vec2 p){
+  float n1 = fbm3(p * 0.00035 + 4.0), n2 = fbm3(p * 0.0011 - 2.0), water = fbm3(p * 0.00022 + 9.0);
+  vec3 c = mix(srgb(vec3(0.09, 0.17, 0.07)), srgb(vec3(0.32, 0.38, 0.18)), smoothstep(0.42, 0.62, n1 * 0.7 + n2 * 0.3));
+  c = mix(c, srgb(vec3(0.26, 0.21, 0.15)), smoothstep(0.66, 0.8, n2) * 0.5);
+  return mix(c, srgb(vec3(0.12, 0.22, 0.3)), smoothstep(0.42, 0.37, water));
+}
 vec3 terrainAlbedo(vec3 wp, vec3 n, vec4 md, out float grass){
   vec2 p = wp.xz; float slope = 1.0 - n.y, n1 = fbm3(p * 0.006), n2 = fbm3(p * 0.04), n3 = vnoise(p * 0.35);
   float rockAmt = smoothstep(0.26, 0.38, slope + (n2 - 0.5) * 0.12);
@@ -104,11 +117,14 @@ vec3 terrainAlbedo(vec3 wp, vec3 n, vec4 md, out float grass){
   float bed = smoothstep(0.6, 0.92, md.b) * (1.0 - rockAmt);
   col = mix(col, srgb(vec3(0.54, 0.45, 0.33)), bed * 0.65);
   col = mix(col, rockColour(wp), rockAmt);
-  float shore = 1.0 - smoothstep(uWaterY + 0.25, uWaterY + 0.9 + n3 * 0.6, wp.y);
+  // T6: the shore is the lake's: land far below the water's level (the lowland under the cloud) is no beach.
+  float shore = (1.0 - smoothstep(uWaterY + 0.25, uWaterY + 0.9 + n3 * 0.6, wp.y)) * (1.0 - smoothstep(uWaterY - 4.0, uWaterY - 14.0, wp.y));
   col = mix(col, srgb(vec3(0.74, 0.68, 0.52)) * (0.9 + 0.15 * n3), shore * (1.0 - rockAmt));
   float snow = smoothstep(uSnowY - 25.0, uSnowY + 25.0, wp.y + (n1 - 0.5) * 90.0) * (1.0 - smoothstep(0.32, 0.48, slope + (n3 - 0.5) * 0.1));
   col = mix(col, srgb(vec3(0.86, 0.89, 0.95)) * (0.9 + 0.1 * n2 + 0.05 * n3), snow);
   grass = (1.0 - rockAmt) * (1.0 - screeAmt) * (1.0 - shore) * (1.0 - snow) * (1.0 - bed * 0.8);
+  float low = smoothstep(uLowY + 400.0, uLowY - 200.0, wp.y);
+  if (low > 0.0) { col = mix(col, lowlandColour(p), low * (1.0 - rockAmt * 0.6)); grass *= 1.0 - low; }
   vec4 gt = groundTint(p);
   col = mix(col, gt.rgb * (0.85 + 0.3 * n3), gt.a * (1.0 - rockAmt));
   grass *= 1.0 - gt.a * 0.45;
@@ -408,6 +424,39 @@ void main(){
   ${FINISH}
 }`;
 
+// ── the cloud sea (T6, Noah 2026-10-21) ──
+/** A sea of cloud far below the brink: two sheets (vistaWorld sets their heights) of slow fbm coverage, breaking here and there to the lowland
+ * beneath, their tops lit toward the sun and shaded in the troughs, hazed like everything else; the inner edge fades in under the escarpment. */
+export const cloudVert = /* glsl */`
+varying vec3 vWorld;
+void main(){ vec4 w = modelMatrix * vec4(position, 1.0); vWorld = w.xyz; gl_Position = projectionMatrix * viewMatrix * w; }`;
+export const cloudFrag = /* glsl */`
+${NOISE}${ATMOS}
+uniform vec3 uCloudSea; // the sea's centre (x, z) and the radius where it begins (under the belt's foot)
+uniform float uCloudCover; // 0..1: how much of the sky it hides (the breaks are the rest)
+uniform float uCloudDrift;
+varying vec3 vWorld;
+void main(){
+  // The sea's shape: great slow swells (the breaks are hundreds of metres wide; both sheets share them, so a break is a break) with smaller billows on them, each sheet's own.
+  vec2 p = vWorld.xz * 0.0009 + uTime * vec2(0.0035, 0.0012), q = p + uCloudDrift;
+  float big = fbm5(p * 0.3 + 3.0), mid = fbm5(p * 1.6 + 11.0), n = big * 0.78 + mid * 0.22;
+  // The breaks: where the swell sinks the cover opens (both sheets together), ragged at the billows' scale (each sheet's own).
+  float c0 = 0.70 - uCloudCover * 0.25; // the noise's own middle is near 0.61: cover 0.55 opens about a quarter of the sea
+  float cov = smoothstep(c0, c0 + 0.05, n + (fbm3(q * 6.0 - 5.0) - 0.5) * 0.07);
+  float edge = smoothstep(uCloudSea.z - 400.0, uCloudSea.z + 200.0, distance(vWorld.xz, uCloudSea.xy));
+  float a = cov * edge;
+  if (a < 0.01) discard;
+  // Lit from the sun's side: the tops white, the hollows in the sea's own shade, blue with the sky.
+  vec2 toSun = normalize(uSunDir.xz + 1e-4) * 0.09;
+  float n2 = fbm5((p + toSun) * 0.3 + 3.0) * 0.5 + fbm5((q + toSun) * 1.6 + 11.0) * 0.5, n3 = big * 0.5 + fbm5(q * 1.6 + 11.0) * 0.5;
+  float lit = clamp(0.5 + (n3 - n2) * 9.0, 0.0, 1.0) * clamp(uSunDir.y * 2.0 + 0.3, 0.15, 1.0);
+  vec3 sunW = uSunCol / max(max(uSunCol.r, uSunCol.g), max(uSunCol.b, 1e-3));
+  vec3 top = mix(vec3(0.9), sunW, 0.25) * (0.75 + 0.45 * clamp(uSunDir.y + 0.2, 0.0, 1.0)), hollow = uAmbSky * 0.55 + uHorizon * 0.12 + vec3(0.03);
+  vec3 col = mix(hollow, top, lit) * (0.9 + 0.1 * fbm3(p * 13.0));
+  gl_FragColor = vec4(applyHaze(col, vWorld), a * 0.985);
+  ${FINISH}
+}`;
+
 // ── water ────────────────────────────────────────────────────────────────
 export const waterVert = /* glsl */`
 varying vec3 vWorld;
@@ -451,9 +500,10 @@ void main(){
   col += uSunCol * smoothstep(0.99955, 0.99975, s) * 6.0;
   if (d.y > 0.0) {
     // Painted cumulus: an fbm layer on a plane, its lit side found by stepping toward the sun.
-    vec2 cp = d.xz / (d.y + 0.1) * 1.4 + uTime * vec2(0.006, 0.002);
+    vec2 cp = d.xz / (max(d.y, 0.06) + 0.1) * 1.4 + uTime * vec2(0.006, 0.002);
     float c = fbm5(cp), c2 = fbm5(cp + normalize(uSunDir.xz + 1e-4) * 0.09);
-    float cov = smoothstep(0.62 - uCloud * 0.2, 0.85 - uCloud * 0.2, c) * smoothstep(0.0, 0.2, d.y);
+    // T6: none at the horizon (seen from the brink the low sky is open, and the sheet smeared into bands there).
+    float cov = smoothstep(0.62 - uCloud * 0.2, 0.85 - uCloud * 0.2, c) * smoothstep(0.08, 0.32, d.y);
     float lit = clamp(0.55 + (c - c2) * 5.0, 0.0, 1.0);
     vec3 cloud = mix(uAmbSky * 0.75 + uHorizon * 0.25, uHorizon * 0.55 + uSunCol * 0.38, lit);
     cloud += uSunCol * pow(max(s, 0.0), 8.0) * 0.4 * (1.0 - cov);
