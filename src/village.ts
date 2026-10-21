@@ -35,6 +35,8 @@ import { createDenField } from './denWorld';
 import { createWardField } from './ruinWorld';
 import { wards, WARD } from './ruinsModel';
 import { createWardInterior } from './wardInteriorWorld';
+import { industries, industryLand, extentOf } from './industryModel';
+import { createIndustryField } from './industryWorld';
 import { parseQuest, blowInside, blowOutside, stepFix, SNERK_AT, CREW_AT, SNERK_LINES, CREW_LINES, WAKE_LINE, DOOR_LINES, DOOR_CUTS, type Quest } from './wardInterior';
 import { createVillageLook, type VillageLook } from './villageVista';
 import { loadVillageLand } from './plateauLand';
@@ -116,7 +118,10 @@ const mootPlace = moot(home.seed);
 const wallowPlaces = wallows(home.seed); setWallows(wallowPlaces.map(w => ({ id: w.id, x: w.x, z: w.z })));
 // RUINS.md (Noah, 2026-10-19): the wards, the old containment's ruins ringing the breach just inside the taint's edge, each on a level earthwork cleared of trees.
 const wardList = wards(home.seed, places(home.seed).find(p => p.id === 'lair')!, relief, (x, z) => walkable(plateau(home.seed), x, z), places(home.seed).filter(p => p.id !== 'lair').map(p => ({ x: p.x, z: p.z, r: p.radius })));
-const chunks = createChunks(scene, home.seed, terrain, dens(home.seed), [...convergences(home.seed), ...plateau(home.seed).brinks], ruins(home.seed), [...warrenPlaces, ...ownWarrenPlaces], mootPlace, wallowPlaces, wardList.map(w => ({ x: w.x, z: w.z, r: WARD.court + w.skirt + 1 })));
+// RUINS.md, the industrial ruins: the yards of the Barrens' old industry, out in the wilds, clear of the wards.
+const yardList = industries(home.seed, industryLand(home.seed, relief, wardList.map(w => ({ x: w.x, z: w.z, r: WARD.court + w.skirt }))));
+const yardClear = yardList.map(y => ({ x: y.x, z: y.z, r: Math.max(...extentOf(y)) + y.skirt + 1 }));
+const chunks = createChunks(scene, home.seed, terrain, dens(home.seed), [...convergences(home.seed), ...plateau(home.seed).brinks], ruins(home.seed), [...warrenPlaces, ...ownWarrenPlaces], mootPlace, wallowPlaces, [...wardList.map(w => ({ x: w.x, z: w.z, r: WARD.court + w.skirt + 1 })), ...yardClear]);
 const ownerOf = (w: { x: number; z: number }): Ctx => ctxs.slice().sort((a, b) => Math.hypot(a.ox - w.x, a.oz - w.z) - Math.hypot(b.ox - w.x, b.oz - w.z))[0];
 const rabbitStock = (id: string): number => { const own = ownWarrenPlaces.find(x => x.id === id); if (own) return ownerOf(own).v.ownRabbits; const w = warrenPlaces.find(x => x.id === id); if (!w) return 0; const k = denKnownBy(w.den); return k ? rabbitsAt(k.c.v, k.d) : WARREN_CAP; }; chunks.setRabbits(rabbitStock);
 chunks.setBoars(id => { const w = wallowPlaces.find(x => x.id === id); return w ? ctxs.find(c => c.id === w.village)?.v.boars ?? 0 : 0; });
@@ -159,7 +164,7 @@ function taintVeins(): { x: number; z: number }[][] {
 }
 /** In the taint the soil is poisoned: the grass will not take her (the roots are closed with the blight, below). */
 const grassOpen = (x: number, z: number): boolean => grassCan(x, z) && !inTaint(breach, x, z) && walkable(plateau(home.seed), x, z);
-const look: VillageLook | null = vistaLand ? createVillageLook({ taint: { at: { x: breach.x, z: breach.z }, veins: taintVeins() }, renderer, scene, camera, sun, hemi, vl: vistaLand, seed: home.seed, treesOf: chunks.treesOf, villages: () => ctxs.map(c => ({ root: c.world.root, x: c.ox, z: c.oz })), dark: (x, z) => biomeAt(x, z, home.seed) === 'dark', blighted: (x, z) => isBlighted(home_().v, x, z) }) : null;
+const look: VillageLook | null = vistaLand ? createVillageLook({ taint: { at: { x: breach.x, z: breach.z }, veins: taintVeins() }, renderer, scene, camera, sun, hemi, vl: vistaLand, seed: home.seed, treesOf: chunks.treesOf, villages: () => ctxs.map(c => ({ root: c.world.root, x: c.ox, z: c.oz })), dark: (x, z) => biomeAt(x, z, home.seed) === 'dark', blighted: (x, z) => isBlighted(home_().v, x, z), clearings: yardClear }) : null;
 if (look) { Object.assign(window, { __look: look }); chunks.setLook({ ground: false, trees: false }); for (const c of ctxs) c.world.root.traverse(o => { if (o.name === 'tree-wood' || o.name === 'tree-leaves' || o.name === 'tree-collar') o.visible = false; }); look.refreshClearing(); }
 // PLATEAU.md: the rivers' water, the crossings and the island's old bridge.
 const waterworks = buildWaterworks(look ? look.world.root : scene, plateau(home.seed), look ? look.world.uniforms : null);
@@ -167,6 +172,11 @@ const WARDS_KEY = 'rootwake-wards-read';
 const wardRead = ((): Set<string> => { try { return new Set(JSON.parse(localStorage.getItem(WARDS_KEY) ?? '[]') as string[]); } catch { return new Set(); } })();
 const wardField = createWardField(look ? look.world.root : scene, wardList, relief, wardRead, ids => { try { localStorage.setItem(WARDS_KEY, JSON.stringify([...ids])); } catch { /* Storage is optional. */ } });
 let wardHere: string | null = null; const tmpWard = new THREE.Vector3();
+const YARDS_KEY = 'rootwake-yards-read';
+const yardRead = ((): Set<string> => { try { return new Set(JSON.parse(localStorage.getItem(YARDS_KEY) ?? '[]') as string[]); } catch { return new Set(); } })();
+const industryField = createIndustryField(look ? look.world.root : scene, yardList, relief, yardRead, ids => { try { localStorage.setItem(YARDS_KEY, JSON.stringify([...ids])); } catch { /* Storage is optional. */ } });
+let yardHere: string | null = null;
+Object.assign(window, { __industry: { list: yardList, field: industryField } });
 // R2 (RUINS.md): the first way in, the ward nearest her village; its quest kept in its own save, its interior an instance under it.
 const firstWard = wardList.slice().sort((a, b) => Math.hypot(a.x, a.z) - Math.hypot(b.x, b.z))[0];
 const QUEST_KEY = 'rootwake-ward-r2';
@@ -205,8 +215,8 @@ let karst: ReturnType<typeof createKarstFeature>;
 const groundWorld: TraversalWorld = {
   // The land is unbounded: the meadow, and past it the chunks (chunkWorld), whose trees the model's lookups see through setTreeProvider.
   // The land is unbounded: the meadow, and past it the chunks (chunkWorld), whose trees the model's lookups see through setTreeProvider; where the karst stands, its own zone worlds are her ground (karstFeature).
-  surfacesAt: (x, z) => (inWard ? wardInterior.surfacesAt(x, z) : karst.owns(x, z) ? karst.traversal().surfacesAt(x, z) : wardField.surfacesAt(x, z) ?? denField.surfacesAt(x, z) ?? [relief(x, z)]),
-  canOccupy: (p, radius, height) => { if (inWard) return wardInterior.canOccupy(p, radius, height); if (karst.owns(p.x, p.z)) return karst.traversal().canOccupy(p, radius, height); const ward = wardField.canOccupy(p, radius, height); if (ward !== null) return ward && walkable(plateau(home.seed), p.x, p.z); const den = denField.canOccupy(p, radius, height); if (den !== null) return den; return p.y >= relief(p.x, p.z) - 0.03 && !houseNear(p.x, p.z, radius) && !treesNear(p.x, p.z, 6).some(t => Math.hypot(p.x - t.x, p.z - t.z) < trunkRadius(t) + radius) && walkable(plateau(home.seed), p.x, p.z); },
+  surfacesAt: (x, z) => (inWard ? wardInterior.surfacesAt(x, z) : karst.owns(x, z) ? karst.traversal().surfacesAt(x, z) : wardField.surfacesAt(x, z) ?? industryField.surfacesAt(x, z) ?? denField.surfacesAt(x, z) ?? [relief(x, z)]),
+  canOccupy: (p, radius, height) => { if (inWard) return wardInterior.canOccupy(p, radius, height); if (karst.owns(p.x, p.z)) return karst.traversal().canOccupy(p, radius, height); const ward = wardField.canOccupy(p, radius, height); if (ward !== null) return ward && walkable(plateau(home.seed), p.x, p.z); const yard = industryField.canOccupy(p, radius); if (yard !== null) return yard && walkable(plateau(home.seed), p.x, p.z); const den = denField.canOccupy(p, radius, height); if (den !== null) return den; return p.y >= relief(p.x, p.z) - 0.03 && !houseNear(p.x, p.z, radius) && !treesNear(p.x, p.z, 6).some(t => Math.hypot(p.x - t.x, p.z - t.z) < trunkRadius(t) + radius) && walkable(plateau(home.seed), p.x, p.z); },
 };
 // PLATEAU.md (Noah): the rivers are barriers, crossed at their fords, stepping stones and bridges; the lake rings the island, crossed by its old bridge. Underground (the roots) she passes beneath them.
 /** While she is a bulge, a figure of leaves or a knot in a root, the shared motor stays put but the stick still speaks. */
@@ -1096,6 +1106,8 @@ function renderMap(c: CanvasRenderingContext2D, w: number, h: number, s: number,
   for (const hnt of overworld.hints) { const a = (hnt.bearing - 90) * Math.PI / 180, r = HINT_REACH * s, sp = HINT_SPREAD * Math.PI / 180, o = hintFrom(hnt), fx = sx(o.x), fz = sz(o.z); c.fillStyle = '#e0a0f02a'; c.strokeStyle = '#e0a0f0'; c.lineWidth = 1 * devicePixelRatio; c.setLineDash([4 * devicePixelRatio, 4 * devicePixelRatio]); c.beginPath(); c.moveTo(fx, fz); c.arc(fx, fz, r, a - sp, a + sp); c.closePath(); c.fill(); c.stroke(); c.setLineDash([]); c.fillStyle = '#e0a0f0'; c.textAlign = 'center'; const [what, way] = hnt.text.split(/ to the (?=[a-z-]+$)/), tx = fx + Math.cos(a) * r * 0.4, ty = fz + Math.sin(a) * r * 0.4; c.fillText(what, tx, ty); if (way) c.fillText(`to the ${way}`, tx, ty + 14 * devicePixelRatio); }
   for (const p of knownPlaces(overworld)) { const x = sx(p.x), y = sz(p.z); c.strokeStyle = p.id === 'lair' ? '#c070c0' : p.kind === 'village' ? villageColour(p.id) : p.kind === 'den' ? '#c8b8a0' : p.kind === 'ruin' ? (overworld.sanctified.has(p.id) ? '#d8f07a' : '#b8c0a8') : p.kind === 'warren' ? '#d8b890' : p.kind === 'moot' ? '#e8d088' : '#f1edcf'; c.lineWidth = 2 * devicePixelRatio; c.beginPath(); if (p.kind === 'village') c.arc(x, y, 7 * devicePixelRatio, 0, Math.PI * 2); else if (p.kind === 'ruin') { const r = 6 * devicePixelRatio; c.moveTo(x, y - r); c.lineTo(x + r, y); c.lineTo(x, y + r); c.lineTo(x - r, y); c.closePath(); } else if (p.kind === 'den') { c.fillStyle = '#c8b8a0'; c.arc(x, y, 5 * devicePixelRatio, 0, Math.PI * 2); c.fill(); } else if (p.kind === 'warren') { c.arc(x, y, 4 * devicePixelRatio, 0, Math.PI * 2); } else if (p.kind === 'moot') { const r = 5 * devicePixelRatio; c.rect(x - r, y - r, r * 2, r * 2); } else if (p.id === 'karst') { c.moveTo(x, y - 9 * devicePixelRatio); c.lineTo(x + 8 * devicePixelRatio, y + 7 * devicePixelRatio); c.lineTo(x - 8 * devicePixelRatio, y + 7 * devicePixelRatio); c.closePath(); } else { c.moveTo(x - 7 * devicePixelRatio, y - 7 * devicePixelRatio); c.lineTo(x + 7 * devicePixelRatio, y + 7 * devicePixelRatio); c.moveTo(x + 7 * devicePixelRatio, y - 7 * devicePixelRatio); c.lineTo(x - 7 * devicePixelRatio, y + 7 * devicePixelRatio); } c.stroke(); c.fillStyle = c.strokeStyle; c.fillText(p.name, x, y + 24 * devicePixelRatio); }
   // G4: the fairy rings she can use, as small pale rings.
+  // The industrial ruins she has seen the ground of: a chimney on a square.
+  for (const yd of yardList) if (isRevealed(overworld, yd.x, yd.z)) { const x = sx(yd.x), y = sz(yd.z), r = 5 * devicePixelRatio; c.strokeStyle = '#e0b070'; c.fillStyle = '#e0b070'; c.lineWidth = 2 * devicePixelRatio; c.beginPath(); c.rect(x - r, y - r * 0.4, r * 2, r * 1.4); c.moveTo(x + r * 0.4, y - r * 0.4); c.lineTo(x + r * 0.4, y - r * 1.4); c.stroke(); if (full) { c.textAlign = 'center'; c.fillText(yd.name, x, y + 22 * devicePixelRatio); } }
   for (const p of deepPlaces()) if (p.kind === 'convergence' || p.kind === 'brink') { const x = sx(p.x), y = sz(p.z); c.strokeStyle = p.kind === 'brink' ? '#ffe2a8' : '#cfeeff'; c.lineWidth = 1.5 * devicePixelRatio; c.beginPath(); c.arc(x, y, 4 * devicePixelRatio, 0, Math.PI * 2); c.stroke(); }
   // Incidents: a red mark where it happened, with what it was.
   for (const inc of allIncidents()) { const x = sx(inc.x), y = sz(inc.z); c.fillStyle = INCIDENT_FOE; c.strokeStyle = INCIDENT_FOE; c.lineWidth = 2 * devicePixelRatio; c.beginPath(); c.arc(x, y, 4 * devicePixelRatio, 0, Math.PI * 2); c.fill(); c.beginPath(); c.arc(x, y, 9 * devicePixelRatio, 0, Math.PI * 2); c.stroke(); c.fillStyle = INCIDENT_VICTIM; c.textAlign = 'center'; c.fillText(inc.text, x, y - 14 * devicePixelRatio); }
@@ -1123,7 +1135,7 @@ function drawCompass(): void {
   c.clearRect(0, 0, w, h); c.fillStyle = '#0b191866'; c.fillRect(0, 0, w, h);
   c.font = `${11 * dpr}px system-ui`; c.textAlign = 'center'; c.textBaseline = 'middle';
   for (let b = 0; b < 360; b += 15) { const x = xOf(b); if (x < 0 || x > w) continue; const major = b % 90 === 0; c.fillStyle = major ? '#f1edcf' : '#f1edcf88'; if (major) c.fillText(['N', 'E', 'S', 'W'][b / 90], x, h * 0.42); else c.fillRect(x - dpr / 2, h * 0.3, dpr, h * 0.25); }
-  const marks: { x: number; z: number; colour: string; faint?: boolean }[] = knownPlaces(overworld).map(p => ({ x: p.x, z: p.z, colour: p.id === 'lair' ? '#e0a0f0' : p.kind === 'village' ? villageColour(p.id) : p.kind === 'den' ? '#c8b8a0' : p.kind === 'ruin' ? (overworld.sanctified.has(p.id) ? '#d8f07a' : '#b8c0a8') : p.kind === 'warren' ? '#d8b890' : p.kind === 'moot' ? '#e8d088' : '#d8f07a' })); if (courseTarget) marks.push({ ...courseTarget, colour: '#f0d060' });
+  const marks: { x: number; z: number; colour: string; faint?: boolean }[] = knownPlaces(overworld).map(p => ({ x: p.x, z: p.z, colour: p.id === 'lair' ? '#e0a0f0' : p.kind === 'village' ? villageColour(p.id) : p.kind === 'den' ? '#c8b8a0' : p.kind === 'ruin' ? (overworld.sanctified.has(p.id) ? '#d8f07a' : '#b8c0a8') : p.kind === 'warren' ? '#d8b890' : p.kind === 'moot' ? '#e8d088' : '#d8f07a' })); for (const yd of yardList) if (isRevealed(overworld, yd.x, yd.z)) marks.push({ x: yd.x, z: yd.z, colour: '#e0b070' }); if (courseTarget) marks.push({ ...courseTarget, colour: '#f0d060' });
   // G2: a hint's mark stands where the fan's middle would be, faint, with no distance: they said which way, not how far.
   for (const hnt of overworld.hints) { const a = hnt.bearing * Math.PI / 180, o = hintFrom(hnt); marks.push({ x: o.x + Math.sin(a) * HINT_REACH * 0.6, z: o.z - Math.cos(a) * HINT_REACH * 0.6, colour: '#e0a0f088', faint: true }); }
   for (const inc of allIncidents()) marks.push({ x: inc.x, z: inc.z, colour: INCIDENT_FOE });
@@ -1263,7 +1275,10 @@ function frame(now: number) {
   if (!underCap(mode)) { chunks.update(player.feet().x, player.feet().z); denField.update(player.feet(), time, packAsleepAt); }
   // RUINS.md: the ward she stands on is named; a glyph-plate she reaches is read.
   { const f = player.feet(), w = wardField.wardAt(f.x, f.z); if ((w?.id ?? null) !== wardHere) { wardHere = w?.id ?? null; if (w) say(w.name, 3); }
-    camera.getWorldDirection(tmpWard); wardField.face(Math.atan2(-tmpWard.x, -tmpWard.z)); const plate = wardField.update(f, time); if (plate) tellBanner(plate.lore); }
+    camera.getWorldDirection(tmpWard); wardField.face(Math.atan2(-tmpWard.x, -tmpWard.z)); const plate = wardField.update(f, time); if (plate) tellBanner(plate.lore);
+    // The industrial ruins likewise: a yard named as she comes onto it, a stone of lore read where she stands on it.
+    const y = industryField.yardAt(f.x, f.z); if ((y?.id ?? null) !== yardHere) { yardHere = y?.id ?? null; if (y) say(y.name, 3); }
+    industryField.face(Math.atan2(-tmpWard.x, -tmpWard.z)); const st = industryField.update(f, time); if (st) tellBanner(st.lore); }
   stepWard(dt);
   // G4: the village she is in is the one her hands and her panel belong to; the ones near enough are presented in full.
   pickActive(); { const f = player.feet(); for (const c of ctxs) { const d = Math.hypot(f.x - c.ox, f.z - c.oz), near = d <= (c.i === 0 ? HOME_NEAR_M : NEAR_M); if (near && !c.near) syncShown(c); if (!near && c.near) hideShown(c); c.near = near; c.world.root.visible = d <= SHOW_M; } }

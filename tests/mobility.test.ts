@@ -391,3 +391,42 @@ test('ward interior: the quest from the door\'s growth to the ward woken', () =>
   for (let i = 0; i < 3; i++) { const m = MIRRORS[i], at = { x: m.x - 0.6, y: MIRROR_FOOT[i], z: m.z }; while (q.mirrors[i] !== MIRROR_SOLVED[i]) { const r = blowInside(q, at, 1, 0)!; assert.equal(r.kind, 'mirror'); assert.equal(r.i, i); } }
   assert.equal(q.stage, 'woken');
 });
+
+// The industrial ruins (RUINS.md, industryModel.ts): the Barrens' old industry, built of the canonical heights.
+import { buildYard, yardGround, yardOccupy, extentOf, industries, industryLand, WANT, type IndustryKind } from '../src/industryModel';
+const YARD_KINDS = Object.keys(WANT) as IndustryKind[];
+test('industrial ruins: every sheer face of every kind, in every turn, is a step, a mount or a wall (or too high to climb)', () => {
+  const canon = [CANON.step, CANON.clamber, CANON.wall];
+  for (const kind of YARD_KINDS) for (let q = 0; q < 4; q++) for (let seed = 1; seed <= 3; seed++) {
+    const y = buildYard('t', kind, 't', 0, 0, 0, q, 3, mulberry32(seed)), [ex, ez] = extentOf(y), at = (x: number, z: number) => yardGround(y, x, z, 0) ?? 0;
+    for (let x = -ex - 3; x < ex + 3; x += 0.05) for (let z = -ez - 3; z < ez + 3; z += 0.05) for (const [dx, dz] of [[0.05, 0], [0, 0.05]]) {
+      const d = Math.abs(at(x + dx, z + dz) - at(x, z)); if (d > 0.12 && d < NORMAL_MOBILITY.climbRise) assert.ok(canon.some(c => Math.abs(c - d) < 0.005), `${kind} q${q} s${seed} ${x.toFixed(2)},${z.toFixed(2)}: ${d.toFixed(3)}`);
+    }
+    for (const st of y.stones) { near(yardGround(y, st.x, st.z, 0)!, st.y, 1e-6); assert.ok(yardOccupy(y, { x: st.x, y: st.y, z: st.z }, BODY_RADIUS, 0), `${kind} stone stood on`); }
+  }
+});
+test('industrial ruins: placed on the plateau by the seed, each kind where its ground suits it, apart, clear of the places', async () => {
+  const { createTerrain } = await import('../src/worldTerrain'); const { places } = await import('../src/overworldModel'); const { plateau } = await import('../src/plateauModel');
+  const t = createTerrain(1), land = industryLand(1, t.height), list = industries(1, land), P = plateau(1);
+  assert.ok(list.length >= 8, `${list.length} yards`); assert.ok(new Set(list.map(y => y.kind)).size >= 7);
+  assert.deepEqual(industries(1, industryLand(1, t.height)).map(y => [y.x, y.z]), list.map(y => [y.x, y.z]), 'the same each time');
+  for (const y of list) {
+    for (const p of places(1)) assert.ok(Math.hypot(p.x - y.x, p.z - y.z) >= p.radius, `${y.name} in ${p.id}`);
+    const [ex, ez] = extentOf(y); for (let u = -ex; u <= ex; u += 2) for (let v = -ez; v <= ez; v += 2) assert.ok(t.height(y.x + u, y.z + v) <= y.y0 + 1e-6, 'the yard stands on the land');
+    if (WANT[y.kind].near === 'river') { const r = land.river(y.x, y.z); assert.ok(r && r.d < 40, `${y.name} by a river`); }
+    if (y.kind === 'drownedTown') assert.ok(land.lake(y.x, y.z).d < 70, 'by the lake');
+    void P;
+  }
+  for (const a of list) for (const b of list) if (a !== b) assert.ok(Math.hypot(a.x - b.x, a.z - b.z) > 40, `${a.name} / ${b.name}`);
+});
+test('industrial ruins: the stick alone takes her up the furnace\'s bank and onto its stack', () => {
+  const y = buildYard('f', 'furnace', 'f', 0, 0, 0, 0, 3, mulberry32(1));
+  const world: TraversalWorld = { surfacesAt: (x, z) => [yardGround(y, x, z, 0) ?? 0], canOccupy: (p, r) => yardOccupy(y, p, r, 0) ?? p.y >= -0.03 };
+  // From the floor (v = 4, beside the stack), +u: a mount onto the bank's first terrace, a wall onto the bank; then toward the stack (−v): a wall onto it.
+  const m = new MobilityMotor(); m.parkour = true; m.reset(new Vector3(-4, CANON.step, 4)); const kinds: string[] = []; m.onCommit = p => kinds.push(p.kind); let letGo = 0, was = false, top = 0;
+  const drive = (right: number, forward: number, until: () => boolean) => { for (let i = 0; i < 900 && !until(); i++) { if (m.hanging && !was) letGo = 0.3; was = !!m.hanging; m.update(1 / 60, world, letGo > 0 ? idle : { ...idle, right, forward, held: true }); letGo = Math.max(0, letGo - 1 / 60); top = Math.max(top, m.feet.y); assert.ok(world.canOccupy(m.feet, BODY_RADIUS, BODY_HEIGHT), `${m.mode} ${m.feet.toArray()}`); } };
+  const T2 = CANON.step + CANON.clamber + CANON.wall;
+  drive(1, 0, () => m.mode === 'grounded' && !m.traversal && m.feet.x > 3.6 && Math.abs(m.feet.y - T2) < 0.01);
+  assert.deepEqual(kinds, ['clamber', 'climb', 'climb'], kinds.join()); near(m.feet.y, T2, 0.01);
+  drive(0, 1, () => m.mode === 'grounded' && !m.traversal && m.feet.y > T2 + 0.5); assert.ok(top >= T2 + CANON.wall - 0.01, `onto the stack (${kinds.join()})`);
+});

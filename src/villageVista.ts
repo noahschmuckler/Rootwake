@@ -207,6 +207,8 @@ export interface LookInputs {
   vl: VillageLand; seed: number;
   treesOf: (cx: number, cz: number) => Tree[]; villages: () => { root: THREE.Object3D; x: number; z: number }[];
   dark: (x: number, z: number) => boolean; blighted: (x: number, z: number) => boolean;
+  /** RUINS.md: squares (centre, half-side) the understory keeps clear of: the industrial ruins' yards. */
+  clearings?: { x: number; z: number; r: number }[];
   /** MOTHER.md: the breach and its veins (none: no taint drawn). */
   taint?: TaintLook;
   quality?: Quality;
@@ -255,7 +257,7 @@ export function createVillageLook(inp: LookInputs): VillageLook {
     wooded: (x, z) => beyond(x, z, seed) > 0.6 && noise(x, z, 110, seed + 3) <= 0.58 && Math.hypot(x - lairAt.x, z - lairAt.z) > Math.max(DARK_RADIUS, TAINT.edge) && Math.hypot(x - KARST_AT.x, z - KARST_AT.z) > KARST_FOREST + 30,
     onLand: (x, z) => onLand(seed, x, z, 1.5),
     trunks: (x0, z0, x1, z1) => { const out: { x: number; z: number; r: number }[] = []; for (let cz = Math.floor(z0 / CHUNK); cz <= Math.floor(z1 / CHUNK); cz++) for (let cx = Math.floor(x0 / CHUNK); cx <= Math.floor(x1 / CHUNK); cx++) for (const t of inp.treesOf(cx, cz)) if (t.x > x0 && t.x < x1 && t.z > z0 && t.z < z1) out.push({ x: t.x, z: t.z, r: 0.32 * t.size }); return out; },
-    clear: (x, z) => !keep.some(p => Math.hypot(x - p.x, z - p.z) < 10 + ((p as { radius?: number }).radius ?? 0)),
+    clear: (x, z) => !keep.some(p => Math.hypot(x - p.x, z - p.z) < 10 + ((p as { radius?: number }).radius ?? 0)) && !(inp.clearings ?? []).some(c => Math.max(Math.abs(x - c.x), Math.abs(z - c.z)) < c.r),
     river: (x, z) => riverEdge(seed, x, z, RIPARIAN + 14),
   }, vl.terrain.height, seed, quality.name);
   renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.toneMapping = THREE.ACESFilmicToneMapping;

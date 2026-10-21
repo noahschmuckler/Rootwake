@@ -63,7 +63,7 @@ const bearingName = (dx: number, dz: number): string => BEARINGS[((Math.round(Ma
 
 /** The ward's frame: u and v (its own) to world x, z offsets, by quarter-turns. */
 export function toWorld(q: number, u: number, v: number): [number, number] { switch (q & 3) { case 0: return [u, v]; case 1: return [-v, u]; case 2: return [-u, -v]; default: return [v, -u]; } }
-function rectToWorld(q: number, cx: number, cz: number, r: { u0: number; u1: number; v0: number; v1: number }): { x0: number; x1: number; z0: number; z1: number } {
+export function rectToWorld(q: number, cx: number, cz: number, r: { u0: number; u1: number; v0: number; v1: number }): { x0: number; x1: number; z0: number; z1: number } {
   const [ax, az] = toWorld(q, r.u0, r.v0), [bx, bz] = toWorld(q, r.u1, r.v1);
   return { x0: cx + Math.min(ax, bx), x1: cx + Math.max(ax, bx), z0: cz + Math.min(az, bz), z1: cz + Math.max(az, bz) };
 }

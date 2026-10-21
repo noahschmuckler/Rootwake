@@ -152,3 +152,42 @@ Noah, 2026-10-19, after playing the parkour. His direction is recorded first, th
   - the crew or the woken ward doing anything for her afterward;
   - foes and traps (R3).
 
+## The industrial ruins, I1 (Noah, 2026-10-21: "add many more")
+
+CONTAGION.md's brief: "one of the great things about the Pine Barrens is the ruined remains of former industry … some with clear lessons to teach, goals, quests, enemies to kill, power to unlock; some inscrutable and lost to time, present to be clambered over and wondered about". I1 is the second half: places to clamber and wonder at, each with a stone or two of lore. The lessons, goals and power are I2.
+
+- **The model** (`industryModel.ts`, pure). Each kind has a plan, built like the wards only of the canonical heights on a level earthwork. Mounds of slag, cullet or spoil lie wholly on the yard, never against a face.
+  - A test scans every face of every kind in every orientation: each is a step, a mount or a wall, or too high to climb (≥ 1.75 m).
+  - Another test drives her by the stick from the furnace's casting floor up its bank and onto its stack.
+
+  | Kind | Yard | Ground it wants |
+  |---|---|---|
+  | Bog-iron furnace (2) | The casting floor a step up, the bank a mount then a wall, the stack a wall above the bank and too high from the floor. The tuyere arch in the stack's face, the casting house's broken walls, a slag heap. | Dry |
+  | Glassworks | The melting house's walls (wall-high and mount-high lengths with gaps between), the hearth, the leer to walk along, cullet heaps glinting with glass. | Dry |
+  | Charcoal pits (2) | Earth rings a step high round blackened burns; the collier's hut, its walls a mount high; a log pile. | Dry |
+  | Cranberry bog | Three long dikes a mount high and their cross-dikes, the red beds between, the sluice a leap wide between posts too high to climb. | A river's bank, along it |
+  | Paper mill | Walls a wall high with doorways; the race, two walls a mount high a leap apart; the wheel at its head, a gear in the grass. | A river's bank |
+  | Sand pit | The spoil banked in white sand, each terrace one move up and narrower, a rusted cart on the third. | Dry |
+  | Railbed | The embankment 60 m long, its ties and broken rails, the platform a mount high, the water tower's legs (too high) and its tank. | Dry, the land rising little |
+  | Drowned town | Foundations a step high, chimneys a wall high or whole, the chapel's steps and floor and its tower stump. The rest of the street lies under the lake past the yard's edge. | The lake's edge |
+  | Corduroy road | Cedar logs laid crosswise on a raised causeway; stumps beside it. | A river's bank |
+
+- **Placement** (`industries`, `industryLand`): each kind's count, by the seed, on a lattice over the plateau.
+  - Out in the wilds (past the villages' meadows) and on walkable ground.
+  - `INDUSTRY_CLEAR` 60 m clear of every place (her taint among them, as the lair's radius) and of the wards, and apart from each other.
+  - Where the land rises least under the yard (`WANT[kind].rise`).
+  - Named after the Barrens' ghost towns ("the Harrisville furnace", "drowned Speedwell").
+  - Seed 1 places eleven.
+- **The drawing** (`industryWorld.ts`): ironstone, brick, fieldstone, sand, peat and timber, each with its own texture; the earthwork coloured by kind, its mounds by what they are; the decor; stones of lore that glow amber, with a pillar of light until read (the wards' plates are pale blue).
+- **In the village** (`village.ts`):
+  - The yards' trees are cleared (`createChunks`' clearings) and so is the understory (`LookInputs.clearings`).
+  - Her ground and her body's room come from the field, after the wards'.
+  - A yard is named as she steps onto it, and a stone is read where she stands on it, kept in `rootwake-yards-read`.
+  - On the map and the compass, a yard shows as an amber chimney-and-square once she has explored its ground.
+  - Dev handle: `__industry` (`list`, `field`).
+- **Lore:** `INDUSTRY_LORE`, placeholder for Noah. It ties the iron, the lenses, the paper's unfading ink and the drowned town to the world's own story.
+- **I2, proposed:**
+  - situations from the quest grammar: the sealed furnace (its arch opens on a hearth that still burns), the held mill (something nests in the wheel pit), the lost town (a dive under the lake);
+  - the Leeds Devil as the Barrens' own creature;
+  - a few yards as places of power for the contagion's front (irritants or germination points, with the land session).
+
