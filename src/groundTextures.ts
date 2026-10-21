@@ -95,7 +95,8 @@ export function floorTexture(name: FloorName): THREE.Texture {
   const tex = new THREE.CanvasTexture(draw(name)); tex.colorSpace = THREE.SRGBColorSpace; tex.wrapS = tex.wrapT = THREE.RepeatWrapping; tex.anisotropy = 4;
   made.set(name, tex);
   // The folder's index.json names the photos present (so no request is ever made for a file that is not there); a photo's pixels replace the drawn ones in the same texture object.
-  manifest().then(names => { if (!names.includes(name)) return; new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}textures/barrens/${name}.jpg`, photo => { tex.image = photo.image; tex.needsUpdate = true; }); });
+  // The photo is a new Source after a dispose, not written into the drawn one's image: the GPU texture was allocated at the canvas's 512, and a larger photo written into it overflows (GL_INVALID_VALUE, the drawn pixels kept).
+  manifest().then(names => { if (!names.includes(name)) return; new THREE.TextureLoader().load(`${import.meta.env.BASE_URL}textures/barrens/${name}.jpg`, photo => { tex.dispose(); tex.source = new THREE.Source(photo.image); tex.needsUpdate = true; }); });
   return tex;
 }
 let listed: Promise<string[]> | null = null;
