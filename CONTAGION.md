@@ -1,0 +1,188 @@
+# The contagion: her growth as mycelium, and the land as a front
+
+Noah, 2026-10-21, after the brink pass. His brief is recorded first as given, then the ideas already
+waiting in both repos' design documents, then the proposal: what to build next and in what order.
+Nothing below is built. MOTHER.md holds her nature and M1 as built; RUINS.md the wards; SETTLEMENTS.md
+the building tree; COMPANIONS.md the seven; DESCENT.md the mountain.
+
+## Noah's brief, in full (2026-10-21)
+
+Given after the brink pass, as a design pass; recorded as given, organised below.
+
+- **The land begs to be populated.** The vastness of the land, both on the plateau and the outside world, begs to be populated with adventure.
+- **Remove the restriction on her.** With the mother of goats a visible force from the wellspire, remove the restriction: the dark patch should act like **mycelium seeking nourishment, avoiding irritants**. Its primary nourishment is villages. The mechanics are either already present or clearly hinted at: she farms the villagers for Dark Young, who spread the contagion. It could spread outward circumferentially, and/or villages or other places of power, once captured, could be new germination points. Even if she takes over the entire plateau, the mechanics are there to reverse it: defeat Dark Young, return the infants to the village, protect the village and make it thrive with plentiful food, advance their tech for defense and entertainment and organisation, become a bulwark against the darkness.
+- **The ruins of former industry.** The wilderness is vast, and one of the great things about the Pine Barrens is the ruined remains of former industry. There are already a few ruins; add many more: some with clear lessons to teach, goals, quests, enemies to kill, power to unlock; some inscrutable and lost to time, present to be clambered over and wondered about.
+- **The hook outward.** The villages are the hook for reaching the far corners, the other towers of the world, to recruit the other heroes and bring them here for their abilities, knowledge and synergies. Those lessons then apply to the wider world, the surface, even more vast and full of potential: cities, devices, economics, politics. Greater and subtler enemies: Nyarlathotep infesting the realpolitik; Cthulhu disturbing the dreams of the citizenry; Dagon's cult, corrupted citizens and deep ones preventing overseas commerce; elder things and their shoggoth servants with inscrutable motives; the King in Yellow inspiring the criminals and thieves gnawing at the roots of civilisation; and **Delvira**, Hulda's counterpart and daughter, growing in strength just as Hulda and her companions do, the final boss to be pacified by the might of a united world population.
+- **The mountain's depth** remains to be plumbed: its connections to the surface plateau, its metroidvania styling requiring her to seek out abilities and companions, its weird inhabitants and their strange economy, the mother of goats infesting its corners and preventing access to whole regions.
+- **Repeated passes** for optimisation, graphics and behaviour, depth of mechanics and gameplay loops, will benefit everything.
+- **The far future**: the space-faring race this world is destined to birth, to set out and claim another mote of roiling chaos in the name of life and order.
+- The environment now has full network access (the CC0 texture sites are reachable).
+
+## What this supersedes
+
+Two standing rules change by this brief, and are not silently dropped:
+
+- **MOTHER.md, phase one: "she cannot be defeated, and does not grow."** The heart keeps both halves:
+  the breach is fixed, the worm cannot be slain. What grows and shrinks now is her *growth*: the
+  mycelium out of the breach, which M1 built as fixed rings. "She is held, not caged … not a realised
+  risk on the game's timescale" (MOTHER.md, her form revised) becomes a risk the player can lose to and
+  win back.
+- **EXPANSION.md: "the dark loop is not the core loop; not every village should have a Shub nearby."**
+  Kept in spirit: a village's peace is its distance from the front, and the front can be driven back
+  to nothing. The first village is 300 m from the edge today; the other two are on the karst's safe
+  side and stay quiet for weeks of play unless the front is let go.
+
+Kept unchanged, because it is what makes the spread reversible: **no Dark Young without an infant
+inside it** (VILLAGE_HANDOFF.md). Her growth is fed by what the snatchers bring. Starve the sacs and
+the front starves.
+
+## What is already waiting in the documents
+
+### Rootwake
+
+- **The mother.** M2: her arms into the clouds, the attention's attacks with warnings, lore in the
+  ruined containment, freeing infants from the sacs. M3: waking the wards one by one and "what holding
+  the land around her does". Later: the forges below ground, the containment reactivated, the finale.
+  Open: what the aetherforges are; whether a miracle cleanses the blight (VILLAGERS.md, open since D4).
+- **The wards and ruins.** R1 (five wards on the ring) and R2 (the first interior: the snerk, the
+  greblin crew, the knot of her growth, the mirrors, the waking) are built. R3 (turned hollowed on the
+  tops, traps with tells) and R4 (her worm in its shaft from the wards' deep galleries) are specced.
+  The toolkit on record is DiggyDwarves' QUEST_MANUAL grammar: five situations (OCCUPIED, SEALED,
+  HELD, LOST, STARVED) by four valves (FIGHT, FIX, TRADE, GROW); "force takes objects, never knowledge".
+  A woken ward calms the Colour within 170 m (`WARD_CALM_R`) but the grey land is unchanged.
+- **The villages.** Of the building tree only the hut, the warren and the drying rack are built. S5 the
+  mason (stone house, granary, well, oven, mill, palisade then wall) and S6 the sage's karst and the
+  worked research quest are sketched. "Chaos keeps pace" has only the dire pack built: the poisoned
+  warren, the granary's counter, climbing raiders, the smokehouse's smell and road ambushes wait.
+  W2 (the tree of miracles), W3 (the rival), V2/V3 (roles, relationships), V5/V6 (brutes, whispering
+  and possession) are on paper.
+- **The companions.** Order settled: steward, mason, sage, then the industrial trio. Recruitment as
+  proposed: reach the karst by tier, pulse it with clarity, play their opening, link the nodes. The
+  steward should wake on his own far mountain; the plateau has one karst now, so the other towers are
+  beyond the brink. G5's top tier waits on companions.
+- **The mountain.** D0/D1 built. D3 (the keepers' stations and what they ask), the metroidvania
+  gating, the greeblin furnace city and the core are not. Her growth seals the deeper layers.
+- **The land.** T6 built. Snow and forest on the outer peaks, cairns on the passes, fallen logs as
+  parkour obstacles, creatures that still walk through rivers.
+
+### DiggyDwarves (the sibling repo; nothing of it is Rootwake code)
+
+- **Cosmology.** Chaos at the core; space-elves triangulate chaos into planets with aetherforges; seven
+  dwarves wake once life crusts over; the eight Teeth at a cube's corners with the twelve edges as the
+  subway; the Keystone the lock. Each recruit brings a combat mechanic, a traversal key and a civ domain
+  (the Cultivator's vine ladders, the Mason's scaffolds, the Alchemist dissolving barriers, the Smith
+  tunnelling, the Steward parleying past creatures, the Sage reading glyphs, the Artificer lighting
+  magical dark). The Eighth, the Dark Dwarf, took everyone's chaos into himself; Nyarlathotep may
+  incarnate as warlords, captains of industry, dragons or dwarves. The pantheon named there:
+  Shub-Niggurath's corrupted woods, Cthulhu dreaming under the ocean, Elder Things in the polar ice.
+  Dagon, the King in Yellow and Delvira are new with this brief.
+- **The Underdelve.** The territory influence sim (per-region tallies, spread, decay, a garrison pull,
+  kill pressure) is a proven pure model of exactly the push and pull this brief asks for on the
+  plateau. Leaders and parley, pacts and tribute, cull/oust/reach quests, the gate-road. The factions:
+  the Hollowed cultivating chaos crystal, the Greeblins' furnace cities, the Snerks as knowers and
+  peacekeepers whose artifact trade is grid maintenance. The strange economy: artifacts degrade in the
+  heat of cultivation, so demand never ends; slag curated into memberberries.
+- **The Karst Spine.** Seven coloured layers feeding a white beam; one dwarf lights enough for
+  transport, the full seal needs all seven; surface-crafted mirrors, prisms and filters bind the two
+  economies. Optics phase 2: prism, combiner, dimmer, filter.
+- **Phases.** Phase 2 humans (disputes, agriculture, science, balrogs); Phase 3 a 4X with the seven
+  statues; Phase 4 an FTL-style space 4X; the liberation campaign at planet scale; karsts turned
+  universities; the Nemesis stub ("do not build yet"); the Chronicle and the Diminishing.
+- **Living world.** Schedules, typed dialogue with a flag store, encounters by a player-relative
+  budget, situations generalised, relationship tracks and incident memory.
+
+## The proposal: the front
+
+The piece that makes the vastness mean something is the one Noah leads with. Nearly every mechanic it
+needs exists; what is missing is the field that joins them. Build **the contagion** next.
+
+### The model (pure, `contagionModel.ts`)
+
+- **Germination points.** Her growth is a set of points, each with a reach: the breach (reach as M1's
+  rings, so day one looks exactly as now), and later every captured place. The taint's depth at any
+  point of the land is the deepest of them; `taintModel`'s rings become the shape of one point, scaled
+  by its reach.
+- **The veins are the hyphae.** The front advances along the root lines (the veins M1 already draws
+  from hub to hub), not as a circle: each day every vein at the edge grows or withers by a step
+  (`BLIGHT_STEP` was 30 m/day). Growth seeks nourishment and avoids irritants:
+  - **Nourishment**, pulling a vein toward it: villages, weighted by folk and infants; a warren; a
+    wallow; the stores eaten in a raid (`darkMealsToday`); and above all a Dark Young bred of an infant
+    (`BLIGHT_PER_DY` returns, as the front's food).
+  - **Irritants**, pushing it back within a radius: a woken ward (`WARD_CALM_R` becomes a true push, not
+    only a calming of the Colour); a sanctified grove; a thriving village with a shrine; the karst's
+    foot; later, a palisade, a road, fire.
+  - **Starvation.** With no infant taken for `STARVE_DAYS`, the whole growth withers a step a day. Return
+    every infant and slay every Dark Young, and it falls back to the breach's own rings.
+- **Capture.** The front reaching a place changes what the place is:
+  - a **village** is besieged (the state exists); its snatchers now come from the nearest point, not the
+    lair alone (today only the first village is raided, `isHome`); overrun (folk below a threshold, or
+    every infant gone and the stores fouled), its green becomes a nursery with sacs and it is a new
+    germination point;
+  - a **ward** is overgrown: the knot of her growth R2 built regrows and the ward sleeps; clearing it
+    and waking the ward is the reversal, so R2's interior is already the capture and the uncapture;
+  - a **grove** (a sanctified ruin) is fouled and its deep-root end closes; channelling clarity into the
+    basin again re-sanctifies it;
+  - a **warren** is poisoned (SETTLEMENTS.md's counter): its rabbits bite.
+- **Reversal is the village loop as built**: defeat Dark Young, carry the infants home, feed the village
+  to thriving, pray at the stone, hedge the run, wake the ward, sanctify the grove. The new tech
+  (S5's palisade, watch post, granary) raises the threshold a village can hold at.
+
+### The land (vista look)
+
+- A **taint map** over the plateau, like the floor map (`uFloor`): one small texture of depth, rewritten
+  at each dawn's step; the terrain, fog, sky and breath read it instead of a single centre. The trees:
+  a chunk's kinds 9 and 10 are assigned from the map; chunks the front crossed since they were built
+  are rebuilt (they are cached by seed today; key them by the front's day). Cost to measure: the front
+  only moves at dawn, and only chunks it crossed rebuild.
+- **The map and the compass** show the front and every point, and the keeper's rumor names its
+  bearing ("the trees to the west have gone black" exists for the blight).
+- From the summit the whole front is read at a glance: the "visible force from the wellspire".
+
+### Passes
+
+Each answers one question on the phone, in the order every study here has used.
+
+- **C1, the front.** *Does a front that creeps along the roots toward the village, read from the summit
+  and the map, make the land feel contested rather than decorated?* The model, the taint map, the daily
+  step, nourishment and irritants with the breach as the only point, starvation. Starts as M1 looks.
+- **C2, capture and germination.** *Does losing a village to her, and seeing the sacs on its green,
+  make the other villages matter?* Raids and snatchers from any point; the village overrun; the ward
+  overgrown and the grove fouled; the warren poisoned.
+- **C3, the bulwark.** *Can the whole plateau be lost and won back with the mechanics as built, and does
+  the winning read as the village's strength rather than hers?* The irritants made true pushes; the
+  thriving village's radius; S5's first stone (palisade, watch post, granary) as thresholds; the
+  reversal timed and tuned so a lost plateau is a long campaign, not a reload.
+- **Alongside, in the creature session's hands (it owns ruins, wards and creatures): the industrial
+  ruins.** The Pine Barrens' own: bog-iron furnaces and their slag heaps, a glassworks, charcoal pits,
+  cranberry bog dikes and sluices, a paper mill's race, sand pits, a railbed, a drowned town, a cedar
+  swamp's corduroy road. Each a place by the seed, a landmark on the map, clambered over by the parkour;
+  some a situation from the QUEST_MANUAL grammar (a sealed furnace, a held mill, a lost town), some
+  inscrutable; a few, as places of power, irritants or germination points for the front. The Leeds
+  Devil is the Barrens' own creature, if a new one is wanted.
+- **Quick win, any time:** the CC0 photo textures (ambientCG, Poly Haven) now that the network allows
+  them; the drop-in path is `public/textures/barrens` (PLATEAU.md T4c).
+
+### Later, in the order the docs already give
+
+- **M2 and R3/R4** (the heart, the attacks, the worm): the front's deep end.
+- **S5 and S6** (the mason, the sage): the bulwark's tech, and the first companion's worked quest.
+- **The far towers**: the brink's passes lead down; the lowland under the cloud is where the other
+  heroes' mountains stand (DD's eight Teeth, reinterpreted: one plateau is one tooth). A companion's
+  recruitment is a journey off the plateau and back with him.
+- **D3 and the metroidvania**: the mountain gated by abilities and companions; her growth sealing
+  regions is the front's underground half.
+- **Phase 2 and after**: the surface, cities, politics, the pantheon, Delvira; then space. Not planned
+  in detail; held as the direction.
+
+## Open calls for Noah
+
+- **Pace.** The daily step and `STARVE_DAYS`; how many days the first village has before the front
+  touches it if she does nothing (proposed: about twelve).
+- **What captures a village**: folk below a count, infants all taken, stores fouled, or any of them.
+- **Whether captured villagers die, flee to the next village, or are turned** (V6's possession is on
+  paper).
+- **Whether the ward's calm is a push from C1** or only from C3.
+- **Whether the breach itself can ever be starved to nothing**, or always keeps M1's rings (proposed:
+  keeps them; the heart is M2's and the finale's).
+- **The split of work**: the front, the taint map and the places are the land session's; the raids,
+  snatchers and sacs from new points, the knot regrowing and the industrial ruins the creature session's.
