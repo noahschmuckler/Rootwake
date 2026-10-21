@@ -28,6 +28,10 @@ export function onLand(seed: number, x: number, z: number, margin: number): bool
   if (r > PLATEAU_R - margin || r < p.lakeR(a) + margin) return false;
   const nr = p.nearRiver(x, z, margin + 6); return !nr || nr.d > nr.half + margin;
 }
+/** T4c (PINE BARRENS): how far (m) a point lies from the nearest river's water's edge, within `reach` of its course (else Infinity). */
+export function riverEdge(seed: number, x: number, z: number, reach = 40): number { const nr = plateau(seed).nearRiver(x, z, reach); return nr ? Math.max(0, nr.d - nr.half) : Infinity; }
+/** T4c: whether a river crossing (a ford, stepping stones, a footbridge) lies within `r` m: the streamside thickets keep off its approaches. */
+export function crossingNear(seed: number, x: number, z: number, r: number): boolean { return plateau(seed).crossings.some(c => Math.hypot(c.x - x, c.z - z) < r); }
 const denCache = new Map<number, Den[]>();
 export function dens(seed: number): Den[] {
   const cached = denCache.get(seed); if (cached) return cached;

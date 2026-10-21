@@ -61,6 +61,9 @@ vec4 groundTint(vec2 xz){ return onMap(xz) ? texture2D(uGround, mapUV(xz)) : vec
 float canopyAt(vec2 xz){ return onMap(xz) ? texture2D(uMapData, mapUV(xz)).r : 0.0; }
 /** How much of the sun a closed canopy takes from what stands beneath it (the ground, the grass, the understory, the trunks). Tuning. */
 const float CANOPY_SHADE = 0.62;
+/** T4c: what lies on the floor at a point (villageVista.floorMap): r needles, g leaf mould, b moss and peat, a bare sand; each 0..1, their sum how much covers the land's own colour. */
+uniform sampler2D uFloor;
+vec4 floorAt(vec2 xz){ return onMap(xz) ? texture2D(uFloor, mapUV(xz)) : vec4(0.0); }
 /** The same bilinear the near mesh and the walking use (vistaTerrain heightAt). */
 float heightAt(vec2 xz){
   vec2 f = clamp((xz + uMapHalf) / uCell, vec2(0.0), vec2(uN - 1.001)); ivec2 i = ivec2(floor(f)); vec2 t = f - vec2(i);
@@ -159,6 +162,18 @@ ${SHADOW_FRAG}
 ${NOISE}${ATMOS}${MAP}${TERRAIN_ALBEDO}${CLEAR}
 varying vec3 vWorld; varying vec3 vNormal;
 uniform vec4 uSoil; // x, z, amount: within reach of her the ground thins to glass while she is beneath it (groundVision)
+// T4c (PINE BARRENS): the floor's detail, tiling textures (groundTextures.ts) weighed by the floor map: sand where the canopy opens, needles under the pines, leaf mould under the oaks, moss and peat by the water.
+uniform sampler2D uTexSand; uniform sampler2D uTexNeedles; uniform sampler2D uTexLeaves; uniform sampler2D uTexMoss;
+const float FLOOR_TILE = 2.4;
+vec3 floorDetail(vec2 p, vec4 fl){
+  vec2 t = p / FLOOR_TILE, t2 = p / (FLOOR_TILE * 2.9) + 0.37;
+  // Two scales of each, so the tiling never reads as a grid.
+  vec3 sand = mix(texture2D(uTexSand, t).rgb, texture2D(uTexSand, t2).rgb, 0.4);
+  vec3 nd = mix(texture2D(uTexNeedles, t).rgb, texture2D(uTexNeedles, t2).rgb, 0.4);
+  vec3 lv = mix(texture2D(uTexLeaves, t * 1.15).rgb, texture2D(uTexLeaves, t2).rgb, 0.4);
+  vec3 ms = mix(texture2D(uTexMoss, t).rgb, texture2D(uTexMoss, t2).rgb, 0.4);
+  return (sand * fl.a + nd * fl.r + lv * fl.g + ms * fl.b) / max(fl.r + fl.g + fl.b + fl.a, 1e-3);
+}
 void main(){
   vec3 n = normalize(vNormal);
   // A painterly bump: the normal leans with two scales of noise, so flat ground is not flat-lit.
@@ -172,6 +187,8 @@ void main(){
   if (trail > 0.01) { float rag = vnoise(p * 1.7) * 0.35 + vnoise(p * 6.0) * 0.15; float k = smoothstep(0.25, 0.6, trail + rag - 0.25);
     vec3 earth = mix(srgb(vec3(0.55, 0.45, 0.31)), srgb(vec3(0.70, 0.61, 0.44)), smoothstep(0.6, 1.0, trail)) * (0.9 + 0.2 * vnoise(p * 3.1));
     albedo = mix(albedo, earth, k); }
+  vec4 fl = floorAt(p); float cover = min(1.0, fl.r + fl.g + fl.b + fl.a);
+  if (cover > 0.01) albedo = mix(albedo, floorDetail(p, fl) * (0.82 + 0.36 * fbm3(p * 0.07)), cover * (1.0 - smoothstep(0.2, 0.5, trail)));
   float vis = min(md.r * (1.0 - CANOPY_SHADE * canopyAt(p)), getShadowMask());
   vec3 col = toon(albedo, n, vis, mix(0.55, 1.0, md.g));
   float soil = 1.0 - 0.78 * uSoil.z * (1.0 - smoothstep(14.0, 28.0, distance(vWorld.xz, uSoil.xy)));
@@ -248,10 +265,16 @@ ${NOISE}
 uniform float uTime;
 attribute float aShade;
 varying vec3 vWorld; varying vec3 vN; varying float vShade; varying vec2 vBase;
+#ifdef BARK
+varying vec2 vUv;
+#endif
 void main(){
   mat4 m = modelMatrix * instanceMatrix;
   vec4 worldPosition = m * vec4(position, 1.0);
   vBase = m[3].xz;
+#ifdef BARK
+  vUv = uv;
+#endif
 #ifdef USE_SWAY
   float k = max(position.y, 0.0) * 0.012;
   worldPosition.x += sin(uTime * 1.1 + vBase.x * 0.37 + position.y * 0.4) * k * (1.0 + sin(uTime * 0.3 + vBase.y) );
@@ -287,6 +310,11 @@ ${TERRAIN_ALBEDO}
 #endif
 uniform vec3 uColor;
 varying vec3 vWorld; varying vec3 vN; varying float vShade; varying vec2 vBase;
+#ifdef BARK
+// T4c: bark as a tiling texture (groundTextures.ts), uBarkScale repeats along and round the trunk; uColor tints it.
+uniform sampler2D uBark; uniform vec2 uBarkScale;
+varying vec2 vUv;
+#endif
 void main(){
   vec3 n = normalize(vN);
   float tint = hash12(floor(vBase * 0.37));
@@ -295,6 +323,8 @@ void main(){
   vec3 albedo = rockColour(vWorld * vec3(1.0, 2.5, 1.0));
   float moss = smoothstep(0.55, 0.85, n.y + (vnoise(vWorld.xz * 1.3) - 0.5) * 0.4);
   albedo = mix(albedo, grassColour(vWorld.xz, md) * 0.8, moss);
+#elif defined(BARK)
+  vec3 albedo = uColor * texture2D(uBark, vUv * uBarkScale).rgb * (0.85 + 0.3 * tint);
 #else
   vec3 albedo = uColor * (0.85 + 0.3 * tint);
 #ifdef VARIED

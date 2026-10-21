@@ -10,7 +10,7 @@ import { solidVert, solidFrag, cardVert, cardFrag } from './vistaShaders';
 import { spriteTexture, standees, type Standee, type SpriteKind } from './sprites';
 
 export type UnderKind = 'sapling' | 'shrub' | 'fern';
-export interface UnderItem { kind: UnderKind; x: number; z: number; s: number; rot: number; v: number }
+export interface UnderItem { kind: UnderKind; x: number; z: number; s: number; rot: number; v: number; /** T4c: how far into the streamside thicket (0..1). */ rip: number }
 /** What a tile needs to know of the land: how deep in forest a point is, whether it is wood at all (not meadow, not her taint, not a village's green), whether it is on land, and the trunks and places to keep clear of. */
 export interface UnderLand {
   forest(x: number, z: number): number;
@@ -18,7 +18,13 @@ export interface UnderLand {
   onLand(x: number, z: number): boolean;
   trunks(x0: number, z0: number, x1: number, z1: number): { x: number; z: number; r: number }[];
   clear(x: number, z: number): boolean;
+  /** T4c: how far (m) from a river's water's edge (Infinity when none near): the streamside grows a thicket. */
+  river?(x: number, z: number): number;
 }
+const smooth = (a: number, b: number, x: number) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
+/** T4c: what the streamside adds (per m²) within RIP_REACH m of the water: highbush blueberry, sweet pepperbush and leatherleaf over her head, cinnamon ferns beneath. Tuning. */
+export const RIPARIAN_ADD: Record<UnderKind, number> = { sapling: 0.02, shrub: 0.2, fern: 0.16 };
+export const RIP_REACH: [number, number] = [4, 24];
 /** The tile's side (m); each kind's density (per m²) on the plains and in a stand's heart, and at a stand's edge (shrubs, saplings: an edge is brushy). Tuning. */
 export const UNDER_TILE = 24;
 export const DENSITY: Record<UnderKind, { plains: number; heart: number; edge: number }> = {
@@ -39,18 +45,19 @@ export function underTile(tx: number, tz: number, seed: number, land: UnderLand,
   }
   const trunks = land.trunks(x0 - 3, z0 - 3, x0 + UNDER_TILE + 3, z0 + UNDER_TILE + 3), area = UNDER_TILE * UNDER_TILE;
   for (const kind of ['sapling', 'shrub', 'fern'] as UnderKind[]) {
-    const d = DENSITY[kind], most = Math.max(d.plains, d.heart, d.edge), n = Math.round(area * most * scale);
+    const d = DENSITY[kind], most = Math.max(d.plains, d.heart, d.edge) + (land.river ? RIPARIAN_ADD[kind] : 0), n = Math.round(area * most * scale);
     for (let i = 0; i < n; i++) {
       const x = x0 + rand() * UNDER_TILE, z = z0 + rand() * UNDER_TILE, roll = rand(), sz = rand(), rot = rand() * Math.PI * 2, v = rand();
       if (!land.wooded(x, z)) continue;
-      const f = land.forest(x, z), edge = 4 * f * (1 - f), want = d.plains + (d.heart - d.plains) * f + d.edge * edge;
+      const f = land.forest(x, z), edge = 4 * f * (1 - f), rip = land.river ? 1 - smooth(RIP_REACH[0], RIP_REACH[1], land.river(x, z)) : 0, want = d.plains + (d.heart - d.plains) * f + d.edge * edge + RIPARIAN_ADD[kind] * rip;
       if (roll * most > want) continue;
       if (!land.onLand(x, z) || !land.clear(x, z)) continue;
       // Clear of the trunks: a fern may stand at a root's foot, a shrub a little off, a sapling where the canopy opens.
       const keep = kind === 'fern' ? 0.25 : kind === 'shrub' ? 0.45 : 1.4;
       if (trunks.some(t => Math.hypot(t.x - x, t.z - z) < t.r + keep)) continue;
       const [a, b] = SIZES[kind];
-      out.push({ kind, x, z, s: a + (b - a) * (kind === 'shrub' ? sz * sz * (0.55 + 0.45 * Math.max(f, edge)) : sz), rot, v });
+      // The streamside's shrubs are the tall ones (highbush blueberry stands over her head).
+      out.push({ kind, x, z, s: a + (b - a) * (kind === 'shrub' ? Math.max(sz * sz * (0.55 + 0.45 * Math.max(f, edge)), rip * (0.45 + 0.5 * sz)) : sz), rot, v, rip });
     }
   }
   return out;
@@ -77,6 +84,8 @@ function clump(rr: () => number, n: number, spread: number, w: number, h: number
 const scrubOak = (seed: number) => clump(mulberry32(seed), 3, 0.18, 0.62, 0.85);
 /** Blueberry ~0.45 m: a low wide clump of twiggy small-leaved cards. */
 const blueberry = (seed: number) => clump(mulberry32(seed), 3, 0.3, 0.6, 0.45);
+/** Highbush blueberry ~1 m at scale 1 (drawn at 1.5–2.7): a tall twiggy clump of small-leaved cards, the streamside's. */
+const highbush = (seed: number) => clump(mulberry32(seed), 4, 0.28, 0.75, 1.0);
 /** Bracken ~0.5 m: two crossed fronds. */
 const bracken = (seed: number) => clump(mulberry32(seed), 1, 0, 0.75, 0.55);
 /** A young pitch pine ~1.6 m: a thin stem (drawn solid) and a few needle tufts up it. */
@@ -100,13 +109,14 @@ export function createUnderstory(parent: THREE.Object3D, shared: Record<string, 
   const cardMat = (hex: string, kind: SpriteKind) => new THREE.ShaderMaterial({ uniforms: uniforms({ uColor: { value: new THREE.Color(hex) }, uMap: { value: spriteTexture(kind) } }), vertexShader: cardVert, fragmentShader: cardFrag, lights: true, defines: { USE_SWAY: '', UNDER: '' }, side: THREE.DoubleSide });
   const solidMat = (hex: string) => new THREE.ShaderMaterial({ uniforms: uniforms({ uColor: { value: new THREE.Color(hex) } }), vertexShader: solidVert, fragmentShader: solidFrag, lights: true, defines: { UNDER: '' } });
   /** Each drawn bucket: a shape, a material, and the items it draws (rebuilt as she moves). */
-  interface Bucket { mesh: THREE.InstancedMesh; kind: UnderKind; pick: (v: number, s: number) => boolean; part?: 'stem' | 'crown' }
+  interface Bucket { mesh: THREE.InstancedMesh; kind: UnderKind; pick: (v: number, s: number, rip: number) => boolean; part?: 'stem' | 'crown' }
   /** The most instances a bucket draws (a High tile ring at the heart's density holds a few thousand items over every bucket). Tuning. */
   const buckets: Bucket[] = [], CAP = 2400;
   const mk = (geo: THREE.BufferGeometry, mat: THREE.Material): THREE.InstancedMesh => { const m = new THREE.InstancedMesh(geo, mat, CAP); m.count = 0; m.frustumCulled = false; m.receiveShadow = true; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); group.add(m); return m; };
   // Shrubs: the small ones (most: underTile skews them small) are blueberry, the big ones scrub oak, two shapes each.
   for (let s = 0; s < 2; s++) buckets.push({ mesh: mk(blueberry(seed * 13 + s), cardMat(s ? '#3f6b33' : '#45703a', 'berry')), kind: 'shrub', pick: (v, sz) => sz < BERRY_BELOW && Math.floor(v * 2) === s });
-  for (let s = 0; s < 2; s++) buckets.push({ mesh: mk(scrubOak(seed * 17 + s), cardMat(s ? '#3d6628' : '#476f2c', 'leaf')), kind: 'shrub', pick: (v, sz) => sz >= BERRY_BELOW && Math.floor(v * 2) === s });
+  for (let s = 0; s < 2; s++) buckets.push({ mesh: mk(scrubOak(seed * 17 + s), cardMat(s ? '#3d6628' : '#476f2c', 'leaf')), kind: 'shrub', pick: (v, sz, rip) => sz >= BERRY_BELOW && rip < 0.5 && Math.floor(v * 2) === s });
+  for (let s = 0; s < 2; s++) buckets.push({ mesh: mk(highbush(seed * 29 + s), cardMat(s ? '#3b6a35' : '#44733a', 'highbush')), kind: 'shrub', pick: (v, sz, rip) => sz >= BERRY_BELOW && rip >= 0.5 && Math.floor(v * 2) === s });
   for (let s = 0; s < 2; s++) buckets.push({ mesh: mk(bracken(seed * 19 + s), cardMat(s ? '#5a8a30' : '#52822e', 'frond')), kind: 'fern', pick: v => Math.floor(v * 2) === s });
   for (let s = 0; s < 2; s++) {
     const sh = pineSapling(seed * 23 + s);
@@ -145,7 +155,7 @@ export function createUnderstory(parent: THREE.Object3D, shared: Record<string, 
         if (it.v > q.share || d2 > lim * lim) return;
         pos.set(it.x, t.ys[i], it.z); rot.setFromAxisAngle(up, it.rot); scl.setScalar(it.s); m.compose(pos, rot, scl);
         const pv = Math.min(0.999, it.v / q.share);
-        for (const b of buckets) if (b.kind === it.kind && b.pick(pv, it.s) && b.mesh.count < CAP) b.mesh.setMatrixAt(b.mesh.count++, m);
+        for (const b of buckets) if (b.kind === it.kind && b.pick(pv, it.s, it.rip) && b.mesh.count < CAP) b.mesh.setMatrixAt(b.mesh.count++, m);
         items++;
       });
     }

@@ -4,7 +4,7 @@
 // included) is an island the chunks defer to: no hills and no chunk trees within MEADOW_ISLAND of the
 // village, and the karst stands on an island of its own (KARST_ISLAND), its clearing kept free of chunk trees.
 import { mulberry32 } from './colors';
-import { places, villageSites, onLand, FOREST_RADIUS, KARST_AT } from './overworldModel';
+import { places, villageSites, onLand, riverEdge, crossingNear, FOREST_RADIUS, KARST_AT } from './overworldModel';
 import { TAINT } from './taintModel';
 import type { Tree } from './villageModel';
 
@@ -54,7 +54,9 @@ export const forestAt = (x: number, z: number, seed = 1): number => { let f = fi
 export const AGES: { share: number; size: [number, number] }[] = [{ share: 0.14, size: [1.7, 2.4] }, { share: 0.5, size: [1.0, 1.6] }, { share: 0.36, size: [0.55, 0.95] }];
 /** How many trees a chunk may hold, how hard the forest pass tries, and the spacing between trunks (m) on the plains and in a stand's heart (scaled by the trees' sizes). Tuning. */
 // PINE BARRENS (Noah, 2026-10-21): pitch pines stand farther apart than the broadleaf stands did (their crowns are narrow and the floor is lit), so a stand is tall and open, not a wall.
-export const FOREST_CAP = 48, FOREST_TRIES = 220, SPACING: [number, number] = [5.0, 2.8];
+export const FOREST_CAP = 44, FOREST_TRIES = 220, SPACING: [number, number] = [5.0, 2.8];
+/** T4c: the streamside: within RIPARIAN m of a river's edge through wooded land the white cedars stand close (CEDAR_GAP m, scaled by size), CEDAR_CAP a chunk, their sizes CEDAR_SIZE; a chunk holds at most CHUNK_IDS trees (its id stride). Tuning. */
+export const RIPARIAN = 16, CEDAR_CAP = 20, CEDAR_GAP = 2.8, CEDAR_SIZE: [number, number] = [1.2, 2.1], CHUNK_IDS = 64;
 export const chunkKey = (cx: number, cz: number): string => `${cx},${cz}`;
 export const chunkOf = (x: number, z: number): { cx: number; cz: number } => ({ cx: Math.floor(x / CHUNK), cz: Math.floor(z / CHUNK) });
 /** A chunk's trees, from its own seed: by biome's density, none on the island or in the karst's clearing, spaced. Ids are unique per chunk so a chunk tree is never confused with the village's. */
@@ -82,6 +84,23 @@ export function chunkTrees(cx: number, cz: number, seed = 1): Tree[] {
     const gap = (SPACING[0] + (SPACING[1] - SPACING[0]) * f) * (0.55 + 0.45 * size);
     if (out.some(t => Math.hypot(t.x - x, t.z - z) < gap * 0.5 + (SPACING[0] + (SPACING[1] - SPACING[0]) * f) * (0.55 + 0.45 * t.size) * 0.5)) continue;
     out.push({ id: base + out.length, x, z, size });
+  }
+  return cedars(cx, cz, seed, out);
+}
+/** T4c: a third draw, the streamside's cedars (drawn as the white cedar by the look: villageVista.villageTrees reads the same river distance): where a river runs
+ * through wooded land, within RIPARIAN of its edge, thick at the water and thinning out, clear of the crossings' approaches and of the trees already standing. */
+function cedars(cx: number, cz: number, seed: number, out: Tree[]): Tree[] {
+  // Most chunks are nowhere near a river: a coarse look first.
+  let near = false; for (const [u, v] of [[0.5, 0.5], [0.1, 0.1], [0.9, 0.1], [0.1, 0.9], [0.9, 0.9]]) if (riverEdge(seed, (cx + u) * CHUNK, (cz + v) * CHUNK, RIPARIAN + CHUNK * 0.45) < RIPARIAN + CHUNK * 0.45) { near = true; break; }
+  if (!near) return out;
+  const r3 = mulberry32((seed * 69621 + cx * 2654435 + cz * 40503 + 9) >>> 0), cap = Math.min(FOREST_CAP, out.length + CEDAR_CAP); // a chunk holds FOREST_CAP trees at most, cedars included (its id stride CHUNK_IDS is wider)
+  for (let i = 0; i < 160 && out.length < cap; i++) {
+    const x = (cx + r3()) * CHUNK, z = (cz + r3()) * CHUNK, roll = r3(), grow = r3(), d = riverEdge(seed, x, z, RIPARIAN + 4);
+    if (d > RIPARIAN || roll > 0.95 * (1 - d / RIPARIAN) ** 0.5) continue;
+    if (biomeAt(x, z, seed) !== 'wood' || beyond(x, z, seed) < 0.6 || !onLand(seed, x, z, 1.8) || crossingNear(seed, x, z, 14) || Math.hypot(x - KARST_AT.x, z - KARST_AT.z) < KARST_CLEARING) continue;
+    const size = CEDAR_SIZE[0] + grow * (CEDAR_SIZE[1] - CEDAR_SIZE[0]);
+    if (out.some(t => Math.hypot(t.x - x, t.z - z) < CEDAR_GAP * (0.6 + 0.4 * (size + t.size) * 0.5))) continue;
+    out.push({ id: (cx >= 0 ? cx * 2 : -cx * 2 - 1) * 0 + 100000 + ((((cx >= 0 ? cx * 2 : -cx * 2 - 1) + (cz >= 0 ? cz * 2 : -cz * 2 - 1)) * ((cx >= 0 ? cx * 2 : -cx * 2 - 1) + (cz >= 0 ? cz * 2 : -cz * 2 - 1) + 1) / 2 + (cz >= 0 ? cz * 2 : -cz * 2 - 1)) * CHUNK_IDS) + out.length, x, z, size });
   }
   return out;
 }

@@ -13,8 +13,8 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import type { Terrain } from './worldTerrain';
 import { rng, type Land, type Tree as VTree, type Rock } from './vistaTerrain';
 import { buildVista, QUALITIES, CASTER_LAYER, sunDirection, type Hour, type Quality, type VistaWorld } from './vistaWorld';
-import { places, dens, ruins, warrens, wallows, ownWarrens, moot, onLand, FOREST_RADIUS as DARK_RADIUS, KARST_AT } from './overworldModel';
-import { convergences, beyond, noise, CHUNK, forestField, forestAt } from './chunkModel';
+import { places, dens, ruins, warrens, wallows, ownWarrens, moot, onLand, riverEdge, FOREST_RADIUS as DARK_RADIUS, KARST_AT } from './overworldModel';
+import { convergences, beyond, noise, CHUNK, forestField, forestAt, RIPARIAN } from './chunkModel';
 import { createUnderstory, type Understory } from './understory';
 import { FOREST_RADIUS as KARST_FOREST, NODES as KARST_NODES, nodeFrame } from './karstFlowModel';
 import { TREES, type Tree } from './villageModel';
@@ -59,6 +59,28 @@ function forestOf(land: Land, seed: number): Float32Array {
 /** PINE BARRENS (Noah, 2026-10-21): under a stand the floor is needle litter, and where the canopy opens, the barrens' pale sugar sand (MOSS is
  * the sand now: the noise that opened the mould to moss opens the needles to sand); how much it covers the wood's own green. Linear rgb. Tuning. */
 const LITTER = [0.2, 0.11, 0.05], MOSS = [0.5, 0.42, 0.27], LITTER_A: [number, number] = [0.4, 0.92];
+/** T4c (PINE BARRENS): where the oaks stand among the pines, 0..1 by a slow noise (groves of oak, and oak scattered through the pine): the look's tree kinds and the leaf mould both read it. */
+export const oakShare = (x: number, z: number, seed: number): number => 0.16 + 0.55 * smooth(0.42, 0.68, noise(x, z, 75, seed + 81));
+/** T4c: what lies on the floor, a cell at a time (n×n×4: needles, leaf mould, moss and peat, bare sand; 0..255), from how deep in a stand it lies, how
+ * many oaks are about, how near the water it is. Sand shows where the wood is open; needles thicken with the pines, leaf mould with the oaks, and by
+ * the streams the floor is peat and sphagnum. Sampled every third cell (as forestOf) and read between. Tuning. */
+export function floorMap(land: Land, seed: number): Uint8Array {
+  const { n, cell, half } = land, STEP = 3, m = Math.ceil((n - 1) / STEP) + 1, g = new Float32Array(m * m * 4), out = new Uint8Array(n * n * 4), lair = places(seed).find(p => p.id === 'lair')!, dark = Math.max(DARK_RADIUS, TAINT.edge), at = forestField(seed);
+  for (let j = 0; j < m; j++) for (let i = 0; i < m; i++) {
+    const x = Math.min(n - 1, i * STEP) * cell - half, z = Math.min(n - 1, j * STEP) * cell - half, k = (j * m + i) * 4;
+    if (beyond(x, z, seed) < 0.62 || noise(x, z, 110, seed + 3) > 0.58 || Math.hypot(x - lair.x, z - lair.z) < dark || Math.hypot(x - KARST_AT.x, z - KARST_AT.z) < KARST_FOREST + 30) continue;
+    const f = at(x, z), oak = oakShare(x, z, seed), rip = 1 - smooth(4, RIPARIAN + 10, riverEdge(seed, x, z, RIPARIAN + 14)), gap = noise(x, z, 9, seed + 83);
+    // The wooded plains: thin sand and a scatter of needles under the grass; a stand: needles (pine) and leaf mould (oak), sand in its gaps; the streamside: peat.
+    let needles = 0.3 + 0.65 * f * (1 - 0.6 * oak), leaves = (0.1 + 0.75 * f) * oak, sand = 0.3 * (1 - f) + 0.3 * f * smooth(0.5, 0.8, gap), moss = rip * (0.7 + 0.3 * f);
+    const sum = needles + leaves + sand + moss, over = Math.max(1, sum / (0.62 + 0.38 * f + 0.45 * rip)); needles /= over; leaves /= over; sand /= over; moss /= over;
+    g[k] = needles; g[k + 1] = leaves; g[k + 2] = moss; g[k + 3] = sand;
+  }
+  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+    const u = i / STEP, v = j / STEP, i0 = Math.min(m - 2, Math.floor(u)), j0 = Math.min(m - 2, Math.floor(v)), tu = Math.min(1, u - i0), tv = Math.min(1, v - j0), k = (j * n + i) * 4;
+    for (let c = 0; c < 4; c++) { const a = g[(j0 * m + i0) * 4 + c], b = g[(j0 * m + i0 + 1) * 4 + c], d = g[((j0 + 1) * m + i0) * 4 + c], e = g[((j0 + 1) * m + i0 + 1) * 4 + c]; out[k + c] = Math.round(255 * Math.min(1, ((a * (1 - tu) + b * tu) * (1 - tv) + (d * (1 - tu) + e * tu) * tv))); }
+  }
+  return out;
+}
 /** The canopy (0..255 a cell) the grass thins under: a stand's depth, opened here and there by gaps of light. */
 export function canopyMap(land: Land, seed: number): Uint8Array {
   const { n, cell, half } = land, f = forestOf(land, seed), out = new Uint8Array(n * n);
@@ -93,7 +115,7 @@ export function groundTint(land: Land, seed: number, blighted: (x: number, z: nu
 
 // ── the trees ────────────────────────────────────────────────────────────
 /** Every tree the village knows, as the vista draws it: the chunks' (all of them, built or not) and each village's own wood. Kind 5 the village tree, 6 in the dark forest, 7 blighted. */
-export function villageTrees(land: Land, edge: number, terrain: Terrain, treesOf: (cx: number, cz: number) => Tree[], origins: { x: number; z: number }[], dark: (x: number, z: number) => boolean, blighted: (x: number, z: number) => boolean, taint?: TaintLook): VTree[] {
+export function villageTrees(land: Land, edge: number, terrain: Terrain, treesOf: (cx: number, cz: number) => Tree[], origins: { x: number; z: number }[], dark: (x: number, z: number) => boolean, blighted: (x: number, z: number) => boolean, taint?: TaintLook, seed = 1): VTree[] {
   const out: VTree[] = [], reach = Math.ceil(edge / CHUNK), vein = taint ? veinIndex(taint) : null;
   // MOTHER.md: in the taint, kind 10 (the nursery's growths, the heart's) where the trees are gone, 9 (grey, dead, twitching) through the grey and more and more of the mild ring, and along the veins a little way past the edge.
   const kindAt = (x: number, z: number, id: number): VTree["kind"] => {
@@ -104,8 +126,9 @@ export function villageTrees(land: Land, edge: number, terrain: Terrain, treesOf
     if (ring === 'mild') return h < 0.15 + 0.8 * (TAINT.edge - d) / (TAINT.edge - TAINT.grey) || vein(x, z) < VEIN_TREE_M ? 9 : 6;
     return veinAt(d) > 0 && vein(x, z) < VEIN_TREE_M && h < veinAt(d) * 1.2 ? 9 : base;
   };
-  // PINE BARRENS: the chunks' living trees are pitch pines (kind 11); the villages' own woods keep their broadleaves (5), as do the dark wood and the taint.
-  const add = (x: number, z: number, size: number, id: number, pine = false) => { const k = kindAt(x, z, id); out.push({ x, z, y: terrain.height(x, z), kind: pine && k === 5 ? 11 : k, scale: size, rot: (id * 2.399963) % (Math.PI * 2) }); };
+  // PINE BARRENS: the chunks' living trees are pitch pines (11), blackjack oaks among them by oakShare (12), and white cedars along the rivers (13, where chunkModel.cedars drew them); the villages' own woods keep their broadleaves (5), as do the dark wood and the taint.
+  const barrens = (x: number, z: number, id: number): VTree["kind"] => riverEdge(seed, x, z, RIPARIAN + 4) <= RIPARIAN ? 13 : hash01(id * 0.37 + 11) < oakShare(x, z, seed) ? 12 : 11;
+  const add = (x: number, z: number, size: number, id: number, pine = false) => { const k = kindAt(x, z, id); out.push({ x, z, y: terrain.height(x, z), kind: pine && k === 5 ? barrens(x, z, id) : k, scale: size, rot: (id * 2.399963) % (Math.PI * 2) }); };
   for (let cz = -reach; cz <= reach; cz++) for (let cx = -reach; cx <= reach; cx++) for (const t of treesOf(cx, cz)) if (norm4(t.x, t.z) < edge - 40) add(t.x, t.z, t.size, t.id, true);
   for (const o of origins) for (const t of TREES) add(t.x + o.x, t.z + o.z, t.size, t.id + o.x * 7 + o.z * 13);
   // The karst's own trees (its forest floor, its ledges, the helix on its faces): framed as the free flow frames them, so a trunk climb meets its crown; pines as the vista's conifer (a tenth of its height per size: the karst's pine is 5 m at size 1); ferns stay the karst's.
@@ -215,9 +238,9 @@ export function createVillageLook(inp: LookInputs): VillageLook {
   const { renderer, scene, camera, sun, hemi, vl, seed } = inp;
   const coarse = matchMedia('(pointer: coarse)').matches, qName = new URLSearchParams(location.search).get('q')?.toLowerCase();
   let quality = inp.quality ?? QUALITIES.find(q => q.name.toLowerCase() === qName) ?? QUALITIES[coarse ? 1 : 2];
-  const trees = () => villageTrees(vl.land, vl.edge, vl.terrain, inp.treesOf, inp.villages().map(v => ({ x: v.x, z: v.z })), inp.dark, inp.blighted, inp.taint);
+  const trees = () => villageTrees(vl.land, vl.edge, vl.terrain, inp.treesOf, inp.villages().map(v => ({ x: v.x, z: v.z })), inp.dark, inp.blighted, inp.taint, seed);
   const world = buildVista(scene, vl.land, trees(), villageRocks(vl, seed), quality, { hazeBase: 0, ground: groundTint(vl.land, seed, inp.blighted, inp.taint), fine: vl.terrain.height, fineLod: true, renderer, bladeH: BLADE_H, nearTreesScale: NEAR_TREES, treeReach: TREE_REACH });
-  world.setCanopy(canopyMap(vl.land, seed));
+  world.setCanopy(canopyMap(vl.land, seed)); world.setFloor(floorMap(vl.land, seed));
   // FOREST: the understory, kept from the places (as the rocks are) and the trunks.
   const lairAt = places(seed).find(p => p.id === 'lair')!, keep = [...places(seed), ...dens(seed), ...ruins(seed), ...warrens(seed), ...wallows(seed), ...ownWarrens(seed), moot(seed), ...convergences(seed)];
   const understory = createUnderstory(world.root, world.uniforms, {
@@ -226,6 +249,7 @@ export function createVillageLook(inp: LookInputs): VillageLook {
     onLand: (x, z) => onLand(seed, x, z, 1.5),
     trunks: (x0, z0, x1, z1) => { const out: { x: number; z: number; r: number }[] = []; for (let cz = Math.floor(z0 / CHUNK); cz <= Math.floor(z1 / CHUNK); cz++) for (let cx = Math.floor(x0 / CHUNK); cx <= Math.floor(x1 / CHUNK); cx++) for (const t of inp.treesOf(cx, cz)) if (t.x > x0 && t.x < x1 && t.z > z0 && t.z < z1) out.push({ x: t.x, z: t.z, r: 0.32 * t.size }); return out; },
     clear: (x, z) => !keep.some(p => Math.hypot(x - p.x, z - p.z) < 10 + ((p as { radius?: number }).radius ?? 0)),
+    river: (x, z) => riverEdge(seed, x, z, RIPARIAN + 14),
   }, vl.terrain.height, seed, quality.name);
   renderer.shadowMap.type = THREE.PCFSoftShadowMap; renderer.toneMapping = THREE.ACESFilmicToneMapping;
   sun.shadow.bias = -0.0004; sun.shadow.normalBias = 0.05; sun.shadow.camera.near = 1; sun.shadow.camera.far = 900; sun.shadow.camera.layers.enable(CASTER_LAYER); scene.add(sun.target);

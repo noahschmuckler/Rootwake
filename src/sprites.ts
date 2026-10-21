@@ -5,14 +5,14 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mulberry32 } from './colors';
 
-export type SpriteKind = 'grass' | 'leaf' | 'needle' | 'frond' | 'bloom' | 'pine' | 'berry';
+export type SpriteKind = 'grass' | 'leaf' | 'needle' | 'frond' | 'bloom' | 'pine' | 'berry' | 'oak' | 'cedar' | 'highbush';
 const textures = new Map<SpriteKind, THREE.CanvasTexture>();
 /** Drawn in pale neutral tones so the material's colour sets the hue; alpha does the shaping. */
 export function spriteTexture(kind: SpriteKind): THREE.CanvasTexture {
   const cached = textures.get(kind); if (cached) return cached;
   const size = 256, canvas = document.createElement('canvas'); canvas.width = size; canvas.height = size;
   const ctx = canvas.getContext('2d')!; ctx.clearRect(0, 0, size, size);
-  const rand = mulberry32(kind === 'grass' ? 42 : kind === 'leaf' ? 7 : kind === 'needle' ? 11 : kind === 'bloom' ? 23 : kind === 'pine' ? 29 : kind === 'berry' ? 31 : 19);
+  const rand = mulberry32(kind === 'grass' ? 42 : kind === 'leaf' ? 7 : kind === 'needle' ? 11 : kind === 'bloom' ? 23 : kind === 'pine' ? 29 : kind === 'berry' ? 31 : kind === 'oak' ? 37 : kind === 'cedar' ? 41 : kind === 'highbush' ? 43 : 19);
   const tone = () => { const v = 170 + Math.floor(rand() * 85); return `rgb(${v - 20}, ${v}, ${v - 30})`; };
   if (kind === 'grass' || kind === 'frond') {
     const blades = kind === 'grass' ? 13 : 9;
@@ -54,6 +54,33 @@ export function spriteTexture(kind: SpriteKind): THREE.CanvasTexture {
       const a = ta + (rand() - 0.5) * 2.2, len = size * (0.12 + rand() * 0.15), v = 115 + Math.floor(rand() * 90) + Math.floor(along / size * 160);
       ctx.strokeStyle = `rgb(${v - 30}, ${v}, ${v - 45})`; ctx.lineWidth = 1.6 + rand() * 1.4; ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(bx + Math.cos(a) * len, by + Math.sin(a) * len); ctx.stroke();
     }
+  } else if (kind === 'oak') {
+    // T4c: a blackjack oak's leaf cluster: big lobed leaves (broadest toward the tip), overlapping, on a few twigs, ragged at the rim.
+    ctx.strokeStyle = 'rgba(95, 75, 55, 0.9)'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+    for (let t = 0; t < 5; t++) { const a = (t / 5) * Math.PI * 2 + rand() * 0.8, len = size * (0.15 + rand() * 0.2); ctx.beginPath(); ctx.moveTo(size / 2, size / 2); ctx.lineTo(size / 2 + Math.cos(a) * len, size / 2 + Math.sin(a) * len); ctx.stroke(); }
+    for (let i = 0; i < 30; i++) {
+      const a = rand() * Math.PI * 2, r = Math.pow(rand(), 0.6) * size * 0.36, x = size / 2 + Math.cos(a) * r, y = size / 2 + Math.sin(a) * r, len = 40 + rand() * 34, rot = rand() * Math.PI * 2, v = 160 + Math.floor(rand() * 85);
+      ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.fillStyle = `rgb(${v - 30}, ${v}, ${v - 45})`; ctx.beginPath();
+      // The blackjack's leaf: narrow at the stem, three broad lobes at the tip.
+      for (let k = 0; k <= 30; k++) { const t = k / 30, ang = t * Math.PI * 2, c = Math.cos(ang), w = 0.22 + 0.5 * Math.max(0, c) + 0.12 * Math.abs(Math.sin(ang * 3)) * Math.max(0, c); const px = Math.cos(ang) * len * 0.5, py = Math.sin(ang) * len * w; if (k === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py); }
+      ctx.closePath(); ctx.fill(); ctx.strokeStyle = 'rgba(90, 100, 70, 0.45)'; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(-len * 0.5, 0); ctx.lineTo(len * 0.45, 0); ctx.stroke(); ctx.restore();
+    }
+  } else if (kind === 'cedar') {
+    // T4c: an Atlantic white cedar's spray: flat fans of scale-like foliage on branching twigs, fine, dense at the heart, feathered at the rim.
+    ctx.lineCap = 'round';
+    const fan = (x: number, y: number, a: number, len: number, depth: number): void => {
+      ctx.strokeStyle = depth > 1 ? 'rgba(100, 85, 65, 0.9)' : `rgb(${150 + Math.floor(rand() * 40)}, ${175 + Math.floor(rand() * 60)}, ${130 + Math.floor(rand() * 40)})`; ctx.lineWidth = depth > 1 ? 2.2 : 3.5;
+      const ex = x + Math.cos(a) * len, ey = y + Math.sin(a) * len; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(ex, ey); ctx.stroke();
+      if (depth === 0) return;
+      const n = 3 + Math.floor(rand() * 3); for (let k = 1; k <= n; k++) { const t = k / (n + 0.5), side = k % 2 ? 1 : -1; fan(x + (ex - x) * t, y + (ey - y) * t, a + side * (0.7 + rand() * 0.3), len * (0.45 - t * 0.2), depth - 1); }
+    };
+    for (let t = 0; t < 11; t++) { const a = -Math.PI / 2 + (t / 11 - 0.5) * 3.6 + rand() * 0.3; fan(size / 2 + (rand() - 0.5) * size * 0.2, size * (0.5 + rand() * 0.25), a, size * (0.28 + rand() * 0.12), 2); }
+  } else if (kind === 'highbush') {
+    // T4c: highbush blueberry (sweet pepperbush, leatherleaf too), the streamside's thicket over her head: many arching stems, branching, leafy to the top.
+    ctx.lineCap = 'round';
+    for (let t = 0; t < 12; t++) { const x0 = size * (0.25 + rand() * 0.5), lean = (rand() - 0.5) * 1.1, top = size * (0.04 + rand() * 0.2); ctx.strokeStyle = 'rgba(95, 70, 50, 0.95)'; ctx.lineWidth = 2.5; ctx.beginPath(); ctx.moveTo(x0, size); ctx.quadraticCurveTo(x0 + lean * size * 0.15, size * 0.55, x0 + lean * size * 0.35, top); ctx.stroke();
+      for (let k = 0; k < 7; k++) { const u = 0.3 + rand() * 0.65, px = x0 + lean * size * 0.3 * u, py = size - (size - top) * u, b = (rand() - 0.5) * 2.4; ctx.lineWidth = 1.5; ctx.beginPath(); ctx.moveTo(px, py); ctx.lineTo(px + Math.cos(b) * 22, py - 14 + Math.sin(b) * 10); ctx.stroke(); }
+      for (let k = 0; k < 22; k++) { const u = 0.2 + rand() * 0.8, px = x0 + lean * size * 0.3 * u + (rand() - 0.5) * 34, py = size - (size - top) * u + (rand() - 0.5) * 10, v = 150 + Math.floor(rand() * 85); ctx.fillStyle = `rgb(${v - 30}, ${v}, ${v - 45})`; ctx.beginPath(); ctx.ellipse(px, py, 7 + rand() * 5, 4 + rand() * 2.5, rand() * Math.PI, 0, Math.PI * 2); ctx.fill(); } }
   } else if (kind === 'berry') {
     // Lowbush blueberry and huckleberry, the barrens' knee-high carpet: a thicket of fine twigs with small oval leaves, open enough to see through.
     ctx.lineCap = 'round';
