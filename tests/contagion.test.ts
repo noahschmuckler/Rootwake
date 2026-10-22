@@ -1,5 +1,5 @@
 import { test } from 'node:test'; import assert from 'node:assert/strict';
-import { freshGrowth, stepGrowth, addGerm, serializeGrowth, parseGrowth, indexGrowth, ringOf, depthOf, veinOf, inGrowth, hyphaSegments, germAt, nearestFront, hubsWithin, hubNeighbours, hubKey, germHubs, germRing, fieldStamp, TIPS, STEP, STARVE_DAYS, MAT, VEIN_W, MILD_W, MAT_DEPTH, MILD_DEPTH, PULL_SOFTEN, FOOD_DY, FOOD_PER_TIP, type Growth, type GrowthInputs, type HubRef } from '../src/contagionModel';
+import { removeGerms, GERM_REACH, freshGrowth, stepGrowth, addGerm, serializeGrowth, parseGrowth, indexGrowth, ringOf, depthOf, veinOf, inGrowth, hyphaSegments, germAt, nearestFront, hubsWithin, hubNeighbours, hubKey, germHubs, germRing, fieldStamp, TIPS, STEP, STARVE_DAYS, MAT, VEIN_W, MILD_W, MAT_DEPTH, MILD_DEPTH, PULL_SOFTEN, FOOD_DY, FOOD_PER_TIP, type Growth, type GrowthInputs, type HubRef } from '../src/contagionModel';
 import { TAINT, ringAt, depthAt, veinAt, inTaint } from '../src/taintModel';
 import { hubAt } from '../src/chunkModel';
 import { lairPlace, LAIR_DISTANCE } from '../src/overworldModel';
@@ -153,4 +153,15 @@ test('the field reads are cheap: a 12-day growth indexed, 200k reads under a sec
   const g = grow(12), t0 = performance.now(), idx = indexGrowth(g, SEED), t1 = performance.now(); let n = 0, d = 0;
   for (let i = 0; i < 100000; i++) { const x = (i % 500) * 4 - 400, z = Math.floor(i / 500) * 5 - 1000; if (ringOf(idx, x, z)) n++; d += depthOf(idx, x, z); }
   const ms = performance.now() - t0; assert.ok(ms < 1000, `${ms.toFixed(0)} ms`); assert.ok(n > 1000 && d > 0); console.log(`  index ${(t1 - t0).toFixed(1)} ms, 200k reads ${(ms - (t1 - t0)).toFixed(0)} ms`);
+});
+
+test('C2: removeGerms takes a lesser germ away and rebuilds the closure (the hubs only it claimed let go, the hyphae from them with them); the breach is never removed; GERM_REACH as set', () => {
+  const g0 = freshGrowth(SEED), germ = { id: 'germ:village', kind: 'village' as const, x: 0, z: 0, reach: GERM_REACH.village }, g1 = addGerm(g0, germ, SEED);
+  assert.ok(g1.claimed.length > g0.claimed.length, 'the village germ claims the hubs within its reach'); assert.equal(GERM_REACH.village, 110); assert.equal(GERM_REACH.warren, 40);
+  const back = removeGerms(g1, x => x.kind === 'village', SEED); assert.deepEqual(back.germs, g0.germs); assert.deepEqual(back.claimed, g0.claimed, 'the closure is the breach\'s again'); assert.equal(removeGerms(g0, () => true, SEED), g0, 'nothing to remove: the same growth');
+  assert.equal(removeGerms(g1, x => x.kind === 'breach', SEED), g1, 'the breach is never removed');
+  // A hypha grown from a hub the germ claimed dies with the germ.
+  let g = g1; for (let i = 0; i < 2; i++) g = stepGrowth(g, SEED, fed({ nourish: [{ x: 0, z: 400, w: 8 }] }));
+  const fromGerm = g.hyphae.filter(h => !g0.claimed.includes(hubKey(h.from[0], h.from[1]))); assert.ok(fromGerm.length > 0, 'hyphae grew out of the germ\'s hubs');
+  const gone = removeGerms(g, x => x.id === 'germ:village', SEED); assert.ok(gone.hyphae.every(h => g0.claimed.includes(hubKey(h.from[0], h.from[1])) || gone.claimed.includes(hubKey(h.from[0], h.from[1]))), 'no hypha left without a claimed source'); assert.ok(gone.hyphae.length < g.hyphae.length);
 });

@@ -296,7 +296,7 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   const sacMat = new THREE.MeshStandardMaterial({ color: '#c0507e', emissive: '#a01a6a', emissiveIntensity: 0.9, roughness: 0.25, transparent: true, opacity: 0.72, depthWrite: false }), stalkMat = new THREE.MeshStandardMaterial({ color: '#0c060e', roughness: 0.35 });
   const sacs: { group: THREE.Group; cyst: THREE.Group; seed: number }[] = [];
   function makeSac(i: number) {
-    const group = new THREE.Group(), r = mulberry32(4401 + i * 17), a = r() * Math.PI * 2;
+    const group = new THREE.Group(), r = mulberry32(4401 + i * 17), a = r() * Math.PI * 2; group.name = 'sac';
     const foot = new THREE.Vector3(Math.cos(a) * 1.6, 0, Math.sin(a) * 1.6), top = new THREE.Vector3(Math.cos(a) * 0.6, 4.2 + r() * 0.6, Math.sin(a) * 0.6), hang = new THREE.Vector3(0, 3.0, 0);
     group.add(new THREE.Mesh(taperedTube(new THREE.CatmullRomCurve3([foot, foot.clone().lerp(top, 0.5).add(new THREE.Vector3(0, 0.3, 0)), top, hang.clone().add(new THREE.Vector3(0, 0.6, 0)), hang]), 18, 6, t => 0.2 * (1 - t * 0.7), 0.04), stalkMat));
     const cyst = new THREE.Group(); cyst.position.copy(hang);

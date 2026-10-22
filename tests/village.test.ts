@@ -673,3 +673,87 @@ test('forest: the understory grows thick in a stand, thin on the plains, none on
   assert.equal(underTile(Math.floor(-160 / UNDER_TILE), 0, 1, { ...land, onLand: () => false }).length, 0, 'none in the water');
 });
 
+
+// C2 (CONTAGION.md, capture and germination): the front holding a village, its fouling, the turn, the turned village's births and beds, its snatchers by the ratio, the raid source by the nearest germ, the poisoned warren, the save.
+import { setHeld, foul, setGerms, germSource, sourcePoint, broodSpotOf, groveSpot, ownGerm, roomPerHouse, darkYoungOf, setPoisonedWarrens, isPoisoned, setTurned, askHut, crowded, houseWithRoom, TURN_DAYS, TURNED_BIRTH_DAYS, TURNED_ROOM, DY_RATIO, RAID_REACH, GROVE_R, ROOM_PER_HOUSE, BIRTH_DAYS, INFANT_DAYS, DEATH_MEALS, HUNT_TAKE, dayOf, setOwnWarrens, huntingGround, assignDuty, hunters, purifiable, WOLF_BITE_MEALS } from '../src/villageModel';
+test('C2: held, a village eats nothing but her leavings and nobody starves; three dawns of it and the village is hers, never sooner; unheld it never turns; a clean meal starts the count over; the heap cannot be banished while held', () => {
+  setLair({ x: 300, z: 0, radius: 75 });
+  try {
+    const v = freshV(1); assert.equal(v.held, false); assert.equal(v.turned, false); assert.equal(v.darkDays, 0);
+    setHeld(v, true); assert.ok(v.held); assert.ok(YIELD_SITES.every(k => isSpoiled(v, k)), 'every yielding place spoiled at once'); assert.ok(FOODS.every(f => v.stores[f] === 0), 'the food stores fouled'); assert.equal(v.stores.dark, STORES.dark.cap, 'her leavings heaped'); assert.equal(mealFood(v), 'dark'); assert.ok(v.events.some(e => e.banner && e.text.startsWith('Her growth holds the village')));
+    assert.equal(purifiable(v, 'dark'), false, 'the heap cannot be banished while held'); assert.equal(purifiable(v, 'thicket'), true, 'a spoiled place can still be lifted for the day');
+    for (let day = 1; day <= TURN_DAYS; day++) { step(v, DT - (v.tick % DT) + 1); assert.ok(v.hobbits.every(s => s.missed === 0), `nobody misses a meal on day ${day}`); assert.ok(YIELD_SITES.every(k => isSpoiled(v, k)), 'spoiled again at dawn'); assert.ok(v.stores.dark >= 1, 'the heap is never empty'); assert.equal(v.darkDays, day, `${day} days on her leavings`); assert.equal(v.turned, day >= TURN_DAYS, `turned only on day ${TURN_DAYS} (day ${day})`); }
+    assert.equal(villageState(v).kind, 'turned'); assert.equal(stateText(villageState(v)), 'The village is hers'); assert.equal(v.told, 'turned'); assert.ok(v.events.some(e => e.banner && e.text === 'The village is hers')); assert.ok(v.hobbits.every(s => s.born > 0 || s.meals > 0), 'they ate'); assert.ok(rumors(v).some(r => r.text === 'we eat her leavings, and want for nothing'));
+    assert.equal(v.darkMealsToday, 0, 'the day\'s meals are counted over at dawn'); step(v, 400); assert.ok(v.darkMealsToday > 0 && v.cleanMealsToday === 0, 'dark meals by kind');
+    // Unheld, however long: never.
+    const u = freshV(1); step(u, DT * 6); assert.equal(u.turned, false); assert.equal(u.darkDays, 0); assert.equal(u.held, false);
+    // A clean meal (the hunters', or what she brings) starts the count over.
+    const w = freshV(1); setHeld(w, true); step(w, DT * 2 + 1); assert.equal(w.darkDays, 2); w.stores.berries = 3; step(w, DT); assert.equal(w.darkDays, 0, 'a day with a clean meal does not count'); assert.equal(w.turned, false); step(w, DT * TURN_DAYS); assert.equal(w.turned, true, 'and the count runs again');
+    // Let go, the fouling lapses at the next dawn and the heap is not heaped again.
+    setHeld(w, false); w.stores.dark = 0; step(w, 10); assert.equal(w.stores.dark, 0, 'not heaped again'); step(w, DT + 1); assert.ok(YIELD_SITES.every(k => !isSpoiled(w, k)), 'clean again at the dawn after'); assert.equal(w.turned, true, 'still hers (C3 un-turns)');
+    foul(w); assert.ok(YIELD_SITES.every(k => isSpoiled(w, k)));
+  } finally { setLair(null); }
+});
+test('C2: turned, births come at half the days and the beds are never short: three to a bed, no hut set or asked, no one moves out', () => {
+  assert.equal(TURNED_BIRTH_DAYS, BIRTH_DAYS / 2); assert.equal(TURNED_ROOM, 3);
+  const feed = (v: ReturnType<typeof freshV>): void => { for (const f of FOODS) v.stores[f] = STORES[f].cap; v.stores.water = STORES.water.cap; };
+  const t = freshV(1), u = freshV(1); t.turned = true; for (const v of [t, u]) { v.wellFedDays = TURNED_BIRTH_DAYS; feed(v); for (let i = 0; i < DT; i++) { feed(v); step(v, 1); } }
+  assert.equal(t.hobbits.length, 9, 'the turned village bears at TURNED_BIRTH_DAYS'); assert.equal(u.hobbits.length, 8, 'the other waits for BIRTH_DAYS'); assert.equal(t.wellFedDays, 0); assert.ok(t.hobbits.some(s => s.stage === 'infant'));
+  assert.equal(roomPerHouse(t), ROOM_PER_HOUSE * TURNED_ROOM); assert.equal(roomPerHouse(u), ROOM_PER_HOUSE);
+  for (const s of t.hobbits) s.home = 0; assert.equal(crowded(t), false, 'nine in one house and not crowded'); const many = freshV(1); for (let i = 0; i < 5; i++) assert.ok(bear(many)); assert.equal(crowded(many), true, 'thirteen to twelve beds'); many.turned = true; assert.equal(crowded(many), false, 'turned, never');
+  assert.equal(houseWithRoom(t)!.id, 0, 'the fullest house still has room (nine of twelve)'); for (let i = 0; i < DT; i++) { feed(t); step(t, 1); } assert.equal(t.site, null, 'no stakes set'); assert.ok(t.hobbits.every(s => s.home === 0), 'nobody moves out'); t.prayer = 60; assert.equal(askHut(t), false, 'no hut asked of the stone');
+  assert.ok(!villageState(t).needs.includes('beds')); assert.equal(villageState(t).kind, 'turned');
+});
+test('C2: a turned village\'s own germ sends its snatchers from its green: no bleating, the door opened at once, no mourning, the infant hung in a sac at the green\'s edge; only while its Dark Young are fewer than a third of its folk, else the infants grow up', () => {
+  setLair(null); setGerms([{ id: 'germ:village', kind: 'village', x: 0, z: 0 }]);
+  try {
+    const v = freshV(4); v.turned = true; assert.ok(ownGerm(v)); assert.deepEqual(germSource(v)!.id, 'germ:village'); assert.deepEqual(sourcePoint(v), { x: 0, z: 0 });
+    assert.ok(bear(v)); const baby = v.hobbits.find(s => s.stage === 'infant')!; assert.equal(Math.floor(v.hobbits.length / DY_RATIO), 3); assert.equal(darkYoungOf(v), 0);
+    step(v, SNATCH_TICK + 2); assert.equal(v.snatchers.length, 1, 'a snatcher: the ratio allows'); const n = v.snatchers[0]; assert.ok(Math.hypot(n.x, n.z) < 4, 'out of its own green');
+    const mourn0 = v.mourningUntil; let took = 0; for (let i = 0; i < 200 && !n.infant && v.hobbits.includes(baby); i++) { stepRaiders(v, 0.25, null); took += 0.25; }
+    assert.ok(n.infant && n.infant.id === baby.id, 'taken'); assert.ok(took < 3, `the door opened at once (${took} s)`); assert.ok(!v.events.some(e => e.text.startsWith('The goats are bleating')), 'no bleating'); assert.equal(v.mourningUntil, mourn0, 'no mourning'); assert.ok(v.events.some(e => e.text.endsWith('is given to her in the night')));
+    for (let i = 0; i < 400 && v.snatchers.length; i++) stepRaiders(v, 0.25, null); assert.equal(v.brood.length, 1, 'hung in a sac'); const sac = broodSpotOf(v, 0)!; assert.deepEqual(sac, groveSpot(0)); assert.ok(Math.abs(Math.hypot(sac.x, sac.z) - GROVE_R) < 1e-9, 'at the green\'s edge'); assert.ok(HOUSES.every(h => Math.hypot(h.x - sac.x, h.z - sac.z) > HOUSE_RADIUS + 1.6), 'clear of the houses');
+    assert.equal(darkYoungOf(v), 1, 'the gestating count against the ratio');
+    // At the ratio: no snatcher, and the infant grows up.
+    v.bred.push({ id: 'rue', home: 0, born: 0 }, { id: 'dill', home: 0, born: 0 }); assert.ok(darkYoungOf(v) >= Math.floor(v.hobbits.length / DY_RATIO));
+    assert.ok(bear(v)); const kid = v.hobbits.find(s => s.stage === 'infant')!; step(v, DT - (v.tick % DT) + SNATCH_TICK + 2); assert.equal(v.snatchers.length, 0, 'no snatcher: the ratio holds'); step(v, DT * INFANT_DAYS); assert.ok(v.hobbits.includes(kid) && kid.stage !== 'infant', 'the infant grows up');
+    // The second village's sacs at the same grove take the next slots.
+    const site = villageSites(1)[0], o = freshV(1, 1, site); setGerms([{ id: 'germ:village', kind: 'village', x: site.x + 100, z: site.z }]); const s2 = broodSpotOf(o, 0)!; assert.deepEqual(s2, { x: 100 + groveSpot(1).x, z: groveSpot(1).z });
+  } finally { setLair(null); setGerms([]); }
+});
+test('C2: the raid and the snatchers come from the nearest germ within RAID_REACH: the breach for the first village at any distance, a turned village\'s germ for a neighbour, none for a village with no germ in reach; a turned village is not raided by its own', () => {
+  assert.equal(RAID_REACH, 600);
+  const site = villageSites(1)[0], far = Math.hypot(site.x, site.z); assert.ok(far > RAID_REACH, `the second village stands ${far.toFixed(0)} m from the first`);
+  setLair({ x: 300, z: 0, radius: 75 });
+  try {
+    const home = freshV(1); assert.equal(germSource(home)!.kind, 'breach'); assert.deepEqual(sourcePoint(home), { x: 300, z: 0 }); assert.deepEqual(broodSpotOf(home, 0), broodSpot(0), 'the first village\'s sacs on the breach\'s rim, as before');
+    const o = freshV(1, 1, site); assert.equal(germSource(o), null, 'the breach is out of its reach'); o.hobbits[0].stage = 'infant'; o.bred.push({ id: 'fen~1', home: 0, born: 0 }); step(o, DT + RAID_TICK + 5); assert.equal(o.raidDay, -1, 'no raid'); assert.equal(o.snatchDay, -1, 'no snatchers');
+    setGerms([{ id: 'breach', kind: 'breach', x: 300, z: 0 }, { id: 'germ:village', kind: 'village', x: site.x + 200, z: site.z + 10 }]);
+    assert.equal(germSource(o)!.id, 'germ:village', 'a village germ within reach'); assert.deepEqual(sourcePoint(o), { x: 200, z: 10 }); assert.equal(germSource(home)!.id, 'breach', 'the first village keeps the breach'); assert.ok(!ownGerm(o));
+    step(o, DT - (o.tick % DT) + RAID_TICK + 1); assert.equal(o.raidDay, dayOf(o.tick), 'raided now'); assert.equal(o.raiders.filter(r => r.kind === 'dy').length, 1, 'by its own bred Dark Young'); step(o, SNATCH_TICK - RAID_TICK + 1); assert.equal(o.snatchers.length, 1, 'a snatcher'); assert.ok(Math.hypot(o.snatchers[0].x - 200, o.snatchers[0].z - 10) < 4, 'from the turned village\'s green'); assert.deepEqual(broodSpotOf(o, 0), { x: 200 + groveSpot(1).x, z: 10 + groveSpot(1).z }, 'its sacs hang at that grove');
+    const r = o.raiders.find(x => x.kind === 'dy')!; r.state = 'retreating'; r.x = 0; r.z = 0; stepRaiders(o, 1, null); assert.ok(Math.hypot(r.x - 200, r.z - 10) < Math.hypot(200, 10) - 5, 'beaten, it runs for the germ');
+    const t = freshV(1); setGerms([{ id: 'germ:village', kind: 'village', x: 0, z: 0 }, { id: 'breach', kind: 'breach', x: 300, z: 0 }]); t.turned = true; t.bred.push({ id: 'rue', home: 0, born: 0 }); step(t, RAID_TICK + 1); assert.equal(t.raidDay, -1, 'a turned village is not raided by its own'); assert.equal(t.raiders.length, 0);
+    const n = freshV(1); setGerms([{ id: 'germ:village-2', kind: 'village', x: 100, z: 0 }, { id: 'breach', kind: 'breach', x: 300, z: 0 }]); assert.equal(germSource(n)!.id, 'germ:village-2', 'the nearer germ wins, even for the first village');
+  } finally { setLair(null); setGerms([]); }
+});
+test('C2: a poisoned warren gives no meat and bites the first hunter at it each day; healed, the hunt is as it was', () => {
+  setOwnWarrens([{ id: 'warren:own:village', x: 60, z: 50 }]); setPoisonedWarrens(['warren:own:village']);
+  try {
+    assert.ok(isPoisoned('warren:own:village')); const v = freshV(1); step(v, 150); const h = v.hobbits.find(s => s.id === 'pip')!, k = v.hobbits.find(s => s.id === 'marlo')!; assert.ok(assignDuty(v, h.id, 'hunt')); assert.ok(assignDuty(v, k.id, 'hunt')); assert.equal(hunters(v).length, 2); const g = huntingGround(v)!;
+    const bites = new Set<string>(), watch = (): void => { for (const i of v.incidents) if (i.text.endsWith('bitten by the rabbits')) bites.add(`${i.who}@${i.tick}`); };
+    for (let i = 0; i < 1200 && !v.events.some(e => e.text.endsWith('the rabbits bite')); i++) { advance(v, 1); watch(); }
+    assert.ok(v.events.some(e => e.banner && e.text.endsWith('comes home from the hunt bitten: the rabbits bite')), 'bitten'); const bit = v.incidents.find(i => i.text.endsWith('bitten by the rabbits'))!; assert.ok(bit && bit.who, 'an incident, as a wolf\'s bite'); assert.ok(Math.hypot(bit.x - g.x, bit.z - g.z) < 4, 'at the burrows');
+    const bitten = v.hobbits.find(s => s.id === bit.who)!; assert.equal(bitten.missed, WOLF_BITE_MEALS, 'meals off their strength'); assert.ok(bitten.missed < DEATH_MEALS); assert.equal(v.stores.meat, 0, 'no meat'); assert.equal(v.ownRabbits, WARREN_CAP, 'none taken');
+    for (let i = 0; i < 1200; i++) { advance(v, 1); watch(); } assert.equal(bites.size, 1, 'one hunter a day'); for (let i = 0; i < DT; i++) { advance(v, 1); watch(); } assert.equal(bites.size, 2, 'and one the next day'); assert.equal(v.stores.meat, 0);
+    setPoisonedWarrens([]); assert.ok(!isPoisoned('warren:own:village')); for (let i = 0; i < 2400 && v.stores.meat === 0 && !v.hobbits.some(s => s.carry?.kind === 'meat'); i++) advance(v, 1); assert.ok(v.stores.meat > 0 || v.hobbits.some(s => s.carry?.kind === 'meat'), 'healed, the rabbits are taken again'); assert.ok(v.ownRabbits < WARREN_CAP);
+  } finally { setOwnWarrens([]); setPoisonedWarrens([]); }
+});
+test('C2: the keeper of an unturned village near a turned one says it is hers now; the save carries held, the dark days, turned, the clean meals and the germ, and an old save loads unturned', () => {
+  const site = villageSites(1)[0]; setVillageSites(villageSites(1).map(s => ({ id: s.id, x: s.x, z: s.z, short: s.short }))); setTurned(id => id === 'village');
+  try {
+    const o = freshV(1, 1, site), near = Math.hypot(site.x, site.z) < 700; const r = rumors(o).find(x => x.text === 'the first village is hers now'); assert.equal(!!r, near, `the keeper speaks of it within 700 m (${Math.hypot(site.x, site.z).toFixed(0)} m)`); if (r) assert.ok(r.who === 'keeper' && r.about === 'village' && r.bearing !== undefined);
+    const home = freshV(1); assert.ok(!rumors(home).some(x => x.text.endsWith('is hers now')), 'not of itself'); setTurned(id => id === site.id); const t = rumors(home).find(x => x.text === `${site.short} is hers now`); assert.equal(!!t, near); home.turned = true; assert.ok(!rumors(home).some(x => x.text.endsWith('is hers now')), 'a turned village does not say it');
+    const v = freshV(1); setHeld(v, true); step(v, DT * TURN_DAYS + 1); v.germ = 'germ:village'; v.cleanMealsToday = 2; const back = par(ser(v)); assert.equal(back.held, true); assert.equal(back.darkDays, v.darkDays); assert.equal(back.turned, true); assert.equal(back.cleanMealsToday, 2); assert.equal(back.germ, 'germ:village'); assert.equal(back.told, 'turned'); const whole = (x: typeof v): string => JSON.stringify({ ...JSON.parse(ser(x)), events: null }); assert.equal(whole(back), whole(v), 'saved whole (the events clipped to their length, as ever)');
+    const old = par(JSON.stringify({ ...JSON.parse(ser(freshV(1))), held: undefined, darkDays: undefined, turned: undefined, cleanMealsToday: undefined, germ: undefined })); assert.equal(old.held, false); assert.equal(old.turned, false); assert.equal(old.darkDays, 0); assert.equal(old.germ, null); assert.equal(par('{"hobbits":[{"id":"odo"}],"turned":"yes","germ":7,"held":1}').turned, false);
+  } finally { setVillageSites([]); setTurned(() => false); }
+});

@@ -319,3 +319,107 @@ API; `tests/contagion.test.ts`, 81 tests under `node scripts/test-village.mjs`) 
   the chunks' ground colours and the root meshes, draws everything again, and requires the two digests equal (and
   the incremental draw to have drawn less). The first refresh at boot and a dawn after a long jump still draw what
   moved, no more.
+
+## C2, as built (2026-10-22)
+
+Capture and germination, under Noah's calls above: the front reaching a village fouls its stores, three days on her leavings
+turns it, a turned village is kept and keeps its rounds, its green a new germination point that can be starved out; wards and
+groves are irritants the front never reaches, so nothing of theirs is built. The model is `villageModel.ts` (its C2 comment
+block holds the rules and the constants), read by the entry (`village.ts`) at each dawn's step; `tests/village.test.ts` and
+`tests/contagion.test.ts` (89 tests under `node scripts/test-village.mjs`, 7 new).
+
+- **Held.** After each dawn's step (`holdStep`, after `dawnStep`) a village is `held` while the front's nearest claimed hub
+  (`nearestFront`) stands within `HELD_M` 60 m of its green (the green's own hub stands 46 m off at seed 1, and a mat's mild
+  band reaches 44 m, so `inGrowth` at the green itself was too brittle a test; 60 is the CI's "within 60 m" of C1).
+  `setHeld(v, true)` fouls the village at once and tells it the first time ("Her growth holds the village: the stores are
+  fouled, only her leavings are left"); the model's own dawn fouls it again while held. The fouling (`foul`): every yielding
+  place spoiled through the day with its stock gone, the food stores emptied (Noah: "fouls its stores"; else the bin's grain
+  fed them clean meals for days), the heap of her leavings at its cap and heaped again from the roots whenever it runs out
+  (the cap is 12 and eight villagers eat 24 meals a day: a heap filled only at dawn would have starved them by supper). So
+  nothing but dark is on the table and nobody starves; the heap cannot be banished while held (`purifiable('dark')`), but
+  Hulda's purify still lifts a spoiled place for the day (the C3 lever), and a clean meal from anywhere (her stack, the
+  hunters' meat from a warren the growth has not reached) keeps the count from running (below). Let go, the fouling lapses at
+  the dawn after (the model's dawn had already fouled it) and the heap is not heaped again.
+- **Turned.** `eat` counts the day's meals by kind (`darkMealsToday`, `cleanMealsToday`). At dawn, `darkDays` rises by one
+  when the village was held and every meal it ate that day was dark, else goes to 0; at `TURN_DAYS` 3, `turned` (the banner
+  "The village is hers", the state kind `turned`, its text the same), and the entry adds the germ. The count starts over on
+  any clean meal and never runs unheld: an unheld village never turns. A village held at noon counts from the next full day,
+  so the CI's four village days from the twelfth dawn turn it.
+- **The turned village** (kept, not killed; its rounds unchanged: the gatherers walk to their spoiled places and gather
+  nothing, as before a spoiled place): births at `TURNED_BIRTH_DAYS` 1.5 (D2's leavings already count a dark day as three
+  well-fed days, so a turned village on her leavings bears every dawn there is room, and the halving only shows on clean
+  meals); room `ROOM_PER_HOUSE × TURNED_ROOM` 12 a house (`roomPerHouse`), never crowded, no stakes set and none asked of the
+  stone, nobody moves out; its own snatchers come from its green ("is given to her in the night"; no bleating, the door
+  opened at once, no mourning, the parents told "<name> is hers"), and only while its Dark Young (`darkYoungOf`: bred and
+  gestating) are fewer than floor(folk / `DY_RATIO` 3), else its infants grow up; it is not raided by its own. The keeper's
+  "we eat her leavings, and want for nothing"; communed with, "We are hers now, and want for nothing".
+- **The germ.** `germ:<village id>`, kind `village`, at the green, reach `GERM_REACH.village` 110 (`contagionModel`), its hubs
+  claimed at once (`addGerm`); added once (`v.germ` remembers it): a germ starved out of existence by the model's rule
+  (`STARVE_DAYS` without an infant taken, its reach shrinking `STEP` a day) is not added again, and the village stays turned
+  (C3 un-turns); its fouling lapses once the front no longer holds it. A village begun again (the dev reset) loses its germ
+  (`removeGerms`, new: a lesser germ taken away with the closure rebuilt; the breach never).
+- **The source.** Every village's raid and snatchers come from its germ source (`germSource`, `sourcePoint`): the nearest
+  village germ within `RAID_REACH` 600 m, or the breach, which the first village keeps at any distance (as before: the
+  breach lies 950 m off); a village with no germ in reach has no raids and no snatchers (the other two, until a germ stands
+  within 600 m of them). The Dark Young stay bred of each village's own infants (a raider is its village's); beaten, they
+  run for the source. The entry tells the model the growth's germs at each `setGrowth` (`setGerms`), and sums `infantsTaken`,
+  `darkYoungBred` and `meals` over every village for the dawn step.
+- **The grove.** A village's kept infants hang at its source's grove (`broodSpotOf`): on the breach's rim as M1 placed them
+  (`broodSpotAt`, the first village unchanged), or at a turned village's grove: the green's edge in the stone's gap,
+  `GROVE_R` 6.8 m from the fire, rows of three out along the gap (`groveSpot`), slots interleaved by folk so two villages'
+  sacs at one grove never overlap; `carryInfant` takes one back there as at the breach. The sacs are `villageWorld.setSacs`
+  in each village's own scene (its `foes` group is never hidden by distance), so a neighbour's infants hang in the turned
+  village's green. By day the Dark Young bred of a village whose source is a turned village stand in that gap past the
+  grove (`keeperSpot`, "dark young · keeping"): shown, not fought (they are not raiders of the village: C3 makes them
+  something to fight); by night they are not shown.
+- **The warren.** At each dawn's step a warren the growth reaches (`inGrowth` of the growth with its warren germs taken out,
+  so a warren's own germ does not hold it) gets a germ `germ:<warren id>` of reach `GERM_REACH.warren` 40 (poisoned:
+  `setPoisonedWarrens`, `isPoisoned`), removed when the growth withdraws (healed) or starved out by the model's rule.
+  Hunting it yields no meat and the first hunter at it each day comes home bitten by its rabbits (meals off their strength as
+  a wolf's bite, never to death; an incident at the burrows and a banner); the others, while that bite is still told, are
+  sent home with nothing.
+- **Rumor and map.** The keeper of an unturned village within `FRONT_TELL_M` of a turned one: "<the ford> is hers now" /
+  "the first village is hers now", with its bearing (`setTurned`, the entry's reader). The map and the compass mark a turned
+  village in `FRONT_COLOUR`.
+- **Saves.** `held`, `darkDays`, `turned`, `cleanMealsToday`, `germ` in the village's save, parsed tolerantly (an old save
+  loads unheld and unturned); the growth's record already carries the germs.
+- **Dev.** `__village.c2`: `hold(id)` / `release(id)` (fouled at once; the next dawn sets it from the front again),
+  `turn(id)` (turned now, its germ added), `days(n)` (the villages lived n days with the growth stepping at each dawn),
+  `state(id)` (held, darkDays, turned, germ, folk, infants, brood, bred, the day's meals by kind, the source, the sacs).
+  `villages()` carries `held` and `turned`.
+- **CI** (`scripts/browser-village-vista.mjs`), after the C1 block: held at the twelfth dawn and not turned; `c2.days(4)` and
+  the first village is turned with a germ at its green and the others not; that night its own snatcher takes an infant to
+  the grove (the brood rises within a minute of real time) and the sac is drawn in the scene (`sac` groups, visible), on the
+  green; a screenshot `turned-green.png`; no console errors.
+- **Decisions beyond the rules, flagged:**
+  - the food stores are fouled too, not only the land (else days of clean meals from the bin);
+  - the heap refills whenever it runs out while held, and cannot be banished while held;
+  - a clean meal of any kind (the hunters' meat from an unpoisoned warren, what she brings) starts the three days over: the
+    steward's hunters are a real defence against turning, and a reason the warrens are poisoned;
+  - the ratio counts the gestating with the bred;
+  - cross-village raiding (a turned village's Dark Young going out to raid a neighbour) is not built: the neighbour's raids
+    are its own bred Dark Young from the turned village's germ, as the first village's are from the breach; the turned
+    village's own bred are keepers, shown and not fought;
+  - the newcomer pool (16 a village) bounds a turned village at 24: a birthrate that rises with the folk waits on a larger
+    pool;
+  - the first bite only is told each day at a poisoned warren.
+- **Seams left for C3:** `turned` can be cleared and `held` lapses with the front; `foul` and `setHeld` are plain functions;
+  the keepers are a display and have no model of their own; `removeGerms` takes any lesser germ away.
+- **Open, for Noah's playtest:** `DY_RATIO` 3 (one Dark Young to three villagers), `GERM_REACH.village` 110 (its nursery ring
+  then covers the green to 36 m: the copse's trees become her growths, the houses stand, the wood beyond greys to 88 m) and
+  `.warren` 40, `RAID_REACH` 600 (the other villages stand 650–1400 m from the first, so a turned first village reaches a
+  neighbour only when it stands within 600 m: at seed 1 the pines stand 741 m and the ford 933 m from the first village,
+  606 m from each other, so as set a turned village's snatchers reach no neighbour and the front itself must creep to it:
+  800 would put the pines in the first village's reach), `TURN_DAYS` 3, `HELD_M` 60, `GROVE_R` 6.8 and the grove in the
+  stone's gap, `TURNED_BIRTH_DAYS`; that a turned village's own warren (60 m off) lies in its germ's reach and is poisoned
+  with it (its hunters bitten: as the rule says, and a fair price); the Colour at the captured green: the germ's depth at
+  the green is 0.95 (`germDepth`, 1 at the germ), so she stands there under the Colour as at the breach's nursery, the grade
+  torn red and blue on the out-breath, the ground pale yellow under it and the fog closing to about 60 m (the T8 check in
+  CI now allows it); the captured green on the phone (390×844, SwiftShader, `/tmp/.../scratchpad/shots-c2/`): from above
+  (`over-after.png`) the whole green and its paths under the magenta haze, the ground black-violet, the six houses and the
+  stores standing as they were, the hobbits on their rounds, "Dill, in a sac" at the stone's gap; at eye level
+  (`green-after.png`, `sacs.png`) a black vessel arching over the pink sac at the green's edge with the villagers talking by
+  the fire beyond, the Colour's wash over everything; a day on (`keepers.png`) "dark young · keeping" standing in the
+  stone's gap as Nell walks past it to the fire; the map (`map-after.png`) the germ's 110 m ring round the village and the
+  warren's small one, the hyphae into it from the south-east. Whether that is too much Colour for a village she must walk
+  into to take infants back (the breach's nursery was a delve; this is a home) is the first thing to judge.

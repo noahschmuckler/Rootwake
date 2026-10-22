@@ -117,6 +117,10 @@ function closure(germs: Germ[], hyphae: Hypha[], seed: number): { claimed: strin
 export function freshGrowth(seed: number): Growth { const l = lairPlace(seed), breach: Germ = { id: 'breach', x: l.x, z: l.z, kind: 'breach', reach: TAINT.edge }; return { day: 0, germs: [breach], claimed: [...germHubs([breach], seed)].sort(), hyphae: [], food: 0, starved: 0, fed: false }; }
 /** C2: a new germination point; its hubs are claimed at once. */
 export function addGerm(g: Growth, germ: Germ, seed: number): Growth { const germs = [...g.germs.filter(x => x.id !== germ.id), { ...germ }], c = closure(germs, g.hyphae, seed); return { ...g, germs, claimed: c.claimed, hyphae: c.hyphae }; }
+/** C2: a lesser germ taken away (a warren healed, a village begun again); the breach never. The closure is rebuilt: the hubs only it claimed are let go, with the hyphae that grew from them. */
+export function removeGerms(g: Growth, gone: (x: Germ) => boolean, seed: number): Growth { const germs = g.germs.filter(x => x.kind === 'breach' || !gone(x)); if (germs.length === g.germs.length) return g; const c = closure(germs, g.hyphae, seed); return { ...g, germs, claimed: c.claimed, hyphae: c.hyphae }; }
+/** C2 (CONTAGION.md): a lesser germ's reach by its kind: a turned village's nursery ring (a third of it) then covers its green and its houses; a poisoned warren's its burrows. Tuning (open for Noah). */
+export const GERM_REACH = { village: 110, warren: 40 } as const;
 
 /** The daily step, at dawn: growth toward the nourishment or, starved, withering. */
 export function stepGrowth(g: Growth, seed: number, inputs: GrowthInputs): Growth {

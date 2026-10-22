@@ -70,6 +70,15 @@ try{
   report.incremental=await digest();report.fullMs=Math.round(await page.evaluate(()=>window.__village.growth.refresh(true)));report.full=await digest();
   const drawn=d=>{const {parts,...rest}=d;return rest;};assert.deepEqual(drawn(report.incremental),drawn(report.full),`the incremental refresh leaves the land as a full one draws it (${JSON.stringify({incremental:report.incremental,full:report.full})})`);
   assert.ok(report.incremental.parts.chunksRebuilt<report.incremental.chunks&&report.incremental.parts.groundTiles<report.full.parts.groundTiles,`the incremental refresh drew less than the full one (${JSON.stringify({incremental:report.incremental.parts,full:report.full.parts})})`);
+  // C2 (CONTAGION.md, capture and germination): the front at the green (the twelve dawns above) holds the first village: four village days on nothing but her leavings and it is hers (a lesser germ at its green, the second village untouched); that night its own snatcher takes an infant from a house to the sac grove at the green's edge, and the sac is drawn in its scene.
+  report.c2=await page.evaluate(()=>{const v=window.__village,c=v.c2,before=c.state('village'),ms=Math.round(c.days(4)),after=c.state('village'),germ=v.growth.state.germs.find(g=>g.id==='germ:village')??null;return {before,after,ms,germ,villages:v.villages().map(x=>({id:x.id,held:x.held,turned:x.turned}))};});
+  assert.ok(report.c2.before.held&&!report.c2.before.turned,`held at the twelfth dawn, not yet turned (${JSON.stringify(report.c2.before)})`);assert.ok(report.c2.after.turned&&report.c2.after.state==='turned'&&report.c2.after.darkDays>=3,`turned after four days on her leavings (${JSON.stringify(report.c2.after)})`);
+  assert.ok(report.c2.germ&&Math.hypot(report.c2.germ.x,report.c2.germ.z)<1&&report.c2.germ.kind==='village',`a germ stands at its green (${JSON.stringify(report.c2.germ)})`);assert.ok(report.c2.villages.slice(1).every(x=>!x.turned),'the other villages are not hers');
+  await page.evaluate(()=>{const v=window.__village;v.jumpTo('night');v.setTick(v.tick+95);v.standAt(0,-12,Math.PI);});
+  await page.waitForFunction(()=>window.__village.c2.state('village').brood>=1,null,{timeout:60000});await page.waitForTimeout(1500);
+  report.c2.sacs=await page.evaluate(()=>{const v=window.__village;let sacs=0;v.scene.traverse(o=>{if(o.name==='sac'){let p=o,seen=true;while(p){if(!p.visible)seen=false;p=p.parent;}if(seen)sacs++;}});return {sacs,brood:v.c2.state('village').brood,at:v.c2.state('village').sacs};});
+  assert.ok(report.c2.sacs.sacs>=1&&report.c2.sacs.sacs>=report.c2.sacs.brood,`the sacs are drawn at the green's edge (${JSON.stringify(report.c2.sacs)})`);assert.ok(report.c2.sacs.at.every(p=>Math.hypot(p.x,p.z)<16),'on the green');
+  await page.screenshot({path:`${out}/turned-green.png`,timeout:180000});
   // D1 (DESCENT.md): down to the node, out onto the catwalk of its depth, a keeper heard, back into the drop.
   // PLATEAU.md: she wakes on the summit; the first dive waits on her cultivation, however much clarity she has.
   assert.equal(await page.evaluate(()=>{const v=window.__village;v.jumpTo('noon');v.karst.standOn('summit',-1.3,0.5,0);v.deep.clarity=v.deep.costs.dive+v.deep.costs.back+5;return v.deep.dive();}),false,'no first dive before she has cultivated');
@@ -110,7 +119,7 @@ try{
   report.under=await page.evaluate(()=>window.__look.stratum());assert.ok(report.under.amount>0.9&&report.under.rock&&report.under.fogReach<40&&report.under.hidden.includes('sky'),`under the grass: the rock, a short fog, no sky (${JSON.stringify(report.under)})`);
   await page.waitForTimeout(1500);await page.screenshot({path:`${out}/under-grass.png`,timeout:180000});
   await page.evaluate(()=>window.__village.emerge());await page.waitForFunction(()=>window.__village.mode==='ground'&&window.__village.under===0,null,{timeout:90000});
-  report.surfaced=await page.evaluate(()=>window.__look.stratum());/* The green lies in her growth's gloom by now (twelve dawns stepped above), whose fog reaches about 140 m: well past the under fog's 24. */assert.ok(report.surfaced.amount===0&&!report.surfaced.rock&&report.surfaced.fogReach>100&&report.surfaced.hidden.length===0,`surfaced: nothing of it left (${JSON.stringify(report.surfaced)})`);
+  report.surfaced=await page.evaluate(()=>window.__look.stratum());/* The green is her germ's nursery by now (the village turned above), whose gloom's fog closes to about 60 m (C1's hyphae alone left it about 140): still past the under fog's 24. */assert.ok(report.surfaced.amount===0&&!report.surfaced.rock&&report.surfaced.fogReach>40&&report.surfaced.hidden.length===0,`surfaced: nothing of it left (${JSON.stringify(report.surfaced)})`);
   report.hud=await page.evaluate(()=>document.getElementById('look-hud')?.textContent??'');
   assert.match(report.hud,/tris/);
   assert.deepEqual(errors,[],'no console or shader errors');
