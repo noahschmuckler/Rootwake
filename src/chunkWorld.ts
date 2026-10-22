@@ -13,7 +13,9 @@ import { treeParts } from './flora';
 import { crownHeight, trunkRadius, type Tree } from './villageModel';
 import type { Collider } from './player';
 
-interface Chunk { key: string; group: THREE.Group; trees: Tree[]; colliders: Collider[]; geometries: THREE.BufferGeometry[] }
+/** A chunk's ground tile: its geometry, and what it was coloured from (each vertex's x, z and biome colour), so the blight can recolour it in place. */
+interface Ground { geo: THREE.BufferGeometry; xz: Float32Array; base: Float32Array }
+interface Chunk { key: string; group: THREE.Group; trees: Tree[]; colliders: Collider[]; geometries: THREE.BufferGeometry[]; ground: Ground; /** C1.1: the blight's stamp over the chunk when it was built (null: built before any was given), compared at setBlight. */ stamp: string | null }
 /** G3b: a ruin: RUIN_STONES old stones leaning round a dry basin RUIN_STONE_R out; sanctified, the basin holds crystal water, lit, and the stones carry a pale glow. Tuning. */
 export const RUIN_STONES = 7, RUIN_STONE_R = 2.8;
 /** S2: the moot's stone seats and their ring. Tuning. */
@@ -43,7 +45,7 @@ export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain 
   const bark = new THREE.MeshStandardMaterial({ color: '#6d5f48', roughness: 1 }), leaf = spriteMaterial('leaf', '#5f8657'), darkBark = new THREE.MeshStandardMaterial({ color: '#2a2230', roughness: 1 }), darkLeaf = spriteMaterial('leaf', '#2e2a3a', { emissive: '#1a0a20', emissiveIntensity: 0.25 }), collar = new THREE.MeshStandardMaterial({ color: '#8a6f4e', roughness: 0.95 });
   // D4: trees in the blight are black and withered, and the ground under them stained; rebuilt when the blight moves.
   const blightBark = new THREE.MeshStandardMaterial({ color: '#151018', roughness: 0.8 }), blightLeaf = spriteMaterial('leaf', '#2a1424', { emissive: '#3a0a30', emissiveIntensity: 0.35 });
-  let blighted: (x: number, z: number) => boolean = () => false;
+  let blighted: (x: number, z: number) => boolean = () => false, blightStamp: ((cx: number, cz: number) => string) | null = null;
   const denRock = new THREE.MeshStandardMaterial({ color: '#3b3630', roughness: 1, flatShading: true }), bone = new THREE.MeshStandardMaterial({ color: '#d9d2bf', roughness: 0.9 });
   // G4 (Noah): a fairy ring at each root convergence, a marker on the land for where the deep roots come out: RING_N mushrooms round a circle of RING_R, red caps spotted white, and inside it a small pool of crystal water ringed by crystals, lit. Tuning.
   const RING_R = 2.3, RING_N = 13, capMat = new THREE.MeshStandardMaterial({ color: '#b83a2a', roughness: 0.6, flatShading: true }), stemMat = new THREE.MeshStandardMaterial({ color: '#efe6cc', roughness: 0.9 }), spotMat = new THREE.MeshStandardMaterial({ color: '#f7f2dc', roughness: 0.8 });
@@ -59,11 +61,18 @@ export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain 
   /** Another renderer (the vista look) may draw the ground and the trees itself: the chunks keep their trees, colliders and the rest, unseen. */
   const look = { ground: true, trees: true };
   const applyLook = (o: THREE.Object3D): void => { o.traverse(m => { if (m.name === 'world-ground' || m.name === 'far-ground') m.visible = look.ground; else if (m.name === 'tree-wood' || m.name === 'tree-leaves' || m.name === 'tree-collar') m.visible = look.trees; }); };
-  function build(cx: number, cz: number): Chunk {
-    const group = new THREE.Group(), geometries: THREE.BufferGeometry[] = [], n = CHUNK / TERRAIN_STEP;
-    const geo = new THREE.PlaneGeometry(CHUNK, CHUNK, n, n); geo.rotateX(-Math.PI / 2); geo.translate((cx + 0.5) * CHUNK, 0, (cz + 0.5) * CHUNK);
-    { const pos = geo.attributes.position as THREE.BufferAttribute, col: number[] = []; for (let i = 0; i < pos.count; i++) { const x = pos.getX(i), z = pos.getZ(i); pos.setY(i, terrain.vertex(x, z)); const c = colourOf(x, z); col.push(...(blighted(x, z) ? [c[0] * 0.35 + 0.05, c[1] * 0.2, c[2] * 0.35 + 0.06] as [number, number, number] : c)); } geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); const normals = geo.attributes.normal as THREE.BufferAttribute; for (let i = 0; i < pos.count; i++) normals.setXYZ(i, ...terrain.normal(pos.getX(i), pos.getZ(i))); }
-    const surface = new THREE.Mesh(geo, ground); surface.name = "world-ground"; group.add(surface); geometries.push(geo);
+  /** The ground tile: the land's height and normal at each vertex, its biome colour kept beside the geometry (C1.1: the terrain under a chunk never moves, so a rebuild under a moved blight keeps the tile and recolours it). */
+  function groundOf(cx: number, cz: number): Ground {
+    const n = CHUNK / TERRAIN_STEP, geo = new THREE.PlaneGeometry(CHUNK, CHUNK, n, n); geo.rotateX(-Math.PI / 2); geo.translate((cx + 0.5) * CHUNK, 0, (cz + 0.5) * CHUNK);
+    const pos = geo.attributes.position as THREE.BufferAttribute, xz = new Float32Array(pos.count * 2), base = new Float32Array(pos.count * 3), normals = geo.attributes.normal as THREE.BufferAttribute;
+    for (let i = 0; i < pos.count; i++) { const x = pos.getX(i), z = pos.getZ(i); pos.setY(i, terrain.vertex(x, z)); const c = colourOf(x, z); xz[i * 2] = x; xz[i * 2 + 1] = z; base[i * 3] = c[0]; base[i * 3 + 1] = c[1]; base[i * 3 + 2] = c[2]; normals.setXYZ(i, ...terrain.normal(x, z)); }
+    geo.setAttribute('color', new THREE.Float32BufferAttribute(new Float32Array(pos.count * 3), 3)); return { geo, xz, base };
+  }
+  /** The tile's colours under the blight: the biome's, stained where the blight lies. */
+  function recolour(g: Ground): void { const col = g.geo.attributes.color as THREE.BufferAttribute; for (let i = 0; i < col.count; i++) { const x = g.xz[i * 2], z = g.xz[i * 2 + 1], r = g.base[i * 3], gg = g.base[i * 3 + 1], b = g.base[i * 3 + 2]; if (blighted(x, z)) col.setXYZ(i, r * 0.35 + 0.05, gg * 0.2, b * 0.35 + 0.06); else col.setXYZ(i, r, gg, b); } col.needsUpdate = true; }
+  function build(cx: number, cz: number, prev: Chunk | null = null): Chunk {
+    const group = new THREE.Group(), geometries: THREE.BufferGeometry[] = [], tile = prev ? prev.ground : groundOf(cx, cz); recolour(tile);
+    const surface = new THREE.Mesh(tile.geo, ground); surface.name = "world-ground"; group.add(surface);
     const here = dens.filter(d => Math.floor(d.x / CHUNK) === cx && Math.floor(d.z / CHUNK) === cz);
     const trees = treesFor(cx, cz), rand = mulberry32((cx * 31 + cz * 17 + seed) >>> 0), colliders: Collider[] = [];
     // G3: a den: a mound of dark rocks round a low mouth, bones about it. The rocks are colliders.
@@ -122,7 +131,7 @@ export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain 
     for (const t of trees) { colliders.push({ x: t.x, z: t.z, radius: trunkRadius(t), minY: relief(t.x, t.z) - 0.2, maxY: relief(t.x, t.z) + crownHeight(t) }); if (!look.trees) continue; const dark = biomeAt(t.x, t.z, seed) === 'dark', blight = blighted(t.x, t.z), parts = treeParts(rand, t.x, relief(t.x, t.z), t.z, t.size); (blight ? bwood : dark ? dwood : wood).push(...parts.wood); (blight ? bcards : dark ? dcards : cards).push(...parts.cards.filter((_, i) => !blight || i % 3 === 0)); collars.push(...parts.roots); }
     const add = (gs: THREE.BufferGeometry[], st: Standee[], b: THREE.Material, l: THREE.Material): void => { if (gs.length) { const g = mergeGeometries(gs)!, m = new THREE.Mesh(g, b); m.name = 'tree-wood'; group.add(m); geometries.push(g); } if (st.length) { const g = standees(st), m = new THREE.Mesh(g, l); m.name = 'tree-leaves'; group.add(m); geometries.push(g); } };
     add(wood, cards, bark, leaf); add(dwood, dcards, darkBark, darkLeaf); add(bwood, bcards, blightBark, blightLeaf); if (collars.length) { const g = mergeGeometries(collars)!, m = new THREE.Mesh(g, collar); m.name = 'tree-collar'; group.add(m); geometries.push(g); }
-    applyLook(group); scene.add(group); return { key: chunkKey(cx, cz), group, trees, colliders, geometries };
+    applyLook(group); scene.add(group); return { key: chunkKey(cx, cz), group, trees, colliders, geometries, ground: tile, stamp: blightStamp ? blightStamp(cx, cz) : null };
   }
   /** The far land: past the loaded ring, ground alone out to FAR_RING chunks at FAR_STEP m, one merged mesh rebuilt when she crosses into another chunk, so that from a height the land goes on to the horizon instead of ending at the loaded ring (the summit had no view: Noah's playtest). No trees, no blight out there. Tuning. */
   const FAR_RING = 7, FAR_STEP = 16;
@@ -139,14 +148,25 @@ export function createChunks(scene: THREE.Scene, seed: number, terrain: Terrain 
   function update(x: number, z: number): number {
     const want = new Set<string>(); let built = 0;
     for (const c of chunksAround(x, z)) { const key = chunkKey(c.cx, c.cz); want.add(key); if (!loaded.has(key)) { loaded.set(key, build(c.cx, c.cz)); built++; } }
-    for (const [key, ch] of loaded) if (!want.has(key)) { scene.remove(ch.group); for (const g of ch.geometries) g.dispose(); loaded.delete(key); }
+    for (const [key, ch] of loaded) if (!want.has(key)) { scene.remove(ch.group); for (const g of ch.geometries) g.dispose(); ch.ground.geo.dispose(); loaded.delete(key); }
     { const c = chunksAround(x, z, 0)[0], key = chunkKey(c.cx, c.cz); if (key !== farKey) { farKey = key; buildFar(x, z); } }
     return built;
   }
   const treesNear = (x: number, z: number, r: number): Tree[] => { const out: Tree[] = []; for (const ch of loaded.values()) for (const t of ch.trees) if (Math.hypot(t.x - x, t.z - z) <= r) out.push(t); return out; };
   const colliders = (): Collider[] => { const out: Collider[] = []; for (const ch of loaded.values()) out.push(...ch.colliders); return out; };
-  /** The blight moved: the loaded chunks are built again under it. */
-  function setBlight(f: (x: number, z: number) => boolean): void { blighted = f; for (const [key, ch] of loaded) { scene.remove(ch.group); for (const g of ch.geometries) g.dispose(); const [cx, cz] = key.split(',').map(Number); loaded.set(key, build(cx, cz)); } }
+  /** The blight moved: the loaded chunks are built again under it. C1.1 (the dawn hitch): given a `stamp` of what `f` can read over a chunk (the caller's: its
+   * ground vertices and its trees lie within the chunk's square, inclusive of its far edges), only the chunks whose stamp moved since they were built are
+   * rebuilt, the rest untouched (`full` rebuilds all). Returns how many were rebuilt. */
+  function setBlight(f: (x: number, z: number) => boolean, stamp: ((cx: number, cz: number) => string) | null = null, full = false): number {
+    blighted = f; blightStamp = stamp; let n = 0;
+    for (const [key, ch] of loaded) {
+      const [cx, cz] = key.split(',').map(Number), s = stamp ? stamp(cx, cz) : null; if (!full && s !== null && s === ch.stamp) continue; n++;
+      // Under another look the trees are not built here, so nothing but the ground tile's colours reads the blight: recoloured in place. Under the chunks' own look the trees regroup by their blight: built again, the tile kept.
+      if (!look.trees) { recolour(ch.ground); ch.stamp = s; continue; }
+      scene.remove(ch.group); for (const g of ch.geometries) g.dispose(); loaded.set(key, build(cx, cz, ch));
+    }
+    return n;
+  }
   /** The sanctified ruins (the entry, from the overworld's save and on each sanctifying): the living look on those, the dry on the rest. */
   /** S1: how many rabbits a warren shows, by its id; applied to the warrens built now and as chunks come in. */
   function setRabbits(stock: (id: string) => number): void { rabbitStock = stock; refreshRabbits(); }

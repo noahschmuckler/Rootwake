@@ -234,9 +234,11 @@ API; `tests/contagion.test.ts`, 81 tests under `node scripts/test-village.mjs`) 
   any village whose green has a claimed hub within `FRONT_TELL_M` 700 m, falling back to the home village's fixed
   blight when no front is set (the old tests hold).
 - **Dev handle.** `__village.growth`: `state`, `idx`, `seen`, `inputs()`, `inGrowth(x, z)`, `depth(x, z)`,
-  `nearest(x, z)`, `step(days = 1)` (the dawn step with the live nourishment and irritants, as if the snatchers
-  brought an infant each night: the pace Noah set), `starve(days)` (nothing brought), `reset()` (the breach alone),
-  `refresh()`; each returns the refresh's milliseconds, also `refreshMs`.
+  `nearest(x, z)`, `step(days = 1)` (the dawn step with the live nourishment and irritants and what the raids
+  brought since the last, as the dawns do; C1.1: a fresh world's front seeks on nothing, the pace Noah set),
+  `starve(days)` (a fed growth with nothing brought: it withers), `reset()` (the breach alone), `refresh(full)`
+  (C1.1: everything when `full`), `parts` (the last refresh's milliseconds by part); each returns the refresh's
+  milliseconds, also `refreshMs`.
 - **CI** (`scripts/browser-village-vista.mjs`): `growth.step(12)`, then the front's nearest claimed hub is within
   60 m of the first village's green, ground open on day 0 is hers, the ground texture's bytes changed, no console
   errors.
@@ -251,9 +253,59 @@ API; `tests/contagion.test.ts`, 81 tests under `node scripts/test-village.mjs`) 
 - **Open, for Noah's playtest:**
   - the pace: `STEP` 45 m/day and `TIPS` 3 (twelve days to the first village fed every night);
   - starvation as the raids actually feed it: the step counts only infants the snatchers took that day (`v.taken`
-    rising); with no infant in the village for `STARVE_DAYS` 3 the front withers back toward the breach's edge, so
-    in a fresh village the front only advances once infants are born and taken (the dev `step` feeds it);
+    rising); C1.1 below settles when it begins (only once it has fed) and how it ends (withered to the breach alone,
+    it seeks again);
   - `MAT` 24 and `VEIN_W` 8 (the grey round a claimed hub and along a hypha), `MILD_W` 20;
   - the colours: the hyphae's ashen grey on the ground (`T_VEIN`) and `FRONT_COLOUR` on the map;
   - whether the map should show the front only where revealed (as now) or wherever the keeper has spoken of it;
   - the understory along a hypha, and the plain look (only the fixed blight, now `inGrowth` for the chunk trees).
+
+**C1.1 (2026-10-22): the cycle, and the dawn hitch.** Two follow-ups to C1.
+
+- **Seek, feed, starve** (`contagionModel.ts`, its header). As built, `starved` counted every day with no infant
+  taken, so a fresh world's front withered on day 3 before the village had an infant to snatch, and Noah's "about
+  twelve days to the first village if she does nothing" held only if an infant was taken nightly. Noah's rules,
+  reconciled: the breach can never be starved; lesser germs can; twelve days if she does nothing. So the growth
+  **seeks until it has fed**: `Growth.fed` (serialized; parsed tolerant, default false, and a save from before it
+  loads unfed with its `starved` dropped) turns true when an infant is taken or a Dark Young bred; while it is false
+  the front never withers for starvation and `starved` stays 0 (withering into an irritant is unchanged); once fed,
+  `STARVE_DAYS` 3 without an infant withers the tips as before; and when the growth has withered back to the breach
+  alone (no hypha left, every lesser germ gone) `fed` resets and it seeks again. So the mycelium always comes back
+  seeking; a permanent hold needs irritants (C3's bulwark). The one call made here: a lesser germ caught mid-shrink
+  keeps the starvation going until it is gone (it starves out of existence, as Noah asked, and the growth seeks
+  again only then); a germ's death never resets `fed` by itself. The pace test now runs with no infant taken on any
+  day (reached on day 12 at seed 1, and fed nightly the same day: feeding does not hurry it, food does); a fed front
+  starved withers, withered to nothing it seeks again on the next dawn unstarvable, `fed` round-trips. `__village.
+  growth.step(days)` passes the real deltas (so CI's `step(12)` is a fresh world seeking: the front within 60 m of
+  the first village's green), `starve(days)` forces `fed` and zero intake.
+- **The dawn hitch** (`village.ts` `refreshLand`, `villageVista.ts`, `chunkWorld.ts`, `rootNetworkWorld.ts`,
+  `vistaWorld.ts`), measured as before at Medium under SwiftShader on the build machine's CPU, she standing in the
+  home village: **before**, `growth.step(1)` from day 0 took 1.34 s, twelve days at once 1.16 s, a later single dawn
+  1.28–1.34 s (C1's breakdown: trees 405 ms, ground 333 ms, the chunks' rebuild and the roots the rest). **After**,
+  day 0 → 1 98 ms (trees 18, ground 79), twelve days at once 69 ms (84 tiles and 84 tree chunks drawn again, 15
+  chunks recoloured, 3 root chunks), a later single dawn 29–36 ms (25 tiles, 25 tree chunks, 0–4 chunks); a full
+  draw (`refresh(true)`) 610 ms; the tree partition that follows on the next frame 9–33 ms (the same work as every
+  12 m she walks). The principle: every read of the field at a point depends only on the germs whose influence
+  reaches it and on the index cell it falls in, so `fieldStamp(idx, x0, z0, x1, z1)` names everything the reads over
+  a rectangle can depend on (the germs within reach + `TAINT.veins`, each cell's mats and its hyphae with their t, in
+  the index's order), and a test pins that where a rectangle's stamp is unchanged by a step, every read in it is
+  unchanged. On that:
+  - the look's trees (`villageTrees`) keep each chunk's trees as drawn under the stamp over its square (`TreeCache`)
+    and recompute only the chunks whose stamp moved; the breach's fixed vein lines keep their hash across dawns;
+    `vistaWorld.setTrees` keeps a kind's five instance buffers while its trees fit them (allotted with 25 % + 64
+    headroom), so a day's greying moves no buffer and only the partition re-uploads the instances in use;
+  - the ground tint (`groundTint` with a `GroundCache`) draws again only the 64 m tiles whose stamp moved, each with a
+    cell's margin, replaying in order every vein-line point whose splat reaches a redrawn cell (the last line to
+    reach a cell colours it, so the order is part of the stamp), straight into the texture's own bytes
+    (`world.groundBytes`; one `needsUpdate` for the whole texture, which is cheap);
+  - the chunks (`chunks.setBlight(f, stamp, full)`) keep every chunk whose stamp (the blight's reach and the field
+    over its square, inclusive of its far edges where its ground vertices lie) is what it was built under; a chunk
+    that moved is recoloured in place under the vista look (the tile's biome colours are kept beside its geometry,
+    and nothing else it builds reads the blight), or rebuilt with its tile kept under the chunks' own look;
+  - the roots (`rootNetworkWorld.update`) redraw a chunk's mesh only when the ids of the roots it shows changed
+    (`network.setBlocked` was never the cost: the closure is read per root; the reset-and-rebuild of every tube was).
+  `refreshLand(full)` with `full` clears every cache and draws everything (dev: `__village.growth.refresh(true)`);
+  CI (`scripts/browser-village-vista.mjs`) steps twelve days incrementally, digests the ground bytes, the tree list,
+  the chunks' ground colours and the root meshes, draws everything again, and requires the two digests equal (and
+  the incremental draw to have drawn less). The first refresh at boot and a dawn after a long jump still draw what
+  moved, no more.

@@ -38,16 +38,20 @@ const HAZE_BELOW = 0.07;
 
 // ── the taint (MOTHER.md, M1) ──────────────────────────────────────────────
 /** C1 (CONTAGION.md): the taint as field reads of her growth (contagionModel's index): `at` the breach (the dead trees lean toward it, her arms stand there), `ring`/`depth`/`vein` at a point, `veins` the breach's root lines as M1 drew them (world polylines, as sampled points) and `hyphae` the growth's claimed lengths along the root hubs (read again at each refresh: the growth moves at dawn). */
-export interface TaintLook { at: { x: number; z: number }; ring: (x: number, z: number) => Ring; depth: (x: number, z: number) => number; vein: (x: number, z: number) => number; veins: { x: number; z: number }[][]; hyphae: () => { from: HubRef; to: HubRef; a: { x: number; z: number }; b: { x: number; z: number }; tip: { x: number; z: number }; t: number }[] }
+export interface TaintLook { at: { x: number; z: number }; ring: (x: number, z: number) => Ring; depth: (x: number, z: number) => number; vein: (x: number, z: number) => number; veins: { x: number; z: number }[][]; hyphae: () => { from: HubRef; to: HubRef; a: { x: number; z: number }; b: { x: number; z: number }; tip: { x: number; z: number }; t: number }[];
+  /** C1.1: everything the reads over a world rectangle (inclusive) can depend on (contagionModel.fieldStamp): the ground and the trees keep what they drew where it is unchanged. */
+  stamp: (x0: number, z0: number, x1: number, z1: number) => string }
 /** A hypha's whole edge sampled every 2 m (the vein's strength past the tip fades over TAINT.veins, read by taint.vein). */
 const hyphaLines = (t: TaintLook): { x: number; z: number }[][] => t.hyphae().map(h => { const len = Math.hypot(h.b.x - h.a.x, h.b.z - h.a.z), n = Math.max(2, Math.ceil(len / 2)), line: { x: number; z: number }[] = []; for (let k = 0; k <= n; k++) line.push({ x: h.a.x + (h.b.x - h.a.x) * k / n, z: h.a.z + (h.b.z - h.a.z) * k / n }); return line; });
 /** The mild ring's depth at its top (the grey's edge): the streaks and the grey trees thin from there to nothing at the edge; a hypha's mild band (MILD_DEPTH) sits inside it. */
 const MILD_TOP = depthAt(TAINT.grey);
-/** The vein points in a coarse hash, for asking how near a root line (the breach's, or a hypha's) a tree stands. */
-function veinIndex(lines: { x: number; z: number }[][]): (x: number, z: number) => number {
-  const C = 8, grid = new Map<string, { x: number; z: number }[]>();
-  for (const line of lines) for (const p of line) { const k = `${Math.floor(p.x / C)},${Math.floor(p.z / C)}`; (grid.get(k) ?? grid.set(k, []).get(k)!).push(p); }
-  return (x, z) => { let best = Infinity; const cx = Math.floor(x / C), cz = Math.floor(z / C); for (let i = -1; i <= 1; i++) for (let k = -1; k <= 1; k++) for (const p of grid.get(`${cx + i},${cz + k}`) ?? []) best = Math.min(best, Math.hypot(p.x - x, p.z - z)); return best; };
+/** The vein points in a coarse hash, for asking how near a root line (the breach's, or a hypha's) a tree stands. C1.1: the breach's lines never move, so their hash is built once (veinGrids keeps it by the lines) and the hyphae's laid beside it each dawn. */
+type VeinGrid = Map<string, { x: number; z: number }[]>;
+const VEIN_C = 8, veinGrids = new WeakMap<{ x: number; z: number }[][], VeinGrid>();
+function veinGrid(lines: { x: number; z: number }[][]): VeinGrid { const grid: VeinGrid = new Map(); for (const line of lines) for (const p of line) { const k = `${Math.floor(p.x / VEIN_C)},${Math.floor(p.z / VEIN_C)}`; (grid.get(k) ?? grid.set(k, []).get(k)!).push(p); } return grid; }
+function veinIndex(fixed: { x: number; z: number }[][], moving: { x: number; z: number }[][]): (x: number, z: number) => number {
+  let base = veinGrids.get(fixed); if (!base) { base = veinGrid(fixed); veinGrids.set(fixed, base); } const grids = [base, veinGrid(moving)];
+  return (x, z) => { let best = Infinity; const cx = Math.floor(x / VEIN_C), cz = Math.floor(z / VEIN_C); for (let i = -1; i <= 1; i++) for (let k = -1; k <= 1; k++) { const key = `${cx + i},${cz + k}`; for (const g of grids) for (const p of g.get(key) ?? []) best = Math.min(best, Math.hypot(p.x - x, p.z - z)); } return best; };
 }
 const hash01 = (n: number): number => { const s = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return s - Math.floor(s); };
 /** Tuning: linear colours of the taint's ground (heart, nursery, grey, a grey streak in the mild ring, a vein outside the edge, a vein inside it). */
@@ -99,10 +103,34 @@ export function canopyMap(land: Land, seed: number): Uint8Array {
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) { const k = j * n + i, v = f[k]; if (v <= 0) continue; const gap = noise(i * cell - half, j * cell - half, 22, seed + 73); out[k] = Math.round(255 * Math.min(1, Math.max(0, v * (0.7 + 0.5 * gap)))); }
   return out;
 }
-export function groundTint(land: Land, seed: number, blighted: (x: number, z: number) => boolean, taint?: TaintLook): Uint8Array {
-  const { n, cell, half } = land, out = new Uint8Array(n * n * 4), lair = places(seed).find(p => p.id === 'lair')!, forest = forestOf(land, seed);
+/** C1.1: what groundTint keeps between dawns: its bytes, the field's stamp per STAMP_TILE m tile of the land, and the land's own stamp (the blight) they were drawn under. `tiles` is how many tiles the last call drew. */
+export interface GroundCache { bytes: Uint8Array | null; stamps: Map<string, string>; land: string; tiles: number }
+export const groundCache = (): GroundCache => ({ bytes: null, stamps: new Map(), land: '', tiles: 0 });
+/** The side (m) of the tiles the ground's tint is kept by; aligned to the land's corner, which lies on a multiple of 64 (plateauLand.halfOf), so a tile is one of the field index's cells. Tuning. */
+const STAMP_TILE = 64;
+/** The land's tint: the villages' meadows, the woods and their floors, the dark forest, the blight, and the taint's rings, streaks and veins (the breach's lines and the hyphae).
+ * C1.1 (the dawn hitch): given a `cache` from the last call, only the tiles whose field stamp (`taint.stamp`) moved since are drawn again, each with a cell's margin, and the
+ * vein pass replays, in its order, every line point whose splat reaches a redrawn cell; byte-equal to a full draw (the stamp names everything a cell's reads can depend
+ * on). The whole map is drawn when there is no cache, when `landStamp` (what `blighted` reads) moved, or `full`. */
+export function groundTint(land: Land, seed: number, blighted: (x: number, z: number) => boolean, taint?: TaintLook, cache?: GroundCache, landStamp = '', full = false): Uint8Array {
+  const { n, cell, half } = land, lair = places(seed).find(p => p.id === 'lair')!, forest = forestOf(land, seed);
+  const whole = !cache || !cache.bytes || !taint || full || cache.land !== landStamp, out = cache?.bytes && cache.bytes.length === n * n * 4 ? cache.bytes : new Uint8Array(n * n * 4);
+  // Which cells are drawn: all, or those of the tiles whose stamp moved (plus a cell round each: a line point's splat reaches a neighbour).
+  let mask: Uint8Array | null = null, tiles = 0; const TILES = Math.ceil(2 * half / STAMP_TILE);
+  if (taint && cache) {
+    const next = new Map<string, string>();
+    for (let tj = 0; tj < TILES; tj++) for (let ti = 0; ti < TILES; ti++) {
+      const x0 = ti * STAMP_TILE - half, z0 = tj * STAMP_TILE - half, st = taint.stamp(x0, z0, x0 + STAMP_TILE - 1e-3, z0 + STAMP_TILE - 1e-3), key = `${ti},${tj}`; if (st) next.set(key, st);
+      if (whole || st !== (cache.stamps.get(key) ?? '')) { tiles++; if (!whole) { mask ??= new Uint8Array(n * n); const i0 = Math.max(0, Math.floor((x0 + half) / cell) - 1), i1 = Math.min(n - 1, Math.ceil((x0 + STAMP_TILE + half) / cell) + 1), j0 = Math.max(0, Math.floor((z0 + half) / cell) - 1), j1 = Math.min(n - 1, Math.ceil((z0 + STAMP_TILE + half) / cell) + 1); for (let j = j0; j <= j1; j++) mask.fill(1, j * n + i0, j * n + i1 + 1); } }
+    }
+    cache.stamps = next;
+    if (!whole && !mask) { cache.tiles = 0; return out; }
+  }
+  if (cache) { cache.land = landStamp; cache.bytes = out; cache.tiles = whole ? TILES * TILES : tiles; }
+  const drawn = (i: number, j: number): boolean => !mask || mask[j * n + i] === 1;
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
-    const x = i * cell - half, z = j * cell - half, b = Math.min(1, beyond(x, z, seed) * 1.6), k = (j * n + i) * 4;
+    if (!drawn(i, j)) continue;
+    const x = i * cell - half, z = j * cell - half, b = Math.min(1, beyond(x, z, seed) * 1.6), k = (j * n + i) * 4; out[k] = out[k + 1] = out[k + 2] = out[k + 3] = 0;
     // The villages' meadows are kept: a lush green, whatever pale patch of the vista's grass they fall in.
     if (b < 1) { out[k] = MEADOW[0] * 255; out[k + 1] = MEADOW[1] * 255; out[k + 2] = MEADOW[2] * 255; out[k + 3] = MEADOW[3] * (1 - b) * 255; }
     if (b <= 0) continue;
@@ -115,20 +143,27 @@ export function groundTint(land: Land, seed: number, blighted: (x: number, z: nu
     if (c === WOOD) { const fv = forest[j * n + i]; if (fv > 0.02) { const lit = Math.min(1, fv * (0.8 + 0.4 * noise(x, z, 7, seed + 71))), moss = smooth(0.55, 0.75, noise(x, z, 13, seed + 72)) * 0.7, a = LITTER_A[0] + (LITTER_A[1] - LITTER_A[0]) * lit; out[k] = (WOOD[0] + ((LITTER[0] + (MOSS[0] - LITTER[0]) * moss) - WOOD[0]) * lit) * 255; out[k + 1] = (WOOD[1] + ((LITTER[1] + (MOSS[1] - LITTER[1]) * moss) - WOOD[1]) * lit) * 255; out[k + 2] = (WOOD[2] + ((LITTER[2] + (MOSS[2] - LITTER[2]) * moss) - WOOD[2]) * lit) * 255; out[k + 3] = a * b * 255; continue; } }
     out[k] = c[0] * 255; out[k + 1] = c[1] * 255; out[k + 2] = c[2] * 255; out[k + 3] = c[3] * b * 255;
   }
-  // The veins: her infection along the root lines, black through the grey, grey out into the living wood, fading TAINT.veins past the edge; C1: and the hyphae's claimed lengths, ashen outside the breach's edge as the veins are, fading past each tip.
+  // The veins: her infection along the root lines, black through the grey, grey out into the living wood, fading TAINT.veins past the edge; C1: and the hyphae's claimed lengths, ashen outside the breach's edge as the veins are, fading past each tip. The last line to reach a cell colours it (the order matters: a partial draw replays it).
   if (taint) for (const line of [...taint.veins, ...hyphaLines(taint)]) for (const p of line) {
+    const i = Math.round((p.x + half) / cell), j = Math.round((p.z + half) / cell); if (i < 0 || j < 0 || i >= n || j >= n) continue;
+    if (mask) { let any = false; for (let dj = -1; dj <= 1 && !any; dj++) for (let di = -1; di <= 1; di++) { const ii = i + di, jj = j + dj; if (ii >= 0 && jj >= 0 && ii < n && jj < n && mask[jj * n + ii] === 1) { any = true; break; } } if (!any) continue; }
     const s = taint.vein(p.x, p.z), ring = taint.ring(p.x, p.z); if (s <= 0 || ring === 'heart' || ring === 'nursery') continue;
-    const c = inTaint(taint.at, p.x, p.z) ? T_VEIN_IN : T_VEIN, i = Math.round((p.x + half) / cell), j = Math.round((p.z + half) / cell); if (i < 0 || j < 0 || i >= n || j >= n) continue;
+    const c = inTaint(taint.at, p.x, p.z) ? T_VEIN_IN : T_VEIN;
     const b = Math.min(1, beyond(p.x, p.z, seed) * 1.6); if (b <= 0) continue;
-    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const ii = i + di, jj = j + dj; if (ii < 0 || jj < 0 || ii >= n || jj >= n) continue; const k = (jj * n + ii) * 4, a = c[3] * s * b * 255 * (di || dj ? 0.7 : 1); out[k] = c[0] * 255; out[k + 1] = c[1] * 255; out[k + 2] = c[2] * 255; out[k + 3] = Math.max(a, out[k + 3]); }
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const ii = i + di, jj = j + dj; if (ii < 0 || jj < 0 || ii >= n || jj >= n || !drawn(ii, jj)) continue; const k = (jj * n + ii) * 4, a = c[3] * s * b * 255 * (di || dj ? 0.7 : 1); out[k] = c[0] * 255; out[k + 1] = c[1] * 255; out[k + 2] = c[2] * 255; out[k + 3] = Math.max(a, out[k + 3]); }
   }
   return out;
 }
 
 // ── the trees ────────────────────────────────────────────────────────────
-/** Every tree the village knows, as the vista draws it: the chunks' (all of them, built or not) and each village's own wood. Kind 5 the village tree, 6 in the dark forest, 7 blighted. */
-export function villageTrees(land: Land, edge: number, terrain: Terrain, treesOf: (cx: number, cz: number) => Tree[], origins: { x: number; z: number }[], dark: (x: number, z: number) => boolean, blighted: (x: number, z: number) => boolean, taint?: TaintLook, seed = 1): VTree[] {
-  const out: VTree[] = [], reach = Math.ceil(edge / CHUNK), vein = taint ? veinIndex([...taint.veins, ...hyphaLines(taint)]) : null;
+/** C1.1: what villageTrees keeps between dawns: each chunk's trees as drawn, keyed by the field's stamp over the chunk, under one stamp of the land (the blight). `chunks` is how many chunks the last call drew again. */
+export interface TreeCache { land: string; byChunk: Map<string, { stamp: string; trees: VTree[] }>; chunks: number }
+export const treeCache = (): TreeCache => ({ land: '', byChunk: new Map(), chunks: 0 });
+/** Every tree the village knows, as the vista draws it: the chunks' (all of them, built or not) and each village's own wood. Kind 5 the village tree, 6 in the dark forest, 7 blighted.
+ * C1.1 (the dawn hitch): given a `cache`, a chunk's trees are kept while the field's stamp over its square (`taint.stamp`) and the land's (`landStamp`, what `blighted` reads) are what they
+ * were drawn under: a tree's kind depends on nothing else that moves (the breach's lines and the hyphae within VEIN_TREE_M are in the stamp: a hypha is listed over its whole edge). */
+export function villageTrees(land: Land, edge: number, terrain: Terrain, treesOf: (cx: number, cz: number) => Tree[], origins: { x: number; z: number }[], dark: (x: number, z: number) => boolean, blighted: (x: number, z: number) => boolean, taint?: TaintLook, seed = 1, cache?: TreeCache, landStamp = '', full = false): VTree[] {
+  const out: VTree[] = [], reach = Math.ceil(edge / CHUNK), vein = taint ? veinIndex(taint.veins, hyphaLines(taint)) : null;
   // MOTHER.md: in the taint, kind 10 (the nursery's growths, the heart's) where the trees are gone, 9 (grey, dead, twitching) through the grey and more and more of the mild ring, and along the veins a little way past the edge. C1: the rings and the veins' strength are her growth's (a hypha's claimed length is grey within VEIN_W, so its trees grey with it; past its tip the vein fades).
   const kindAt = (x: number, z: number, id: number): VTree["kind"] => {
     const base = blighted(x, z) ? 7 : dark(x, z) ? 6 : 5; if (!taint || !vein) return base;
@@ -140,9 +175,17 @@ export function villageTrees(land: Land, edge: number, terrain: Terrain, treesOf
   };
   // PINE BARRENS: the chunks' living trees are pitch pines (11), blackjack oaks among them by oakShare (12), and white cedars along the rivers (13, where chunkModel.cedars drew them); the villages' own woods keep their broadleaves (5), as do the dark wood and the taint.
   const barrens = (x: number, z: number, id: number): VTree["kind"] => riverEdge(seed, x, z, RIPARIAN + 4) <= RIPARIAN ? 13 : hash01(id * 0.37 + 11) < oakShare(x, z, seed) ? 12 : 11;
-  const add = (x: number, z: number, size: number, id: number, pine = false) => { const k = kindAt(x, z, id); out.push({ x, z, y: terrain.height(x, z), kind: pine && k === 5 ? barrens(x, z, id) : k, scale: size, rot: (id * 2.399963) % (Math.PI * 2) }); };
-  for (let cz = -reach; cz <= reach; cz++) for (let cx = -reach; cx <= reach; cx++) for (const t of treesOf(cx, cz)) if (norm4(t.x, t.z) < edge - 40) add(t.x, t.z, t.size, t.id, true);
-  for (const o of origins) for (const t of TREES) add(t.x + o.x, t.z + o.z, t.size, t.id + o.x * 7 + o.z * 13);
+  const treeOf = (x: number, z: number, size: number, id: number, pine = false): VTree => { const k = kindAt(x, z, id); return { x, z, y: terrain.height(x, z), kind: pine && k === 5 ? barrens(x, z, id) : k, scale: size, rot: (id * 2.399963) % (Math.PI * 2) }; };
+  if (cache && (full || cache.land !== landStamp)) { cache.byChunk.clear(); cache.land = landStamp; } let drawn = 0;
+  for (let cz = -reach; cz <= reach; cz++) for (let cx = -reach; cx <= reach; cx++) {
+    // A chunk's trees stand within its square (chunkModel.chunkTrees), so the stamp is read just short of its far edges.
+    const key = `${cx},${cz}`, stamp = taint ? taint.stamp(cx * CHUNK, cz * CHUNK, (cx + 1) * CHUNK - 1e-3, (cz + 1) * CHUNK - 1e-3) : '', have = cache?.byChunk.get(key);
+    if (have && have.stamp === stamp) { for (const t of have.trees) out.push(t); continue; }
+    const list: VTree[] = []; for (const t of treesOf(cx, cz)) if (norm4(t.x, t.z) < edge - 40) list.push(treeOf(t.x, t.z, t.size, t.id, true));
+    cache?.byChunk.set(key, { stamp, trees: list }); drawn++; for (const t of list) out.push(t);
+  }
+  if (cache) cache.chunks = drawn;
+  for (const o of origins) for (const t of TREES) out.push(treeOf(t.x + o.x, t.z + o.z, t.size, t.id + o.x * 7 + o.z * 13));
   // The karst's own trees (its forest floor, its ledges, the helix on its faces): framed as the free flow frames them, so a trunk climb meets its crown; pines as the vista's conifer (a tenth of its height per size: the karst's pine is 5 m at size 1); ferns stay the karst's.
   const at = new THREE.Matrix4().makeTranslation(KARST_AT.x, 0, KARST_AT.z), m = new THREE.Matrix4();
   for (const n of Object.values(KARST_NODES)) {
@@ -203,8 +246,11 @@ export interface VillageLook {
   render(): void;
   /** Where grass gives way to the village (its paths, floors and fields), drawn from above; again when huts are built. */
   refreshClearing(): void;
-  refreshTrees(): void;
-  refreshGround(): void;
+  /** The trees' kinds and the ground's tint again under the taint and the blight (at dawn): only what moved since the last, `full` everything (C1.1). Return how many chunks / tiles were drawn again. */
+  refreshTrees(full?: boolean): number;
+  refreshGround(full?: boolean): number;
+  /** Dev: the trees as last given to the vista. */
+  trees(): VTree[];
   setQuality(q: Quality): void;
 }
 export interface LookInputs {
@@ -216,6 +262,8 @@ export interface LookInputs {
   clearings?: { x: number; z: number; r: number }[];
   /** MOTHER.md: the breach and its veins (none: no taint drawn). */
   taint?: TaintLook;
+  /** C1.1: a stamp of whatever else the trees' kinds and the ground's tint read that can move (the blight's reach); when it moves, everything is drawn again. */
+  landStamp?: () => string;
   quality?: Quality;
 }
 /** Tuning: the grade after tone mapping, and bloom only on what is brighter than sunlit ground. */
@@ -252,9 +300,10 @@ export function createVillageLook(inp: LookInputs): VillageLook {
   const { renderer, scene, camera, sun, hemi, vl, seed } = inp;
   const coarse = matchMedia('(pointer: coarse)').matches, qName = new URLSearchParams(location.search).get('q')?.toLowerCase();
   let quality = inp.quality ?? QUALITIES.find(q => q.name.toLowerCase() === qName) ?? QUALITIES[coarse ? 1 : 2];
-  const trees = () => villageTrees(vl.land, vl.edge, vl.terrain, inp.treesOf, inp.villages().map(v => ({ x: v.x, z: v.z })), inp.dark, inp.blighted, inp.taint, seed);
-  const world = buildVista(scene, vl.land, trees(), villageRocks(vl, seed), quality, { hazeBase: 0, hazeBelow: HAZE_BELOW, ground: groundTint(vl.land, seed, inp.blighted, inp.taint), fine: vl.terrain.height, fineLod: true, renderer, waterDisc: { x: KARST_AT.x, z: KARST_AT.z, r: PLATEAU_R + 40 }, cloudSea: { x: KARST_AT.x, z: KARST_AT.z, y: CLOUD_Y, inner: PLATEAU_R + MOUNTAIN_RISE + 120, outer: FAR_REACH, cover: CLOUD_COVER }, farReach: FAR_REACH, lowY: LOW_Y, bladeH: BLADE_H, nearTreesScale: NEAR_TREES, treeReach: TREE_REACH });
-  world.setCanopy(canopyMap(vl.land, seed)); world.setFloor(floorMap(vl.land, seed));
+  const kinds = treeCache(), tint = groundCache(), landStamp = () => inp.landStamp?.() ?? ''; let lastTrees: VTree[] = [];
+  const trees = (full = false) => (lastTrees = villageTrees(vl.land, vl.edge, vl.terrain, inp.treesOf, inp.villages().map(v => ({ x: v.x, z: v.z })), inp.dark, inp.blighted, inp.taint, seed, kinds, landStamp(), full));
+  const world = buildVista(scene, vl.land, trees(), villageRocks(vl, seed), quality, { hazeBase: 0, hazeBelow: HAZE_BELOW, ground: groundTint(vl.land, seed, inp.blighted, inp.taint, tint, landStamp()), fine: vl.terrain.height, fineLod: true, renderer, waterDisc: { x: KARST_AT.x, z: KARST_AT.z, r: PLATEAU_R + 40 }, cloudSea: { x: KARST_AT.x, z: KARST_AT.z, y: CLOUD_Y, inner: PLATEAU_R + MOUNTAIN_RISE + 120, outer: FAR_REACH, cover: CLOUD_COVER }, farReach: FAR_REACH, lowY: LOW_Y, bladeH: BLADE_H, nearTreesScale: NEAR_TREES, treeReach: TREE_REACH });
+  world.setCanopy(canopyMap(vl.land, seed)); world.setFloor(floorMap(vl.land, seed)); tint.bytes = world.groundBytes;
   // FOREST: the understory, kept from the places (as the rocks are) and the trunks.
   const lairAt = places(seed).find(p => p.id === 'lair')!, keep = [...places(seed), ...dens(seed), ...ruins(seed), ...warrens(seed), ...wallows(seed), ...ownWarrens(seed), moot(seed), ...convergences(seed)];
   const understory = createUnderstory(world.root, world.uniforms, {
@@ -324,8 +373,9 @@ export function createVillageLook(inp: LookInputs): VillageLook {
   setQuality(quality);
   return {
     world, understory, get quality() { return quality; }, setQuality, refreshClearing,
-    refreshTrees() { world.setTrees(trees()); },
-    refreshGround() { world.setGround(groundTint(vl.land, seed, inp.blighted, inp.taint)); },
+    refreshTrees(full = false) { world.setTrees(trees(full)); return kinds.chunks; },
+    refreshGround(full = false) { const bytes = groundTint(vl.land, seed, inp.blighted, inp.taint, tint, landStamp(), full); if (tint.tiles > 0) world.setGround(bytes); return tint.tiles; },
+    trees: () => lastTrees,
     frame(f) {
       // Inside (the deep, a den, the karst's cavern) the land is not drawn: the village's own dark fog holds.
       const show = !f.interior && !f.hidden; world.root.visible = show;

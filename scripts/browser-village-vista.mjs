@@ -43,6 +43,12 @@ try{
   assert.equal(report.growth.after.day,report.growth.before.day+12,`twelve dawns stepped (${JSON.stringify(report.growth)})`);
   assert.ok(report.growth.after.nearest<60,`the front's nearest hub within 60 m of the first village's green (${JSON.stringify(report.growth)})`);
   assert.ok(report.growth.after.open<report.growth.before.open,'ground open on day 0 is hers now');assert.notEqual(report.growth.after.sum,report.growth.before.sum,'the ground tint drawn again');
+  // C1.1 (the dawn hitch): the dawn's refresh draws again only what the front crossed (the look's trees by chunk, its ground by tile, the chunks, the roots); what it leaves must be exactly what a full draw gives.
+  const digest=()=>page.evaluate(()=>{const v=window.__village,l=window.__look,bytes=l.world.groundBytes;let g=0;for(let i=0;i<bytes.length;i++)g=(g*31+bytes[i])|0;let t=0;for(const x of l.trees())t=(t*31+x.kind*7+Math.round(x.x*10)+Math.round(x.z*10)*3+Math.round(x.scale*100))|0;
+    let c=0,cg=0,r=0,rp=0;v.scene.traverse(o=>{if(o.name==='world-ground'){const a=o.geometry.attributes.color.array;let h=0;for(let i=0;i<a.length;i++)h=(h*31+Math.round(a[i]*1000))|0;c=(c+h)|0;cg++;}if(o.name.startsWith('root-chunk:')){r++;rp+=o.geometry.attributes.position.count;}});return {ground:g,trees:t,treeCount:l.trees().length,chunkGround:c,chunks:cg,roots:r,rootPoints:rp,parts:v.growth.parts};});
+  report.incremental=await digest();report.fullMs=Math.round(await page.evaluate(()=>window.__village.growth.refresh(true)));report.full=await digest();
+  const drawn=d=>{const {parts,...rest}=d;return rest;};assert.deepEqual(drawn(report.incremental),drawn(report.full),`the incremental refresh leaves the land as a full one draws it (${JSON.stringify({incremental:report.incremental,full:report.full})})`);
+  assert.ok(report.incremental.parts.chunksRebuilt<report.incremental.chunks&&report.incremental.parts.groundTiles<report.full.parts.groundTiles,`the incremental refresh drew less than the full one (${JSON.stringify({incremental:report.incremental.parts,full:report.full.parts})})`);
   // D1 (DESCENT.md): down to the node, out onto the catwalk of its depth, a keeper heard, back into the drop.
   // PLATEAU.md: she wakes on the summit; the first dive waits on her cultivation, however much clarity she has.
   assert.equal(await page.evaluate(()=>{const v=window.__village;v.jumpTo('noon');v.karst.standOn('summit',-1.3,0.5,0);v.deep.clarity=v.deep.costs.dive+v.deep.costs.back+5;return v.deep.dive();}),false,'no first dive before she has cultivated');

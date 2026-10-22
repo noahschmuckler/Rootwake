@@ -1,5 +1,5 @@
 import { test } from 'node:test'; import assert from 'node:assert/strict';
-import { freshGrowth, stepGrowth, addGerm, serializeGrowth, parseGrowth, indexGrowth, ringOf, depthOf, veinOf, inGrowth, hyphaSegments, germAt, nearestFront, hubsWithin, hubNeighbours, hubKey, germHubs, germRing, TIPS, STEP, STARVE_DAYS, MAT, VEIN_W, MILD_W, MAT_DEPTH, MILD_DEPTH, PULL_SOFTEN, FOOD_DY, FOOD_PER_TIP, type Growth, type GrowthInputs, type HubRef } from '../src/contagionModel';
+import { freshGrowth, stepGrowth, addGerm, serializeGrowth, parseGrowth, indexGrowth, ringOf, depthOf, veinOf, inGrowth, hyphaSegments, germAt, nearestFront, hubsWithin, hubNeighbours, hubKey, germHubs, germRing, fieldStamp, TIPS, STEP, STARVE_DAYS, MAT, VEIN_W, MILD_W, MAT_DEPTH, MILD_DEPTH, PULL_SOFTEN, FOOD_DY, FOOD_PER_TIP, type Growth, type GrowthInputs, type HubRef } from '../src/contagionModel';
 import { TAINT, ringAt, depthAt, veinAt, inTaint } from '../src/taintModel';
 import { hubAt } from '../src/chunkModel';
 import { lairPlace, LAIR_DISTANCE } from '../src/overworldModel';
@@ -12,7 +12,7 @@ const grow = (days: number, inputs = fed(), from = freshGrowth(SEED)): Growth =>
 
 test('fresh growth: the breach alone, with M1\'s reach, and exactly the hubs within its edge claimed', () => {
   const g = freshGrowth(SEED); assert.equal(g.day, 0); assert.equal(g.germs.length, 1); assert.equal(g.germs[0].kind, 'breach'); assert.equal(g.germs[0].reach, TAINT.edge); assert.deepEqual({ x: g.germs[0].x, z: g.germs[0].z }, { x: lair.x, z: lair.z });
-  assert.equal(g.hyphae.length, 0); assert.equal(g.food, 0); assert.equal(g.starved, 0);
+  assert.equal(g.hyphae.length, 0); assert.equal(g.food, 0); assert.equal(g.starved, 0); assert.equal(g.fed, false, 'seeking: it has not fed');
   const inside = new Set<string>(); for (let cx = -40; cx <= 40; cx++) for (let cz = -40; cz <= 40; cz++) { const h = hubAt(cx, cz, SEED); if (Math.hypot(h.x - lair.x, h.z - lair.z) < TAINT.edge) inside.add(hubKey(cx, cz)); }
   assert.deepEqual(new Set(g.claimed), inside, 'every hub within the edge and no other'); assert.ok(g.claimed.length > 250 && g.claimed.length < 400, `${g.claimed.length} hubs in the breach`);
   assert.deepEqual(g.claimed, [...g.claimed].sort(), 'claimed is sorted'); assert.deepEqual(freshGrowth(SEED), freshGrowth(SEED), 'deterministic');
@@ -33,11 +33,13 @@ test('a step with nourishment grows the TIPS hungriest open edges and only them;
   assert.ok(g0.hyphae.length === 0 && g0.claimed.length === claimed.size, 'the step never mutates its input');
 });
 
-test('the pace (Noah: about twelve days to the first village): the front\'s nearest hub reaches the village\'s own hub on day 10 to 14', () => {
-  // Hubs sit near chunk centres: the hub nearest the village's origin stands 46 m off at this seed, so "reached" is within 50 m. The snatchers come nightly while the village has infants, so doing nothing feeds the front an infant a day.
-  const g0 = freshGrowth(SEED), start = nearestTo(g0, village.x, village.z); assert.ok(Math.abs(Math.hypot(lair.x, lair.z) - LAIR_DISTANCE) < 40, `the breach ${Math.hypot(lair.x, lair.z).toFixed(0)} m from the village`); assert.ok(start > 450 && start < 560, `the edge's nearest hub ${start.toFixed(0)} m from the village`);
-  let g = g0, reached = 0, last = start; for (let day = 1; day <= 20 && !reached; day++) { g = stepGrowth(g, SEED, fed()); const d = nearestTo(g, village.x, village.z); assert.ok(d <= last + 1e-9, 'the front never recedes while fed'); last = d; if (d < 50) reached = day; }
-  assert.ok(reached >= 10 && reached <= 14, `reached on day ${reached}`); console.log(`  pace: the edge's nearest hub ${start.toFixed(0)} m from the village, reached on day ${reached} (STEP ${STEP}, TIPS ${TIPS})`);
+test('the pace (Noah: about twelve days to the first village if she does nothing): with no infant taken on any day the front\'s nearest hub reaches the village\'s own hub on day 10 to 14', () => {
+  // Hubs sit near chunk centres: the hub nearest the village's origin stands 46 m off at this seed, so "reached" is within 50 m. C1.1: a fresh world has no infant to snatch; unfed, the growth seeks and never starves.
+  const g0 = freshGrowth(SEED), start = nearestTo(g0, village.x, village.z), nothing = fed({ infantsTaken: 0 }); assert.ok(Math.abs(Math.hypot(lair.x, lair.z) - LAIR_DISTANCE) < 40, `the breach ${Math.hypot(lair.x, lair.z).toFixed(0)} m from the village`); assert.ok(start > 450 && start < 560, `the edge's nearest hub ${start.toFixed(0)} m from the village`);
+  let g = g0, reached = 0, last = start; for (let day = 1; day <= 20 && !reached; day++) { g = stepGrowth(g, SEED, nothing); assert.equal(g.fed, false, 'still seeking'); assert.equal(g.starved, 0, 'no starvation before it has fed'); const d = nearestTo(g, village.x, village.z); assert.ok(d <= last + 1e-9, 'the front never recedes while seeking'); last = d; if (d < 50) reached = day; }
+  assert.ok(reached >= 10 && reached <= 14, `reached on day ${reached}`); console.log(`  pace: the edge's nearest hub ${start.toFixed(0)} m from the village, reached on day ${reached} with no infant taken (STEP ${STEP}, TIPS ${TIPS})`);
+  // Fed every night it is the same pace (feeding does not hurry it; food does).
+  let f = g0, fr = 0; for (let day = 1; day <= 20 && !fr; day++) { f = stepGrowth(f, SEED, fed()); assert.equal(f.fed, true); if (nearestTo(f, village.x, village.z) < 50) fr = day; } assert.equal(fr, reached, 'fed nightly, the same day');
 });
 
 test('an irritant: its hubs are never claimed, and a hypha into one withers until the hub is unclaimed; the breach\'s hubs never', () => {
@@ -55,29 +57,38 @@ test('an irritant: its hubs are never claimed, and a hypha into one withers unti
   const inBreach = grow(3, fed({ irritants: [{ x: lair.x, z: lair.z, r: TAINT.edge + 50 }] })); assert.deepEqual(new Set(freshGrowth(SEED).claimed).size, new Set(inBreach.claimed.filter(k => freshGrowth(SEED).claimed.includes(k))).size, 'an irritant over the breach unclaims nothing of it');
 });
 
-test('starvation: no infant for STARVE_DAYS and the tips retreat, hubs unclaim, the breach\'s never; an infant taken ends it', () => {
-  const g8 = grow(8), d8 = nearestTo(g8, village.x, village.z), starve = fed({ infantsTaken: 0 });
+test('starvation, once fed: no infant for STARVE_DAYS and the tips retreat, hubs unclaim, the breach\'s never; an infant taken ends it; withered to nothing it seeks again', () => {
+  const g8 = grow(8), d8 = nearestTo(g8, village.x, village.z), starve = fed({ infantsTaken: 0 }); assert.equal(g8.fed, true, 'fed by the infants taken');
   let g = g8; for (let i = 1; i < STARVE_DAYS; i++) { g = stepGrowth(g, SEED, starve); assert.equal(g.starved, i); assert.ok(nearestTo(g, village.x, village.z) <= d8, 'still growing before STARVE_DAYS'); }
   const length = (x: Growth): number => x.hyphae.reduce((s, h) => s + h.t, 0), full = g.hyphae.filter(h => h.t === 1).length, before = length(g), hubs = g.claimed.length, dPre = nearestTo(g, village.x, village.z);
   g = stepGrowth(g, SEED, starve); assert.equal(g.starved, STARVE_DAYS); assert.ok(length(g) < before, 'the tips retreat (the growing hyphae first)'); assert.ok(g.hyphae.every(h => h.t > 0)); assert.ok(g.claimed.length <= hubs, 'no hub claimed while starving');
   g = stepGrowth(g, SEED, starve); assert.ok(g.hyphae.filter(h => h.t === 1).length < full, 'then the full hyphae into the leaves'); assert.ok(g.claimed.length < hubs, 'and hubs unclaim');
   const nearer = nearestTo(g, village.x, village.z); assert.ok(nearer > dPre, 'the front recedes');
-  for (let i = 0; i < 30; i++) g = stepGrowth(g, SEED, starve);
-  assert.equal(g.hyphae.length, 0, 'every hypha gone'); assert.deepEqual(g.claimed, freshGrowth(SEED).claimed, 'back to the breach\'s own hubs, all of them'); assert.equal(g.germs.length, 1);
+  // Starved on, it withers back to the breach alone; that day it forgets it ever fed, and the next it seeks again, unstarvable until it feeds.
+  let bareDay = 0; for (let i = 0; i < 30 && !bareDay; i++) { g = stepGrowth(g, SEED, starve); if (g.hyphae.length === 0) bareDay = g.day; else { assert.equal(g.fed, true, 'starving while anything is left'); assert.ok(g.starved >= STARVE_DAYS); } }
+  assert.ok(bareDay > 0, 'withered to nothing within 30 days'); assert.deepEqual(g.claimed, freshGrowth(SEED).claimed, 'back to the breach\'s own hubs, all of them'); assert.equal(g.germs.length, 1); assert.equal(g.fed, false, 'bare: it has not fed'); assert.equal(g.starved, 0);
+  const seeks = stepGrowth(g, SEED, starve); assert.equal(seeks.hyphae.length, TIPS, 'seeks again on nothing'); assert.equal(seeks.fed, false); assert.equal(seeks.starved, 0); const on = grow(10, starve, seeks); assert.equal(on.starved, 0, 'never starves until it feeds'); assert.ok(on.hyphae.length > TIPS);
   // Fed again, it grows again from where it stands.
-  const again = stepGrowth(g, SEED, fed()); assert.equal(again.starved, 0); assert.equal(again.hyphae.length, TIPS);
+  const again = stepGrowth(g, SEED, fed()); assert.equal(again.starved, 0); assert.equal(again.fed, true); assert.equal(again.hyphae.length, TIPS);
   // Mid-collapse an infant taken halts the retreat.
   const pre = stepGrowth(stepGrowth(stepGrowth(g8, SEED, starve), SEED, starve), SEED, starve); assert.equal(pre.starved, STARVE_DAYS); const kept = stepGrowth(pre, SEED, starve), halted = stepGrowth(pre, SEED, fed()); assert.equal(halted.starved, 0); assert.ok(nearestTo(halted, village.x, village.z) < nearestTo(kept, village.x, village.z), 'the infant taken, the front grows where the starving one receded');
+  // A Dark Young bred feeds it too (an infant was taken for it); it can starve from then.
+  const bred = stepGrowth(freshGrowth(SEED), SEED, fed({ infantsTaken: 0, darkYoungBred: 1 })); assert.equal(bred.fed, true); assert.equal(grow(STARVE_DAYS, starve, bred).starved, STARVE_DAYS + 1);
 });
 
 test('serialize and parse round-trip; parse tolerates junk and always keeps the breach', () => {
   const g = grow(9, fed({ darkYoungBred: 1, meals: 2 })); const back = parseGrowth(serializeGrowth(g), SEED);
-  assert.equal(back.day, g.day); assert.equal(back.starved, g.starved); assert.ok(Math.abs(back.food - g.food) < 1e-3); assert.deepEqual(back.claimed, g.claimed); assert.equal(back.hyphae.length, g.hyphae.length); for (let i = 0; i < g.hyphae.length; i++) assert.ok(Math.abs(back.hyphae[i].t - g.hyphae[i].t) < 1e-3);
+  assert.equal(back.day, g.day); assert.equal(back.starved, g.starved); assert.equal(back.fed, true); assert.ok(Math.abs(back.food - g.food) < 1e-3); assert.deepEqual(back.claimed, g.claimed); assert.equal(back.hyphae.length, g.hyphae.length); for (let i = 0; i < g.hyphae.length; i++) assert.ok(Math.abs(back.hyphae[i].t - g.hyphae[i].t) < 1e-3);
   assert.equal(serializeGrowth(parseGrowth(serializeGrowth(back), SEED)), serializeGrowth(back), 'stable');
   const next = stepGrowth(back, SEED, fed()), nextG = stepGrowth(g, SEED, fed()); assert.deepEqual(next.claimed, nextG.claimed, 'a parsed growth steps as the live one');
   for (const junk of [null, '', 'garbage', '[]', '5', '{"germs":5,"hyphae":"x"}', '{"day":-3,"germs":[{"id":"breach","kind":"breach","x":0,"z":0,"reach":10}],"claimed":["a,b"],"hyphae":[{"from":[1,1],"to":[9,9],"t":0.5},{"from":[1,1],"to":[2,1],"t":"no"},{"from":[0,0],"to":[1,0],"t":7}]}']) {
-    const p = parseGrowth(junk, SEED); assert.equal(p.germs.length, 1); assert.equal(p.germs[0].kind, 'breach'); assert.equal(p.germs[0].reach, TAINT.edge); assert.deepEqual(p.claimed, freshGrowth(SEED).claimed, `junk ${JSON.stringify(junk)}: the breach's hubs`); assert.equal(p.hyphae.length, 0); assert.ok(p.day >= 0 && p.starved >= 0 && p.food >= 0);
+    const p = parseGrowth(junk, SEED); assert.equal(p.germs.length, 1); assert.equal(p.germs[0].kind, 'breach'); assert.equal(p.germs[0].reach, TAINT.edge); assert.deepEqual(p.claimed, freshGrowth(SEED).claimed, `junk ${JSON.stringify(junk)}: the breach's hubs`); assert.equal(p.hyphae.length, 0); assert.ok(p.day >= 0 && p.starved >= 0 && p.food >= 0); assert.equal(p.fed, false);
   }
+  // `fed` round-trips; a save from before it (C1) is unfed and unstarved; junk in it is false.
+  const starvedFed = grow(2, fed({ infantsTaken: 0 }), g), fedBack = parseGrowth(serializeGrowth(starvedFed), SEED); assert.equal(fedBack.fed, true); assert.equal(fedBack.starved, 2);
+  const unfed = parseGrowth(serializeGrowth(grow(3, fed({ infantsTaken: 0 }))), SEED); assert.equal(unfed.fed, false); assert.equal(unfed.starved, 0);
+  const old = parseGrowth(JSON.stringify({ ...JSON.parse(serializeGrowth(starvedFed)), fed: undefined }), SEED); assert.equal(old.fed, false); assert.equal(old.starved, 0, 'an old save\'s starved count is dropped with its fed'); assert.deepEqual(old.claimed, starvedFed.claimed);
+  assert.equal(parseGrowth(JSON.stringify({ ...JSON.parse(serializeGrowth(starvedFed)), fed: 'yes' }), SEED).fed, false);
   // A lesser germ survives the round trip; a hypha from a hub nobody claims does not.
   const withGerm = addGerm(g, { id: 'village-2', kind: 'village', x: -693, z: -262, reach: 150 }, SEED), p = parseGrowth(serializeGrowth(withGerm), SEED); assert.equal(p.germs.length, 2); assert.deepEqual(p.claimed, withGerm.claimed);
   const orphan = parseGrowth(JSON.stringify({ day: 1, germs: [], claimed: [], hyphae: [{ from: [-30, -30], to: [-29, -30], t: 1 }], food: 0, starved: 0 }), SEED); assert.equal(orphan.hyphae.length, 0); assert.ok(!orphan.claimed.includes('-29,-30'));
@@ -114,8 +125,28 @@ test('a lesser germ: its rings scaled by its reach, its hubs claimed at once, st
   const germ = { id: 'village-2', kind: 'village' as const, x: -693, z: -262, reach: 150 }, g = addGerm(freshGrowth(SEED), germ, SEED), idx = indexGrowth(g, SEED);
   assert.equal(g.germs.length, 2); for (const h of hubsWithin(germ.x, germ.z, germ.reach, SEED)) assert.ok(g.claimed.includes(hubKey(h[0], h[1])));
   assert.equal(germRing(germ, 10), 'nursery'); assert.equal(germRing(germ, 100), 'grey'); assert.equal(germRing(germ, 140), 'mild'); assert.equal(germRing(germ, 151), null); assert.equal(ringOf(idx, germ.x + 100, germ.z), 'grey'); assert.equal(germAt(idx, germ.x + 100, germ.z)!.id, 'village-2'); assert.ok(depthOf(idx, germ.x + 15, germ.z) > 0.85 && depthOf(idx, germ.x + 149, germ.z) < 0.02); assert.equal(veinOf(idx, germ.x + 149, germ.z), 1); assert.ok(veinOf(idx, germ.x + 150 + TAINT.veins / 2, germ.z) > 0.4);
-  let s = g; for (let i = 0; i < 12; i++) s = stepGrowth(s, SEED, fed({ nourish: [], infantsTaken: 0 }));
-  assert.equal(s.germs.length, 1, 'the lesser germ withered away'); assert.equal(s.germs[0].kind, 'breach'); assert.equal(s.germs[0].reach, TAINT.edge); assert.deepEqual(s.claimed, freshGrowth(SEED).claimed);
+  // Unfed it stands (the growth seeks); fed once and then starved, it shrinks STEP a day to nothing while the breach stands, and only then does the growth seek again.
+  const stood = grow(12, fed({ nourish: [], infantsTaken: 0 }), g); assert.equal(stood.germs.length, 2, 'unfed, nothing starves'); assert.equal(stood.germs[1].reach, 150);
+  let s = stepGrowth(g, SEED, fed({ nourish: [] })); assert.equal(s.fed, true); let gone = 0;
+  for (let i = 0; i < 12; i++) { s = stepGrowth(s, SEED, fed({ nourish: [], infantsTaken: 0 })); if (s.germs.length === 2) { assert.equal(s.fed, true, 'starving on while the germ lasts'); assert.ok(s.germs[1].reach <= 150 - Math.max(0, s.starved - STARVE_DAYS + 1) * STEP + 1e-9); } else if (!gone) { gone = s.day; assert.equal(s.fed, false, 'the germ gone and no hypha left: it seeks again'); } }
+  assert.ok(gone > 0, 'the lesser germ withered away'); assert.equal(s.germs.length, 1); assert.equal(s.germs[0].kind, 'breach'); assert.equal(s.germs[0].reach, TAINT.edge); assert.deepEqual(s.claimed, freshGrowth(SEED).claimed);
+});
+
+test('fieldStamp: where a rectangle\'s stamp is unchanged by a step, every read in it is unchanged; where the front moved, it differs', () => {
+  const TILE = 64, half = 1280; let g = freshGrowth(SEED), prev = indexGrowth(g, SEED), same = 0, moved = 0, movedReads = 0;
+  for (let day = 1; day <= 14; day++) {
+    g = stepGrowth(g, SEED, day % 5 === 0 ? fed({ darkYoungBred: 1 }) : fed()); const idx = indexGrowth(g, SEED);
+    for (let x0 = -half; x0 < half; x0 += TILE) for (let z0 = -half; z0 < half; z0 += TILE) {
+      const x1 = x0 + TILE - 1e-3, z1 = z0 + TILE - 1e-3, a = fieldStamp(prev, x0, z0, x1, z1), b = fieldStamp(idx, x0, z0, x1, z1); let differs = false;
+      for (let x = x0; x <= x1; x += 4) for (let z = z0; z <= z1; z += 4) { if (ringOf(prev, x, z) !== ringOf(idx, x, z) || depthOf(prev, x, z) !== depthOf(idx, x, z) || veinOf(prev, x, z) !== veinOf(idx, x, z)) { differs = true; break; } }
+      if (a === b) { same++; assert.ok(!differs, `day ${day}: the stamp of (${x0}, ${z0}) is unchanged but a read in it moved`); } else { moved++; if (differs) movedReads++; }
+    }
+    prev = idx;
+  }
+  assert.ok(same > moved * 20, `most tiles keep their stamp (${same} kept, ${moved} moved)`); assert.ok(moved > 14 && movedReads > 14, `the front moved somewhere each day (${moved}, ${movedReads} with reads moved)`);
+  // A stamp spans the cells a rectangle covers; the breach's germ is in every stamp its reach and veins touch, and in no stamp far away.
+  const idx = indexGrowth(g, SEED); assert.ok(fieldStamp(idx, lair.x - 10, lair.z - 10, lair.x + 10, lair.z + 10).startsWith('breach:')); assert.equal(fieldStamp(idx, lair.x + 2000, lair.z + 2000, lair.x + 2010, lair.z + 2010), '');
+  const wide = fieldStamp(idx, -half, -half, half, half); for (const h of g.hyphae) assert.ok(wide.includes(`s${h.from[0]},${h.from[1]}>${h.to[0]},${h.to[1]}:`), 'every hypha is in the wide stamp');
 });
 
 test('the field reads are cheap: a 12-day growth indexed, 200k reads under a second', () => {

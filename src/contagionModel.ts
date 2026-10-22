@@ -19,17 +19,30 @@
 // TIPS highest-appetite far hubs advance (one hypha each, plus a tip per FOOD_PER_TIP of food), STEP m along
 // the edge, what is left of the step past the far hub running on along the hungriest open edge out of it (else
 // the pace is quantised to whole days an edge); with nothing to seek (no appetite) she sits. Food is what the raids bring: a Dark Young bred of an
-// infant, and the stores eaten. Starvation: no infant taken for STARVE_DAYS and the front withers instead of
-// growing: its tips retreat STEP a day (the frontier recedes as it advanced; a whole-growth retreat would
-// erase a 500 m front in two days), a lesser germ's reach shrinks STEP a day and it is removed once no hub
-// lies in it. A hypha whose far hub stands in an irritant withers every day regardless (Noah: a woken ward is
-// an irritant the hyphae avoid and wither inside, not only a calming of the Colour).
+// infant, and the stores eaten.
+//
+// The cycle: seek, feed, starve (C1.1, reconciling Noah's rules: the breach can never be starved; lesser germs
+// can; about twelve days to the first village if she does nothing). The growth SEEKS until it has fed: `fed`
+// is false until an infant is taken (or a Dark Young bred), and while it is false there is no starvation: a
+// fresh world's front creeps the twelve days to the first village on nothing. Once fed, STARVE_DAYS without an
+// infant and the front withers instead of growing: its tips retreat STEP a day (the frontier recedes as it
+// advanced; a whole-growth retreat would erase a 500 m front in two days), a lesser germ's reach shrinks STEP
+// a day and it is removed once no hub lies in it. When the growth has withered back to the breach alone (no
+// hypha left, every lesser germ gone) `fed` resets and it seeks again: the mycelium always comes back seeking;
+// only irritants hold it (C3's bulwark). A lesser germ caught mid-shrink keeps the starvation going until it
+// is gone (it starves out of existence, as Noah asked); a germ's death never resets `fed` by itself. A hypha
+// whose far hub stands in an irritant withers every day regardless (Noah: a woken ward is an irritant the
+// hyphae avoid and wither inside, not only a calming of the Colour).
 //
 // Reading the field: indexGrowth builds a GrowthIndex (claimed hubs' positions, the hyphae as segments, on a
 // cell grid) and ringOf / depthOf / veinOf / inGrowth read from it, cheap enough for the ground tint build
 // (many thousands of reads a frame). Within a germ's edge the field is the germ's rings alone (the germ's hubs
 // carry no mats), so day one reads exactly as M1 does; a hub claimed by a hypha reads grey within MAT m, a
 // hypha's claimed length grey within VEIN_W, and a band of MILD_W past either reads mild.
+// Every read at a point depends only on the germs whose influence reaches it and on the index cell it falls
+// in (the mats and the hyphae spanned there, each hypha listed over its whole edge's bounds plus PAD): fieldStamp
+// names exactly that for a rectangle, so a reader that keeps what it drew (the land's tint, the trees' kinds, a
+// chunk) can redraw only the rectangles whose stamp moved (C1.1, the dawn hitch) and be byte-equal to a full draw.
 //
 // The nourishment and the irritants are the caller's, each day (village.ts): a village weighs folk + 3 ×
 // infants (WEIGHTS), a warren 1, a wallow 1; a woken ward is an irritant of r 170 (RUINS.md WARD_CALM_R), a
@@ -44,7 +57,7 @@ export interface Germ { id: string; x: number; z: number; kind: GermKind; reach:
 /** A hub by its chunk's coords. */
 export type HubRef = [number, number];
 export interface Hypha { from: HubRef; to: HubRef; t: number }
-export interface Growth { day: number; germs: Germ[]; /** Hub keys, sorted. */ claimed: string[]; hyphae: Hypha[]; food: number; /** Days since the last infant was taken. */ starved: number }
+export interface Growth { day: number; germs: Germ[]; /** Hub keys, sorted. */ claimed: string[]; hyphae: Hypha[]; food: number; /** Days since the last infant was taken, counted only once fed. */ starved: number; /** It has fed (an infant taken, a Dark Young bred) and can starve; false while it seeks, and again once it has withered back to the breach alone. */ fed: boolean }
 export interface Nourish { x: number; z: number; w: number }
 export interface Irritant { x: number; z: number; r: number }
 export interface GrowthInputs { nourish: Nourish[]; irritants: Irritant[]; infantsTaken: number; darkYoungBred: number; meals: number }
@@ -54,7 +67,7 @@ export interface GrowthInputs { nourish: Nourish[]; irritants: Irritant[]; infan
  * diagonal is claimed in two days, so the front gains a hub every two days on its best lane and reaches the village on day 12
  * (seeds 1, 2 and 5; day 13 at seed 3; tests/contagion.test.ts measures it). TIPS: the hubs advanced a day; FOOD_PER_TIP:
  * food for one more. Food: a Dark Young bred of an infant FOOD_DY, a store eaten in a raid FOOD_MEAL, spent FOOD_SPEND a day.
- * STARVE_DAYS without an infant taken and the front withers. PULL_SOFTEN keeps a hub on top of a village from an infinite pull. */
+ * Once fed, STARVE_DAYS without an infant taken and the front withers. PULL_SOFTEN keeps a hub on top of a village from an infinite pull. */
 export const TIPS = 3, STEP = 45, PULL_SOFTEN = 40, FOOD_PER_TIP = 2, FOOD_DY = 3, FOOD_MEAL = 0.5, FOOD_SPEND = 1, STARVE_DAYS = 3;
 /** Tuning: the grey mat round a claimed hub (m), the grey of a hypha's claimed length either side (m), the mild band past either (m); their depths. */
 export const MAT = 24, VEIN_W = 8, MILD_W = 20, MAT_DEPTH = 0.45, MILD_DEPTH = 0.2;
@@ -101,7 +114,7 @@ function closure(germs: Germ[], hyphae: Hypha[], seed: number): { claimed: strin
 }
 
 /** The breach only, its hubs claimed. */
-export function freshGrowth(seed: number): Growth { const l = lairPlace(seed), breach: Germ = { id: 'breach', x: l.x, z: l.z, kind: 'breach', reach: TAINT.edge }; return { day: 0, germs: [breach], claimed: [...germHubs([breach], seed)].sort(), hyphae: [], food: 0, starved: 0 }; }
+export function freshGrowth(seed: number): Growth { const l = lairPlace(seed), breach: Germ = { id: 'breach', x: l.x, z: l.z, kind: 'breach', reach: TAINT.edge }; return { day: 0, germs: [breach], claimed: [...germHubs([breach], seed)].sort(), hyphae: [], food: 0, starved: 0, fed: false }; }
 /** C2: a new germination point; its hubs are claimed at once. */
 export function addGerm(g: Growth, germ: Germ, seed: number): Growth { const germs = [...g.germs.filter(x => x.id !== germ.id), { ...germ }], c = closure(germs, g.hyphae, seed); return { ...g, germs, claimed: c.claimed, hyphae: c.hyphae }; }
 
@@ -109,7 +122,9 @@ export function addGerm(g: Growth, germ: Germ, seed: number): Growth { const ger
 export function stepGrowth(g: Growth, seed: number, inputs: GrowthInputs): Growth {
   const pos = new Map<string, { x: number; z: number }>(), at = (h: HubRef): { x: number; z: number } => { const k = refKey(h); let p = pos.get(k); if (!p) { p = hubAt(h[0], h[1], seed); pos.set(k, p); } return p; };
   const irritated = (h: HubRef): boolean => { const p = at(h); return inputs.irritants.some(i => Math.hypot(p.x - i.x, p.z - i.z) < i.r); };
-  const food = Math.max(0, g.food + inputs.darkYoungBred * FOOD_DY + inputs.meals * FOOD_MEAL - FOOD_SPEND), starved = inputs.infantsTaken > 0 ? 0 : g.starved + 1, starving = starved >= STARVE_DAYS;
+  // Seek, feed, starve: unfed, it seeks and the starved count stays at 0; an infant taken feeds it and ends a starvation; fed, every day without one counts.
+  const fed = g.fed || inputs.infantsTaken > 0 || inputs.darkYoungBred > 0;
+  const food = Math.max(0, g.food + inputs.darkYoungBred * FOOD_DY + inputs.meals * FOOD_MEAL - FOOD_SPEND), starved = inputs.infantsTaken > 0 || !fed ? 0 : g.starved + 1, starving = starved >= STARVE_DAYS;
   const germs = g.germs.map(x => (x.kind !== 'breach' && starving ? { ...x, reach: Math.max(0, x.reach - STEP) } : { ...x }));
   const hyphae = g.hyphae.map(h => ({ from: [h.from[0], h.from[1]] as HubRef, to: [h.to[0], h.to[1]] as HubRef, t: h.t }));
   const claimed = new Set(g.claimed); for (const k of germHubs(germs, seed)) claimed.add(k);
@@ -149,11 +164,13 @@ export function stepGrowth(g: Growth, seed: number, inputs: GrowthInputs): Growt
   // A lesser germ with no hub left in it, starved, is gone.
   const kept = germs.filter(x => x.kind === 'breach' || !(starving && hubsWithin(x.x, x.z, x.reach, seed).length === 0));
   const cc = kept.length === germs.length ? c : closure(kept, c.hyphae, seed);
-  return { day: g.day + 1, germs: kept, claimed: cc.claimed, hyphae: cc.hyphae.map(h => ({ ...h, t: Math.min(1, h.t) })), food, starved };
+  // Withered back to the breach alone, it seeks again.
+  const bare = starving && kept.length === 1 && cc.hyphae.length === 0;
+  return { day: g.day + 1, germs: kept, claimed: cc.claimed, hyphae: cc.hyphae.map(h => ({ ...h, t: Math.min(1, h.t) })), food, starved: bare ? 0 : starved, fed: fed && !bare };
 }
 
 /** Saved under its own key. */
-export const serializeGrowth = (g: Growth): string => JSON.stringify({ day: g.day, germs: g.germs, claimed: g.claimed, hyphae: g.hyphae.map(h => ({ from: h.from, to: h.to, t: Math.round(h.t * 10000) / 10000 })), food: Math.round(g.food * 1000) / 1000, starved: g.starved });
+export const serializeGrowth = (g: Growth): string => JSON.stringify({ day: g.day, germs: g.germs, claimed: g.claimed, hyphae: g.hyphae.map(h => ({ from: h.from, to: h.to, t: Math.round(h.t * 10000) / 10000 })), food: Math.round(g.food * 1000) / 1000, starved: g.starved, fed: g.fed });
 /** Tolerant of garbage: anything unreadable is the breach alone; the breach is always present with M1's reach; claimed is rebuilt as the closure. */
 export function parseGrowth(raw: string | null, seed: number): Growth {
   const fresh = freshGrowth(seed);
@@ -167,7 +184,7 @@ export function parseGrowth(raw: string | null, seed: number): Growth {
     const edges = new Set<string>(), hyphae: Hypha[] = [];
     for (const x of Array.isArray(p.hyphae) ? p.hyphae : []) { const h = x as Hypha, from = ref(h?.from), to = ref(h?.to); if (!from || !to || sameRef(from, to) || !hubNeighbours(from).some(n => sameRef(n, to))) continue; const t = num(h.t, 0, 1, 0); if (t <= 0) continue; const k = `${refKey(from)}>${refKey(to)}`; if (edges.has(k)) continue; edges.add(k); hyphae.push({ from, to, t }); }
     const all = [fresh.germs[0], ...lesser], c = closure(all, hyphae, seed);
-    return { day: Math.floor(num(p.day, 0, 1e7, 0)), germs: all, claimed: c.claimed, hyphae: c.hyphae, food: num(p.food, 0, 1e6, 0), starved: Math.floor(num(p.starved, 0, 1e7, 0)) };
+    return { day: Math.floor(num(p.day, 0, 1e7, 0)), germs: all, claimed: c.claimed, hyphae: c.hyphae, food: num(p.food, 0, 1e6, 0), starved: p.fed === true ? Math.floor(num(p.starved, 0, 1e7, 0)) : 0, fed: p.fed === true };
   } catch { return fresh; }
 }
 
@@ -222,6 +239,20 @@ export function veinOf(idx: GrowthIndex, x: number, z: number): number {
 }
 /** Inside her growth: grass and roots refuse her. */
 export const inGrowth = (idx: GrowthIndex, x: number, z: number): boolean => ringOf(idx, x, z) !== null;
+/** C1.1: everything the reads within a world rectangle (x0..x1, z0..z1, inclusive) can depend on, as a string: the germs whose influence (reach + TAINT.veins)
+ * touches it, and each index cell it covers with that cell's mats and hyphae (position, edge and t, in the index's order: the land's vein pass writes in that
+ * order). Two indexes giving a rectangle the same stamp read identically at every point in it (tests/contagion.test.ts), so a reader may keep what it
+ * drew there. Cheap: a rectangle a cell wide is a few string joins. */
+export function fieldStamp(idx: GrowthIndex, x0: number, z0: number, x1: number, z1: number): string {
+  const parts: string[] = [];
+  for (const g of idx.germs) { const dx = Math.max(x0 - g.x, 0, g.x - x1), dz = Math.max(z0 - g.z, 0, g.z - z1); if (Math.hypot(dx, dz) < g.reach + TAINT.veins + 1) parts.push(`${g.id}:${g.x},${g.z},${g.reach}`); }
+  for (let i = Math.floor(x0 / idx.cell); i <= Math.floor(x1 / idx.cell); i++) for (let k = Math.floor(z0 / idx.cell); k <= Math.floor(z1 / idx.cell); k++) {
+    const c = idx.grid.get(cellKey(i, k)); if (!c) continue; parts.push(`@${i},${k}`);
+    for (const m of c.mats) { const p = idx.mats[m]; parts.push(`m${p.x},${p.z}`); }
+    for (const si of c.segs) { const s = idx.segs[si]; parts.push(`s${s.from[0]},${s.from[1]}>${s.to[0]},${s.to[1]}:${s.t}`); }
+  }
+  return parts.join(';');
+}
 /** The hyphae as world segments with their t (the tip at a + (b - a) t), for the minimap and the look's veins; the germs' own veins are by distance (veinOf), as M1 draws them. */
 export const hyphaSegments = (idx: GrowthIndex): { from: HubRef; to: HubRef; a: { x: number; z: number }; b: { x: number; z: number }; tip: { x: number; z: number }; t: number }[] => idx.segs.map(s => ({ from: s.from, to: s.to, a: { x: s.ax, z: s.az }, b: { x: s.bx, z: s.bz }, tip: { x: s.ax + (s.bx - s.ax) * s.t, z: s.az + (s.bz - s.az) * s.t }, t: s.t }));
 /** The germ whose rings cover a point (the deepest, the nearer on a tie), else null. */

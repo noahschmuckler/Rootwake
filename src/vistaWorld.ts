@@ -69,6 +69,10 @@ export interface VistaWorld {
   /** The hour; `bake: false` rebakes the mountains' shadows over the next frames instead of at once (a moving sun). */
   setHour(h: Hour, bake?: boolean): void;
   setTrees(trees: Tree[]): void;
+  /** The last partition's milliseconds (what follows setTrees on the next frame, and every 12 m walked). */
+  readonly partitionMs: number;
+  /** The tint texture's own bytes: a caller that draws into them (villageVista's ground, C1.1) hands them back to setGround and nothing is copied. */
+  readonly groundBytes: Uint8Array;
   setGround(bytes: Uint8Array): void;
   /** FOREST: the canopy over each cell of the land (n×n, 0..255): the grass thins beneath it. */
   setCanopy(bytes: Uint8Array): void;
@@ -255,17 +259,22 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
   interface Kind { trunk: THREE.BufferGeometry; crown: THREE.BufferGeometry; far: THREE.BufferGeometry; radius: number }
   const kinds: Kind[] = LEAVES.map((_, k) => treeKind(k));
   const mk = (geo: THREE.BufferGeometry, mat: THREE.Material, n: number, cast: boolean) => { const m = new THREE.InstancedMesh(geo, mat, Math.max(1, n)); m.count = 0; m.frustumCulled = false; m.castShadow = cast; m.receiveShadow = true; m.instanceMatrix.setUsage(THREE.DynamicDrawUsage); scene.add(m); return m; };
-  let byKind: Tree[][] = [], nearTrunk: THREE.InstancedMesh[] = [], nearCrown: THREE.InstancedMesh[] = [], casters: THREE.InstancedMesh[] = [], farCrown: THREE.InstancedMesh[] = [];
+  let byKind: Tree[][] = [], nearTrunk: THREE.InstancedMesh[] = [], nearCrown: THREE.InstancedMesh[] = [], casters: THREE.InstancedMesh[] = [], farCrown: THREE.InstancedMesh[] = [], capacity: number[] = [];
+  /** The trees, again: a kind's five instance buffers are kept while its trees fit them (allotted with HEADROOM over the count they were built for, so a day's
+   * greying of a few hundred trees moves no buffer; C1.1, the dawn hitch), else built again; the partition that follows uploads only the instances in use. */
+  const HEADROOM = 1.25, HEADROOM_N = 64;
   function setTrees(list: Tree[]): void {
-    for (const m of [...nearTrunk, ...nearCrown, ...casters, ...farCrown]) { scene.remove(m); m.dispose(); }
-    byKind = kinds.map((_, k) => list.filter(t => t.kind === k));
-    nearTrunk = kinds.map((k, i) => mk(k.trunk, barks[i], byKind[i].length, false));
-    nearCrown = kinds.map((k, i) => mk(k.crown, foliage[i], byKind[i].length, false));
-    // Only the trees inside the shadow box cast: copies on CASTER_LAYER, which the sun's shadow camera sees and the view does not.
-    casters = kinds.flatMap((k, i) => [mk(k.trunk, barks[i], byKind[i].length, true), mk(k.crown, foliage[i], byKind[i].length, true)]);
-    for (const c of casters) c.layers.set(CASTER_LAYER);
-    for (const k of Object.keys(CARDS).map(Number)) casters[k * 2 + 1].customDepthMaterial = depthCards[k];
-    farCrown = kinds.map((k, i) => mk(k.far, farFoliage[i], byKind[i].length, false));
+    byKind = kinds.map(() => []); for (const t of list) byKind[t.kind]?.push(t);
+    kinds.forEach((k, i) => {
+      if (nearTrunk[i] && byKind[i].length <= capacity[i]) return;
+      if (nearTrunk[i]) for (const m of [nearTrunk[i], nearCrown[i], casters[i * 2], casters[i * 2 + 1], farCrown[i]]) { scene.remove(m); m.dispose(); }
+      const cap = capacity[i] = Math.max(1, Math.ceil(byKind[i].length * HEADROOM) + HEADROOM_N);
+      nearTrunk[i] = mk(k.trunk, barks[i], cap, false); nearCrown[i] = mk(k.crown, foliage[i], cap, false);
+      // Only the trees inside the shadow box cast: copies on CASTER_LAYER, which the sun's shadow camera sees and the view does not.
+      casters[i * 2] = mk(k.trunk, barks[i], cap, true); casters[i * 2 + 1] = mk(k.crown, foliage[i], cap, true); casters[i * 2].layers.set(CASTER_LAYER); casters[i * 2 + 1].layers.set(CASTER_LAYER);
+      if (CARDS[i]) casters[i * 2 + 1].customDepthMaterial = depthCards[i];
+      farCrown[i] = mk(k.far, farFoliage[i], cap, false);
+    });
     partitionAt.set(1e9, 0, 0);
   }
   /** Only the instances in use go to the GPU (the buffers hold every tree of the kind; the land's are thousands). */
@@ -276,8 +285,9 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
   const YOUNG_FAR = 1.25, YOUNG_REACH = 260;
   /** Tuning: past this a tree is not drawn at all (the haze has it). */
   const TREE_REACH = opts.treeReach ?? 1400;
+  let partitionMs = 0;
   function partitionTrees(cam: THREE.Vector3): void {
-    const m = new THREE.Matrix4(), r2 = (q.nearTrees * (opts.nearTreesScale ?? 1)) ** 2, s2 = (q.shadow ? q.shadowBox * 1.25 + 8 : 0) ** 2, f2 = TREE_REACH ** 2; near = []; nearCount = 0;
+    const t0 = performance.now(), m = new THREE.Matrix4(), r2 = (q.nearTrees * (opts.nearTreesScale ?? 1)) ** 2, s2 = (q.shadow ? q.shadowBox * 1.25 + 8 : 0) ** 2, f2 = TREE_REACH ** 2; near = []; nearCount = 0;
     byKind.forEach((list, k) => {
       let a = 0, b = 0, c = 0;
       const [ct, cc] = [casters[k * 2], casters[k * 2 + 1]];
@@ -292,7 +302,7 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
       nearTrunk[k].count = nearCrown[k].count = a; farCrown[k].count = b; ct.count = cc.count = c; nearCount += a;
       for (const x of [nearTrunk[k], nearCrown[k], farCrown[k], ct, cc]) upload(x);
     });
-    partitionAt.copy(cam);
+    partitionAt.copy(cam); partitionMs = performance.now() - t0;
   }
   setTrees(trees);
 
@@ -334,8 +344,8 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
 
   return {
     uniforms: shared,
-    root, setHour, setQuality, setTrees,
-    setGround(bytes) { groundBytes.set(bytes); groundTex.needsUpdate = true; },
+    root, setHour, setQuality, setTrees, get partitionMs() { return partitionMs; },
+    get groundBytes() { return groundBytes; }, setGround(bytes) { if (bytes !== groundBytes) groundBytes.set(bytes); groundTex.needsUpdate = true; },
     setCanopy(bytes) { for (let k = 0; k < N * N; k++) mapBytes[k * 4] = bytes[k]; mapTex.needsUpdate = true; },
     setFloor(bytes) { floorBytes.set(bytes); floorTex.needsUpdate = true; },
     setSoil(amount, x, z) {
