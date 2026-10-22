@@ -272,6 +272,43 @@ Y, R, L, H, O, E, P once each). It hides in plain sight.
 6. **The reveal.** Petal is Nyarlathotep's smallest mask, the Crawling Chaos as a crawling flower. She is the
    part of him that walked out of Delvira to whisper, and at the reveal she goes back in.
 
+### Her look (Noah, 2026-10-22)
+
+Stage 0's concept art is in `art/petal/stage-0/`:
+- `sheet.jpg`: a turnaround and three expressions (giggling, pointing helpfully, startled and guilty);
+- `hud-portrait.jpg`: the speech-bubble portrait;
+- `full-body.jpg`: the full figure.
+
+The pieces are image-generated and do not quite agree with each other. **The canonical design**, which every
+future prompt should carry word for word, settles where they disagree:
+
+> Thornya Petal: a chubby baby flower fairy with deep brown skin, rosy cheeks, large dark-brown eyes with
+> bright catchlights, and a full head of tight black curls topped by a small crown of golden rose stamens.
+> She wears a pale green leaf bodice and a full skirt of soft pink five-petalled wild-rose petals. She has
+> two translucent pink rose-petal wings with fine darker veins, slightly too small for her, and one tiny
+> curved thorn at the tip of her left wing. Clean 2D storybook illustration, warm brown outlines, soft
+> painterly shading.
+
+The calls behind it, where the art disagrees:
+
+| Trait | Canonical | Varies in the art |
+|---|---|---|
+| Wings | two rose petals | the sheet draws four veined insect wings |
+| Dress | a petal skirt, which reads as "flower" at HUD size | the sheet has a petal collar over a leaf onesie |
+| Thorn | always one, on the left wing's tip | only `full-body.jpg` has it |
+| Crown | golden stamens, part of the flower | some images draw a tiara |
+
+The flower is the swamp rose (*Rosa palustris*), native to the Pine Barrens.
+
+**Her stages toward Gozer** keep the canonical description and change only a few traits at each step, so
+she stays recognisably the same person:
+- her proportions lengthen from baby to child, then adolescent, then adult;
+- the catchlights in her eyes dim and then go;
+- the thorns multiply along the wings and up the stems of her crown;
+- the petals deepen from pink through rose to crimson and finally near-black;
+- the stamen crown hardens into a true crown;
+- her smile stays exactly the same throughout.
+
 ### What she is for, mechanically
 
 - **Every deal is tracked** (Petal's ledger). Each bargain taken feeds Delvira. This makes the brief's
