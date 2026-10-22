@@ -303,6 +303,7 @@ export function createVillageLook(inp: LookInputs): VillageLook {
   const coarse = matchMedia('(pointer: coarse)').matches, qName = new URLSearchParams(location.search).get('q')?.toLowerCase();
   let quality = inp.quality ?? QUALITIES.find(q => q.name.toLowerCase() === qName) ?? QUALITIES[coarse ? 1 : 2];
   const kinds = treeCache(), tint = groundCache(), landStamp = () => inp.landStamp?.() ?? ''; let lastTrees: VTree[] = [];
+  let decalsHidden = false;
   const trees = (full = false) => (lastTrees = villageTrees(vl.land, vl.edge, vl.terrain, inp.treesOf, inp.villages().map(v => ({ x: v.x, z: v.z })), inp.dark, inp.blighted, inp.taint, seed, kinds, landStamp(), full));
   const world = buildVista(scene, vl.land, trees(), villageRocks(vl, seed), quality, { hazeBase: 0, hazeBelow: HAZE_BELOW, ground: groundTint(vl.land, seed, inp.blighted, inp.taint, tint, landStamp()), fine: vl.terrain.height, fineLod: true, renderer, waterDisc: { x: KARST_AT.x, z: KARST_AT.z, r: PLATEAU_R + 40 }, cloudSea: { x: KARST_AT.x, z: KARST_AT.z, y: CLOUD_Y, inner: PLATEAU_R + MOUNTAIN_RISE + 120, outer: FAR_REACH, cover: CLOUD_COVER }, farReach: FAR_REACH, lowY: LOW_Y, bladeH: BLADE_H, nearTreesScale: NEAR_TREES, treeReach: TREE_REACH });
   world.setCanopy(canopyMap(vl.land, seed)); world.setFloor(floorMap(vl.land, seed)); tint.bytes = world.groundBytes;
@@ -393,6 +394,8 @@ export function createVillageLook(inp: LookInputs): VillageLook {
       world.setSoil(f.under, f.feet.x, f.feet.z);
       // T8: the stratum. Under the soil the rock is drawn, the sky and the far things are not, and the fog closes to UNDER_FOG_M in the soil's dark (the village's own things, the roots among them, by the scene's fog; the look's by its haze).
       const st = Math.max(0, Math.min(1, f.stratum ?? 0)); world.setUnder(st);
+      // Under the earth the villages' worn decals (the green, the paths) would show through it as bright strips: hidden past half, shown again on the rise.
+      if ((st > 0.5) !== decalsHidden) { decalsHidden = st > 0.5; for (const v of inp.villages()) v.root.traverse(o => { if (o.name === 'worn-green' || o.name === 'worn-path') o.visible = !decalsHidden; }); }
       // Under it the vista's sun and sky-light go too (the trees and the understory about her stand in the dark; the earth and the rock have their own glow about her).
       if (st > 0) { const u = world.uniforms; (u.uSunCol.value as THREE.Color).multiplyScalar(1 - 0.9 * st); (u.uAmbSky.value as THREE.Color).multiplyScalar(1 - 0.75 * st); (u.uAmbGround.value as THREE.Color).multiplyScalar(1 - 0.75 * st); }
       world.setGloom(gloomColour, Math.min(1, (0.25 + f.gloom * 0.9) * Math.min(1, f.gloom * 8)) * (1 - 0.8 * clear), (0.012 + f.gloom * 0.03) * (1 - 0.85 * clear));
