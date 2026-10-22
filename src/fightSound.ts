@@ -59,5 +59,19 @@ export class FightSound {
   /** F3: root time beginning: the world drops away under a low drone and a bright bell. */
   rootTime(): void { this.tone('sine', 55, 42, 2.2, 0.35, 0, 0.25); this.tone('sine', 1318, 1310, 1.6, 0.14, 0.02, 0.003); this.tone('sine', 1975, 1970, 1.2, 0.07, 0.05, 0.003); this.hiss(0.15, 0.6, 0.35, 'lowpass', [3000, 900, 150], 0.7); }
   /** She is bitten. */
+  /** A voice: a tone with a quaver, gliding through `f` (Hz at 0, peak, end), panned (-1 left .. 1 right). */
+  private voice(type: OscillatorType, f: [number, number, number], dur: number, gain: number, vib: number, pan: number, delay = 0): void {
+    const c = this.ready(); if (!c) return; const t0 = c.currentTime + delay;
+    const o = c.createOscillator(); o.type = type; o.frequency.setValueAtTime(f[0], t0); o.frequency.linearRampToValueAtTime(f[1], t0 + dur * 0.35); o.frequency.exponentialRampToValueAtTime(f[2], t0 + dur);
+    const l = c.createOscillator(), lg = c.createGain(); l.frequency.value = vib; lg.gain.value = f[1] * 0.04; l.connect(lg); lg.connect(o.frequency);
+    const bp = c.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f[1] * 2.2; bp.Q.value = 0.9;
+    const g = c.createGain(); g.gain.setValueAtTime(0.0001, t0); g.gain.exponentialRampToValueAtTime(gain, t0 + 0.04); g.gain.setValueAtTime(gain, t0 + dur * 0.7); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    const p = c.createStereoPanner ? c.createStereoPanner() : null; o.connect(bp); bp.connect(g); if (p) { p.pan.value = pan; g.connect(p); p.connect(this.out!); } else g.connect(this.out!);
+    o.start(t0); l.start(t0); o.stop(t0 + dur + 0.02); l.stop(t0 + dur + 0.02);
+  }
+  /** Noah (2026-10-22): a snatcher running: a lost kid's bleat, quavering; `near` 0..1 its loudness by distance. */
+  bleat(near: number, pan = 0): void { if (near <= 0.01) return; const p = 0.9 + Math.random() * 0.25; this.voice('sawtooth', [520 * p, 640 * p, 470 * p], 0.55, 0.18 * near, 13, pan); this.voice('sawtooth', [520 * p, 600 * p, 430 * p], 0.3, 0.12 * near, 13, pan, 0.62); }
+  /** A snatcher at a door: an infant's cry, its mimicry, rising and breaking. */
+  cry(near: number, pan = 0): void { if (near <= 0.01) return; const p = 0.95 + Math.random() * 0.15; this.voice('triangle', [430 * p, 720 * p, 380 * p], 0.9, 0.22 * near, 6, pan); this.voice('sawtooth', [860 * p, 1440 * p, 760 * p], 0.9, 0.04 * near, 6, pan); }
   hurt(): void { this.tone('sine', 95, 45, 0.28, 0.9); this.hiss(0.15, 0.25, 0.5, 'bandpass', [700, 400, 160], 1.4); }
 }

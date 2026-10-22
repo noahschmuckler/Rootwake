@@ -74,7 +74,7 @@ function knee(a: THREE.Vector3, b: THREE.Vector3, l1: number, l2: number, bend: 
 }
 
 /** The mantle: an egg, the sac bulging behind and the head with its eyes in front, wrinkled, mottled dark above and pale beneath. Its front (+x) is where the arms meet. */
-function mantleGeometry(): THREE.BufferGeometry {
+export function mantleGeometry(): THREE.BufferGeometry {
   const g = new THREE.SphereGeometry(1, 40, 28), p = g.attributes.position as THREE.BufferAttribute, col: number[] = [], c = new THREE.Color();
   for (let i = 0; i < p.count; i++) {
     let x = p.getX(i), y = p.getY(i), z = p.getZ(i);

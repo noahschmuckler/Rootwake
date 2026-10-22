@@ -149,3 +149,65 @@ The scale (Noah: "an entire biome of grey twitching trees, the alveoli trees onl
   - She is strong enough to hold it and to send her young to farm the villages, gaining strength slowly toward freeing herself.
   - That is not a realised risk on the game's timescale.
 
+
+## The brood: snatchers and sacs (Noah, 2026-10-22)
+
+Noah approved all of the proposed suggestions, with one addition: "the snatchers can still be fast, but they try to hide en route to the village and running back with the baby. They run up to a tree or bush or other object and adopt its texture and rough form, still octopus model but crudely bush or tree shaped. Run hide run hide etc."
+
+### The snatcher, as built
+
+- **A Dark Young kid** (`broodFigures.createSnatcher`). It has the Dark Young's mantle (`darkYoung.mantleGeometry`) at kid size (`KID`) and eight arms folded as a goat kid's legs, ears and horn buds. It gallops.
+  - At a door the head's four arms unfold and reach in.
+  - It carries the infant under its belly.
+- **Run, hide, run** (`villageModel`, the D3 block):
+  - It dashes `DASH_M` (spread by `DASH_SPREAD`) toward where it is going, to the tree nearest that point within `COVER_SEARCH` that brings it at least `DASH_MIN` nearer. If there is none, it becomes a bush of itself in the open there.
+  - It hides `HIDE_S` (spread by `HIDE_SPREAD`), then dashes on. Within `FINAL_DASH` of its goal it runs straight in.
+  - It does this both ways, in to the village and back to the sacs with the infant.
+  - Hidden, it holds its shape while Hulda comes, and bolts only when she is within `SPOOKED_R`.
+  - A blow still makes it drop what it carries and run.
+  - Hidden, it is not named: the label "something small" shows only while it runs.
+- **The disguise** (`broodFigures`):
+  - **At a tree:** it stands up into a crude sapling. The mantle becomes a knot on a trunk of the hind arms braided down. The head's arms become branches, with needle tufts sprouting on their outer halves.
+  - **In the open:** it squats into a shrub, all eight arms splayed up and out and leafed.
+  - **Skin:** it takes the bark's colour and grain (`floorTexture` bark-pine or bark-oak), and the violet glow under it goes out.
+  - **The change:** the arms open from the base outward, so it reads as unfolding (`HIDE_RATE` in, `BOLT_RATE` out). The arms sway in the wind while hidden.
+  - **The one tell:** hidden, its eyes close, and every `EYE_EVERY` seconds or so one opens for `EYE_OPEN`.
+- **What it fears** (`feared`):
+  - It keeps `TORCH_R` from a watch's lit torch and `HEDGE_FEAR` from a hedge's thorn, and never hides in either.
+  - It does not go for an infant whose door stands in torchlight. It lurks hidden as a bush out of the light (`LURK_S` at a time) until the light goes, or dawn.
+  - The steward's watch now guards against the snatchers as well as the raids.
+- **Its voice** (`fightSound.bleat`, `cry`; `snatcherVoices` in `village.ts`):
+  - Running, now and then a lost kid's quavering bleat.
+  - At a door, an infant's cry: its mimicry.
+  - Hidden, silence.
+  - Both are panned and fade by distance out to `VOICE_M`.
+
+### The sacs, as built
+
+- **Gestation you can see** (`sacStage`, `sacsOf`; `broodFigures.createSac`).
+  - Over `GESTATION_TICKS` the sac grows and darkens from pink through bruise to black.
+  - Inside, the bundle lengthens and greys, and from 40% buds horns.
+  - The label reads "<name>, in a sac", then "· darkening", then "· near its time".
+- **At due it splits.** The Dark Young climbs out ("<name>'s sac splits: a Dark Young climbs out"). The torn sac hangs open and empty for `HATCH_TICKS`. If Hulda stands within `HATCH_AGGRO` it comes for her (`hatchAt` in `village.ts`).
+- **Cutting a sac open (the M2 question, answered).** Walking up no longer lifts the infant out (`carryInfant` takes only infants lying out).
+  - She stands at the sac (within `SAC_REACH`) with empty hands and cuts (`cutSac`), "cutting <name> free · n%".
+  - It takes `SAC_CUT_S`, and up to (1 + `SAC_LATE`) times as long when the sac is due.
+  - A slit opens and widens, the sac shudders, and the other sacs tighten.
+  - The vessel lashes her for `SAC_LASH` vigor every `SAC_LASH_S`, and each lash raises the mother's attention.
+  - The first cut wakes the grove's keeper: a bred Dark Young at home, if there is one, comes out hunting her.
+  - Stepping away, the cut closes after `SAC_HEAL_S`.
+  - Cut free past `SAC_MARK`, the child comes home **marked** (`InfantRef.marked`, `HobbitState.marked`, saved).
+- **Dev:** `__village.live` is the active village itself, for staging snatchers and sacs. Each snatcher figure's `group.userData.figure` can be stepped directly.
+
+### Open, for Noah
+
+- **What "marked" does.** It is recorded and saved, and nothing reads it yet. Candidates:
+  - dark eyes and an odd appetite;
+  - a child the mother can find again;
+  - the start of a turned village from inside.
+- **The tuning** of every constant above.
+- **Still to do from the suggestions:**
+  - **The parkour chase:** the snatcher escaping over the wards' and yards' canonical faces.
+  - **Two at once** at high attention, one a noisy decoy.
+  - **The vein:** from each sac back to its germ, so that cutting it starves the germ. This is the contagion's accounting, so it needs coordinating with the land session.
+  - **Freeing every sac on a turned green** as a step of C3.

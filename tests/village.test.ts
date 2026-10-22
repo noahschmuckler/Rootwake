@@ -304,11 +304,11 @@ test('D3: no infant, no snatcher; with one, a snatcher comes out of the lair, ta
     const none = freshV(4); step(none, SNATCH_TICK + 2); assert.equal(none.snatchers.length, 0, 'no infant, no snatcher');
     const v = freshV(4); assert.ok(bear(v)); const baby = v.hobbits.find(s => s.stage === 'infant')!; step(v, SNATCH_TICK + 2); assert.equal(v.snatchers.length, 1, 'one snatcher when there is an infant');
     const n = v.snatchers[0]; assert.ok(Math.hypot(n.x - 300, n.z) < 5, 'out of the lair');
-    let told = false; for (let i = 0; i < 400 && !n.infant; i++) { stepRaiders(v, 0.25, null); told ||= v.events.some(e => e.banner && e.text.includes('goats are bleating')); }
+    let told = false; for (let i = 0; i < 3000 && !n.infant; i++) { stepRaiders(v, 0.25, null); told ||= v.events.some(e => e.banner && e.text.includes('goats are bleating')); }
     assert.equal(n.infant?.id, baby.id, 'it has the infant'); assert.ok(told, 'the goats told of it'); assert.ok(!v.hobbits.some(s => s.id === baby.id), 'gone from its house'); assert.ok(!v.dead.some(d => d.id === baby.id), 'not dead'); assert.equal(v.taken, 1); assert.ok(v.events.some(e => e.text.endsWith('is taken in the night')));
     assert.ok(takenIds(v).includes(baby.id) && nextNewcomer(v)?.id !== baby.id, 'its name is not born again while it is out');
-    for (let i = 0; i < 400 && v.snatchers.length; i++) stepRaiders(v, 0.25, null); assert.equal(v.brood.length, 1, 'kept at the lair'); assert.ok(SNATCH_PACE >= 9);
-    step(v, GESTATION_TICKS + 1); assert.equal(v.bred.length, 1, 'a Dark Young is born of it'); assert.ok(v.events.some(e => e.text.toLowerCase().startsWith('a dark young is born of')));
+    for (let i = 0; i < 3000 && v.snatchers.length; i++) stepRaiders(v, 0.25, null); assert.equal(v.brood.length, 1, 'kept at the lair'); assert.ok(SNATCH_PACE >= 9);
+    step(v, GESTATION_TICKS + 1); assert.equal(v.bred.length, 1, 'a Dark Young is born of it'); assert.ok(v.events.some(e => e.text.includes('sac splits: a Dark Young climbs out')));
     const raid0 = v.raiders.length; step(v, (DT - (v.tick % DT)) + RAID_TICK + 1); const withIt = v.raiders.filter(r => r.infant?.id === baby.id); assert.equal(withIt.length, 1, `it raids with the rest (${raid0} → ${v.raiders.length})`);
     const back = par(ser(v)); assert.equal(ser(back), ser(v), 'the brood and the bred survive a save');
   } finally { setLair(null); }
@@ -351,8 +351,63 @@ test('D3.1 / M1: an infant kept at the lair hangs in the nursery\'s sac grove, o
     const v = freshV(1); v.brood.push({ infant: { id: NEWCOMERS[3].id, home: 1, born: 0 }, due: 1e9 }, { infant: { id: NEWCOMERS[4].id, home: 2, born: 0 }, due: 1e9 });
     const p = broodSpot(0)!, d = Math.hypot(p.x - 300, p.z); void REACH; assert.ok(Math.abs(d - BROOD_RING) < 1e-9 && d > TAINT.heart && d < TAINT.nursery, `in the nursery (${d.toFixed(1)} m)`); assert.ok(p.x < 300, 'on the side toward the village');
     assert.ok([1, 2, 3].every(i => { const q = broodSpot(i)!, e = Math.hypot(q.x - 300, q.z); return e > TAINT.heart && e < TAINT.nursery && Math.hypot(q.x - p.x, q.z - p.z) > 1; }), 'the sacs apart, all in the nursery');
-    assert.equal(carryInfant(v, { x: p.x + 0.3, z: p.z }), 'picked'); assert.equal(v.carried?.id, NEWCOMERS[3].id); assert.equal(v.brood.length, 1); assert.ok(v.events.some(e => e.banner && e.text.includes('back from the mother')));
+    assert.equal(carryInfant(v, { x: p.x + 0.3, z: p.z }), null, 'not lifted off: it must be cut');
+    let cut = null; for (let i = 0; i < 200 && v.brood.length === 2; i++) cut = cutSac(v, { x: p.x + 0.3, z: p.z }, 0.1);
+    assert.equal(cut?.p, 1); assert.equal(v.carried?.id, NEWCOMERS[3].id); assert.equal(v.brood.length, 1); assert.ok(v.events.some(e => e.banner && e.text.includes('free of the sac')));
     setUnkillable(false); v.lair.hp = 1; strike(v, { x: 300, z: 0 }, 1, 0); setUnkillable(true); assert.equal(v.lair.alive, false); assert.equal(v.brood.length, 0); assert.equal(v.dropped.length, 1, 'the rest lie free'); assert.ok(v.events.some(e => e.text.includes('lie free')));
+  } finally { setLair(null); }
+});
+
+// The brood (Noah, 2026-10-22; MOTHER.md): the snatcher runs and hides both ways, fears torchlight and thorn; the sacs gestate, split at due, and are cut open at a risk.
+import { cutSac, sacStage, sacsOf, hidden, feared, SNATCH_ENTER_S, SPOOKED_R, TORCH_R, HEDGE_FEAR, SAC_CUT_S, SAC_LATE, SAC_LASH, SAC_MARK, GESTATION_TICKS as GT, HATCH_TICKS } from '../src/villageModel';
+test('brood: a snatcher dashes and hides as a tree or a bush on its way in and on its way back, holding still while hidden, and bolts when she is on it', () => {
+  setLair({ x: 300, z: 0, radius: 75 });
+  try {
+    const v = freshV(4); bear(v); step(v, SNATCH_TICK + 2); const n = v.snatchers[0];
+    let hides = 0, was = false, still = true, hideAt = { x: 0, z: 0 }; const covers = new Set<string>(); let inHides = 0;
+    for (let i = 0; i < 4000 && v.snatchers.length; i++) {
+      stepRaiders(v, 0.1, null); const h = v.snatchers.length && hidden(n);
+      if (h && !was) { hides++; hideAt = { x: n.x, z: n.z }; covers.add(n.cover!); if (!n.infant) inHides++; }
+      if (h && was && Math.hypot(n.x - hideAt.x, n.z - hideAt.z) > 1e-9) still = false; was = !!h;
+    }
+    assert.ok(inHides >= 3, `it hides on the way in (${inHides})`); assert.ok(hides - inHides >= 3, `and on the way back (${hides - inHides})`); assert.ok(still, 'hidden, it holds still'); assert.ok([...covers].every(c => c === 'tree' || c === 'bush'));
+    assert.equal(v.brood.length, 1, 'and it brings the infant to the sacs');
+    // Spooked: she comes on it hidden.
+    const w = freshV(4); bear(w); step(w, SNATCH_TICK + 2); const m = w.snatchers[0]; for (let i = 0; i < 2000 && !hidden(m); i++) stepRaiders(w, 0.1, null); assert.ok(hidden(m));
+    stepRaiders(w, 0.1, { x: m.x + SPOOKED_R * 2, z: m.z }); assert.ok(hidden(m), 'she passes at a distance: it holds its shape');
+    stepRaiders(w, 0.1, { x: m.x + SPOOKED_R * 0.5, z: m.z }); assert.ok(!hidden(m), 'she is on it: it bolts');
+  } finally { setLair(null); }
+});
+test('brood: a watch\'s torch at the door keeps the snatcher off (it lurks hidden out of the light), a hedge\'s thorn bends its run; out goes the light and it comes in', () => {
+  setLair({ x: 300, z: 0, radius: 75 });
+  try {
+    const v = freshV(4); bear(v); const baby = v.hobbits.find(s => s.stage === 'infant')!, door = HOUSES[baby.home].door; const guard = v.hobbits.find(s => s.stage === 'grown')!;
+    step(v, SNATCH_TICK + 2); const n = v.snatchers[0]; const lit = (): void => { guard.x = door.x + 1; guard.z = door.z; guard.inside = false; guard.torch = true; guard.path = []; };
+    let closest = Infinity; for (let i = 0; i < 2500; i++) { lit(); stepRaiders(v, 0.1, null); closest = Math.min(closest, Math.hypot(n.x - guard.x, n.z - guard.z)); }
+    assert.equal(n.infant, null, 'it does not take the infant in torchlight'); assert.ok(v.hobbits.some(s => s.id === baby.id)); assert.ok(closest > TORCH_R * 0.85, `it keeps out of the light (${closest.toFixed(1)} m)`);
+    assert.ok(feared(v, door.x, door.z), 'the door is lit'); assert.ok(!feared(v, door.x + TORCH_R + 2, door.z));
+    delete guard.torch; for (let i = 0; i < 3000 && !n.infant; i++) stepRaiders(v, 0.1, null); assert.equal(n.infant?.id, baby.id, 'the light gone, it takes the infant');
+    v.hedges.push({ x: 10, z: 0, angle: Math.PI / 2, until: 1e9, dealt: 0 }); assert.ok(feared(v, 10 + HEDGE_FEAR * 0.5, 2)); assert.ok(!feared(v, 10 + HEDGE_FEAR + 1, 2)); void SNATCH_ENTER_S;
+  } finally { setLair(null); }
+});
+test('brood: a sac gestates (darkening, drawn by sacsOf), splits at due into a Dark Young (the torn sac hangs a while); cut open it lashes her, rouses the mother, wakes a keeper, and comes home marked if late; stepping off, the cut closes', () => {
+  setLair({ x: 300, z: 0, radius: 75 });
+  try {
+    const v = freshV(1); v.brood.push({ infant: { id: NEWCOMERS[3].id, home: 1, born: 0 }, due: v.tick + GT }, { infant: { id: NEWCOMERS[4].id, home: 2, born: 0 }, due: v.tick + GT * 0.2 });
+    assert.ok(sacStage(v, v.brood[0]) < 0.01); assert.ok(Math.abs(sacStage(v, v.brood[1]) - 0.8) < 1e-9); const drawn = sacsOf(v); assert.equal(drawn.length, 2); assert.equal(drawn[1].name, hobbitById(NEWCOMERS[4].id).name);
+    // Cut the early one: it takes SAC_CUT_S; it lashes; walking off closes it.
+    const p = broodSpot(0)!, her = { x: p.x + 0.5, z: p.z }, vig = v.hero.vigor, att = v.lair.attention;
+    cutSac(v, her, SAC_CUT_S * 0.5); assert.ok(v.cutting && v.cutting.s > 0); assert.ok(sacsOf(v)[0].cut > 0.4);
+    cutSac(v, { x: p.x + 40, z: p.z }, 3); assert.equal(v.cutting, null, 'stepping off, the cut closes');
+    let r = null; for (let i = 0; i < 100 && v.brood.length === 2; i++) r = cutSac(v, her, 0.1); assert.equal(r?.p, 1); assert.ok(v.hero.vigor <= vig - SAC_LASH, 'it lashed her'); assert.ok(v.lair.attention > att, 'it roused her'); assert.equal(v.carried?.marked, undefined, 'early: not marked');
+    // The late one: a keeper at home wakes, it takes (1 + SAC_LATE * stage) times as long, and the child is marked.
+    v.carried = null; v.bred.push({ id: NEWCOMERS[5].id, home: 0, born: 0 }); v.hero.vigor = 100; const q = broodSpot(0)!, her2 = { x: q.x + 0.5, z: q.z }; const raid0 = v.raiders.length;
+    let t = 0; for (let i = 0; i < 1000 && v.brood.length; i++) { v.hero.vigor = 100; r = cutSac(v, her2, 0.05); t += 0.05; }
+    assert.ok(t >= SAC_CUT_S * (1 + SAC_LATE * 0.8) - 0.1, `late, it is slower (${t.toFixed(2)} s)`); assert.equal(v.raiders.length, raid0 + 1, 'a keeper wakes'); assert.equal(v.raiders.at(-1)!.infant?.id, NEWCOMERS[5].id); assert.equal(v.raiders.at(-1)!.state, 'hunting');
+    assert.equal(v.carried?.marked, true, 'late: marked'); assert.ok(0.8 >= SAC_MARK);
+    const door = HOUSES[2].door; assert.equal(carryInfant(v, { x: door.x, z: door.z }), 'home'); const home = v.hobbits.find(s => s.id === NEWCOMERS[4].id)!; assert.equal(home.marked, true, 'home, and marked'); assert.equal(par(ser(v)).hobbits.find(s => s.id === home.id)?.marked, true, 'marked survives a save');
+    // Due: the sac splits.
+    const w = freshV(1); w.brood.push({ infant: { id: NEWCOMERS[3].id, home: 1, born: 0 }, due: w.tick + 3 }); step(w, 4); assert.equal(w.bred.length, 1); assert.equal(w.hatched.length, 1); assert.ok(w.events.some(e => e.text.includes('sac splits'))); step(w, HATCH_TICKS + 2); assert.equal(w.hatched.length, 0, 'the torn sac falls');
   } finally { setLair(null); }
 });
 
@@ -712,7 +767,7 @@ test('C2: a turned village\'s own germ sends its snatchers from its green: no bl
     step(v, SNATCH_TICK + 2); assert.equal(v.snatchers.length, 1, 'a snatcher: the ratio allows'); const n = v.snatchers[0]; assert.ok(Math.hypot(n.x, n.z) < 4, 'out of its own green');
     const mourn0 = v.mourningUntil; let took = 0; for (let i = 0; i < 200 && !n.infant && v.hobbits.includes(baby); i++) { stepRaiders(v, 0.25, null); took += 0.25; }
     assert.ok(n.infant && n.infant.id === baby.id, 'taken'); assert.ok(took < 3, `the door opened at once (${took} s)`); assert.ok(!v.events.some(e => e.text.startsWith('The goats are bleating')), 'no bleating'); assert.equal(v.mourningUntil, mourn0, 'no mourning'); assert.ok(v.events.some(e => e.text.endsWith('is given to her in the night')));
-    for (let i = 0; i < 400 && v.snatchers.length; i++) stepRaiders(v, 0.25, null); assert.equal(v.brood.length, 1, 'hung in a sac'); const sac = broodSpotOf(v, 0)!; assert.deepEqual(sac, groveSpot(0)); assert.ok(Math.abs(Math.hypot(sac.x, sac.z) - GROVE_R) < 1e-9, 'at the green\'s edge'); assert.ok(HOUSES.every(h => Math.hypot(h.x - sac.x, h.z - sac.z) > HOUSE_RADIUS + 1.6), 'clear of the houses');
+    for (let i = 0; i < 3000 && v.snatchers.length; i++) stepRaiders(v, 0.25, null); assert.equal(v.brood.length, 1, 'hung in a sac'); const sac = broodSpotOf(v, 0)!; assert.deepEqual(sac, groveSpot(0)); assert.ok(Math.abs(Math.hypot(sac.x, sac.z) - GROVE_R) < 1e-9, 'at the green\'s edge'); assert.ok(HOUSES.every(h => Math.hypot(h.x - sac.x, h.z - sac.z) > HOUSE_RADIUS + 1.6), 'clear of the houses');
     assert.equal(darkYoungOf(v), 1, 'the gestating count against the ratio');
     // At the ratio: no snatcher, and the infant grows up.
     v.bred.push({ id: 'rue', home: 0, born: 0 }, { id: 'dill', home: 0, born: 0 }); assert.ok(darkYoungOf(v) >= Math.floor(v.hobbits.length / DY_RATIO));

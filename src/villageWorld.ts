@@ -15,6 +15,7 @@ import { spriteMaterial, standees, crownStandees, type Standee } from './sprites
 import { treeParts, taperedTube } from './flora';
 import { createHulda } from './huldaCharacter';
 import { makeWolf, setDireLook } from './wolfFigure';
+import { createSnatcher, createSac, type SnatcherFigure, type SnatcherLook, type SacFigure } from './broodFigures';
 import { createDarkYoung, DY_SCALE, type DarkYoung } from './darkYoung';
 import { createDireWolf, DIRE_SCALE, type DireWolf } from './direWolf';
 
@@ -275,39 +276,28 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
     if (dead <= 0 && tell > 0) { f.group.scale.y *= 1 - 0.22 * tell; f.group.scale.x *= 1 + 0.06 * tell; } for (const e of f.eyes) e.scale.setScalar((f.dire ? 1.5 : 1) * (1 + 1.6 * tell));
   }
   function hideRaider(id: number): void { const f = raiderFigures.get(id); if (f) f.group.visible = false; const w = wolfFigures.get(id); if (w) w.group.visible = false; const d = direFigures.get(id); if (d) d.group.visible = false; }
-  // D3: the snatcher, a small octopoid, low and dark with two dim eyes and six arms that ripple as it runs; an infant is a pale bundle in its arms, lying on the land, or in hers.
-  const snatchMat = new THREE.MeshStandardMaterial({ color: '#1a1420', emissive: '#2a0a30', emissiveIntensity: 0.4, roughness: 0.35 }), snatchEye = new THREE.MeshBasicMaterial({ color: '#c08aff' }), bundleMat = new THREE.MeshStandardMaterial({ color: '#efe6cc', emissive: '#3a3020', emissiveIntensity: 0.25, roughness: 0.9 });
+  // D3: an infant is a pale bundle: lying on the land, or in her arms.
+  const bundleMat = new THREE.MeshStandardMaterial({ color: '#efe6cc', emissive: '#3a3020', emissiveIntensity: 0.25, roughness: 0.9 });
   const makeBundle = (): THREE.Mesh => { const b = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), bundleMat); b.scale.set(1.5, 0.8, 0.9); return b; };
-  const snatchFigures = new Map<number, { group: THREE.Group; arms: THREE.Group[]; bundle: THREE.Mesh }>();
-  function snatchFigure(id: number) {
-    let f = snatchFigures.get(id); if (f) return f;
-    const group = new THREE.Group(), body = new THREE.Mesh(new THREE.SphereGeometry(0.2, 10, 8), snatchMat); body.scale.set(1.3, 0.65, 1.1); body.position.y = 0.16; group.add(body);
-    for (const zz of [-0.07, 0.07]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.025, 6, 5), snatchEye); e.position.set(0.22, 0.22, zz); group.add(e); }
-    const arms: THREE.Group[] = []; for (let i = 0; i < 6; i++) { const a = (i / 6) * Math.PI * 2 + 0.5, g = new THREE.Group(); g.position.set(Math.cos(a) * 0.12, 0.08, Math.sin(a) * 0.12); g.rotation.y = -a; const curve = new THREE.CatmullRomCurve3([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0.18, -0.05, 0.03), new THREE.Vector3(0.36, -0.07, -0.03), new THREE.Vector3(0.5, -0.06, 0.02)]); g.add(new THREE.Mesh(taperedTube(curve, 10, 5, t => 0.035 * (1 - t * 0.85), 0), snatchMat)); group.add(g); arms.push(g); }
-    const bundle = makeBundle(); bundle.position.set(-0.05, 0.3, 0); bundle.visible = false; group.add(bundle);
-    foes.add(group); f = { group, arms, bundle }; snatchFigures.set(id, f); return f;
-  }
-  function setSnatcher(id: number, x: number, z: number, heading: number, t: number, carrying: boolean): void {
-    const f = snatchFigure(id); f.group.visible = true; f.group.position.set(x, relief(x, z), z); f.group.rotation.y = -heading; f.bundle.visible = carrying;
-    for (let i = 0; i < f.arms.length; i++) f.arms[i].rotation.z = Math.sin(t * 0.03 + i * 1.3) * 0.35;
+  // Noah (2026-10-22): the snatcher is a Dark Young kid that runs and hides, a sapling at a tree, a shrub in the open (broodFigures).
+  const snatchFigures = new Map<number, SnatcherFigure>();
+  // The figure keeps its own clock (wall time, ms): its disguise comes on at its own pace whatever the world's speed.
+  const snatchClock = new Map<number, number>();
+  function setSnatcher(id: number, s: Omit<SnatcherLook, 'y'>, t: number): void {
+    let f = snatchFigures.get(id); if (!f) { f = createSnatcher(id); foes.add(f.group); snatchFigures.set(id, f); }
+    const dt = Math.min(0.1, Math.max(0, (t - (snatchClock.get(id) ?? t)) * 0.001)); snatchClock.set(id, t);
+    f.group.visible = true; f.update({ ...s, y: relief(s.x, s.z) }, t * 0.001, dt);
   }
   function hideSnatchersBut(ids: Set<number>): void { for (const [id, f] of snatchFigures) if (!ids.has(id)) f.group.visible = false; }
-  // M1 (MOTHER.md): the birth sacs in the nursery: from a black vessel arching over, a cyst hangs, veined and swollen, translucent enough to show the infant curled inside; it sways and swells.
-  const sacMat = new THREE.MeshStandardMaterial({ color: '#c0507e', emissive: '#a01a6a', emissiveIntensity: 0.9, roughness: 0.25, transparent: true, opacity: 0.72, depthWrite: false }), stalkMat = new THREE.MeshStandardMaterial({ color: '#0c060e', roughness: 0.35 });
-  const sacs: { group: THREE.Group; cyst: THREE.Group; seed: number }[] = [];
-  function makeSac(i: number) {
-    const group = new THREE.Group(), r = mulberry32(4401 + i * 17), a = r() * Math.PI * 2; group.name = 'sac';
-    const foot = new THREE.Vector3(Math.cos(a) * 1.6, 0, Math.sin(a) * 1.6), top = new THREE.Vector3(Math.cos(a) * 0.6, 4.2 + r() * 0.6, Math.sin(a) * 0.6), hang = new THREE.Vector3(0, 3.0, 0);
-    group.add(new THREE.Mesh(taperedTube(new THREE.CatmullRomCurve3([foot, foot.clone().lerp(top, 0.5).add(new THREE.Vector3(0, 0.3, 0)), top, hang.clone().add(new THREE.Vector3(0, 0.6, 0)), hang]), 18, 6, t => 0.2 * (1 - t * 0.7), 0.04), stalkMat));
-    const cyst = new THREE.Group(); cyst.position.copy(hang);
-    const skin = new THREE.Mesh(new THREE.SphereGeometry(0.55, 14, 10), sacMat); skin.scale.set(1, 1.35, 1); skin.position.y = -0.7; cyst.add(skin);
-    const babe = makeBundle(); babe.position.y = -0.75; babe.rotation.z = 1.2; babe.scale.multiplyScalar(1.2); cyst.add(babe);
-    group.add(cyst); foes.add(group); return { group, cyst, seed: r() * 6.28 };
-  }
-  /** The infants the mother keeps, each in its sac at its place in the grove (village frame). */
-  function setSacs(kept: { x: number; z: number }[], t: number): void {
-    while (sacs.length < kept.length) sacs.push(makeSac(sacs.length));
-    sacs.forEach((s, i) => { const k = kept[i]; s.group.visible = !!k; if (!k) return; s.group.position.set(k.x, relief(k.x, k.z), k.z); s.cyst.rotation.z = Math.sin(t * 0.0011 + s.seed) * 0.12; s.cyst.rotation.x = Math.cos(t * 0.0009 + s.seed) * 0.1; const w = 1 + Math.sin(t * 0.0021 + s.seed) * 0.06; s.cyst.scale.set(w, 2 - w, w); });
+  // M1 (MOTHER.md): the birth sacs in the nursery, darkening as they gestate, cut open by her or split at due (broodFigures).
+  const sacs: SacFigure[] = [], torn: SacFigure[] = [];
+  /** The infants the mother keeps, each in its sac at its place in the grove, and the sacs that have split (village frame). */
+  function setSacs(kept: { x: number; z: number; stage: number; cut: number }[], t: number, split: { x: number; z: number; age: number }[] = []): void {
+    while (sacs.length < kept.length) { const f = createSac(sacs.length); foes.add(f.group); sacs.push(f); }
+    while (torn.length < split.length) { const f = createSac(torn.length + 40); foes.add(f.group); torn.push(f); }
+    const cutting = kept.some(k => k.cut > 0);
+    sacs.forEach((s, i) => { const k = kept[i]; s.group.visible = !!k; if (!k) return; s.group.position.set(k.x, relief(k.x, k.z), k.z); s.update({ stage: k.stage, cut: k.cut, tighten: cutting && k.cut === 0, torn: 0 }, t); });
+    torn.forEach((s, i) => { const k = split[i]; s.group.visible = !!k; if (!k) return; s.group.position.set(k.x, relief(k.x, k.z), k.z); s.update({ stage: 1, cut: 0, tighten: false, torn: Math.max(0.01, k.age) }, t); });
   }
   const lying: THREE.Mesh[] = [], inArms = makeBundle(); inArms.visible = false; scene.add(inArms);
   /** The infants lying on the land, and the one in her arms (null when none). */
