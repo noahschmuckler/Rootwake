@@ -12,7 +12,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import type { Terrain } from './worldTerrain';
 import { rng, type Land, type Tree as VTree, type Rock } from './vistaTerrain';
-import { buildVista, QUALITIES, CASTER_LAYER, sunDirection, type Hour, type Quality, type VistaWorld } from './vistaWorld';
+import { buildVista, QUALITIES, CASTER_LAYER, sunDirection, UNDER_FOG_M, UNDER_COLOUR, type Hour, type Quality, type VistaWorld } from './vistaWorld';
 import { places, dens, ruins, warrens, wallows, ownWarrens, moot, onLand, riverEdge, FOREST_RADIUS as DARK_RADIUS, KARST_AT } from './overworldModel';
 import { convergences, beyond, noise, CHUNK, forestField, forestAt, RIPARIAN } from './chunkModel';
 import { createUnderstory, type Understory } from './understory';
@@ -237,13 +237,15 @@ export function hourAtClock(h: number): Hour {
 }
 
 // ── the look ─────────────────────────────────────────────────────────────
-export interface LookFrame { clockHour: number; feet: THREE.Vector3; under: number; interior: boolean; gloom: number; hidden?: boolean; /** MOTHER.md: the Colour's strength (0..1) and how far into her out-breath (0..1); a tree's flare on screen (uv x, y, radius, strength; hue 0..1); the grey fog thinning (0..1). */ colour?: number; exhale?: number; spot?: [number, number, number, number]; spotHue?: number; clear?: number }
+export interface LookFrame { clockHour: number; feet: THREE.Vector3; under: number; /** T8 (PLATEAU.md, the stratum): how far under the soil she is on a shallow ride (the grass, a surface root; 0..1): the rock under the roots, the soil's underside, the fog that closes in the dark. Not the deep, nor the karst's conduits. */ stratum?: number; interior: boolean; gloom: number; hidden?: boolean; /** MOTHER.md: the Colour's strength (0..1) and how far into her out-breath (0..1); a tree's flare on screen (uv x, y, radius, strength; hue 0..1); the grey fog thinning (0..1). */ colour?: number; exhale?: number; spot?: [number, number, number, number]; spotHue?: number; clear?: number }
 export interface VillageLook {
   world: VistaWorld; quality: Quality;
   /** FOREST: what grows under the trees (understory.ts). */
   understory: Understory;
   frame(f: LookFrame): void;
   render(): void;
+  /** T8 (dev): the stratum's state and the look's fog reach (m, to 5%). */
+  stratum(): { amount: number; rock: boolean; rockTris: number; tiles: number; hidden: string[]; fogReach: number };
   /** Where grass gives way to the village (its paths, floors and fields), drawn from above; again when huts are built. */
   refreshClearing(): void;
   /** The trees' kinds and the ground's tint again under the taint and the blight (at dawn): only what moved since the last, `full` everything (C1.1). Return how many chunks / tiles were drawn again. */
@@ -360,7 +362,7 @@ export function createVillageLook(inp: LookInputs): VillageLook {
   }
 
   // ── each frame ──
-  const GREY_FOG = new THREE.Color('#77746f'), GLOOM = new THREE.Color('#1a1020'), GLOOM_IN = new THREE.Color('#4a0c40'), gloomColour = new THREE.Color('#1a1020'), fogColour = new THREE.Color(), dir = new THREE.Vector3();
+  const UNDER = new THREE.Color(UNDER_COLOUR), GREY_FOG = new THREE.Color('#77746f'), GLOOM = new THREE.Color('#1a1020'), GLOOM_IN = new THREE.Color('#4a0c40'), gloomColour = new THREE.Color('#1a1020'), fogColour = new THREE.Color(), dir = new THREE.Vector3();
   let lastClock = -1;
   function setQuality(q: Quality): void {
     quality = q; world.setQuality(q); understory?.setQuality(q.name);
@@ -389,16 +391,22 @@ export function createVillageLook(inp: LookInputs): VillageLook {
       world.setHour(h, lastClock < 0 || Math.abs(f.clockHour - lastClock) > 0.5); lastClock = f.clockHour;
       renderer.toneMappingExposure = h.exposure;
       world.setSoil(f.under, f.feet.x, f.feet.z);
+      // T8: the stratum. Under the soil the rock is drawn, the sky and the far things are not, and the fog closes to UNDER_FOG_M in the soil's dark (the village's own things, the roots among them, by the scene's fog; the look's by its haze).
+      const st = Math.max(0, Math.min(1, f.stratum ?? 0)); world.setUnder(st);
+      // Under it the vista's sun and sky-light go too (the trees and the understory about her stand in the dark; the earth and the rock have their own glow about her).
+      if (st > 0) { const u = world.uniforms; (u.uSunCol.value as THREE.Color).multiplyScalar(1 - 0.9 * st); (u.uAmbSky.value as THREE.Color).multiplyScalar(1 - 0.75 * st); (u.uAmbGround.value as THREE.Color).multiplyScalar(1 - 0.75 * st); }
       world.setGloom(gloomColour, Math.min(1, (0.25 + f.gloom * 0.9) * Math.min(1, f.gloom * 8)) * (1 - 0.8 * clear), (0.012 + f.gloom * 0.03) * (1 - 0.85 * clear));
       world.update(camera, performance.now() / 1000); understory.update(camera);
       // The village's figures and houses: the same sun (dimmed in a mountain's baked shadow), shadows near her, fog of the hour's horizon.
       dir.copy(sunDirection(h)); const lit = world.sunAt(f.feet.x, f.feet.z);
-      sun.color.set(h.sun); sun.intensity = h.sunI * 0.9 * (0.25 + 0.75 * lit) * (1 - f.gloom * 0.6); sun.target.position.copy(f.feet); sun.position.copy(f.feet).addScaledVector(dir, 400);
-      hemi.color.set(h.ambSky); hemi.groundColor.set(h.ambGround); hemi.intensity = h.ambI * 2.2 * (1 - f.gloom * 0.5);
-      fogColour.set(h.horizon).lerp(gloomColour, Math.min(1, f.gloom > 0 ? 0.3 + f.gloom * 0.6 + f.gloom * f.gloom * 0.1 : 0) * (1 - 0.6 * clear)); scene.background = fogColour.clone();
-      scene.fog = new THREE.FogExp2(fogColour.getHex(), h.haze * 1.3 + (f.gloom > 0 ? 0.008 + f.gloom * 0.03 : 0) * (1 - 0.92 * clear));
+      sun.color.set(h.sun); sun.intensity = h.sunI * 0.9 * (0.25 + 0.75 * lit) * (1 - f.gloom * 0.6) * (1 - 0.85 * st); sun.target.position.copy(f.feet); sun.position.copy(f.feet).addScaledVector(dir, 400);
+      hemi.color.set(h.ambSky); hemi.groundColor.set(h.ambGround); hemi.intensity = h.ambI * 2.2 * (1 - f.gloom * 0.5) * (1 - 0.5 * st);
+      fogColour.set(h.horizon).lerp(gloomColour, Math.min(1, f.gloom > 0 ? 0.3 + f.gloom * 0.6 + f.gloom * f.gloom * 0.1 : 0) * (1 - 0.6 * clear)).lerp(UNDER, st); scene.background = fogColour.clone();
+      // Three's exponential fog is squared in the distance: 5% is left at √3 / density.
+      scene.fog = new THREE.FogExp2(fogColour.getHex(), THREE.MathUtils.lerp(h.haze * 1.3 + (f.gloom > 0 ? 0.008 + f.gloom * 0.03 : 0) * (1 - 0.92 * clear), Math.sqrt(3) / UNDER_FOG_M, st));
       if (camera.far !== FAR_REACH * 1.3) { camera.far = FAR_REACH * 1.3; camera.updateProjectionMatrix(); }
     },
+    stratum: () => ({ ...world.stratum(), fogReach: Math.sqrt(3) / (scene.fog as THREE.FogExp2).density }),
     render() {
       composer.render();
       if (hud) {

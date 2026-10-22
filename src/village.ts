@@ -304,6 +304,8 @@ const inDeep = (m: Mode): boolean => m === 'meditate' || m === 'dive' || m === '
 const underCap = (m: Mode): boolean => (inDeep(m) && m !== 'meditate') || inCatwalk(m);
 /** On a catwalk: walking it, or at its portal's board. */
 const inCatwalk = (m: Mode = mode): boolean => m === 'catwalk' || (m === 'meditate' && session?.from === 'catwalk');
+/** T8: a shallow ride, under the soil along the grass or a surface root (and the sink into it and the rise out): the stratum is drawn under her, not in the deep, the dens, the catwalk or the karst's conduits. CAM_SOIL: how far under the surface the ride's camera may sink (m): within the soil, over the roots (0.5–1.5 m down) and the rock (SOIL_DEPTH, 2.6 m). Tuning. */
+const shallow = (m: Mode): boolean => m === 'grass' || m === 'root' || m === 'sink' || m === 'rise', CAM_SOIL = 1.4;
 let mode: Mode = 'ground', under = 0, press = 0, lastStickTap = -Infinity, stickDown = 0, stickDownAt = { x: 0, y: 0 };
 let trunk: { tree: Tree; h: number; az: number; downHeld: number } | null = null;
 let crown: { tree: Tree; az: number; armed: boolean } | null = null;
@@ -341,6 +343,8 @@ const stickY = (): number => (player.gesture.held ? player.gesture.y : 0), stick
 function orbitCamera(target: THREE.Vector3, back = 3.2, up = 1.3, ease = 1): void {
   const yaw = player.yaw, f = player.forward();
   camWant.set(target.x + Math.sin(yaw) * back, target.y + up, target.z + Math.cos(yaw) * back); lookWant.set(target.x + f.x * 2, target.y + 0.4 + f.y * 2, target.z + f.z * 2);
+  // T8 (PLATEAU.md, the stratum): on a shallow ride the camera stays in the soil: behind her up a hillside it would sink into the hill, under the rock that now lies SOIL_DEPTH down; it is held no deeper than CAM_SOIL under the surface at its own spot.
+  if (shallow(mode)) camWant.y = Math.max(camWant.y, relief(camWant.x, camWant.z) - CAM_SOIL);
   if (ease >= 1) { camera.position.copy(camWant); camera.lookAt(lookWant); camEased = false; return; }
   if (!camEased) { camAt.copy(camera.position); lookAt.copy(lookWant); camEased = true; }
   camAt.lerp(camWant, ease); lookAt.lerp(lookWant, ease); camera.position.copy(camAt); camera.lookAt(lookAt);
@@ -1437,7 +1441,7 @@ function frame(now: number) {
   if (look) {
     const huts = ctxs.reduce((n, c) => n + c.v.huts, 0); if (huts !== lookHuts) { lookHuts = huts; look.refreshClearing(); }
     const f = player.feet(), ck = clockOf(village.tick);
-    look.frame({ clockHour: ck.hour + ck.minute / 60, feet: f, under, interior: underCap(mode) || denField.inside || inWard || !!atm?.inCavern, gloom: taintNow.depth, colour: taintNow.colour, exhale: taintNow.exhale, ...taintFx });
+    look.frame({ clockHour: ck.hour + ck.minute / 60, feet: f, under, stratum: mode === 'karst' ? 0 : under, interior: underCap(mode) || denField.inside || inWard || !!atm?.inCavern, gloom: taintNow.depth, colour: taintNow.colour, exhale: taintNow.exhale, ...taintFx });
     impact.push(camera); look.render(); impact.pop(camera);
   } else { impact.push(camera); renderer.render(scene, camera); impact.pop(camera); }
 }

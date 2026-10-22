@@ -20,6 +20,8 @@ uniform vec3 uAmbSky; uniform vec3 uAmbGround; uniform float uHaze; uniform floa
 uniform float uHazeBelow; // T6: the air's density below the haze's base, as a share of the density at the base (1: as thick as at the base; less, and the brink sees down to the lowland)
 uniform vec4 uGloom; // a dark fog over everything (rgb, amount): the dark forest; its density is uGloomD
 uniform float uGloomD; uniform float uStars;
+uniform vec4 uUnder; // T8 (PLATEAU.md, the stratum): on a shallow ride under the soil, the soil's dark (rgb) and how far under she is (a, 0..1); uUnderD the density of the fog that closes in it
+uniform float uUnderD;
 vec3 skyColour(vec3 d){
   float y = max(d.y, 0.0);
   vec3 c = mix(uHorizon, uZenith, pow(y, 0.5));
@@ -39,7 +41,9 @@ vec3 applyHaze(vec3 col, vec3 wp){
   float amount = 1.0 - exp(-uHaze * dist * integ);
   vec3 hc = skyColour(normalize(vec3(d.x, clamp(d.y, 0.0, 1.0) * 0.35 + 0.03, d.z)));
   col = mix(col, hc, clamp(amount, 0.0, 1.0));
-  return mix(col, uGloom.rgb, uGloom.a * (1.0 - exp(-dist * uGloomD)));
+  col = mix(col, uGloom.rgb, uGloom.a * (1.0 - exp(-dist * uGloomD)));
+  if (uUnder.a > 0.0) col = mix(col, uUnder.rgb, uUnder.a * (1.0 - exp(-dist * uUnderD)));
+  return col;
 }
 /** The cel light: a soft terminator, sun only on the lit side, blue sky ambient everywhere. */
 vec3 toon(vec3 albedo, vec3 n, float vis, float ao){
@@ -190,10 +194,21 @@ vec3 floorDetail(vec2 p, vec4 fl){
   vec3 ms = mix(texture2D(uTexMoss, t).rgb, texture2D(uTexMoss, t2).rgb, 0.4);
   return (sand * fl.a + nd * fl.r + lv * fl.g + ms * fl.b) / max(fl.r + fl.g + fl.b + fl.a, 1e-3);
 }
+/** T8: the soil as seen from a shallow ride: dark earth with a grain of root threads and stones, no sun on it, lit by a glow about her (uSoil.xy) that is gone a few metres out. The land's underside is this; its top turns to it as she goes under (she is beneath the grass: no lit meadow). */
+vec3 soilEarth(vec2 p){
+  float g = fbm3(p * 0.6), f = vnoise(p * 2.3), thread = smoothstep(0.1, 0.0, abs(vnoise(p * 1.4 + 7.0) - 0.5)) * 0.45, stone = smoothstep(0.86, 0.92, vnoise(p * 6.1 + 3.0));
+  vec3 earth = mix(srgb(vec3(0.24, 0.16, 0.10)), srgb(vec3(0.38, 0.28, 0.17)), g) * (0.8 + 0.4 * f) * (1.0 - thread);
+  earth = mix(earth, srgb(vec3(0.46, 0.44, 0.40)) * (0.7 + 0.5 * f), stone);
+  return earth * (0.3 + 1.1 * exp(-distance(p, uSoil.xy) / 14.0));
+}
 void main(){
   vec3 n = normalize(vNormal);
+  vec2 p = vWorld.xz;
+  float soil = 1.0 - 0.78 * uSoil.z * (1.0 - smoothstep(14.0, 28.0, distance(p, uSoil.xy)));
+  // T8: the land seen from beneath (its normal turned away from the eye: the underside of a hillside on a ride, never a skirt seen from above) is soil, not the lit ground.
+  if (dot(vWorld - cameraPosition, n) > 0.0) { gl_FragColor = vec4(applyHaze(soilEarth(p), vWorld), soil); ${FINISH} return; }
   // A painterly bump: the normal leans with two scales of noise, so flat ground is not flat-lit.
-  vec2 p = vWorld.xz; float e = 0.6;
+  float e = 0.6;
   float b0 = fbm3(p * 0.45), bx = fbm3((p + vec2(e, 0.0)) * 0.45), bz = fbm3((p + vec2(0.0, e)) * 0.45);
   n = normalize(n + vec3(b0 - bx, 0.0, b0 - bz) * 0.9);
   vec4 md = mapData(p);
@@ -207,20 +222,16 @@ void main(){
   if (cover > 0.01) albedo = mix(albedo, floorDetail(p, fl) * (0.82 + 0.36 * fbm3(p * 0.07)), cover * (1.0 - smoothstep(0.2, 0.5, trail)));
   float vis = min(md.r * (1.0 - CANOPY_SHADE * canopyAt(p)), getShadowMask());
   vec3 col = toon(albedo, n, vis, mix(0.55, 1.0, md.g));
-  float soil = 1.0 - 0.78 * uSoil.z * (1.0 - smoothstep(14.0, 28.0, distance(vWorld.xz, uSoil.xy)));
+  // T8: under the grass the land's top is earth too, over the rock (seen through the glass about her), not the sunlit meadow.
+  if (uUnder.a > 0.0) col = mix(col, soilEarth(p), uUnder.a);
   gl_FragColor = vec4(applyHaze(col, vWorld), soil);
   ${FINISH}
 }`;
 
 // ── the grass ────────────────────────────────────────────────────────────
 /** One blade per instance in a square patch that wraps around the camera, so the blades stay put in the world. */
-export const grassVert = /* glsl */`
-${SHADOW_VERT}
-${NOISE}${ATMOS}${MAP}${TERRAIN_ALBEDO}${CLEAR}
-attribute vec4 aBlade; // x, z in the patch; size; rotation
-attribute vec4 aTuft; // the blade within its tuft: angle, offset x, offset z, height
-uniform vec2 uCenter; uniform float uPatch; uniform float uBladeH; uniform float uBladeW; uniform vec2 uWind;
-// The ground near her at a finer step than the map (x0, z0, side, texels): blades stand on the walked surface.
+/** The ground near her at a finer step than the map (x0, z0, side, texels): blades stand on the walked surface, and the stratum (T8) runs under it. */
+export const FINE = /* glsl */`
 uniform highp sampler2D uFine; uniform vec4 uFineAt;
 float fineHeight(vec2 xz, float coarse){
   vec2 f = (xz - uFineAt.xy) / uFineAt.z * (uFineAt.w - 1.0);
@@ -229,6 +240,13 @@ float fineHeight(vec2 xz, float coarse){
   float a = texelFetch(uFine, i, 0).r, b = texelFetch(uFine, i + ivec2(1, 0), 0).r, c = texelFetch(uFine, i + ivec2(0, 1), 0).r, d = texelFetch(uFine, i + ivec2(1, 1), 0).r;
   return mix(mix(a, b, t.x), mix(c, d, t.x), t.y);
 }
+`;
+export const grassVert = /* glsl */`
+${SHADOW_VERT}
+${NOISE}${ATMOS}${MAP}${TERRAIN_ALBEDO}${CLEAR}${FINE}
+attribute vec4 aBlade; // x, z in the patch; size; rotation
+attribute vec4 aTuft; // the blade within its tuft: angle, offset x, offset z, height
+uniform vec2 uCenter; uniform float uPatch; uniform float uBladeH; uniform float uBladeW; uniform vec2 uWind;
 varying vec3 vWorld; varying vec3 vCol; varying vec3 vN; varying float vY; varying float vGust; varying vec2 vMd;
 void main(){
   vec2 rel = mod(aBlade.xy - uCenter + 0.5 * uPatch, uPatch) - 0.5 * uPatch, xz = uCenter + rel;
@@ -481,11 +499,37 @@ void main(){
   float foam = 1.0 - smoothstep(0.0, 0.35 + 0.35 * vnoise(p * 2.0 + uTime * 0.3), depth);
   col = mix(col, (uAmbSky + uSunCol * md.r) * 0.85, foam * 0.75);
   float alpha = clamp(smoothstep(-0.05, 0.6, depth) * 0.82 + fres * 0.2, 0.0, 1.0);
-  gl_FragColor = vec4(applyHaze(col, vWorld), alpha);
+  gl_FragColor = vec4(applyHaze(col, vWorld), alpha * (1.0 - uUnder.a)); // T8: the water plane lies under the land; from a shallow ride it would show through the glassy soil as a bright sheet
   ${FINISH}
 }`;
 
 // ── sky ──────────────────────────────────────────────────────────────────
+// ── the stratum (T8, PLATEAU.md) ─────────────────────────────────────────
+/** The rock under the soil: a sheet of cells about the camera (uStratumAt: x0, z0 of the sheet), each vertex lowered uSoilDepth under the walked surface (the fine window where it reaches, the map beyond). */
+export const stratumVert = /* glsl */`
+${MAP}${FINE}
+uniform vec2 uStratumAt; uniform float uSoilDepth;
+varying vec3 vWorld; varying vec3 vN;
+void main(){
+  vec2 xz = uStratumAt + position.xz; vec3 n; float h = heightNormalAt(xz, n); h = fineHeight(xz, h);
+  vWorld = vec3(xz.x, h - uSoilDepth, xz.y); vN = n;
+  gl_Position = projectionMatrix * viewMatrix * vec4(vWorld, 1.0);
+}`;
+/** Dark wet rock: a grain of strata seams and mottling from the shared noise (no texture), the glint of wet stone, lit faintly from where she is and no further; the under fog has the rest. Both faces. */
+export const stratumFrag = /* glsl */`
+${NOISE}${ATMOS}
+uniform vec4 uSoil;
+varying vec3 vWorld; varying vec3 vN;
+void main(){
+  vec3 n = normalize(vN); vec2 p = vWorld.xz;
+  float g = fbm3(p * 0.35), f = vnoise(p * 3.7), seam = smoothstep(0.12, 0.0, abs(vnoise(p * 0.9 + 11.0) - 0.5));
+  vec3 rock = mix(srgb(vec3(0.20, 0.19, 0.18)), srgb(vec3(0.34, 0.32, 0.29)), g) * (0.85 + 0.3 * f) * (1.0 - 0.5 * seam);
+  float lamp = 0.3 + 1.4 * exp(-distance(p, uSoil.xy) / 14.0);
+  vec3 col = (rock * (0.6 + 0.4 * abs(n.y)) + pow(f, 6.0) * 0.12) * lamp;
+  gl_FragColor = vec4(applyHaze(col, vWorld), 1.0);
+  ${FINISH}
+}`;
+
 export const skyVert = /* glsl */`
 varying vec3 vDir;
 void main(){ vDir = position; vec4 w = modelMatrix * vec4(position, 1.0); gl_Position = projectionMatrix * viewMatrix * w; gl_Position.z = gl_Position.w * 0.99999; }`;
@@ -512,6 +556,7 @@ void main(){
   // Stars at night: a hashed field on the dome, twinkling a little.
   if (uStars > 0.0 && d.y > 0.0) { vec2 sp = vec2(atan(d.z, d.x) * 120.0, d.y * 160.0); vec2 cell = floor(sp); float h = hash12(cell); float st = step(0.985, h) * smoothstep(0.35, 0.0, length(fract(sp) - 0.5)) * (0.6 + 0.4 * sin(uTime * 2.0 + h * 40.0)); col += vec3(st * 1.4 * uStars) * smoothstep(0.0, 0.25, d.y); }
   col = mix(col, uGloom.rgb, uGloom.a * 0.85 + uGloom.a * uGloom.a * 0.13);
+  col = mix(col, uUnder.rgb, uUnder.a); // T8: no sky from under the soil
   gl_FragColor = vec4(col, 1.0);
   ${FINISH}
 }`;
