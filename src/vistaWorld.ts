@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { mergeGeometries, mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import type { CircleCollider } from './player';
 import { surfaceAt, normalAt, bakeSun, rng, type Land, type Tree, type Rock } from './vistaTerrain';
-import { terrainVert, terrainFrag, grassVert, grassFrag, solidVert, solidFrag, cardVert, cardFrag, waterVert, waterFrag, skyVert, skyFrag, cloudVert, cloudFrag } from './vistaShaders';
+import { terrainVert, terrainFrag, grassVert, grassFrag, solidVert, solidFrag, cardVert, cardFrag, waterVert, waterFrag, skyVert, skyFrag, cloudVert, cloudFrag, stratumVert, stratumFrag } from './vistaShaders';
 import { spriteTexture, standees, crownStandees, type Standee, type SpriteKind } from './sprites';
 import { floorTexture, type FloorName } from './groundTextures';
 
@@ -80,6 +80,10 @@ export interface VistaWorld {
   setFloor(bytes: Uint8Array): void;
   /** The view through soil while she is beneath it (groundVision's rule). */
   setSoil(amount: number, x: number, z: number): void;
+  /** T8 (PLATEAU.md, the stratum): how far under the soil she is on a shallow ride (0..1). Under it the rock sheet is drawn SOIL_DEPTH below the surface about the camera, the under fog closes to UNDER_FOG_M, the water fades, and past 0.5 the sky, far rings, cloud sea, far crowns and far tiles are not drawn. Costs nothing at 0. */
+  setUnder(amount: number): void;
+  /** T8 (dev): what the stratum is doing: the amount, whether the rock is drawn, its triangles, how many tiles are drawn, what is hidden. */
+  stratum(): { amount: number; rock: boolean; rockTris: number; tiles: number; hidden: string[] };
   /** A dark fog over everything (the dark forest). */
   setGloom(colour: THREE.Color, amount: number, density: number): void;
   /** Mask i (0..2): where no grass grows, a texture laid on the square at (x0, z0) of the given side. */
@@ -94,6 +98,8 @@ export interface VistaWorld {
   uniforms: Record<string, THREE.IUniform>;
 }
 
+/** T8 (PLATEAU.md, the stratum): how far under the walked surface the rock lies (m; the roots run 0.5–1.5 m under, so the ride runs between soil above and rock below), how far the under fog lets her see (m, to 5%), the colour of the soil's dark, the rock sheet's cells and their side (m: a few tens of metres about the camera is all the fog shows), and past what distance a terrain tile is not drawn while she is under. Tuning. */
+export const SOIL_DEPTH = 2.6, UNDER_FOG_M = 24, UNDER_COLOUR = '#15100a', STRATUM_CELLS = 56, STRATUM_CELL = 1.5, UNDER_TILE_REACH = 70;
 export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks: Rock[], quality: Quality, opts: Partial<VistaOptions> = {}): VistaWorld {
   const { n: N, cell: CELL, half: HALF, size: SIZE } = land;
   const root = new THREE.Group(); root.name = 'vista'; scene.add(root); scene = root as unknown as THREE.Scene;
@@ -109,6 +115,8 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
   /** Tuning: the fine window's side (m) and texels: blades stand on the walked surface within it. */
   const FINE_SIDE = 96, FINE_T = 97, fineData = new Float32Array(FINE_T * FINE_T), fineTex = new THREE.DataTexture(fineData, FINE_T, FINE_T, THREE.RedFormat, THREE.FloatType); fineTex.magFilter = fineTex.minFilter = THREE.NearestFilter;
   let fineAt = new THREE.Vector2(1e9, 1e9);
+  /** The glass about her (x, z, amount) and the fine window: the land's, the grass's and the stratum's (T8) alike. */
+  const soilU = { value: new THREE.Vector4(0, 0, 0, 0) }, fineU = { uFine: { value: fineTex }, uFineAt: { value: new THREE.Vector4(0, 0, 1, 0) } };
   for (let k = 0; k < N * N; k++) { mapBytes[k * 4 + 1] = Math.round(land.ao[k] * 255); mapBytes[k * 4 + 2] = Math.round(land.flow[k] * 255); mapBytes[k * 4 + 3] = Math.round(land.sediment[k] * 255); }
   const mapTex = new THREE.DataTexture(mapBytes, N, N, THREE.RGBAFormat, THREE.UnsignedByteType); mapTex.magFilter = mapTex.minFilter = THREE.LinearFilter; mapTex.wrapS = mapTex.wrapT = THREE.ClampToEdgeWrapping;
   const heightTex = new THREE.DataTexture(new Float32Array(land.h), N, N, THREE.RedFormat, THREE.FloatType); heightTex.magFilter = heightTex.minFilter = THREE.NearestFilter; heightTex.needsUpdate = true;
@@ -119,6 +127,7 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
     uMapData: { value: mapTex }, uSunTex: { value: sunTex }, uGround: { value: groundTex }, uFloor: { value: floorTex }, uHeight: { value: heightTex }, uMapHalf: { value: HALF }, uCell: { value: CELL }, uN: { value: N }, uSunN: { value: SN },
     uWaterY: { value: Number.isFinite(land.waterY) ? land.waterY : -1e4 }, uSnowY: { value: land.snowY },
     uGloom: { value: new THREE.Vector4(0, 0, 0, 0) }, uGloomD: { value: 0.03 }, uStars: { value: 0 },
+    uUnder: { value: new THREE.Vector4(...new THREE.Color(UNDER_COLOUR).toArray(), 0) }, uUnderD: { value: 3 / UNDER_FOG_M },
   };
   const lit = (vertexShader: string, fragmentShader: string, own: Record<string, THREE.IUniform> = {}, defines: Record<string, string> = {}): THREE.ShaderMaterial => {
     const uniforms = { ...THREE.UniformsUtils.merge([THREE.UniformsLib.lights]), ...shared, ...own };
@@ -131,7 +140,7 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
   const TILES = 16, CELLS = (N - 1) / TILES, TILE = CELLS * CELL, FINE_NEAR = 110, STEPS = land.surface && opts.fineLod ? [0.5, 1, 2, 4, 8] : [1, 2, 4, 8];
   // The clearing masks, shared by the grass (none grows there) and the land (a trail is painted on it).
   const clearU = { uClear0: { value: blank as THREE.Texture }, uClear1: { value: blank as THREE.Texture }, uClear2: { value: blank as THREE.Texture }, uClearAt: { value: [new THREE.Vector3(0, 0, 1e-3), new THREE.Vector3(0, 0, 1e-3), new THREE.Vector3(0, 0, 1e-3)] } };
-  const terrainMat = lit(terrainVert, terrainFrag, { uSoil: { value: new THREE.Vector4(0, 0, 0, 0) }, ...clearU, uTexSand: { value: floorTexture('sand') }, uTexNeedles: { value: floorTexture('needles') }, uTexLeaves: { value: floorTexture('leaves') }, uTexMoss: { value: floorTexture('moss') } }); terrainMat.side = THREE.DoubleSide;
+  const terrainMat = lit(terrainVert, terrainFrag, { uSoil: soilU, ...clearU, uTexSand: { value: floorTexture('sand') }, uTexNeedles: { value: floorTexture('needles') }, uTexLeaves: { value: floorTexture('leaves') }, uTexMoss: { value: floorTexture('moss') } }); terrainMat.side = THREE.DoubleSide;
   const at = (x: number, z: number) => surfaceAt(land, x, z);
   const tileGroup = new THREE.Group(); tileGroup.name = 'terrain'; scene.add(tileGroup);
   interface Tile { mesh: THREE.Mesh; lod: number; geos: (THREE.BufferGeometry | undefined)[]; cx: number; cz: number }
@@ -155,10 +164,13 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
     const t: Tile = { mesh: new THREE.Mesh(undefined, terrainMat), lod: -1, geos: [], cx: (ti + 0.5) * TILE - HALF, cz: (tj + 0.5) * TILE - HALF };
     t.mesh.receiveShadow = true; t.mesh.matrixAutoUpdate = false; t.mesh.userData = { ti, tj }; tileGroup.add(t.mesh); tiles.push(t);
   }
+  let underAmount = 0, tilesDrawn = 0;
   function setTileLods(cam: THREE.Vector3): void {
-    const [l1, l2, l3] = q.lod, fine = STEPS.length > 4 ? 1 : 0;
+    const [l1, l2, l3] = q.lod, fine = STEPS.length > 4 ? 1 : 0; tilesDrawn = 0;
     for (const t of tiles) {
       const d = Math.max(0, Math.hypot(t.cx - cam.x, t.cz - cam.z) - TILE * 0.7), lod = (fine && d < FINE_NEAR ? -1 : d < l1 ? 0 : d < l2 ? 1 : d < l3 ? 2 : 3) + fine;
+      // T8: under the soil the fog closes within a tile: only the tiles about her are drawn.
+      t.mesh.visible = !(underAmount > 0.5 && d > UNDER_TILE_REACH); if (t.mesh.visible) tilesDrawn++;
       if (lod === t.lod) continue;
       t.lod = lod; t.geos[lod] ??= tileGeometry(t.mesh.userData.ti, t.mesh.userData.tj, STEPS[lod]); t.mesh.geometry = t.geos[lod]!;
       // Drop the finest geometry once well away, to bound memory.
@@ -181,8 +193,9 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
     };
     for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) if (need(i, j)) { const a = vert(i, j), b = vert(i + 1, j), c = vert(i, j + 1), d = vert(i + 1, j + 1); idx.push(a, c, b, b, c, d); }
     const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nor, 3)); g.setIndex(idx); g.computeBoundingSphere();
-    const ring = new THREE.Mesh(g, terrainMat); ring.name = name; ring.frustumCulled = false; scene.add(ring);
+    const ring = new THREE.Mesh(g, terrainMat); ring.name = name; ring.frustumCulled = false; scene.add(ring); rings.push(ring);
   };
+  const rings: THREE.Mesh[] = [], clouds: THREE.Mesh[] = [], lastCam = new THREE.Vector3();
   /** Tuning: reach and spacing of the ring (m); T6: a second, coarser ring runs on to FAR_REACH so the lowland under the brink ends in haze, not at an edge. */
   const R1 = Math.max(7000, HALF + 4500), FAR_REACH = opts.farReach ?? R1;
   ringMesh(HALF - 80, R1, 80, 'far-ring');
@@ -200,14 +213,17 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
     for (const [dy, drift, cover] of [[0, 0, cs.cover], [-90, 37, cs.cover]] as [number, number, number][]) {
       const mat = new THREE.ShaderMaterial({ uniforms: { ...shared, uCloudSea: { value: new THREE.Vector3(cs.x, cs.z, cs.inner) }, uCloudCover: { value: cover }, uCloudDrift: { value: drift } }, vertexShader: cloudVert, fragmentShader: cloudFrag, transparent: true, depthWrite: false, side: THREE.DoubleSide });
       const g = new THREE.RingGeometry(Math.max(1, cs.inner - 500), cs.outer, 96, 6); g.rotateX(-Math.PI / 2); g.translate(cs.x, 0, cs.z);
-      const m = new THREE.Mesh(g, mat); m.position.y = cs.y + dy; m.name = 'cloud-sea'; m.frustumCulled = false; m.renderOrder = 2; scene.add(m);
+      const m = new THREE.Mesh(g, mat); m.position.y = cs.y + dy; m.name = 'cloud-sea'; m.frustumCulled = false; m.renderOrder = 2; scene.add(m); clouds.push(m);
     }
   }
 
+  // ── the stratum (T8): the rock under the soil, a sheet of cells about the camera, its heights read in the vertex shader ──
+  const stratumGeo = new THREE.PlaneGeometry(STRATUM_CELLS * STRATUM_CELL, STRATUM_CELLS * STRATUM_CELL, STRATUM_CELLS, STRATUM_CELLS); stratumGeo.rotateX(-Math.PI / 2); stratumGeo.deleteAttribute('uv'); stratumGeo.deleteAttribute('normal');
+  const stratumMat = new THREE.ShaderMaterial({ uniforms: { ...shared, ...fineU, uSoil: soilU, uStratumAt: { value: new THREE.Vector2() }, uSoilDepth: { value: SOIL_DEPTH } }, vertexShader: stratumVert, fragmentShader: stratumFrag, side: THREE.DoubleSide });
+  const stratum = new THREE.Mesh(stratumGeo, stratumMat); stratum.name = 'stratum'; stratum.frustumCulled = false; stratum.visible = false; scene.add(stratum);
   // ── grass ──
   const grassMat = lit(grassVert, grassFrag, { uCenter: { value: new THREE.Vector2() }, uPatch: { value: 60 }, uBladeH: { value: opts.bladeH ?? 0.34 }, uBladeW: { value: 0.045 }, uWind: { value: new THREE.Vector2(0.94, 0.34) },
-    ...clearU,
-    uFine: { value: fineTex }, uFineAt: { value: new THREE.Vector4(0, 0, 1, 0) } }); grassMat.side = THREE.DoubleSide;
+    ...clearU, ...fineU }); grassMat.side = THREE.DoubleSide;
   /** Tuning: blades per tuft (each instance is a tuft). */
   const TUFT = 3, bladeGeo = new THREE.BufferGeometry();
   { // A tuft of three blades, each three segments and a point: x across (−0.5..0.5), y up (0..1); aTuft = angle, offset x, offset z, height.
@@ -273,7 +289,7 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
       // Only the trees inside the shadow box cast: copies on CASTER_LAYER, which the sun's shadow camera sees and the view does not.
       casters[i * 2] = mk(k.trunk, barks[i], cap, true); casters[i * 2 + 1] = mk(k.crown, foliage[i], cap, true); casters[i * 2].layers.set(CASTER_LAYER); casters[i * 2 + 1].layers.set(CASTER_LAYER);
       if (CARDS[i]) casters[i * 2 + 1].customDepthMaterial = depthCards[i];
-      farCrown[i] = mk(k.far, farFoliage[i], cap, false);
+      farCrown[i] = mk(k.far, farFoliage[i], cap, false); farCrown[i].visible = underAmount <= 0.5;
     });
     partitionAt.set(1e9, 0, 0);
   }
@@ -339,7 +355,7 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
     if (!opts.fine) return;
     const x0 = Math.round(x - FINE_SIDE / 2), z0 = Math.round(z - FINE_SIDE / 2), st = FINE_SIDE / (FINE_T - 1);
     for (let j = 0; j < FINE_T; j++) for (let i = 0; i < FINE_T; i++) fineData[j * FINE_T + i] = opts.fine(x0 + i * st, z0 + j * st);
-    fineTex.needsUpdate = true; fineAt.set(x, z); grassMat.uniforms.uFineAt.value.set(x0, z0, FINE_SIDE, FINE_T);
+    fineTex.needsUpdate = true; fineAt.set(x, z); fineU.uFineAt.value.set(x0, z0, FINE_SIDE, FINE_T);
   }
 
   return {
@@ -348,16 +364,25 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
     get groundBytes() { return groundBytes; }, setGround(bytes) { if (bytes !== groundBytes) groundBytes.set(bytes); groundTex.needsUpdate = true; },
     setCanopy(bytes) { for (let k = 0; k < N * N; k++) mapBytes[k * 4] = bytes[k]; mapTex.needsUpdate = true; },
     setFloor(bytes) { floorBytes.set(bytes); floorTex.needsUpdate = true; },
+    setUnder(amount) {
+      if (amount === underAmount) return; const was = underAmount; underAmount = amount;
+      shared.uUnder.value.w = amount; stratum.visible = amount > 0.01;
+      // Past halfway the fog has what is far: what lies beyond a tile is not drawn at all (and comes back as it clears).
+      const far = amount > 0.5; if (far !== was > 0.5) { for (const o of [sky, water, ...clouds, ...rings, ...farCrown]) o.visible = !far; if (!far) water.visible = Number.isFinite(land.waterY); setTileLods(lastCam); }
+    },
+    stratum: () => ({ amount: underAmount, rock: stratum.visible, rockTris: stratum.visible ? STRATUM_CELLS * STRATUM_CELLS * 2 : 0, tiles: tilesDrawn, hidden: [sky, water, ...clouds, ...rings, ...farCrown].filter(o => !o.visible).map(o => o.name) }),
     setSoil(amount, x, z) {
-      terrainMat.uniforms.uSoil.value.set(x, z, amount, 0);
+      soilU.value.set(x, z, amount, 0);
       const glass = amount > 0.01; if (terrainMat.transparent !== glass) { terrainMat.transparent = glass; terrainMat.needsUpdate = true; }
       terrainMat.depthWrite = amount < 0.5; soilClear = amount < 0.05;
     },
     setGloom(colour, amount, density) { shared.uGloom.value.set(colour.r, colour.g, colour.b, amount); shared.uGloomD.value = density; },
     setClear(i, texture, x0, z0, side) { (clearU as Record<string, THREE.IUniform>)[`uClear${i}`].value = texture ?? blank; clearU.uClearAt.value[i].set(x0, z0, texture ? side : 1e-3); },
     update(camera, timeS) {
-      const p = camera.position; shared.uTime.value = timeS;
+      const p = camera.position; shared.uTime.value = timeS; lastCam.copy(p);
       stepBake();
+      // T8: the rock sheet rides with the camera, snapped to its cells so it never swims.
+      if (stratum.visible) stratumMat.uniforms.uStratumAt.value.set(Math.round(p.x / STRATUM_CELL) * STRATUM_CELL - STRATUM_CELLS * STRATUM_CELL / 2, Math.round(p.z / STRATUM_CELL) * STRATUM_CELL - STRATUM_CELLS * STRATUM_CELL / 2);
       if (opts.fine && Math.hypot(p.x - fineAt.x, p.z - fineAt.y) > FINE_SIDE * 0.22) refreshFine(p.x, p.z);
       sky.position.copy(p);
       setTileLods(p);

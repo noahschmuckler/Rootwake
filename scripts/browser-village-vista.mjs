@@ -1,6 +1,6 @@
 // The village under the vista's look (headless Chromium, SwiftShader): it boots past the intro, the vista's land is drawn and
 // the chunks' own ground and trees are not, the land and the sky change with the clock, the deep hides the land, and no
-// console or shader errors. Screenshots at a phone's portrait aspect land in artifacts/village-vista.
+// console or shader errors; under the grass the stratum (T8) is on and gone again on surfacing. Screenshots at a phone's portrait aspect land in artifacts/village-vista.
 import {createRequire} from 'node:module';
 import {createServer} from 'node:http';
 import {readFile,mkdir,writeFile} from 'node:fs/promises';
@@ -105,6 +105,12 @@ try{
   await page.waitForFunction(()=>window.__village.mode==='deep'&&!document.getElementById('deep').hidden,null,{timeout:10000});
   report.back=await page.evaluate(()=>({active:window.__village.deep.visit.active,act:document.getElementById('descentAct').hidden}));assert.ok(!report.back.active&&report.back.act,'back in the drop, the catwalk gone');
   await page.evaluate(()=>window.__village.deep.launch('pool'));await page.waitForFunction(()=>window.__village.mode==='ground',null,{timeout:120000});
+  // T8 (PLATEAU.md, the stratum): under the grass the rock is drawn beneath her, the fog closes within a few tens of metres and the sky and the far things are not drawn; once she is up, none of it is left.
+  await page.evaluate(()=>{const v=window.__village;v.jumpTo('noon');v.sinkAt(6,34);});await page.waitForFunction(()=>window.__village.mode==='grass'&&window.__village.under>0.9,null,{timeout:90000});
+  report.under=await page.evaluate(()=>window.__look.stratum());assert.ok(report.under.amount>0.9&&report.under.rock&&report.under.fogReach<40&&report.under.hidden.includes('sky'),`under the grass: the rock, a short fog, no sky (${JSON.stringify(report.under)})`);
+  await page.waitForTimeout(1500);await page.screenshot({path:`${out}/under-grass.png`,timeout:180000});
+  await page.evaluate(()=>window.__village.emerge());await page.waitForFunction(()=>window.__village.mode==='ground'&&window.__village.under===0,null,{timeout:90000});
+  report.surfaced=await page.evaluate(()=>window.__look.stratum());/* The green lies in her growth's gloom by now (twelve dawns stepped above), whose fog reaches about 140 m: well past the under fog's 24. */assert.ok(report.surfaced.amount===0&&!report.surfaced.rock&&report.surfaced.fogReach>100&&report.surfaced.hidden.length===0,`surfaced: nothing of it left (${JSON.stringify(report.surfaced)})`);
   report.hud=await page.evaluate(()=>document.getElementById('look-hud')?.textContent??'');
   assert.match(report.hud,/tris/);
   assert.deepEqual(errors,[],'no console or shader errors');
