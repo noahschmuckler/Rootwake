@@ -1,14 +1,19 @@
 import { test } from 'node:test'; import assert from 'node:assert/strict';
-import { plateau, walkable, PLATEAU_R, ISLAND_R, WATER_Y, WADE_DEPTH, TERRACE_R, PASS_N, MOUNTAIN_RISE, CLOUD_Y } from '../src/plateauModel';
-import { places, villageSites, KARST_AT, onLand } from '../src/overworldModel';
-import { STREAM_Z } from '../src/villageModel';
+import { plateau, walkable, standsLevel, footprint, PLATEAU_R, ISLAND_R, WATER_Y, WADE_DEPTH, TERRACE_R, TERRACE_FADE, PASS_N, MOUNTAIN_RISE, CLOUD_Y, BRINK_PAST, BRINK_LEVEL_R, VILLAGE_HALF, LEVEL_SLOPE } from '../src/plateauModel';
+import { places, villageSites, KARST_AT, onLand, standsAt, FOOT, dens, warrens, ownWarrens, wallows, ruins, moot } from '../src/overworldModel';
+import { convergences, hubAt, RING_FOOT, RING_FAR, RING_SLOPE } from '../src/chunkModel';
+import { STREAM_Z, housePlace, SITES, STORES, CROP_STRIPS, HOUSE_RADIUS, TREES } from '../src/villageModel';
 
+/** T7: why a footprint of `r` is not clear: water under it, or the ground (padded: as drawn) rising more than `rise` across it. */
+const level = (p: ReturnType<typeof plateau>, x: number, z: number, r: number, rise: number): string | null => { let lo = Infinity, hi = -Infinity; for (const q of footprint(x, z, r)) { if (p.water(q.x, q.z)) return `water under it at (${q.x.toFixed(1)}, ${q.z.toFixed(1)})`; const g = p.ground(q.x, q.z); lo = Math.min(lo, g); hi = Math.max(hi, g); } return hi - lo > rise ? `the ground rises ${(hi - lo).toFixed(2)} across it` : null; };
 const p = plateau(1);
 test('T6: the belt is a belt: past the crest the land falls to a lowland far below the cloud; three passes climb to brinks she can stand at, and nowhere else is the belt walkable', () => {
   const p = plateau(1);
   assert.equal(p.brinks.length, PASS_N);
   for (const b of p.brinks) {
-    assert.ok(walkable(p, b.x, b.z), `${b.name} is stood at`); assert.ok(p.into(b.x, b.z) >= MOUNTAIN_RISE, `${b.name} past the crest`);
+    // T7: the brink is the last level ground before the lip (where the fall begins, BRINK_PAST past the crest), a few strides back from it.
+    assert.ok(walkable(p, b.x, b.z), `${b.name} is stood at`); assert.ok(p.into(b.x, b.z) >= MOUNTAIN_RISE - 30, `${b.name} at the crest`); assert.ok(standsLevel(p, b.x, b.z, BRINK_LEVEL_R, LEVEL_SLOPE * 3), `${b.name}'s ring is on gentle ground`); assert.equal(level(p, b.x, b.z, BRINK_LEVEL_R, 0.3), null, `${b.name}'s ring stands level on its pad`);
+    { const r0 = Math.hypot(b.x - p.centre.x, b.z - p.centre.z); let lip = -1; for (let d = 0; d <= 40; d += 1) { const x = p.centre.x + Math.cos(b.angle) * (r0 + d), z = p.centre.z + Math.sin(b.angle) * (r0 + d); if (p.into(x, z) >= MOUNTAIN_RISE + BRINK_PAST) { lip = d; break; } } assert.ok(lip >= 0 && lip <= 40, `the lip lies a few strides on from ${b.name} (${lip} m)`); }
     // Up the pass from the rim: walkable all the way, never a step down, and the saddle well under the ridge beside it.
     let last = -1e9, saddle = 0; for (let r = PLATEAU_R - 30; r <= Math.hypot(b.x - p.centre.x, b.z - p.centre.z) - 4; r += 6) { const x = p.centre.x + Math.cos(b.angle) * r, z = p.centre.z + Math.sin(b.angle) * r, h = p.base(x, z); assert.ok(walkable(p, x, z), `${b.name}'s pass is walkable at ${r - PLATEAU_R}`); assert.ok(h >= last - 3, `${b.name}'s pass climbs (${r - PLATEAU_R})`); last = h; saddle = Math.max(saddle, h); }
     const beside = Math.max(...[-0.22, -0.15, -0.09, 0.09, 0.15, 0.22].map(da => p.base(p.centre.x + Math.cos(b.angle + da) * (PLATEAU_R + 560), p.centre.z + Math.sin(b.angle + da) * (PLATEAU_R + 560)))); assert.ok(beside > saddle + 30, `the ridge beside ${b.name} stands over its saddle (${beside.toFixed(0)} vs ${saddle.toFixed(0)})`);
@@ -74,4 +79,42 @@ test('the baked land round-trips: heights to 1.6 cm, the maps to a 255th, its fi
   const e = { n, half: 0, h, flow: m, sediment: m, ao: m }, back = decodeLand(1, encodeLand(1, e))!;
   assert.ok(back); for (let k = 0; k < N; k += 997) { assert.ok(Math.abs(back.h[k] - h[k]) < 0.01, `height ${k}`); assert.ok(Math.abs(back.ao[k] - m[k]) < 0.003); }
   assert.equal(decodeLand(2, encodeLand(1, e)), null, 'another seed’s bake is not this one');
+});
+
+// T7 (PLATEAU.md, every place stands clear; Noah, 2026-10-22: structures below ground and under water in some villages, and some fairy rings).
+test('T7: every village structure stands on dry ground that is level under it, in every village, for seeds 1 to 6: the houses and the hut sites, the sites, the strips, the stores, and the trees on the bank', () => {
+  for (let seed = 1; seed <= 6; seed++) {
+    const p = plateau(seed);
+    for (const v of [{ id: 'village', x: 0, z: 0 }, ...villageSites(seed)]) {
+      const at = (x: number, z: number) => ({ x: v.x + x, z: v.z + z });
+      for (let i = 0; i < 18; i++) { const h = housePlace(i), w = at(h.x, h.z), why = level(p, w.x, w.z, HOUSE_RADIUS + 0.5, 0.15); assert.equal(why, null, `seed ${seed}, ${v.id}'s house ${i}: ${why}`); }
+      // The stream site stands at the water's edge (the water is fetched there): its middle is dry, and the bank it stands on gentle.
+      for (const [k, s] of Object.entries(SITES)) { const w = at(s.x, s.z); if (k === 'stream') { assert.ok(!p.water(w.x, w.z), `seed ${seed}, ${v.id}'s stream site stands dry`); const nr = p.nearRiver(w.x, w.z, 10); assert.ok(nr && nr.d - nr.half < 2.5, `seed ${seed}, ${v.id}'s stream site stands at the water's edge`); continue; } const why = level(p, w.x, w.z, s.radius, k === 'thicket' ? 0.6 : 0.3); assert.equal(why, null, `seed ${seed}, ${v.id}'s ${k}: ${why}`); }
+      for (let n = 0; n < CROP_STRIPS; n++) { const w = at(SITES.field.x + (n - 2), SITES.field.z + (n - 2) * 0.3), why = level(p, w.x, w.z, 2.6, 0.3); assert.equal(why, null, `seed ${seed}, ${v.id}'s strip ${n}: ${why}`); }
+      for (const [k, s] of Object.entries(STORES)) { const w = at(s.x, s.z), why = level(p, w.x, w.z, 0.8, 0.15); assert.equal(why, null, `seed ${seed}, ${v.id}'s ${k}: ${why}`); }
+      for (const t of TREES) { const w = at(t.x, t.z); assert.ok(!p.water(w.x, w.z), `seed ${seed}, ${v.id}'s tree ${t.id} stands out of the water`); }
+      // The river through the village is its stream: VILLAGE_HALF across, level across the terrace at BANK_H under the green, falling before and after.
+      const r = p.rivers.find(q => q.village === v.id)!, t = p.terraces.find(q => q.id === v.id)!; let inside = 0;
+      for (let i = 0; i < r.points.length; i++) { const d = Math.hypot(r.points[i].x - v.x, r.points[i].z - v.z); if (d < TERRACE_R) { inside++; assert.ok(Math.abs(r.half[i] - VILLAGE_HALF) < 1e-6, `${r.id} is the stream through ${v.id} (${r.half[i]})`); assert.ok(Math.abs(t.y - r.surface[i]) > 1 && Math.abs(t.y - r.surface[i]) < 2, `${r.id} runs level under ${v.id}'s green (${(t.y - r.surface[i]).toFixed(2)} under it at ${i})`); } }
+      assert.ok(inside > 20, `${r.id} runs through ${v.id}'s terrace (${inside} points)`);
+      const far = r.surface[0] - r.surface[r.surface.length - 1]; assert.ok(far > 10, `${r.id} still falls from the mountains to the lake (${far.toFixed(0)} m)`);
+    }
+  }
+});
+test('T7: every place stands on dry level ground on its footprint (dens, warrens, wallows, ruins, the moot), and every fairy ring, at its hub or within RING_REACH of it, for seeds 1 to 6', () => {
+  for (let seed = 1; seed <= 6; seed++) {
+    const p = plateau(seed);
+    for (const pl of places(seed)) {
+      if (pl.kind === 'karst' || pl.kind === 'village' || pl.kind === 'lair') continue;
+      const r = FOOT[pl.kind], why = level(p, pl.x, pl.z, r, 0.05); assert.equal(why, null, `seed ${seed}, ${pl.id} at (${pl.x}, ${pl.z}): ${why} (its pad is level)`);
+      assert.ok(standsAt(seed, pl.x, pl.z, r, 6), `seed ${seed}, ${pl.id} stands on the land clear of the water`);
+    }
+    assert.ok(dens(seed).length >= 8, `seed ${seed} keeps its dens (${dens(seed).length})`); assert.equal(warrens(seed).length, dens(seed).length); assert.equal(wallows(seed).length, 1 + villageSites(seed).length); assert.equal(ruins(seed).length, 3); assert.ok(ownWarrens(seed).length >= 1); void moot(seed);
+    for (const c of convergences(seed)) {
+      const h = hubAt(c.cx, c.cz, seed), why = level(p, c.x, c.z, RING_FOOT, 0.05); assert.equal(why, null, `seed ${seed}, ${c.id} at (${c.x}, ${c.z}): ${why} (its pad is level)`); assert.ok(standsLevel(p, c.x, c.z, RING_FOOT, RING_SLOPE), `seed ${seed}, ${c.id} on gentle natural ground`);
+      assert.ok(Math.hypot(c.x - h.x, c.z - h.z) <= RING_FAR + 0.5, `${c.id} within reach of its hub`); assert.ok(onLand(seed, c.x, c.z, RING_FOOT + 4), `${c.id} on the land`);
+    }
+    for (const b of p.brinks) assert.equal(level(p, b.x, b.z, BRINK_LEVEL_R, 0.3), null, `seed ${seed}, ${b.name}'s ring stands level on its pad`);
+  }
+  void TERRACE_FADE;
 });

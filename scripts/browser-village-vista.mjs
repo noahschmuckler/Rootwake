@@ -29,6 +29,27 @@ try{
   assert.ok(report.state.height>60,`mountains past the farthest place (${report.state.height})`);
   // T6 (PLATEAU.md): the belt's passes end at brinks, deep-root destinations from the first.
   assert.equal(report.state.brinks,3,'three brinks');assert.equal(report.state.brinksReach,3,'all of them reachable by default');
+  // T7 (PLATEAU.md, every place stands clear): at each village's green (the finest land mesh is built about her), every house's base lies on the drawn ground within 0.15 m over its whole footprint, no house, site, store, strip or tree of the village stands in water, and the fairy rings about it stand on the drawn ground, dry.
+  report.t7=[];
+  for(const vil of await page.evaluate(()=>window.__village.villages().map(v=>({id:v.id,x:v.x,z:v.z})))){
+    await page.evaluate(([x,z])=>{const v=window.__village;v.jumpTo('noon');v.standAt(x,z-10,0);},[vil.x,vil.z]);await page.waitForTimeout(2500);
+    const r=await page.evaluate(([id,ox,oz])=>{const v=window.__village,m=window.__plateau.model,tiles=v.scene.getObjectByName('terrain').children;
+      const drawnAt=(x,z)=>{for(const t of tiles){const g=t.geometry;if(!g||!t.visible)continue;const pa=g.attributes.position,pos=pa.array,n=Math.round(-3+Math.sqrt(pa.count+8)),x0=pos[0],z0=pos[2],sp=pos[3]-pos[0];if(x<x0||z<z0||x>x0+n*sp||z>z0+n*sp)continue;const fx=(x-x0)/sp,fz=(z-z0)/sp,i=Math.min(n-1,Math.floor(fx)),j=Math.min(n-1,Math.floor(fz)),u=fx-i,w=fz-j,at=(ii,jj)=>pos[(jj*(n+1)+ii)*3+1],a=at(i,j),b=at(i+1,j),c=at(i,j+1),d=at(i+1,j+1);return {y:u+w<=1?a*(1-u-w)+b*u+c*w:d*(u+w-1)+c*(1-u)+b*(1-w),sp};}return null;};
+      const ring=(x,z,r,n=8)=>{const out=[[x,z]];for(let i=0;i<n;i++)out.push([x+Math.cos(i/n*6.2832)*r,z+Math.sin(i/n*6.2832)*r]);return out;};
+      const root=v.scene.children.find(o=>o.name==='village-root'&&Math.abs(o.position.x-ox)<0.5&&Math.abs(o.position.z-oz)<0.5),houses=[],wet=[];let sp=0;
+      for(const h of root.children.filter(o=>o.name.startsWith('house-'))){const x=ox+h.position.x,z=oz+h.position.z;let off=0;for(const [px,pz] of ring(x,z,1.35)){const d=drawnAt(px,pz);if(!d){off=NaN;break;}sp=d.sp;off=Math.max(off,Math.abs(h.position.y-d.y));}houses.push({id:h.name,off:+off.toFixed(3)});if(m.water(x,z))wet.push(h.name);}
+      for(const [k,s] of Object.entries(v.sites))if(m.water(ox+s.x,oz+s.z))wet.push(`site ${k}`);
+      for(const [k,s] of Object.entries(v.storeSpots))if(m.water(ox+s.x,oz+s.z))wet.push(`store ${k}`);
+      for(const t of v.trees)if(m.water(ox+t.x,oz+t.z))wet.push(`tree ${t.id}`);
+      for(let n=0;n<5;n++)if(m.water(ox+v.sites.field.x+(n-2),oz+v.sites.field.z+(n-2)*0.3))wet.push(`strip ${n}`);
+      const f=v.player.feet(),rings=[];v.scene.traverse(o=>{if(o.name==='fairy-ring'&&Math.hypot(o.position.x-f.x,o.position.z-f.z)<90){let off=0;for(const [px,pz] of ring(o.position.x,o.position.z,0.85)){const d=drawnAt(px,pz);off=d?Math.max(off,Math.abs(o.position.y-d.y)):NaN;}rings.push({x:+o.position.x.toFixed(1),z:+o.position.z.toFixed(1),off:+off.toFixed(3),wet:!!m.water(o.position.x,o.position.z)});}});
+      return {id,sp,houses,wet,rings};},[vil.id,vil.x,vil.z]);
+    report.t7.push(r);
+    assert.ok(r.houses.length>=6&&r.sp<=3.3,`${vil.id}: its houses on the finest land mesh (${r.houses.length} houses, ${r.sp} m)`);
+    for(const h of r.houses)assert.ok(h.off<=0.15,`${vil.id}'s ${h.id} stands on the drawn ground (off ${h.off})`);
+    assert.deepEqual(r.wet,[],`nothing of ${vil.id} stands in water`);
+    assert.ok(r.rings.length>=1,`a fairy ring near ${vil.id}'s green`);for(const g of r.rings)assert.ok(g.off<=0.15&&!g.wet,`the fairy ring at (${g.x}, ${g.z}) stands dry on the drawn ground (off ${g.off}, wet ${g.wet})`);
+  }
   const sky=()=>page.evaluate(()=>{const m=window.__village.scene.getObjectByName('sky').material.uniforms;return {zenith:m.uZenith.value.getHex(),stars:m.uStars.value,sun:m.uSunDir.value.y};});
   report.noon=await sky();
   await shot('night-green',()=>{const v=window.__village;v.jumpTo('night');v.setTick(v.tick+200);});

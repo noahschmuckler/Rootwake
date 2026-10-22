@@ -7,7 +7,7 @@ import { CatmullRomCurve3, Vector3 } from 'three';
 import { TREES, TREE_ROOTS, type RootEdge, grassCan } from './villageModel';
 import { NODES, FLOW_ROOTS, PILLARS, ZONES, type Node } from './karstFlowModel';
 import { KARST_AT, villageSites } from './overworldModel';
-import { CHUNK, chunkKey, chunksAround, chunkTrees, hubAt } from './chunkModel';
+import { CHUNK, chunkKey, chunksAround, chunkTrees, hubAt, convergences } from './chunkModel';
 import type { Terrain } from './worldTerrain';
 export interface WorldRoot extends RootEdge { surface: boolean; bounds: [number, number, number, number] }
 /** A node of the graph: a tree (the village's, a chunk's, a karst plant) or a hub (a junction under a chunk). Ids: village trees 0.., chunk trees 100000.., karst plants -1.., hubs -1000000... */
@@ -80,6 +80,8 @@ export function createRootNetwork(terrain: Terrain) {
     };
     // Each edge has exactly one owner; neighbors compute identical hubs. Eight ways out of a hub (the two diagonals south), so a course runs near straight, not Manhattan-long.
     join(h, hub(cx + 1, cz), 'east'); join(h, hub(cx, cz + 1), 'south'); join(h, hub(cx + 1, cz + 1), 'southeast'); join(h, hub(cx - 1, cz + 1), 'southwest');
+    // T7: the chunk's fairy ring, when it stands off the hub (chunkModel.convergences), is a junction of its own at the end of a spur from the hub: the roots meet under the ring still.
+    for (const c of convergences(terrain.seed)) if (c.cx === cx && c.cz === cz && (c.x !== h.x || c.z !== h.z)) { const id = hubId(cx, cz) - 1000000; if (!where.has(id)) where.set(id, { id, x: c.x, z: c.z, kind: 'hub', cx, cz }); join(h, { id, x: c.x, z: c.z }, 'ring'); }
     for (const t of chunkTrees(cx, cz, terrain.seed)) { if (!where.has(t.id)) where.set(t.id, { id: t.id, x: t.x, z: t.z, kind: 'tree', cx, cz }); join(h, t, `tree:${t.id}`); }
     for (const t of TREES) if (Math.floor(t.x / CHUNK) === cx && Math.floor(t.z / CHUNK) === cz) join(h, t, `village:${t.id}`);
     for (const t of siteTrees) if (Math.floor(t.x / CHUNK) === cx && Math.floor(t.z / CHUNK) === cz) join(h, t, `site:${t.id}`);

@@ -5,7 +5,7 @@
 // within EXPLORE_RADIUS of her, saved; and the places she knows.
 import { mulberry32 } from './colors';
 import { TAINT } from './taintModel';
-import { plateau, PLATEAU_R } from './plateauModel';
+import { plateau, PLATEAU_R, standsLevel, PAD_FADE, LAKE_SHORE, BANK_REACH } from './plateauModel';
 
 export type PlaceKind = 'village' | 'karst' | 'lair' | 'den' | 'ruin' | 'warren' | 'moot' | /** S4b */ 'wallow';
 export interface Place { id: string; kind: PlaceKind; name: string; x: number; z: number; radius: number; tier?: number }
@@ -28,6 +28,23 @@ export function onLand(seed: number, x: number, z: number, margin: number): bool
   if (r > PLATEAU_R - margin || r < p.lakeR(a) + margin) return false;
   const nr = p.nearRiver(x, z, margin + 6); return !nr || nr.d > nr.half + margin;
 }
+/** T7 (PLATEAU.md, every place stands clear): a place of footprint `r` stands at (x, z) when it is on the land `margin` past its footprint (onLand: the rim, the lake, the rivers and their banks) and its footprint is dry and level (plateauModel.standsLevel). */
+export function standsAt(seed: number, x: number, z: number, r: number, margin = 10, slope?: number): boolean {
+  if (!onLand(seed, x, z, r + margin)) return false;
+  // Clear of the lake's shore slope and of the rivers' bank carving too, which would cut into the level pad the land makes of the footprint (plateauModel.ground).
+  const p = plateau(seed), lk = Math.hypot(x - p.centre.x, z - p.centre.z) - p.lakeR(Math.atan2(z - p.centre.z, x - p.centre.x)); if (lk < LAKE_SHORE + r) return false;
+  const nr = p.nearRiver(x, z, BANK_REACH + r + 2); if (nr && nr.d < BANK_REACH + r) return false;
+  return standsLevel(p, x, z, r, slope);
+}
+/** T7: the nearest spot to (x, z) within `reach` where a place of footprint `r` stands (standsAt, and `ok`): the spot itself, else rings of candidates every `step` m out; null when there is none. Integer coordinates, so a place's spot is the same whenever it is placed. */
+export function settle(seed: number, x: number, z: number, r: number, reach: number, ok: (x: number, z: number) => boolean = () => true, margin = 10, step = 4, slope?: number): { x: number; z: number } | null {
+  const fits = (qx: number, qz: number): boolean => standsAt(seed, qx, qz, r, margin, slope) && ok(qx, qz);
+  if (fits(x, z)) return { x, z };
+  for (let d = step; d <= reach; d += step) { const n = Math.max(8, Math.round((2 * Math.PI * d) / step)); for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2, qx = Math.round(x + Math.cos(a) * d), qz = Math.round(z + Math.sin(a) * d); if (fits(qx, qz)) return { x: qx, z: qz }; } }
+  return null;
+}
+/** T7: the footprints the places are judged by (m): what each one draws about its centre, seated as one piece. Tuning. */
+export const FOOT = { den: 5, warren: 8, wallow: 6, ruin: 4, moot: 5 } as const;
 /** T4c (PINE BARRENS): how far (m) a point lies from the nearest river's water's edge, within `reach` of its course (else Infinity). */
 export function riverEdge(seed: number, x: number, z: number, reach = 40): number { const nr = plateau(seed).nearRiver(x, z, reach); return nr ? Math.max(0, nr.d - nr.half) : Infinity; }
 /** T4c: whether a river crossing (a ford, stepping stones, a footbridge) lies within `r` m: the streamside thickets keep off its approaches. */
@@ -38,9 +55,12 @@ export function dens(seed: number): Den[] {
   const lair = basePlaces(seed).find(p => p.id === 'lair')!, out: Den[] = [];
   for (let cx = -DEN_RANGE; cx <= DEN_RANGE; cx++) for (let cz = -DEN_RANGE; cz <= DEN_RANGE; cz++) {
     const rand = mulberry32((seed * 9173 + (cx + 50) * 613 + (cz + 50) * 7919 + 100003) >>> 0);
-    const x = Math.round((cx + 0.5) * DEN_CELL + (rand() - 0.5) * 0.6 * DEN_CELL), z = Math.round((cz + 0.5) * DEN_CELL + (rand() - 0.5) * 0.6 * DEN_CELL), dg = danger(x, z), roll = rand();
+    let x = Math.round((cx + 0.5) * DEN_CELL + (rand() - 0.5) * 0.6 * DEN_CELL), z = Math.round((cz + 0.5) * DEN_CELL + (rand() - 0.5) * 0.6 * DEN_CELL); const dg = danger(x, z), roll = rand();
     if (roll >= dg * DEN_CHANCE) continue;
-    if (!onLand(seed, x, z, DEN_RADIUS + 20) || Math.hypot(x, z) < VILLAGE_RADIUS + DEN_CLEAR || Math.hypot(x - KARST_AT.x, z - KARST_AT.z) < 100 + DEN_CLEAR || Math.hypot(x - lair.x, z - lair.z) < Math.max(FOREST_RADIUS + DEN_CLEAR, LAIR_CLEAR) || villageSites(seed).some(v => Math.hypot(x - v.x, z - v.z) < VILLAGE_RADIUS + DEN_CLEAR)) continue;
+    const clear = (x: number, z: number): boolean => onLand(seed, x, z, DEN_RADIUS + 20) && Math.hypot(x, z) >= VILLAGE_RADIUS + DEN_CLEAR && Math.hypot(x - KARST_AT.x, z - KARST_AT.z) >= 100 + DEN_CLEAR && Math.hypot(x - lair.x, z - lair.z) >= Math.max(FOREST_RADIUS + DEN_CLEAR, LAIR_CLEAR) && !villageSites(seed).some(v => Math.hypot(x - v.x, z - v.z) < VILLAGE_RADIUS + DEN_CLEAR);
+    if (!clear(x, z)) continue;
+    // T7: the den's mound stands on dry level ground: the spot the seed drew, else the nearest such spot within its cell's play (DEN_CELL × 0.3).
+    const at = settle(seed, x, z, FOOT.den, DEN_CELL * 0.3, clear); if (!at) continue; x = at.x; z = at.z;
     const tier = 1 + Math.min(2, Math.floor(dg * 3)); out.push({ id: `den-${cx},${cz}`, x, z, tier, pack: PACK_BASE + tier });
   }
   denCache.set(seed, out); return out;
@@ -85,14 +105,14 @@ export function ruins(seed: number): Ruin[] {
   const rand = mulberry32((seed * 7127 + 331) >>> 0), lair = basePlaces(seed).find(p => p.id === 'lair')!, out: Ruin[] = [];
   for (let i = 0; i < 600 && out.length < RUIN_N; i++) {
     const a = rand() * Math.PI * 2, r = RUIN_NEAR + rand() * (RUIN_FAR - RUIN_NEAR), x = Math.round(Math.cos(a) * r), z = Math.round(Math.sin(a) * r);
-    if (!onLand(seed, x, z, RUIN_RADIUS + 10) || Math.hypot(x - KARST_AT.x, z - KARST_AT.z) < 100 + RUIN_CLEAR || Math.hypot(x - lair.x, z - lair.z) < Math.max(FOREST_RADIUS, TAINT.edge) + RUIN_CLEAR) continue;
+    if (!onLand(seed, x, z, RUIN_RADIUS + 10) || !standsAt(seed, x, z, FOOT.ruin, 6) || Math.hypot(x - KARST_AT.x, z - KARST_AT.z) < 100 + RUIN_CLEAR || Math.hypot(x - lair.x, z - lair.z) < Math.max(FOREST_RADIUS, TAINT.edge) + RUIN_CLEAR) continue;
     if (villageSites(seed).some(v => Math.hypot(x - v.x, z - v.z) < VILLAGE_RADIUS + RUIN_CLEAR) || dens(seed).some(d => Math.hypot(x - d.x, z - d.z) < DEN_RADIUS + RUIN_CLEAR) || warrens(seed).some(w => Math.hypot(x - w.x, z - w.z) < WARREN_RADIUS + RUIN_CLEAR) || out.some(o => Math.hypot(x - o.x, z - o.z) < RUIN_APART)) continue;
     const k = out.length; out.push({ id: `ruin-${k}`, name: RUIN_LORE[k].name, lore: RUIN_LORE[k].lore, x, z });
   }
   ruinCache.set(seed, out); return out;
 }
 /** S1 (SETTLEMENTS.md, the pooled ecology): a warren for every den: a pool of rabbits WARREN_FRAC of the way from the den toward the village it comes down on (the nearest), up to WARREN_SIDE m off the line by the seed (the other side when that lands in the dark forest), WARREN_RADIUS across; the den's wolves eat there at dusk before they come to the village, and the village's hunters will too. Tuning. */
-export const WARREN_FRAC = 0.35, WARREN_SIDE = 45, WARREN_RADIUS = 12;
+export const WARREN_FRAC = 0.35, WARREN_SIDE = 45, WARREN_RADIUS = 12, /** T7: how far along the line the warren may slide for level ground. */ WARREN_ALONG: [number, number] = [0.22, 0.5];
 export interface Warren { id: string; den: string; x: number; z: number }
 const warrenCache = new Map<number, Warren[]>();
 export function warrens(seed: number): Warren[] {
@@ -101,10 +121,20 @@ export function warrens(seed: number): Warren[] {
   for (const d of dens(seed)) {
     const rand = mulberry32((seed * 7477 + d.x * 31 + d.z * 17 + 9001) >>> 0), v = villages.slice().sort((a, b) => Math.hypot(a.x - d.x, a.z - d.z) - Math.hypot(b.x - d.x, b.z - d.z))[0];
     const dx = v.x - d.x, dz = v.z - d.z, len = Math.hypot(dx, dz) || 1, nx = -dz / len, nz = dx / len, side = (rand() - 0.5) * 2 * WARREN_SIDE;
-    let x = Math.round(d.x + dx * WARREN_FRAC + nx * side), z = Math.round(d.z + dz * WARREN_FRAC + nz * side);
-    if (Math.hypot(x - lair.x, z - lair.z) < LAIR_CLEAR || !onLand(seed, x, z, WARREN_RADIUS + 6)) { x = Math.round(d.x + dx * WARREN_FRAC - nx * side); z = Math.round(d.z + dz * WARREN_FRAC - nz * side); }
-    // Off the water: drawn back toward the den until dry (the den itself is).
-    for (let k = 1; k <= 10 && !onLand(seed, x, z, WARREN_RADIUS + 6); k++) { x = Math.round(x + (d.x - x) * 0.25); z = Math.round(z + (d.z - z) * 0.25); }
+    const spot = (sd: number, frac = WARREN_FRAC): { x: number; z: number } => ({ x: Math.round(d.x + dx * frac + nx * sd), z: Math.round(d.z + dz * frac + nz * sd) });
+    // T7: dry, level (standsAt) and clear of the den's own pad and the dark forest: where the seed put it, else the nearest spot to that along the line's breadth, else nearer the den or the village (WARREN_ALONG).
+    const fits = (q: { x: number; z: number }): boolean => Math.hypot(q.x - lair.x, q.z - lair.z) >= LAIR_CLEAR && standsAt(seed, q.x, q.z, FOOT.warren, 6) && Math.hypot(q.x - d.x, q.z - d.z) >= FOOT.den + FOOT.warren + PAD_FADE + 1;
+    let at: { x: number; z: number } | null = fits(spot(side)) ? spot(side) : null;
+    for (let k = 3; k <= 2 * WARREN_SIDE && !at; k += 3) for (const sd of [side + k, side - k]) if (!at && Math.abs(sd) <= WARREN_SIDE && fits(spot(sd))) at = spot(sd);
+    for (let a = 3; a <= (WARREN_ALONG[1] - WARREN_ALONG[0]) * len / 2 && !at; a += 3) for (const fr of [WARREN_FRAC - a / len, WARREN_FRAC + a / len]) for (let k = 0; k <= 2 * WARREN_SIDE && !at; k += 3) for (const sd of k ? [side + k, side - k] : [side]) if (!at && fr >= WARREN_ALONG[0] && fr <= WARREN_ALONG[1] && Math.abs(sd) <= WARREN_SIDE && fits(spot(sd, fr))) at = spot(sd, fr);
+    // Nowhere on the line: the nearest level spot to the seed's within WARREN_SIDE + 20 m of it, off the line and (as the old draw toward the den was) in the dark forest if it must be; last of all that old draw, back toward the den until dry.
+    at ??= settle(seed, spot(side).x, spot(side).z, FOOT.warren, WARREN_SIDE + 20, (qx, qz) => Math.hypot(qx - d.x, qz - d.z) >= FOOT.den + FOOT.warren + PAD_FADE + 1, 6, 4);
+    let { x, z } = at ?? spot(side);
+    if (!at) {
+      if (Math.hypot(x - lair.x, z - lair.z) < LAIR_CLEAR || !onLand(seed, x, z, WARREN_RADIUS + 6)) { x = Math.round(d.x + dx * WARREN_FRAC - nx * side); z = Math.round(d.z + dz * WARREN_FRAC - nz * side); }
+      // Off the water: drawn back toward the den until dry (the den itself is).
+      for (let k = 1; k <= 10 && !onLand(seed, x, z, WARREN_RADIUS + 6); k++) { x = Math.round(x + (d.x - x) * 0.25); z = Math.round(z + (d.z - z) * 0.25); }
+    }
     out.push({ id: `warren:${d.id}`, den: d.id, x, z });
   }
   warrenCache.set(seed, out); return out;
@@ -118,7 +148,7 @@ export function ownWarrens(seed: number): Warren[] {
   for (const v of [{ id: 'village', x: 0, z: 0 }, ...villageSites(seed)]) {
     if (dens(seed).some(d => Math.hypot(d.x - v.x, d.z - v.z) <= DEN_REACH)) continue;
     const rand = mulberry32((seed * 3313 + Math.round(v.x) * 7 + Math.round(v.z) * 13 + 77) >>> 0); let x = 0, z = 0;
-    for (let i = 0; i < 24; i++) { const a = rand() * Math.PI * 2; x = Math.round(v.x + Math.cos(a) * OWN_WARREN_R); z = Math.round(v.z + Math.sin(a) * OWN_WARREN_R); if (Math.hypot(x - lair.x, z - lair.z) > FOREST_RADIUS + 30 && Math.hypot(x - KARST_AT.x, z - KARST_AT.z) > 130 && onLand(seed, x, z, WARREN_RADIUS + 6)) break; }
+    for (let i = 0; i < 24; i++) { const a = rand() * Math.PI * 2; x = Math.round(v.x + Math.cos(a) * OWN_WARREN_R); z = Math.round(v.z + Math.sin(a) * OWN_WARREN_R); if (Math.hypot(x - lair.x, z - lair.z) > FOREST_RADIUS + 30 && Math.hypot(x - KARST_AT.x, z - KARST_AT.z) > 130 && onLand(seed, x, z, WARREN_RADIUS + 6) && standsAt(seed, x, z, FOOT.warren, 6)) break; } // T7: dry and level
     out.push({ id: `warren:own:${v.id}`, den: '', x, z });
   }
   ownCache.set(seed, out); return out;
@@ -132,7 +162,7 @@ export function wallows(seed: number): Wallow[] {
   const lair = basePlaces(seed).find(p => p.id === 'lair')!, out: Wallow[] = [], burrows = [...warrens(seed), ...ownWarrens(seed)];
   for (const v of [{ id: 'village', x: 0, z: 0 }, ...villageSites(seed)]) {
     const rand = mulberry32((seed * 4721 + Math.round(v.x) * 11 + Math.round(v.z) * 17 + 91) >>> 0); let x = 0, z = 0;
-    for (let i = 0; i < 32; i++) { const a = rand() * Math.PI * 2; x = Math.round(v.x + Math.cos(a) * WALLOW_R); z = Math.round(v.z + Math.sin(a) * WALLOW_R); if (Math.hypot(x - lair.x, z - lair.z) > FOREST_RADIUS + 30 && Math.hypot(x - KARST_AT.x, z - KARST_AT.z) > 130 && onLand(seed, x, z, WALLOW_RADIUS + 6) && !burrows.some(w => Math.hypot(w.x - x, w.z - z) < 40) && !dens(seed).some(d => Math.hypot(d.x - x, d.z - z) < DEN_RADIUS + 20)) break; }
+    for (let i = 0; i < 32; i++) { const a = rand() * Math.PI * 2; x = Math.round(v.x + Math.cos(a) * WALLOW_R); z = Math.round(v.z + Math.sin(a) * WALLOW_R); if (Math.hypot(x - lair.x, z - lair.z) > FOREST_RADIUS + 30 && Math.hypot(x - KARST_AT.x, z - KARST_AT.z) > 130 && onLand(seed, x, z, WALLOW_RADIUS + 6) && standsAt(seed, x, z, FOOT.wallow, 6) && !burrows.some(w => Math.hypot(w.x - x, w.z - z) < 40) && !dens(seed).some(d => Math.hypot(d.x - x, d.z - z) < DEN_RADIUS + 20) && !ruins(seed).some(r => Math.hypot(r.x - x, r.z - z) < WALLOW_RADIUS + RUIN_CLEAR)) break; } // T7: dry and level, and (as the ruins are placed first) clear of them by the ruins' own clearance
     out.push({ id: `wallow:${v.id}`, village: v.id, x, z });
   }
   wallowCache.set(seed, out); return out;
@@ -144,8 +174,8 @@ export function moot(seed: number): { id: 'moot'; name: string; x: number; z: nu
   let at = mootCache.get(seed);
   if (!at) { const rand = mulberry32((seed * 6007 + 4243) >>> 0), lair = basePlaces(seed).find(p => p.id === 'lair')!;
     for (let i = 0; i < 800 && !at; i++) { const a = rand() * Math.PI * 2, r = MOOT_NEAR + rand() * (MOOT_FAR - MOOT_NEAR), x = Math.round(Math.cos(a) * r), z = Math.round(Math.sin(a) * r);
-      if (!onLand(seed, x, z, MOOT_RADIUS + 10) || Math.hypot(x - KARST_AT.x, z - KARST_AT.z) < 100 + MOOT_CLEAR || Math.hypot(x - lair.x, z - lair.z) < FOREST_RADIUS + MOOT_CLEAR) continue;
-      if (dens(seed).some(d => Math.hypot(x - d.x, z - d.z) < DEN_RADIUS + MOOT_CLEAR) || ruins(seed).some(r => Math.hypot(x - r.x, z - r.z) < RUIN_RADIUS + MOOT_CLEAR) || [...warrens(seed), ...ownWarrens(seed)].some(w => Math.hypot(x - w.x, z - w.z) < WARREN_RADIUS + MOOT_CLEAR) || villageSites(seed).some(v => Math.hypot(x - v.x, z - v.z) < VILLAGE_RADIUS + MOOT_CLEAR)) continue;
+      if (!onLand(seed, x, z, MOOT_RADIUS + 10) || !standsAt(seed, x, z, FOOT.moot, 6) || Math.hypot(x - KARST_AT.x, z - KARST_AT.z) < 100 + MOOT_CLEAR || Math.hypot(x - lair.x, z - lair.z) < FOREST_RADIUS + MOOT_CLEAR) continue;
+      if (dens(seed).some(d => Math.hypot(x - d.x, z - d.z) < DEN_RADIUS + MOOT_CLEAR) || ruins(seed).some(r => Math.hypot(x - r.x, z - r.z) < Math.max(RUIN_RADIUS + MOOT_CLEAR, MOOT_RADIUS + RUIN_CLEAR)) || [...warrens(seed), ...ownWarrens(seed)].some(w => Math.hypot(x - w.x, z - w.z) < WARREN_RADIUS + MOOT_CLEAR) || villageSites(seed).some(v => Math.hypot(x - v.x, z - v.z) < VILLAGE_RADIUS + MOOT_CLEAR)) continue;
       at = { x, z }; }
     at ??= { x: MOOT_NEAR, z: 0 }; mootCache.set(seed, at); }
   return { id: 'moot', name: 'the old moot', x: at.x, z: at.z };

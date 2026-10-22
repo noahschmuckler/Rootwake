@@ -4,7 +4,8 @@
 // included) is an island the chunks defer to: no hills and no chunk trees within MEADOW_ISLAND of the
 // village, and the karst stands on an island of its own (KARST_ISLAND), its clearing kept free of chunk trees.
 import { mulberry32 } from './colors';
-import { places, villageSites, onLand, riverEdge, crossingNear, FOREST_RADIUS, KARST_AT } from './overworldModel';
+import { places, villageSites, onLand, riverEdge, crossingNear, settle, FOREST_RADIUS, KARST_AT, FOOT } from './overworldModel';
+import { PAD_FADE } from './plateauModel';
 import { TAINT } from './taintModel';
 import type { Tree } from './villageModel';
 
@@ -106,12 +107,18 @@ function cedars(cx: number, cz: number, seed: number, out: Tree[]): Tree[] {
 }
 /** The root network's hub of a chunk (worldRoots joins the chunk's roots there): near its middle, nudged by the seed. The same rule serves the deep roots' convergences. */
 export const hubAt = (cx: number, cz: number, seed = 1): { x: number; z: number } => ({ x: (cx + 0.5) * CHUNK + (noise(cx * 19, cz * 19, 13, seed + 31) - 0.5) * 16, z: (cz + 0.5) * CHUNK + (noise(cx * 19, cz * 19, 13, seed + 67) - 0.5) * 16 });
-/** G4 (Noah): a root convergence for every place on the land but the karst: the hub of the place's chunk, marked above ground by a fairy ring with a pool of crystal water in it. One per chunk; `about` is the place it serves. */
+/** G4 (Noah): a root convergence for every place on the land but the karst: the hub of the place's chunk, marked above ground by a fairy ring with a pool of crystal water in it. One per chunk; `about` is the place it serves.
+ * T7: the ring stands on dry level ground (RING_FOOT about it): at the hub when the hub's ground is such, else at the nearest such spot within RING_REACH of it, or on gentler-than-RING_SLOPE ground within RING_FAR (the chunk's roots run a spur from the hub to the ring: worldRoots). A hub in a village's river had its ring under the water. */
 export interface Convergence { id: string; about: string; name: string; cx: number; cz: number; x: number; z: number }
+export const RING_FOOT = 3.5, RING_REACH = 40, RING_FAR = 80, RING_SLOPE = 0.18; // RING_SLOPE: LEVEL_SLOPE × 1.8 (a literal: chunkModel and plateauModel import each other, and a constant read at the top of a module in that cycle is not yet set in the page's bundle)
 const convCache = new Map<number, Convergence[]>();
 export function convergences(seed = 1): Convergence[] {
   const cached = convCache.get(seed); if (cached) return cached; const out: Convergence[] = [], seen = new Set<string>();
-  for (const p of places(seed)) { if (p.kind === 'karst') continue; const c = chunkOf(p.x, p.z), key = chunkKey(c.cx, c.cz); if (seen.has(key)) continue; seen.add(key); const h = hubAt(c.cx, c.cz, seed); out.push({ id: `conv:${p.id}`, about: p.id, name: `the fairy ring by ${p.name}`, cx: c.cx, cz: c.cz, x: h.x, z: h.z }); }
+  // The ring's pad (plateauModel) keeps clear of the places' own pads, so each is level.
+  const padded = places(seed).filter(q => q.kind in FOOT);
+  for (const p of places(seed)) { if (p.kind === 'karst') continue; const c = chunkOf(p.x, p.z), key = chunkKey(c.cx, c.cz); if (seen.has(key)) continue; seen.add(key); const h = hubAt(c.cx, c.cz, seed), clear = (x: number, z: number): boolean => padded.every(q => Math.hypot(q.x - x, q.z - z) >= FOOT[q.kind as keyof typeof FOOT] + RING_FOOT + PAD_FADE + 1);
+    // Within RING_REACH on level ground; else on ground up to RING_SLOPE (the pad's edge a little steeper); else within RING_FAR; else the hub itself.
+    const at = settle(seed, h.x, h.z, RING_FOOT, RING_REACH, clear, 4, 3) ?? settle(seed, h.x, h.z, RING_FOOT, RING_REACH, clear, 4, 3, RING_SLOPE) ?? settle(seed, h.x, h.z, RING_FOOT, RING_FAR, clear, 4, 4, RING_SLOPE) ?? h; out.push({ id: `conv:${p.id}`, about: p.id, name: `the fairy ring by ${p.name}`, cx: c.cx, cz: c.cz, x: at.x, z: at.z }); }
   convCache.set(seed, out); return out;
 }
 /** The chunks in the ring round a point. */

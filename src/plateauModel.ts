@@ -6,8 +6,9 @@
 // stones. The heights here are the land's shape before erosion and the carving after it; the eroded
 // grid itself is the renderer's (plateauLand.ts). Pure: no Three.js, node-tested.
 import { gradientNoise, fbm, ridged, rng, type Noise } from './vistaTerrain';
-import { KARST_AT, villageSites, lairPlace } from './overworldModel';
-import { STREAM_Z, STREAM_REACH } from './villageModel';
+import { KARST_AT, villageSites, lairPlace, places, FOOT } from './overworldModel';
+import { convergences, RING_FOOT } from './chunkModel';
+import { STREAM_Z, STREAM_REACH, MEADOW_RADIUS } from './villageModel';
 import { TAINT } from './taintModel';
 
 const smooth = (a: number, b: number, x: number): number => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -16,6 +17,8 @@ const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
 
 /** The plateau's radius about the karst; the lake's mean radius and its shore's wobble; the island's; the water's surface (the karst's floor and the island are at 0). Tuning. */
 export const PLATEAU_R = 1800, LAKE_R = 215, LAKE_WOBBLE = 12, ISLAND_R = 104, WATER_Y = -1.2, LAKE_DEPTH = 9;
+/** The shore: the ground falls to the water over LAKE_SHORE m inland of the lake's edge; a river's bank carving reaches BANK_REACH m from its centreline. */
+export const LAKE_SHORE = 40, BANK_REACH = 8 + 12;
 /** The plateau's rise from the lake's shore to its rim (m), the hills over it (m) and their ridged crests (m), the mountains past the rim: their climb (m) and how much of a ring they take to rise. Tuning. */
 export const RIM_RISE = 85, HILL_M = 24, RIDGE_M = 22, MOUNTAIN_RISE = 650;
 /** T6, the brink (Noah, 2026-10-21): the mountains are a belt, not a wall. They rise over MOUNTAIN_RISE to their crest and past it the land falls away
@@ -23,11 +26,15 @@ export const RIM_RISE = 85, HILL_M = 24, RIDGE_M = 22, MOUNTAIN_RISE = 650;
  * above the lowland, so a break in it is a long way down. PASS_N passes cross the belt, each a saddle PASS_RISE above the rim, PASS_HALF m wide
  * (walkable only there past PASS_FOOT into the belt), ending at a brink BRINK_PAST past the crest where she may stand and look down; the rest is
  * too steep. PEAK_N outer peaks stand through the cloud beyond. Tuning. */
-export const ESCARP = 950, RIDGE_FALL = 180, LOW_Y = -2300, CLOUD_Y = -260, PASS_N = 3, PASS_RISE = 190, PASS_HALF = 11, PASS_FOOT = 40, BRINK_PAST = 6, PEAK_N = 6;
+export const ESCARP = 950, RIDGE_FALL = 180, LOW_Y = -2300, CLOUD_Y = -260, PASS_N = 3, PASS_RISE = 190, PASS_HALF = 11, PASS_FOOT = 40, BRINK_PAST = 6, PEAK_N = 6, BRINK_LEVEL_R = 3.5;
 /** A village's ground: flat within TERRACE_R of its green (the layouts' meadow), blending out over TERRACE_FADE; it stands BANK_H above its river. Tuning. */
 export const TERRACE_R = 90, TERRACE_FADE = 70, BANK_H = 1.6;
 /** Rivers: half width at the source and at the mouth (m), the channel's depth below the surface, the valley's half width from source to mouth, how far upstream of the rim a river rises. Tuning. */
 export const RIVER_HALF: [number, number] = [3.6, 8], RIVER_DEPTH = 1.6, VALLEY: [number, number] = [45, 150], SOURCE_PAST = 140;
+/** T7 (PLATEAU.md, every place stands clear): through a village the river is its stream: VILLAGE_HALF m across (the layout's stream site stands at its edge, its trees on the bank) and level across the whole terrace at the green's own level, falling before and after over the terrace's fade. Tuning. */
+export const VILLAGE_HALF = 2.4;
+/** T7: a footprint is level when the ground rises no more than LEVEL_SLOPE of its width across it (every den, ring, ruin, wallow and moot is seated as one piece at its centre's height); the land then makes a level pad of every place's footprint, at its centre's height, blending out over PAD_FADE (the erosion's gullies and the hills' own grade ran through them). Tuning. */
+export const LEVEL_SLOPE = 0.1, PAD_FADE = 8;
 /** Crossings: a river is crossed every CROSS_EVERY m of its course (stepping stones and footbridges by turns), never within CROSS_CLEAR of the lake or of another crossing; a ford's water is FORD_DEPTH deep, walkable (below WADE_DEPTH). Tuning. */
 export const CROSS_EVERY = 420, CROSS_CLEAR = 90, FORD_DEPTH = 0.22, WADE_DEPTH = 0.35, FORD_HALF_LEN = 7;
 /** The island's bridge: its width and the height of its deck's crown over the water. Tuning. */
@@ -55,10 +62,10 @@ export interface Plateau {
   terraces: { id: string; x: number; z: number; y: number }[];
   /** The land's shape before erosion (what the grid starts from): the bowl, the hills, the mountains, the valleys roughed in. */
   base(x: number, z: number): number;
-  /** The final ground: `grid` (the eroded shape, or `base` when there is none) with the terraces, the lake, the island and the channels carved in. */
-  ground(x: number, z: number, grid?: (x: number, z: number) => number): number;
-  /** Water at a point: in the lake or a river, the surface and how deep; null when dry. */
-  water(x: number, z: number): { kind: 'lake' | 'river'; surface: number; depth: number; river?: string } | null;
+  /** The final ground: `grid` (the eroded shape, or `base` when there is none) with the terraces, the places' pads (T7; `padded` false leaves them out: the natural ground the places are judged on), the lake, the island and the channels carved in. */
+  ground(x: number, z: number, grid?: (x: number, z: number) => number, padded?: boolean): number;
+  /** Water at a point: in the lake or a river, the surface and how deep; null when dry. T7: `padded` false reads the natural ground (the places are judged on it, so their judging never depends on the pads they make). */
+  water(x: number, z: number, padded?: boolean): { kind: 'lake' | 'river'; surface: number; depth: number; river?: string } | null;
   /** The nearest river point: which river, which point, how far, and its half width there. */
   nearRiver(x: number, z: number, reach?: number): { river: River; i: number; d: number; half: number } | null;
   /** The bridge's deck where (x, z) is on it, else null. */
@@ -159,8 +166,11 @@ function build(seed: number): Plateau {
   void r0;
   /** A course is good when it keeps off the other villages' greens, the island, the dark forest's heart and the other rivers. */
   function ok(course: P[], own: string | null): boolean {
+    const mine = villages.find(v => v.id === own);
     for (const p of course) {
       for (const v of villages) if (v.id !== own && Math.hypot(p.x - v.x, p.z - v.z) < TERRACE_R + 50) return false;
+      // T7: its own village's meadow and the wood round it (the layout's trees stand out to MEADOW_RADIUS + 36) only along the stream itself, never on the way in or out.
+      if (mine && Math.hypot(p.x - mine.x, p.z - mine.z) < MEADOW_RADIUS + 40 && !(Math.abs(p.x - mine.x) <= STREAM_REACH && Math.abs(p.z - mine.z - STREAM_Z(p.x - mine.x)) < 1)) return false;
       // Out of the taint and its veins (the creature session: no river through her biome).
       if (Math.hypot(p.x - lair.x, p.z - lair.z) < TAINT.edge + TAINT.veins) return false;
       if (Math.hypot(p.x - C.x, p.z - C.z) < ISLAND_R + 40) return false;
@@ -177,6 +187,16 @@ function build(seed: number): Plateau {
       const k = run / (length || 1); half.push(lerp(RIVER_HALF[0], RIVER_HALF[1], k));
       // The water never climbs: the bowl a little under the bank, never above where it has been, never below the lake's.
       s = Math.min(s, bowl(points[i].x, points[i].z) - 1.2 - 0.4 * k); surface.push(Math.max(WATER_Y, s));
+    }
+    // T7: through its village the river is the stream: level across the terrace at the level the green stands BANK_H over (it fell at the land's own
+    // grade before, up to several metres above the green on the upstream side and in a gorge below it), and VILLAGE_HALF across. Both blend out over the
+    // terrace's fade; the running minimum keeps it falling where the course wanders back.
+    const v = village ? villages.find(q => q.id === village) : undefined;
+    if (v) {
+      let bi = 0, bd = Infinity; for (let i = 0; i < n; i++) { const d = Math.hypot(points[i].x - v.x, points[i].z - v.z - STREAM_Z(0)); if (d < bd) { bd = d; bi = i; } }
+      const sv = surface[bi];
+      for (let i = 0; i < n; i++) { const d = Math.hypot(points[i].x - v.x, points[i].z - v.z); surface[i] = sv + (surface[i] - sv) * smooth(TERRACE_R, TERRACE_R + TERRACE_FADE, d); half[i] = lerp(VILLAGE_HALF, half[i], smooth(TERRACE_R, TERRACE_R + 60, d)); }
+      for (let i = 1; i < n; i++) surface[i] = Math.min(surface[i], surface[i - 1]);
     }
     // Into the lake, the last stretch eases down to the water's surface.
     for (let i = Math.max(0, n - 12); i < n; i++) surface[i] = lerp(surface[Math.max(0, n - 13)], WATER_Y, (i - (n - 13)) / 12);
@@ -239,16 +259,33 @@ function build(seed: number): Plateau {
     if (nr) { const s = nr.river.surface[nr.i] + 0.8, k = nr.i / nr.river.points.length, w = lerp(VALLEY[0], VALLEY[1], k); if (h > s) h = lerp(s, h, Math.pow(smooth(nr.half, nr.half + w, nr.d), 0.8)); }
     return h;
   };
-  function ground(x: number, z: number, grid: (x: number, z: number) => number = base): number {
+  // T7: the pads, one per place and fairy ring and brink (their footprints, FOOT / RING_FOOT), indexed by PAD_CELL so `ground` looks up only the pads about it. Built on the first
+  // padded call: the places are placed on the natural ground (overworldModel.standsAt reads `ground` and `water` unpadded), and they read this plateau, so the pads wait for them;
+  // a padded call made while a place is being placed (the first ever may be) reads the natural ground too, and the places it placed come out the same whichever call came first.
+  const PAD_CELL = 64, padKey = (i: number, j: number): string => `${i},${j}`;
+  let pads: Map<string, { x: number; z: number; r: number }[]> | null = null, padsBusy = false;
+  const padsNear = (x: number, z: number): { x: number; z: number; r: number }[] | undefined => {
+    if (!pads) {
+      if (padsBusy) return undefined; padsBusy = true;
+      const list: { x: number; z: number; r: number }[] = [...places(seed).filter(q => q.kind === 'den' || q.kind === 'warren' || q.kind === 'wallow' || q.kind === 'ruin' || q.kind === 'moot').map(q => ({ x: q.x, z: q.z, r: FOOT[q.kind as keyof typeof FOOT] })), ...convergences(seed).map(c => ({ x: c.x, z: c.z, r: RING_FOOT })), ...brinks.map(b => ({ x: b.x, z: b.z, r: RING_FOOT }))];
+      const m = new Map<string, { x: number; z: number; r: number }[]>();
+      for (const q of list) { const R = q.r + PAD_FADE; for (let j = Math.floor((q.z - R) / PAD_CELL); j <= Math.floor((q.z + R) / PAD_CELL); j++) for (let i = Math.floor((q.x - R) / PAD_CELL); i <= Math.floor((q.x + R) / PAD_CELL); i++) { const k = padKey(i, j); (m.get(k) ?? m.set(k, []).get(k)!).push(q); } }
+      pads = m; padsBusy = false;
+    }
+    return pads.get(padKey(Math.floor(x / PAD_CELL), Math.floor(z / PAD_CELL)));
+  };
+  function ground(x: number, z: number, grid: (x: number, z: number) => number = base, padded = true): number {
     let h = grid(x, z); const { r, a } = polar(x, z);
     // The terraces: each village's ground level, its green flat.
     for (const t of terraces) { const d = Math.hypot(x - t.x, z - t.z); if (d < TERRACE_R + TERRACE_FADE) h = lerp(t.y + 0.05 * Math.sin(x * 0.07) * Math.cos(z * 0.06), h, smooth(TERRACE_R, TERRACE_R + TERRACE_FADE, d)); }
+    // T7: the pads: a place's footprint level at its centre's own height.
+    if (padded) { const near = padsNear(x, z); if (near) for (const q of near) { const d = Math.hypot(x - q.x, z - q.z); if (d < q.r + PAD_FADE) h = lerp(ground(q.x, q.z, grid, false), h, smooth(q.r, q.r + PAD_FADE, d)); } }
     // The lake: its shore falls to a bowl under the water; the island stands out of it, flat where the karst's floor is.
     const lr = lakeR(a);
-    if (r < lr + 40) { const bed = WATER_Y - LAKE_DEPTH * smooth(lr, lr - 70, r); h = lerp(bed, Math.max(h, WATER_Y + 0.4), smooth(lr - 6, lr + 40, r)); }
+    if (r < lr + LAKE_SHORE) { const bed = WATER_Y - LAKE_DEPTH * smooth(lr, lr - 70, r); h = lerp(bed, Math.max(h, WATER_Y + 0.4), smooth(lr - 6, lr + LAKE_SHORE, r)); }
     if (r < ISLAND_R + 26) h = lerp(0, h, smooth(ISLAND_R - 6, ISLAND_R + 26, r));
     // The channels: the bank a little over the water, the bed under it; a ford's bed just under.
-    const nr = nearRiver(x, z, RIVER_HALF[1] + 12);
+    const nr = nearRiver(x, z, BANK_REACH);
     if (nr && r > ISLAND_R + 20) {
       const s = nr.river.surface[nr.i], ford = crossingNear(nr.river.id, x, z, 'ford') ?? crossingNear(nr.river.id, x, z, 'stones'), depth = ford ? FORD_DEPTH : RIVER_DEPTH, half = ford ? nr.half * 1.6 : nr.half;
       if (nr.d < half) h = Math.min(h, s - depth * (1 - (nr.d / half) ** 2) - (ford ? 0 : 0.15));
@@ -268,19 +305,22 @@ function build(seed: number): Plateau {
     for (const c of crossings) if (c.river === river && c.kind === kind) { const ux = Math.cos(c.along), uz = Math.sin(c.along), along = (x - c.x) * ux + (z - c.z) * uz; if (Math.abs(along) < FORD_HALF_LEN && Math.hypot(x - c.x, z - c.z) < c.half * 2 + FORD_HALF_LEN) return c; }
     return null;
   }
-  function water(x: number, z: number): ReturnType<Plateau['water']> {
+  function water(x: number, z: number, padded = true): ReturnType<Plateau['water']> {
     const { r, a } = polar(x, z);
-    if (r < lakeR(a) + 2 && r > ISLAND_R - 2) { const g = ground(x, z); if (g < WATER_Y) return { kind: 'lake', surface: WATER_Y, depth: WATER_Y - g }; }
+    if (r < lakeR(a) + 2 && r > ISLAND_R - 2) { const g = ground(x, z, base, padded); if (g < WATER_Y) return { kind: 'lake', surface: WATER_Y, depth: WATER_Y - g }; }
     const nr = nearRiver(x, z, RIVER_HALF[1] * 1.7); if (!nr) return null;
-    const s = nr.river.surface[nr.i], g = ground(x, z); if (g >= s) return null;
+    const s = nr.river.surface[nr.i], g = ground(x, z, base, padded); if (g >= s) return null;
     return { kind: 'river', surface: s, depth: s - g, river: nr.river.id };
   }
   // ── T6: the passes and their brinks ──
   // PASS_N bearings spread round the plateau, each nudged off any river's source (a pass is a dry saddle, a river's source a wet valley); the brink is where the pass line crosses BRINK_PAST past the crest.
-  { const rand = rng(seed * 577 + 31), start = rand() * Math.PI * 2, sources = rivers.map(r => angleOf(r.points[0]));
-    for (let i = 0; i < PASS_N; i++) { let a = wrapA(start + (i / PASS_N) * Math.PI * 2 + (rand() - 0.5) * 0.5); for (let k = 0; k < 8; k++) { const near = sources.find(sa => Math.abs(wrapA(a - sa)) < 0.26); if (near === undefined) break; a = wrapA(near + (wrapA(a - near) >= 0 ? 0.3 : -0.3)); } passAngles.push(a); } }
+  // T7: and off the outer peaks' bearings (a pass looks out over the fall, not into a peak that stands through the cloud).
+  { const rand = rng(seed * 577 + 31), start = rand() * Math.PI * 2, sources = rivers.map(r => angleOf(r.points[0])), peakAngles = peaks.map(pk => angleOf(pk));
+    for (let i = 0; i < PASS_N; i++) { let a = wrapA(start + (i / PASS_N) * Math.PI * 2 + (rand() - 0.5) * 0.5); for (let k = 0; k < 8; k++) { const near = sources.find(sa => Math.abs(wrapA(a - sa)) < 0.26) ?? peakAngles.find(pa => Math.abs(wrapA(a - pa)) < 0.32); if (near === undefined) break; a = wrapA(near + (wrapA(a - near) >= 0 ? 0.36 : -0.36)); } passAngles.push(a); } }
   const brinks: Brink[] = passAngles.map((a, i) => {
     let rr = PLATEAU_R; for (; rr < PLATEAU_R + MOUNTAIN_RISE + ESCARP; rr += 2) { const q = onCircle(a, rr); if (into(q.x, q.z) >= MOUNTAIN_RISE + BRINK_PAST) break; }
+    // T7: the lip is where the fall begins; her ring stands on the last ground level along the pass before it (BRINK_LEVEL_R about, LEVEL_SLOPE; its pad levels it across), a few strides back.
+    for (let back = 0; back < 40; back += 1) { let lo = Infinity, hi = -Infinity; for (const du of [0, 0.5, 1, -0.5, -1]) { const q = onCircle(a, rr - back + du * BRINK_LEVEL_R), h = bowl(q.x, q.z); lo = Math.min(lo, h); hi = Math.max(hi, h); } if (hi - lo <= LEVEL_SLOPE * 2 * BRINK_LEVEL_R) { rr -= back; break; } }
     const q = onCircle(a, rr), bearing = ((Math.atan2(Math.cos(a), -Math.sin(a)) * 180 / Math.PI) + 360) % 360, oct = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'][Math.round(bearing / 45) % 8];
     return { id: `brink:${i}`, name: `the ${oct} brink`, x: q.x, z: q.z, angle: a };
   });
@@ -304,6 +344,14 @@ export function walkable(p: Plateau, x: number, z: number): boolean {
   // T6: the belt is too steep but at its passes, and a pass ends at the brink: past it is the fall.
   const d = p.into(x, z); if (d > PASS_FOOT && (d > MOUNTAIN_RISE + BRINK_PAST + 8 || p.passAt(x, z) < 0.5)) return false;
   const w = p.water(x, z); return !w || w.depth < WADE_DEPTH;
+}
+/** T7: the points a footprint is judged at: the centre, a ring at `r` and one at half of it. */
+export function footprint(x: number, z: number, r: number, n = 12): P[] { const out: P[] = [{ x, z }]; for (const k of [0.5, 1]) for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2; out.push({ x: x + Math.cos(a) * r * k, z: z + Math.sin(a) * r * k }); } return out; }
+/** T7: whether a footprint of radius `r` about (x, z) is dry (no water under any of it) and level (the natural ground, before any pad, rises at most LEVEL_SLOPE of its width across it: the pad the land then makes of it stands no higher than that over the land about). The ground judged is the plateau's own before erosion; the erosion's gullies are what the pad levels. */
+export function standsLevel(p: Plateau, x: number, z: number, r: number, slope = LEVEL_SLOPE): boolean {
+  let lo = Infinity, hi = -Infinity;
+  for (const q of footprint(x, z, r)) { if (p.water(q.x, q.z, false)) return false; const g = p.ground(q.x, q.z, undefined, false); lo = Math.min(lo, g); hi = Math.max(hi, g); if (hi - lo > slope * 2 * r) return false; }
+  return true;
 }
 export type { Noise };
 export const _internal = { wrap };

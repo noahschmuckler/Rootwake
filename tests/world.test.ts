@@ -111,12 +111,12 @@ test('D4: blighted roots refuse root travel: no course ends in the blight, none 
   g.update(lair.x, lair.z); assert.equal(g.nearest({ x: lair.x + 20, z: lair.z }, 6), null, 'a tap in the blight finds no root');
 });
 
-import { warrens, dens as densOf, villageSites as sitesOf, places as placesOf, WARREN_FRAC, WARREN_SIDE, WARREN_RADIUS, freshOverworld as freshO, explore as exploreO, knownPlaces as knownOf } from '../src/overworldModel';
+import { warrens, dens as densOf, villageSites as sitesOf, places as placesOf, WARREN_FRAC, WARREN_SIDE, WARREN_RADIUS, WARREN_ALONG, freshOverworld as freshO, explore as exploreO, knownPlaces as knownOf } from '../src/overworldModel';
 test('S1: a warren for every den, between the den and the village it comes down on, off the line by the seed; a place of its own, known when seen', () => {
   const ws = warrens(1), ds = densOf(1); assert.equal(ws.length, ds.length); assert.deepEqual(warrens(1), ws, 'deterministic');
   const villages = [{ x: 0, z: 0 }, ...sitesOf(1)];
   for (const w of ws) { const d = ds.find(x => x.id === w.den)!; assert.ok(d, 'its den exists'); const v = villages.slice().sort((a, b) => Math.hypot(a.x - d.x, a.z - d.z) - Math.hypot(b.x - d.x, b.z - d.z))[0], len = Math.hypot(v.x - d.x, v.z - d.z);
     const along = ((w.x - d.x) * (v.x - d.x) + (w.z - d.z) * (v.z - d.z)) / len, off = Math.abs((w.x - d.x) * (v.z - d.z) - (w.z - d.z) * (v.x - d.x)) / len;
-    assert.ok(Math.abs(along - len * WARREN_FRAC) < 1.5, `a third of the way (${along.toFixed(0)} of ${len.toFixed(0)})`); assert.ok(off <= WARREN_SIDE + 1.5, `off the line by at most ${WARREN_SIDE} (${off.toFixed(0)})`); }
+    assert.ok(Math.abs(along - len * WARREN_FRAC) < 1.5 || (along / len >= WARREN_ALONG[0] - 0.01 && along / len <= WARREN_ALONG[1] + 0.01), `a third of the way, or (T7) slid along the line for level ground (${along.toFixed(0)} of ${len.toFixed(0)})`); assert.ok(off <= WARREN_SIDE + 1.5, `off the line by at most ${WARREN_SIDE} (${off.toFixed(0)})`); }
   assert.ok(placesOf(1).some(p => p.kind === 'warren' && p.id === ws[0].id && p.radius === WARREN_RADIUS)); const o = freshO(1); exploreO(o, ws[0].x, ws[0].z); assert.ok(knownOf(o).some(p => p.id === ws[0].id), 'a warren seen is known');
 });

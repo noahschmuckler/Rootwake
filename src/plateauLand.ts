@@ -40,7 +40,7 @@ export function bakeLand(seed: number): Eroded {
 /** What a bake was made from: the shape at a few points, the grid and the erosion. A bake whose fingerprint differs from the code's is stale. */
 export function fingerprint(seed: number): string {
   const p = plateau(seed), pts = [[0, 0], [400, -900], [-1300, 200], [900, 700], [-60, -330 - PLATEAU_R - 300]];
-  return JSON.stringify({ v: 4, seed, n: VILLAGE_LAND_N, d: VILLAGE_DROPLETS, half: halfOf(seed), s: pts.map(([x, z]) => Math.round(p.base(x, z) * 100)), r: p.rivers.map(r => r.points.length) });
+  return JSON.stringify({ v: 5, seed, n: VILLAGE_LAND_N, d: VILLAGE_DROPLETS, half: halfOf(seed), s: pts.map(([x, z]) => Math.round(p.base(x, z) * 100)), r: p.rivers.map(r => r.points.length) });
 }
 /** A bake as bytes: a JSON header (its fingerprint), then the heights in 1.6 cm steps as 32-bit differences along each row (smooth land compresses well so; T6: the map now falls 3 km past the brink, past a 16-bit range), and the three maps as bytes. */
 const H_OFFSET = 4000;
@@ -95,7 +95,7 @@ export function villageLandFrom(seed: number, base: Terrain, e: Eroded, baked: b
   // The drawn grid carries the carving too (the far meshes, the water's depth and the maps read it): the terraces, the lake's bed, the island, the channels.
   const h = new Float32Array(n * n), flow = e.flow.slice(); let top = -Infinity;
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
-    const x = i * cell - half, z = j * cell - half, k = j * n + i; h[k] = p.ground(x, z, () => e.h[k]); if (h[k] > top) top = h[k];
+    const x = i * cell - half, z = j * cell - half, k = j * n + i; h[k] = p.ground(x, z, grid); if (h[k] > top) top = h[k]; // T7: through `grid` (not the cell's own height alone), so a place's pad reads its centre's height
     // The rivers' beds and banks read as the vista reads a gully's: gravel, and no grass (its `flow` is how much water ran there).
     const nr = p.nearRiver(x, z, RIVER_HALF[1] + BANK_GRAVEL); if (nr) flow[k] = Math.max(flow[k], smooth(nr.half + BANK_GRAVEL, nr.half + 1, nr.d));
   }
