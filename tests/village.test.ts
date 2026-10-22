@@ -722,18 +722,19 @@ test('C2: a turned village\'s own germ sends its snatchers from its green: no bl
   } finally { setLair(null); setGerms([]); }
 });
 test('C2: the raid and the snatchers come from the nearest germ within RAID_REACH: the breach for the first village at any distance, a turned village\'s germ for a neighbour, none for a village with no germ in reach; a turned village is not raided by its own', () => {
-  assert.equal(RAID_REACH, 600);
-  const site = villageSites(1)[0], far = Math.hypot(site.x, site.z); assert.ok(far > RAID_REACH, `the second village stands ${far.toFixed(0)} m from the first`);
-  setLair({ x: 300, z: 0, radius: 75 });
+  assert.equal(RAID_REACH, 800);
+  // The test's breach stands on the far side of the first village from the second, out of the second's reach.
+  const site = villageSites(1)[0], away = { x: Math.round(-site.x / Math.hypot(site.x, site.z) * 300), z: Math.round(-site.z / Math.hypot(site.x, site.z) * 300) }, far = Math.hypot(site.x - away.x, site.z - away.z); assert.ok(far > RAID_REACH, `the second village stands ${far.toFixed(0)} m from the breach`);
+  setLair({ x: away.x, z: away.z, radius: 75 });
   try {
-    const home = freshV(1); assert.equal(germSource(home)!.kind, 'breach'); assert.deepEqual(sourcePoint(home), { x: 300, z: 0 }); assert.deepEqual(broodSpotOf(home, 0), broodSpot(0), 'the first village\'s sacs on the breach\'s rim, as before');
+    const home = freshV(1); assert.equal(germSource(home)!.kind, 'breach'); assert.deepEqual(sourcePoint(home), { x: away.x, z: away.z }); assert.deepEqual(broodSpotOf(home, 0), broodSpot(0), 'the first village\'s sacs on the breach\'s rim, as before');
     const o = freshV(1, 1, site); assert.equal(germSource(o), null, 'the breach is out of its reach'); o.hobbits[0].stage = 'infant'; o.bred.push({ id: 'fen~1', home: 0, born: 0 }); step(o, DT + RAID_TICK + 5); assert.equal(o.raidDay, -1, 'no raid'); assert.equal(o.snatchDay, -1, 'no snatchers');
-    setGerms([{ id: 'breach', kind: 'breach', x: 300, z: 0 }, { id: 'germ:village', kind: 'village', x: site.x + 200, z: site.z + 10 }]);
+    setGerms([{ id: 'breach', kind: 'breach', x: away.x, z: away.z }, { id: 'germ:village', kind: 'village', x: site.x + 200, z: site.z + 10 }]);
     assert.equal(germSource(o)!.id, 'germ:village', 'a village germ within reach'); assert.deepEqual(sourcePoint(o), { x: 200, z: 10 }); assert.equal(germSource(home)!.id, 'breach', 'the first village keeps the breach'); assert.ok(!ownGerm(o));
     step(o, DT - (o.tick % DT) + RAID_TICK + 1); assert.equal(o.raidDay, dayOf(o.tick), 'raided now'); assert.equal(o.raiders.filter(r => r.kind === 'dy').length, 1, 'by its own bred Dark Young'); step(o, SNATCH_TICK - RAID_TICK + 1); assert.equal(o.snatchers.length, 1, 'a snatcher'); assert.ok(Math.hypot(o.snatchers[0].x - 200, o.snatchers[0].z - 10) < 4, 'from the turned village\'s green'); assert.deepEqual(broodSpotOf(o, 0), { x: 200 + groveSpot(1).x, z: 10 + groveSpot(1).z }, 'its sacs hang at that grove');
     const r = o.raiders.find(x => x.kind === 'dy')!; r.state = 'retreating'; r.x = 0; r.z = 0; stepRaiders(o, 1, null); assert.ok(Math.hypot(r.x - 200, r.z - 10) < Math.hypot(200, 10) - 5, 'beaten, it runs for the germ');
-    const t = freshV(1); setGerms([{ id: 'germ:village', kind: 'village', x: 0, z: 0 }, { id: 'breach', kind: 'breach', x: 300, z: 0 }]); t.turned = true; t.bred.push({ id: 'rue', home: 0, born: 0 }); step(t, RAID_TICK + 1); assert.equal(t.raidDay, -1, 'a turned village is not raided by its own'); assert.equal(t.raiders.length, 0);
-    const n = freshV(1); setGerms([{ id: 'germ:village-2', kind: 'village', x: 100, z: 0 }, { id: 'breach', kind: 'breach', x: 300, z: 0 }]); assert.equal(germSource(n)!.id, 'germ:village-2', 'the nearer germ wins, even for the first village');
+    const t = freshV(1); setGerms([{ id: 'germ:village', kind: 'village', x: 0, z: 0 }, { id: 'breach', kind: 'breach', x: away.x, z: away.z }]); t.turned = true; t.bred.push({ id: 'rue', home: 0, born: 0 }); step(t, RAID_TICK + 1); assert.equal(t.raidDay, -1, 'a turned village is not raided by its own'); assert.equal(t.raiders.length, 0);
+    const n = freshV(1); setGerms([{ id: 'germ:village-2', kind: 'village', x: 100, z: 0 }, { id: 'breach', kind: 'breach', x: away.x, z: away.z }]); assert.equal(germSource(n)!.id, 'germ:village-2', 'the nearer germ wins, even for the first village');
   } finally { setLair(null); setGerms([]); }
 });
 test('C2: a poisoned warren gives no meat and bites the first hunter at it each day; healed, the hunt is as it was', () => {

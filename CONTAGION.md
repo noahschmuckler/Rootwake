@@ -359,9 +359,9 @@ block holds the rules and the constants), read by the entry (`village.ts`) at ea
   (C3 un-turns); its fouling lapses once the front no longer holds it. A village begun again (the dev reset) loses its germ
   (`removeGerms`, new: a lesser germ taken away with the closure rebuilt; the breach never).
 - **The source.** Every village's raid and snatchers come from its germ source (`germSource`, `sourcePoint`): the nearest
-  village germ within `RAID_REACH` 600 m, or the breach, which the first village keeps at any distance (as before: the
+  village germ within `RAID_REACH` 800 m (Noah: raised from 600 so a turned first village reaches the pines), or the breach, which the first village keeps at any distance (as before: the
   breach lies 950 m off); a village with no germ in reach has no raids and no snatchers (the other two, until a germ stands
-  within 600 m of them). The Dark Young stay bred of each village's own infants (a raider is its village's); beaten, they
+  within 800 m of them). The Dark Young stay bred of each village's own infants (a raider is its village's); beaten, they
   run for the source. The entry tells the model the growth's germs at each `setGrowth` (`setGerms`), and sums `infantsTaken`,
   `darkYoungBred` and `meals` over every village for the dawn step.
 - **The grove.** A village's kept infants hang at its source's grove (`broodSpotOf`): on the breach's rim as M1 placed them
@@ -407,9 +407,9 @@ block holds the rules and the constants), read by the entry (`village.ts`) at ea
   the keepers are a display and have no model of their own; `removeGerms` takes any lesser germ away.
 - **Open, for Noah's playtest:** `DY_RATIO` 3 (one Dark Young to three villagers), `GERM_REACH.village` 110 (its nursery ring
   then covers the green to 36 m: the copse's trees become her growths, the houses stand, the wood beyond greys to 88 m) and
-  `.warren` 40, `RAID_REACH` 600 (the other villages stand 650–1400 m from the first, so a turned first village reaches a
+  `.warren` 40, `RAID_REACH` 800 (was 600; the other villages stand 650–1400 m from the first, so a turned first village reaches a
   neighbour only when it stands within 600 m: at seed 1 the pines stand 741 m and the ford 933 m from the first village,
-  606 m from each other, so as set a turned village's snatchers reach no neighbour and the front itself must creep to it:
+  606 m from each other, so at 800 a turned first village's germ reaches the pines and not the ford:
   800 would put the pines in the first village's reach), `TURN_DAYS` 3, `HELD_M` 60, `GROVE_R` 6.8 and the grove in the
   stone's gap, `TURNED_BIRTH_DAYS`; that a turned village's own warren (60 m off) lies in its germ's reach and is poisoned
   with it (its hunters bitten: as the rule says, and a fair price); the Colour at the captured green: the germ's depth at
