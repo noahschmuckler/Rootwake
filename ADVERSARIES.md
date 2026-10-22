@@ -63,7 +63,7 @@ the mother of goats, in context. Nothing here is built. The heroes are DiggyDwar
 | Smith | extraction, tempered | **Shudde M'ell and the Chthonians** | digging without restraint | mines, heat | hatchlings, quakes, hollowed ground |
 | Mason | shelter, boundaries | **Yog-Sothoth, and the Hounds of Tindalos** | every door is also a gate | doorways, angles | breaches, the hunted |
 | Alchemist | transformation with purpose | **Ubbo-Sathla, and its spawn Abhoth** | dissolution without form | water, reagents | slurry-folk, plague |
-| Artificer | power, light, information | **Nyarlathotep, as the Showman** | spectacle and power without wisdom | wires, broadcasts, machines | the mesmerised |
+| Artificer | power, light, information | **the Mi-Go, as the Showman** (three in a trenchcoat) | spectacle and power without wisdom | wires, broadcasts, machines | the mesmerised |
 
 ### Hulda and Shub-Niggurath (built, in part)
 
@@ -196,20 +196,24 @@ the mother of goats, in context. Nothing here is built. The heroes are DiggyDwar
 
 ### The Artificer and the Showman
 
+- **Decided (Noah, 2026-10-22): three Mi-Go in a trenchcoat, wearing a showman's mask.**
+  - The Mi-Go, the Fungi from Yuggoth, are the mythos' technologists: winged crustacean-fungi who keep
+    brains alive in cylinders.
+  - The Showman is a costume they have borrowed from Nyarlathotep's prose poem. They are imitating
+    the mask, not wearing it as his.
+  - So the Artificer's adversary is independent of Nyarlathotep, and comic until it isn't. Under the coat
+    is the most alien technology in the game.
 - **The canon:** in Lovecraft's prose poem *Nyarlathotep* (1920), he comes out of Egypt as a showman
   exhibiting instruments of glass and metal and strange electricity. The crowds who watch go mad and wander
-  into the ruined night.
+  into the ruined night. The Mi-Go first appear in *The Whisperer in Darkness* (1931).
 - **Simple loop:** a lamp that works too well. Light against the night raids is the Artificer's gift, but
   this light draws people out of their houses at night to stare.
 - **Abstract loop:** wires and broadcasts are the network. It is mass spectacle and power without wisdom;
   the mesmerised serve whatever the machine says.
-- **The thrall by tier:** the lamp-watcher; the city that cannot look away.
-- **The Artificer's counterpart is not independent.** The Showman is one of Nyarlathotep's thousand masks,
-  and Nyarlathotep is behind everything else in this document; see Petal below.
-  - The Artificer's light in magical darkness (DD's traversal key for him) is what finally shows the
-    helper's true shadow.
-  - If an independent counterpart is wanted instead, the Mi-Go (the Fungi from Yuggoth, surgeons who keep
-    brains in cylinders) are the mythos' technologists.
+- **The thrall by tier:** the lamp-watcher; the city that cannot look away; at the top, the brain in a
+  cylinder, kept "alive" in the Mi-Go's network, which is the mesmerised taken to its end.
+- **Petal's shadow:** the Artificer's light in magical darkness (DD's traversal key for him) is still what
+  finally shows the helper's true shadow.
 
 ## One engine, seven networks
 
@@ -224,7 +228,7 @@ irritants) is the first instance of a general mechanic. Each adversary is the sa
 | Chthonians | mine galleries | heat, depth | shoring, restraint |
 | Yog-Sothoth | doors and gates | angles, opened gates | curves, sealed gates |
 | Ubbo-Sathla | water | fouled reagents | filters, quarantine |
-| Nyarlathotep | wires, broadcasts | spectacle | wisdom, the Sage's context |
+| the Mi-Go | wires, broadcasts | spectacle | wisdom, the Sage's context |
 
 Build the engine once and re-skin the graph: this is how the later society simulation stays tractable.
 
@@ -238,19 +242,19 @@ Y, R, L, H, O, E, P once each). It hides in plain sight.
 - The thorns are a joke at first and a warning in hindsight.
 - Her first hint can be "Mind the thorns!"
 
-### Her arc
+### Her arc (Noah, 2026-10-22)
 
-1. **Part of the UI.** Petal is the tutorial: the hint bubble, the tip line (`village.ts`'s `tip`), the "?"
-   button.
-   - She is drawn as a tiny flower-sprite in the HUD's corner, bobbing, with two dot eyes.
-   - She teaches the rings, the stores, the strike.
-   - Nothing in her is in the world yet; the player files her with the menus.
-2. **In the world.** One day she steps out of the HUD: the bubble's corner sprite flutters off the screen
-   and lands on Hulda's shoulder, a petal-winged imp.
-   - She is a genre staple, in the line of Navi, Tatl, Fi and Paimon. She points out quests, translates
-     the snerks, finds the way in.
-   - She is truly helpful, and the player grows fond of her.
-3. **The introducer.** As the world opens, Petal is the one who brings each adversary's offer, helpfully
+1. **Part of the UI.** She arrives with the UI overhaul as a 2D static character in the UI's own style,
+   appearing with a speech bubble to walk the player through the basic controls. She teaches the rings,
+   the stores, the strike. Nothing of her is in the world yet; the player files her with the menus.
+2. **The first sighting.** The first time Petal is seen in the world, Hulda catches her **talking to an
+   enemy**.
+   - She notices Hulda, hides at once, and cannot be found.
+   - Shortly afterwards she pops up in her 2D UI form with helpful advice, pretending nothing is wrong or
+     strange.
+3. **The long lull.** The next sighting is a long while off, so the player is lulled into a false sense of
+   security. Petal stays the friendly UI character all that while, and truly helpful.
+4. **The introducer.** As the world opens, Petal is the one who brings each adversary's offer, helpfully
    and accurately:
    - **For the Steward:** she explains the Moloch stone's terms.
    - **For the Sage:** she finds the lost scroll, and it is Act Two.
@@ -259,20 +263,28 @@ Y, R, L, H, O, E, P once each). It hides in plain sight.
    - **For the Alchemist:** she has a recipe for the solvent.
    - **For the Artificer:** she brings the wonderful lamp.
    - Her advice is never a lie, only incomplete. Every deal is truly good in the short term.
-4. **The tells**, for the attentive:
+5. **The tells**, for the attentive:
    - the anagram;
    - her shadow, which under the Artificer's light is not a flower's;
    - she knows of things before they happen;
    - she calls Shub "auntie" (in the mythos Nyarlathotep is the Outer Gods' messenger and Shub's herald);
    - she never comes into the taint, and has an excuse each time.
-5. **The reveal.** Petal is Nyarlathotep's smallest mask, the Crawling Chaos as a crawling flower. She is the
+6. **The reveal.** Petal is Nyarlathotep's smallest mask, the Crawling Chaos as a crawling flower. She is the
    part of him that walked out of Delvira to whisper, and at the reveal she goes back in.
 
 ### What she is for, mechanically
 
-- **Every deal is tracked, unseen** (Petal's ledger). Each bargain taken feeds Delvira. This makes the
-  brief's "Delvira growing in strength just as Hulda and her companions do" literal: her strength at the
-  end is the sum of the shortcuts the player took.
+- **Every deal is tracked** (Petal's ledger). Each bargain taken feeds Delvira. This makes the brief's
+  "Delvira growing in strength just as Hulda and her companions do" literal: her strength at the end is
+  the sum of the shortcuts the player took.
+- **The ledger shows in Petal herself (Noah, 2026-10-22).** Each deal makes her a tiny bit more realistic
+  and more adult.
+  - She starts as a chubby baby flower fairy and ends as something like Gozer the Gozerian (*Ghostbusters*):
+    statuesque, androgynous, beautiful and wrong.
+  - The change is a step per deal and small each time, so a player who takes few deals keeps a cherub, and
+    one who takes many watches her grow up without quite noticing when.
+  - Her 2D UI portrait and her in-world figure change together. Her art is a sequence of stages, not one
+    sprite.
 - **Refusing Petal is always a viable path:** slower and harder, never closed. Taking her offers is never
   punished at once. The game never says which is right; the ending does.
 - **After the reveal the UI is suspect.** Use this sparingly. One or two hints that are now subtly wrong is
@@ -307,16 +319,24 @@ and the later game:
 - **The King in Yellow** was "inspiring the criminals and thieves" in the brief. It is revised here to
   despair, with crime as its consequence.
 
-## Open, for Noah
+## Decided (Noah, 2026-10-22)
 
-1. **One mind or many?** Is Nyarlathotep behind every adversary, as the Petal arc implies, or only behind the
-   deals, with the seven powers otherwise independent and sometimes competing? Competing gods would let a
-   player set one against another, for example Moloch's bargains against Shub's fecundity.
-2. **The King in Yellow's simple loop** is the hardest to make playable and needs prototyping first: the
-   library at night, the Sign spotted, seal, burn or gloss.
-3. **Petal's first appearance in the world.** Which moment of the current game should she step out of the HUD
-   at? A candidate: the steward's waking, the first time Hulda is not alone.
-4. **The ledger's visibility.** Fully hidden, or hinted at (the Keystone glowing a little brighter with each
-   deal)?
-5. **The Artificer's own counterpart:** the Showman mask as above, or the Mi-Go, leaving Nyarlathotep only
-   behind Petal.
+1. **Nyarlathotep is behind the deals only.** He works through Petal, brokering the other adversaries'
+   bargains. The seven powers are otherwise independent and may compete, so a player can set one against
+   another (Moloch's bargains against Shub's fecundity, say).
+2. **Every adversary's simple loop needs prototyping**, not only the King in Yellow's.
+3. **Petal's entrance:** a 2D static character in the UI's style at the UI overhaul, with a speech bubble
+   for the basic controls. Her first sighting in the world is Hulda catching her talking to an enemy; she
+   hides and cannot be found, then pops up in the UI with advice as though nothing happened. The next
+   sighting is a long while off.
+4. **The ledger is Petal's own form:** each deal makes her a little more realistic and adult, from a chubby
+   baby flower fairy to something like Gozer the Gozerian.
+5. **The Artificer's adversary:** three Mi-Go in a trenchcoat, wearing a showman's mask.
+
+## Open
+
+- **The enemy at the first sighting.** Which enemy is she talking to? A Dark Young at the forest's edge
+  fits the current game; a snatcher half-hidden as a shrub would make the scene look like nothing at all.
+- **The UI overhaul**, which her first form waits on, is not planned yet.
+- **Her stages:** how many, and whether they are drawn or modelled (a 2D portrait sequence plus an
+  in-world figure for each).
