@@ -1002,7 +1002,7 @@ function pickTarget(v: Village, n: Snatcher, fear: Fear): string | 'lit' | null 
   return open ? open.id : lying.length || inf.length ? 'lit' : null;
 }
 /** What the snatchers fear (village frame): a lit torch (a guard's, out of doors) and a hedge's thorn. */
-interface Fear { torches: Vec2[] }
+interface Fear { torches: Vec2[]; none?: boolean }
 const fearOf = (v: Village): Fear => ({ torches: v.hobbits.filter(s => s.torch && !s.inside).map(s => ({ x: s.x, z: s.z })) });
 /** The nearest point of a standing hedge to (x, z), or null. */
 function thornAt(v: Village, x: number, z: number): Vec2 | null {
@@ -1012,6 +1012,7 @@ function thornAt(v: Village, x: number, z: number): Vec2 | null {
 }
 /** Is (x, z) in torchlight or at the thorn (with `pad` m to spare)? */
 export function feared(v: Village, x: number, z: number, fear: Fear = fearOf(v), pad = 0): boolean {
+  if (fear.none) return false;
   if (fear.torches.some(t => Math.hypot(t.x - x, t.z - z) < TORCH_R + pad)) return true;
   const h = thornAt(v, x, z); return !!h && Math.hypot(h.x - x, h.z - z) < HEDGE_FEAR + pad;
 }
@@ -1020,7 +1021,7 @@ function dashTo(v: Village, n: Snatcher, to: Vec2, m: number, fear: Fear): numbe
   const d = Math.hypot(to.x - n.x, to.z - n.z); if (d < 1e-6) return 0;
   let dx = (to.x - n.x) / d, dz = (to.z - n.z) / d;
   const push = (from: Vec2, r: number): void => { const ex = n.x - from.x, ez = n.z - from.z, e = Math.hypot(ex, ez), R = r * 1.35; if (e < R && e > 1e-6) { const w = 2.5 * (1 - e / R); dx += ex / e * w; dz += ez / e * w; } };
-  for (const t of fear.torches) push(t, TORCH_R); const h = thornAt(v, n.x, n.z); if (h) push(h, HEDGE_FEAR);
+  for (const t of fear.torches) push(t, TORCH_R); const h = fear.none ? null : thornAt(v, n.x, n.z); if (h) push(h, HEDGE_FEAR);
   const l = Math.hypot(dx, dz) || 1, step = Math.min(d, m); n.heading = Math.atan2(dz, dx); n.x += dx / l * step; n.z += dz / l * step;
   return Math.hypot(to.x - n.x, to.z - n.z);
 }
@@ -1037,7 +1038,8 @@ function chooseCover(v: Village, n: Snatcher, goal: Vec2, fear: Fear): void {
 }
 /** On toward `goal` by dashes and hides; within FINAL_DASH straight in. The distance left. */
 function travel(v: Village, n: Snatcher, goal: Vec2, dt: number, fear: Fear): number {
-  if (Math.hypot(goal.x - n.x, goal.z - n.z) <= FINAL_DASH) { n.cover = null; return dashTo(v, n, goal, SNATCH_PACE * dt, fear); }
+  // C2: a turned village does not resist: its own snatchers neither hide nor fear on its ground.
+  if (fear.none || Math.hypot(goal.x - n.x, goal.z - n.z) <= FINAL_DASH) { n.cover = null; return dashTo(v, n, goal, SNATCH_PACE * dt, fear); }
   if (!n.cover) chooseCover(v, n, goal, fear);
   if (dashTo(v, n, { x: n.cx, z: n.cz }, SNATCH_PACE * dt, fear) < 0.3) { const r = mulberry32((n.id * 131 + v.tick * 17) >>> 0); n.x = n.cx; n.z = n.cz; n.hide = HIDE_S + (r() - 0.5) * HIDE_SPREAD; }
   return Math.hypot(goal.x - n.x, goal.z - n.z);
@@ -1046,7 +1048,7 @@ function travel(v: Village, n: Snatcher, goal: Vec2, dt: number, fear: Fear): nu
 export const hidden = (n: Snatcher): boolean => n.hide > 0 && !!n.cover;
 /** The snatchers by real seconds: to the infant, in, and back to the lair, a dash and a hide at a time; at the lair the infant is kept. */
 function stepSnatchers(v: Village, dt: number, her: Vec2 | null = null): void {
-  const fear = fearOf(v);
+  const fear: Fear = v.turned ? { torches: [], none: true } : fearOf(v);
   for (const n of v.snatchers) {
     // Hidden, it holds the thing's shape till its time is up or she is on it.
     if (n.hide > 0) { n.hide -= dt; if (her && Math.hypot(her.x - n.x, her.z - n.z) < SPOOKED_R) n.hide = 0; if (n.hide > 0) continue; n.hide = 0; n.cover = null; }
