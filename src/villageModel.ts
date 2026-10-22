@@ -429,7 +429,9 @@ export function rumors(v: Village): Rumor[] {
   if (st.kind === 'lost') return out;
   if (st.kind === 'thriving') { elder('the stores are full'); elder('the stone is warm'); }
   for (const n of st.needs) elder(n === 'meals missed' ? 'we went hungry' : n === 'wood for the fire' ? 'no wood for the fire tonight' : n === 'beds' ? `we are ${v.hobbits.length} to ${housesOf(v).length * BEDS} beds` : n === 'an infant lying out' ? `${v.dropped.length ? infantName(v.dropped[0].infant) : 'a child'} lies out in the dark` : n === 'the Dark Young ate a meal' ? 'the Dark Young came in the night' : n.endsWith('at the lair') ? `${infantName((v.brood[0]?.infant ?? v.bred[0])!)} is with the mother of goats` : n === 'wolves at dusk' ? 'the wolves come at dusk' : n.endsWith('bitten by wolves') ? `${n.split(' ')[0]} of us bitten last night` : n.endsWith('spoiled') ? `${n.replace(' spoiled', '')} has gone bad` : n.endsWith('for the hut') ? `the new hut wants ${n.replace(' for the hut', '')}` : n);
-  if (lairAt && isHome(v)) { const b = fromGreen(v, lairAt).bearing; out.push({ text: `something walks in the wood to the ${bearingWords(b)}`, bearing: b, about: 'lair', who: 'keeper' }); if (v.blight > 0) out.push({ text: `the trees to the ${bearingWords(b)} have gone black`, bearing: b, about: 'blight', who: 'keeper' }); }
+  if (lairAt && isHome(v)) { const b = fromGreen(v, lairAt).bearing; out.push({ text: `something walks in the wood to the ${bearingWords(b)}`, bearing: b, about: 'lair', who: 'keeper' }); }
+  // C1 (CONTAGION.md): the keeper names the way to her front, the nearest claimed root hub (frontAt, the entry's read of the growth) within FRONT_TELL_M of the green; without a front set, the home village's fixed blight, as before.
+  { const fr = frontAt?.(v.origin.x, v.origin.z); if (fr && Math.hypot(fr.x - v.origin.x, fr.z - v.origin.z) < FRONT_TELL_M) { const b = fromGreen(v, fr).bearing; out.push({ text: `the trees to the ${bearingWords(b)} have gone black`, bearing: b, about: 'blight', who: 'keeper' }); } else if (!frontAt && lairAt && isHome(v) && v.blight > 0) { const b = fromGreen(v, lairAt).bearing; out.push({ text: `the trees to the ${bearingWords(b)} have gone black`, bearing: b, about: 'blight', who: 'keeper' }); } }
   { const near = densInReach(v), nearest = densAt.slice().sort((a, b) => fromGreen(v, a).distance - fromGreen(v, b).distance)[0];
     for (const d of near) { const b = fromGreen(v, d).bearing; out.push({ text: `${d.id === direDen ? 'black wolves' : 'wolves'} howl to the ${bearingWords(b)}`, bearing: b, about: d.id, who: 'keeper' }); const w = warrenOf(d.id); if (w) { const wb = fromGreen(v, w).bearing; out.push({ text: `rabbits run to the ${bearingWords(wb)}`, bearing: wb, about: w.id, who: 'keeper' }); } }
     // No den in reach, and the keeper still names the nearest: the first village is calm ground, and the wolves are something to go and find.
@@ -544,6 +546,10 @@ export const FOREST_DRAIN = 2, LAIR_WAKE = 26, LAIR_SPAWN_S = 18, LAIR_BROOD = 3
 export let UNKILLABLE = true;
 export const setUnkillable = (b: boolean): void => { UNKILLABLE = b; };
 export let lairAt: { x: number; z: number; radius: number } | null = null;
+/** C1 (CONTAGION.md): where her front is nearest a point on the land (the entry reads contagionModel.nearestFront), for the keeper's rumor; null until the entry sets it. A keeper speaks of the front within FRONT_TELL_M of the green. Tuning. */
+export let frontAt: ((x: number, z: number) => { x: number; z: number } | null) | null = null;
+export const setFront = (f: ((x: number, z: number) => { x: number; z: number } | null) | null): void => { frontAt = f; };
+export const FRONT_TELL_M = 700;
 export const setLair = (at: { x: number; z: number; radius: number } | null): void => { lairAt = at; };
 export const forestDepth = (x: number, z: number): number => { if (!lairAt) return 0; const d = Math.hypot(x - lairAt.x, z - lairAt.z); return d >= lairAt.radius ? 0 : 1 - d / lairAt.radius; };
 export const raidsPaused = (v: Village): boolean => !v.lair.alive && dayOf(v.tick) < v.lair.slainDay + LAIR_PEACE_DAYS;

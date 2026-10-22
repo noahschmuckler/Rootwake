@@ -189,3 +189,71 @@ Each answers one question on the phone, in the order every study here has used.
   original mother cannot, in this development phase.
 - **The work:** the land session orchestrates agents for the contagion, pass by pass, each judged on the
   phone before the next. The industrial ruins catalogue stays offered to the creature session.
+
+## C1, as built (2026-10-21)
+
+The front, integrated: her growth creeps along the roots toward the villages, read everywhere the taint's rings
+were. Starts as M1 looks; the model session's `contagionModel.ts` (its header holds the rules, the constants and the
+API; `tests/contagion.test.ts`, 81 tests under `node scripts/test-village.mjs`) is now what the village plays.
+
+- **State** (`village.ts`). A `Growth` under its own key, `rootwake-growth-v1`, loaded with `parseGrowth(raw, seed)`
+  (junk is the breach alone) and saved with `serializeGrowth` inside `save()`, carrying beside the growth a `seen`
+  record (`day`, `taken`, `bred`, `eaten`) of the home village's counters the dawn step's inputs are deltas of, so
+  the deltas survive a reload. A fresh record begins on the day it arrives (`seen.day` today), not with every day
+  the village has lived. The `GrowthIndex` (`indexGrowth`) is rebuilt only when the growth changes (`setGrowth`),
+  never per frame.
+- **The dawn step.** Once for every home-village day that passes (`dayOf(v.tick)` rising; several at once after a
+  jump, the first carrying the deltas and the rest none), `stepGrowth(growth, seed, inputs)` with:
+  - `nourish`: every village `{ x, z, w: folk × WEIGHTS.folk + infants × WEIGHTS.infant }` (1 and 3), each warren
+    (the dens' and the villages' own) and each wallow at 1;
+  - `irritants`: the woken ward (`wardQuest.stage === 'woken'` at `firstWard`, r `IRRITANT_R.ward` 170), every
+    sanctified ruin (`overworld.sanctified`, r 120), the karst's foot (`KARST_AT`, r 140);
+  - `infantsTaken` the rise in `v.taken`, `darkYoungBred` the rise in `v.bred.length`, `meals` the rise in `v.eaten`
+    (the raids' cumulative count), all of the home village, since the last step.
+- **Travel.** `grassOpen` and the root refusal ("the roots here are hers") read `inGrowth(idx, x, z)`; the chunks'
+  blight (`chunks.setBlight`, the plain look's blackened trees) and the root network's closure read the blight or
+  `inGrowth`, set in one `refreshLand()` that runs on the frame whenever the blight or the growth's serialized
+  stamp changed (the `blightDrawn` pattern): `look.refreshTrees()`, `look.refreshGround()`, the chunks, the roots,
+  the map if open.
+- **The look** (`villageVista.ts`). `TaintLook` is field reads: `at` (the breach: the dead trees still lean toward
+  it, her arms stand there), `ring`, `depth`, `vein` (`ringOf`/`depthOf`/`veinOf` of the live index), `veins` (the
+  breach's root lines as M1 laid them, `taintVeins()`) and `hyphae()` (`hyphaSegments`). `groundTint` reads
+  `ring`/`depth` (the mild streaks thin by depth over `MILD_TOP`, the grey's depth, so a hypha's mild band reads as
+  the ring's outer third), keeps the breach's lines masked by `vein`, and draws every hypha's whole edge the same
+  way: `vein` is 1 along the claimed length and fades past the tip, black inside the breach's edge and ashen
+  outside it (`T_VEIN_IN`/`T_VEIN`). `villageTrees` greys (kind 9) by the same hash rules wherever `ring` is grey
+  or mild, and within `VEIN_TREE_M` 8 m of a hypha's edge where `vein` is nonzero, by `vein`'s strength; kind 10
+  only in the breach's heart and nursery; the barrens elsewhere unchanged. The understory still clears by distance
+  from the breach (it grows along a hypha for now).
+- **The depth she stands in.** `taintNow.depth = depthOf(idx, f.x, f.z) × (1 − wardCalm(f.x, f.z))`: the ward's
+  calm stays a multiplier on the Colour, and the ward is an irritant in the model too (Noah's call).
+- **The map and the rumor.** `drawMap` draws each germ's edge as a ring and each hypha's claimed length as a line in
+  `FRONT_COLOUR` (`#9a6a98`, a dim grey-magenta), where the land is revealed or the lair known; the breach's blight
+  circle is kept. The keeper's "the trees to the X have gone black" reads the front: `villageModel.setFront(f)` is
+  the seam (a reader the entry sets to `nearestFront(idx, x, z)`; the model stays pure), and `rumors` speaks it for
+  any village whose green has a claimed hub within `FRONT_TELL_M` 700 m, falling back to the home village's fixed
+  blight when no front is set (the old tests hold).
+- **Dev handle.** `__village.growth`: `state`, `idx`, `seen`, `inputs()`, `inGrowth(x, z)`, `depth(x, z)`,
+  `nearest(x, z)`, `step(days = 1)` (the dawn step with the live nourishment and irritants, as if the snatchers
+  brought an infant each night: the pace Noah set), `starve(days)` (nothing brought), `reset()` (the breach alone),
+  `refresh()`; each returns the refresh's milliseconds, also `refreshMs`.
+- **CI** (`scripts/browser-village-vista.mjs`): `growth.step(12)`, then the front's nearest claimed hub is within
+  60 m of the first village's green, ground open on day 0 is hers, the ground texture's bytes changed, no console
+  errors.
+- **The dawn hitch**, measured at Medium under SwiftShader (phone aspect, JS time on the build machine's CPU; a
+  phone's would be longer): `growth.step(1)` 1.1–1.2 s a step, of which `refreshTrees` 405 ms, `refreshGround`
+  333 ms, and the rest (~450 ms) `chunks.setBlight` rebuilding every loaded chunk (colliders and roots; the vista
+  draws neither its ground nor its trees) and the root network's closure. At Low in CI, 1.3 s. That is past the
+  ~300 ms a dawn should cost, as one hitch a village day; not optimised here. The path when it matters: rebuild
+  only the chunks the front crossed since the last step (key a chunk's build by the growth stamp of the cells it
+  touches), cache each tree's kind per chunk the same way so `refreshTrees` re-partitions only the changed ones,
+  and build the ground tint on the cells a hypha's band covers instead of the whole 513² map.
+- **Open, for Noah's playtest:**
+  - the pace: `STEP` 45 m/day and `TIPS` 3 (twelve days to the first village fed every night);
+  - starvation as the raids actually feed it: the step counts only infants the snatchers took that day (`v.taken`
+    rising); with no infant in the village for `STARVE_DAYS` 3 the front withers back toward the breach's edge, so
+    in a fresh village the front only advances once infants are born and taken (the dev `step` feeds it);
+  - `MAT` 24 and `VEIN_W` 8 (the grey round a claimed hub and along a hypha), `MILD_W` 20;
+  - the colours: the hyphae's ashen grey on the ground (`T_VEIN`) and `FRONT_COLOUR` on the map;
+  - whether the map should show the front only where revealed (as now) or wherever the keeper has spoken of it;
+  - the understory along a hypha, and the plain look (only the fixed blight, now `inGrowth` for the chunk trees).

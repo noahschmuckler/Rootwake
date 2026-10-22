@@ -36,6 +36,13 @@ try{
   assert.notEqual(report.noon.zenith,report.night.zenith,'the sky follows the clock');assert.ok(report.night.stars>0.5,'stars by night');
   await shot('dusk-karst',()=>{const v=window.__village;v.jumpTo('dusk');v.standAt(-60+160,-330+60,Math.atan2(160,60));});
   await shot('wood-noon',()=>{const v=window.__village;v.jumpTo('noon');v.standAt(120,60,0.4);});
+  // C1 (CONTAGION.md): her growth creeps along the roots toward the first village: twelve fed dawns bring the front's nearest claimed hub to its green, ground she could cross on day 0 is hers, the land's tint is drawn again.
+  report.growth=await page.evaluate(()=>{const v=window.__village,g=v.growth,bytes=window.__look.world.uniforms.uGround.value.image.data,sum=()=>{let s=0;for(let i=0;i<bytes.length;i+=97)s=(s+bytes[i])|0;return s;},probe=[];for(let x=-600;x<=600;x+=50)for(let z=-600;z<=600;z+=50)probe.push([x,z]);
+    const read=()=>{const st=g.state;return {day:st.day,hyphae:st.hyphae.length,claimed:st.claimed.length,nearest:Math.round(g.nearest(0,0).d),sum:sum(),open:probe.filter(([x,z])=>!g.inGrowth(x,z)).length};};
+    const before=read(),ms=Math.round(g.step(12)),after=read();return {before,after,ms};});
+  assert.equal(report.growth.after.day,report.growth.before.day+12,`twelve dawns stepped (${JSON.stringify(report.growth)})`);
+  assert.ok(report.growth.after.nearest<60,`the front's nearest hub within 60 m of the first village's green (${JSON.stringify(report.growth)})`);
+  assert.ok(report.growth.after.open<report.growth.before.open,'ground open on day 0 is hers now');assert.notEqual(report.growth.after.sum,report.growth.before.sum,'the ground tint drawn again');
   // D1 (DESCENT.md): down to the node, out onto the catwalk of its depth, a keeper heard, back into the drop.
   // PLATEAU.md: she wakes on the summit; the first dive waits on her cultivation, however much clarity she has.
   assert.equal(await page.evaluate(()=>{const v=window.__village;v.jumpTo('noon');v.karst.standOn('summit',-1.3,0.5,0);v.deep.clarity=v.deep.costs.dive+v.deep.costs.back+5;return v.deep.dive();}),false,'no first dive before she has cultivated');

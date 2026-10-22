@@ -78,6 +78,7 @@ These rules exist today and conflict with "she cannot be defeated and does not g
     - Her blows inside the taint provoke it; a blow on the mother provokes it most.
     - The mother cannot be slain (`UNKILLABLE`). The old death is kept behind it for tests and for when she can be bound.
     - The blight is fixed at the grey ring's edge from the first, unannounced.
+    - C1 (CONTAGION.md, 2026-10-21): the taint's rings are now the breach germ of `contagionModel` (M1's rings exactly, never starved), and the fixed blight's closure of the chunks and the roots reads from the growth (`inGrowth`) along with it.
     - The brood hangs in the sac grove: `BROOD_RING`, the nursery's rim toward the first village. The snatchers bring infants there (`groveAt`), and Hulda can still take one back by walking to it.
 - **Travel.**
   - Inside the edge the grass will not take her: "the soil here is poisoned". Grass travel stops at the edge.

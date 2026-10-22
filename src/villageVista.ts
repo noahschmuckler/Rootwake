@@ -18,7 +18,8 @@ import { convergences, beyond, noise, CHUNK, forestField, forestAt, RIPARIAN } f
 import { createUnderstory, type Understory } from './understory';
 import { FOREST_RADIUS as KARST_FOREST, NODES as KARST_NODES, nodeFrame } from './karstFlowModel';
 import { TREES, type Tree } from './villageModel';
-import { TAINT, ringAt, veinAt } from './taintModel';
+import { TAINT, depthAt, inTaint, type Ring } from './taintModel';
+import type { HubRef } from './contagionModel';
 
 // ── the land ─────────────────────────────────────────────────────────────
 /** The squarish norm the mountains rise by: the dens lie on a square grid, so the range follows a rounded square. */
@@ -36,12 +37,16 @@ const CLOUD_COVER = 0.5;
 const HAZE_BELOW = 0.07;
 
 // ── the taint (MOTHER.md, M1) ──────────────────────────────────────────────
-/** The breach's centre and the root lines her infection runs along (world polylines, as sampled points). */
-export interface TaintLook { at: { x: number; z: number }; veins: { x: number; z: number }[][] }
-/** The vein points in a coarse hash, for asking how near a root line a tree stands. */
-function veinIndex(t: TaintLook): (x: number, z: number) => number {
+/** C1 (CONTAGION.md): the taint as field reads of her growth (contagionModel's index): `at` the breach (the dead trees lean toward it, her arms stand there), `ring`/`depth`/`vein` at a point, `veins` the breach's root lines as M1 drew them (world polylines, as sampled points) and `hyphae` the growth's claimed lengths along the root hubs (read again at each refresh: the growth moves at dawn). */
+export interface TaintLook { at: { x: number; z: number }; ring: (x: number, z: number) => Ring; depth: (x: number, z: number) => number; vein: (x: number, z: number) => number; veins: { x: number; z: number }[][]; hyphae: () => { from: HubRef; to: HubRef; a: { x: number; z: number }; b: { x: number; z: number }; tip: { x: number; z: number }; t: number }[] }
+/** A hypha's whole edge sampled every 2 m (the vein's strength past the tip fades over TAINT.veins, read by taint.vein). */
+const hyphaLines = (t: TaintLook): { x: number; z: number }[][] => t.hyphae().map(h => { const len = Math.hypot(h.b.x - h.a.x, h.b.z - h.a.z), n = Math.max(2, Math.ceil(len / 2)), line: { x: number; z: number }[] = []; for (let k = 0; k <= n; k++) line.push({ x: h.a.x + (h.b.x - h.a.x) * k / n, z: h.a.z + (h.b.z - h.a.z) * k / n }); return line; });
+/** The mild ring's depth at its top (the grey's edge): the streaks and the grey trees thin from there to nothing at the edge; a hypha's mild band (MILD_DEPTH) sits inside it. */
+const MILD_TOP = depthAt(TAINT.grey);
+/** The vein points in a coarse hash, for asking how near a root line (the breach's, or a hypha's) a tree stands. */
+function veinIndex(lines: { x: number; z: number }[][]): (x: number, z: number) => number {
   const C = 8, grid = new Map<string, { x: number; z: number }[]>();
-  for (const line of t.veins) for (const p of line) { const k = `${Math.floor(p.x / C)},${Math.floor(p.z / C)}`; (grid.get(k) ?? grid.set(k, []).get(k)!).push(p); }
+  for (const line of lines) for (const p of line) { const k = `${Math.floor(p.x / C)},${Math.floor(p.z / C)}`; (grid.get(k) ?? grid.set(k, []).get(k)!).push(p); }
   return (x, z) => { let best = Infinity; const cx = Math.floor(x / C), cz = Math.floor(z / C); for (let i = -1; i <= 1; i++) for (let k = -1; k <= 1; k++) for (const p of grid.get(`${cx + i},${cz + k}`) ?? []) best = Math.min(best, Math.hypot(p.x - x, p.z - z)); return best; };
 }
 const hash01 = (n: number): number => { const s = Math.sin(n * 12.9898 + 78.233) * 43758.5453; return s - Math.floor(s); };
@@ -103,17 +108,17 @@ export function groundTint(land: Land, seed: number, blighted: (x: number, z: nu
     if (b <= 0) continue;
     const dark = 1 - smooth(DARK_RADIUS - 10, DARK_RADIUS + 10, Math.hypot(x - lair.x, z - lair.z));
     let c = blighted(x, z) ? BLIGHT : dark > 0.5 ? DARK : noise(x, z, 110, seed + 3) > 0.58 ? null : WOOD;
-    // The taint: black at the heart and in the nursery, the dead grey of poisoned soil, grey streaks thinning through the mild ring.
-    if (taint) { const d = Math.hypot(x - taint.at.x, z - taint.at.z), ring = ringAt(d); if (ring === 'heart') c = T_HEART; else if (ring === 'nursery') c = T_NURSERY; else if (ring === 'grey') c = T_GREY; else if (ring === 'mild' && noise(x, z, 14, seed + 61) > 0.3 + 0.55 * (d - TAINT.grey) / (TAINT.edge - TAINT.grey)) c = T_STREAK; }
+    // The taint: black at the heart and in the nursery, the dead grey of poisoned soil, grey streaks thinning through the mild ring (C1: read from her growth, so a hypha's claimed length is a grey band with a mild one past it).
+    if (taint) { const ring = taint.ring(x, z); if (ring === 'heart') c = T_HEART; else if (ring === 'nursery') c = T_NURSERY; else if (ring === 'grey') c = T_GREY; else if (ring === 'mild' && noise(x, z, 14, seed + 61) > 0.3 + 0.55 * (1 - Math.min(1, taint.depth(x, z) / MILD_TOP))) c = T_STREAK; }
     if (!c) continue;
     // FOREST: under a stand the wood's green gives way to leaf mould, mossy where the canopy opens.
     if (c === WOOD) { const fv = forest[j * n + i]; if (fv > 0.02) { const lit = Math.min(1, fv * (0.8 + 0.4 * noise(x, z, 7, seed + 71))), moss = smooth(0.55, 0.75, noise(x, z, 13, seed + 72)) * 0.7, a = LITTER_A[0] + (LITTER_A[1] - LITTER_A[0]) * lit; out[k] = (WOOD[0] + ((LITTER[0] + (MOSS[0] - LITTER[0]) * moss) - WOOD[0]) * lit) * 255; out[k + 1] = (WOOD[1] + ((LITTER[1] + (MOSS[1] - LITTER[1]) * moss) - WOOD[1]) * lit) * 255; out[k + 2] = (WOOD[2] + ((LITTER[2] + (MOSS[2] - LITTER[2]) * moss) - WOOD[2]) * lit) * 255; out[k + 3] = a * b * 255; continue; } }
     out[k] = c[0] * 255; out[k + 1] = c[1] * 255; out[k + 2] = c[2] * 255; out[k + 3] = c[3] * b * 255;
   }
-  // The veins: her infection along the root lines, black through the grey, grey out into the living wood, fading VEIN_REACH past the edge.
-  if (taint) for (const line of taint.veins) for (const p of line) {
-    const d = Math.hypot(p.x - taint.at.x, p.z - taint.at.z), s = veinAt(d), ring = ringAt(d); if (s <= 0 || ring === 'heart' || ring === 'nursery') continue;
-    const c = ring ? T_VEIN_IN : T_VEIN, i = Math.round((p.x + half) / cell), j = Math.round((p.z + half) / cell); if (i < 0 || j < 0 || i >= n || j >= n) continue;
+  // The veins: her infection along the root lines, black through the grey, grey out into the living wood, fading TAINT.veins past the edge; C1: and the hyphae's claimed lengths, ashen outside the breach's edge as the veins are, fading past each tip.
+  if (taint) for (const line of [...taint.veins, ...hyphaLines(taint)]) for (const p of line) {
+    const s = taint.vein(p.x, p.z), ring = taint.ring(p.x, p.z); if (s <= 0 || ring === 'heart' || ring === 'nursery') continue;
+    const c = inTaint(taint.at, p.x, p.z) ? T_VEIN_IN : T_VEIN, i = Math.round((p.x + half) / cell), j = Math.round((p.z + half) / cell); if (i < 0 || j < 0 || i >= n || j >= n) continue;
     const b = Math.min(1, beyond(p.x, p.z, seed) * 1.6); if (b <= 0) continue;
     for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { const ii = i + di, jj = j + dj; if (ii < 0 || jj < 0 || ii >= n || jj >= n) continue; const k = (jj * n + ii) * 4, a = c[3] * s * b * 255 * (di || dj ? 0.7 : 1); out[k] = c[0] * 255; out[k + 1] = c[1] * 255; out[k + 2] = c[2] * 255; out[k + 3] = Math.max(a, out[k + 3]); }
   }
@@ -123,15 +128,15 @@ export function groundTint(land: Land, seed: number, blighted: (x: number, z: nu
 // ── the trees ────────────────────────────────────────────────────────────
 /** Every tree the village knows, as the vista draws it: the chunks' (all of them, built or not) and each village's own wood. Kind 5 the village tree, 6 in the dark forest, 7 blighted. */
 export function villageTrees(land: Land, edge: number, terrain: Terrain, treesOf: (cx: number, cz: number) => Tree[], origins: { x: number; z: number }[], dark: (x: number, z: number) => boolean, blighted: (x: number, z: number) => boolean, taint?: TaintLook, seed = 1): VTree[] {
-  const out: VTree[] = [], reach = Math.ceil(edge / CHUNK), vein = taint ? veinIndex(taint) : null;
-  // MOTHER.md: in the taint, kind 10 (the nursery's growths, the heart's) where the trees are gone, 9 (grey, dead, twitching) through the grey and more and more of the mild ring, and along the veins a little way past the edge.
+  const out: VTree[] = [], reach = Math.ceil(edge / CHUNK), vein = taint ? veinIndex([...taint.veins, ...hyphaLines(taint)]) : null;
+  // MOTHER.md: in the taint, kind 10 (the nursery's growths, the heart's) where the trees are gone, 9 (grey, dead, twitching) through the grey and more and more of the mild ring, and along the veins a little way past the edge. C1: the rings and the veins' strength are her growth's (a hypha's claimed length is grey within VEIN_W, so its trees grey with it; past its tip the vein fades).
   const kindAt = (x: number, z: number, id: number): VTree["kind"] => {
     const base = blighted(x, z) ? 7 : dark(x, z) ? 6 : 5; if (!taint || !vein) return base;
-    const d = Math.hypot(x - taint.at.x, z - taint.at.z), ring = ringAt(d), h = hash01(id);
+    const ring = taint.ring(x, z), h = hash01(id);
     if (ring === 'heart' || ring === 'nursery') return 10;
     if (ring === 'grey') return 9;
-    if (ring === 'mild') return h < 0.15 + 0.8 * (TAINT.edge - d) / (TAINT.edge - TAINT.grey) || vein(x, z) < VEIN_TREE_M ? 9 : 6;
-    return veinAt(d) > 0 && vein(x, z) < VEIN_TREE_M && h < veinAt(d) * 1.2 ? 9 : base;
+    if (ring === 'mild') return h < 0.15 + 0.8 * Math.min(1, taint.depth(x, z) / MILD_TOP) || vein(x, z) < VEIN_TREE_M ? 9 : 6;
+    const s = taint.vein(x, z); return s > 0 && vein(x, z) < VEIN_TREE_M && h < s * 1.2 ? 9 : base;
   };
   // PINE BARRENS: the chunks' living trees are pitch pines (11), blackjack oaks among them by oakShare (12), and white cedars along the rivers (13, where chunkModel.cedars drew them); the villages' own woods keep their broadleaves (5), as do the dark wood and the taint.
   const barrens = (x: number, z: number, id: number): VTree["kind"] => riverEdge(seed, x, z, RIPARIAN + 4) <= RIPARIAN ? 13 : hash01(id * 0.37 + 11) < oakShare(x, z, seed) ? 12 : 11;
