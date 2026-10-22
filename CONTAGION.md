@@ -174,6 +174,16 @@ Each answers one question on the phone, in the order every study here has used.
 - **Phase 2 and after**: the surface, cities, politics, the pantheon, Delvira; then space. Not planned
   in detail; held as the direction.
 
+## Noah's calls for C2 (2026-10-22)
+
+- C1 judged on the phone: "I love all of this." T7 (every place stands clear) and T8 (the stratum) judged with it.
+- **Turned villagers are kept, not killed.**
+- **A captured village** keeps its rounds: the hobbits walk their day and eat dark meals; the sacs hang on its green.
+- **Wards and groves hold by definition**: they are irritants the hyphae avoid, so the front never reaches a
+  woken ward or a sanctified grove; nothing of theirs is captured in C2. Whether an irritant can be overwhelmed
+  (surrounded for days) is an open call, not built.
+- **Un-turning** (clean meals, thriving, the irritants' pushes) is C3's.
+
 ## Noah's calls (2026-10-21)
 
 - **Pace:** about twelve days from the breach's edge to the first village if she does nothing. Agreed.
