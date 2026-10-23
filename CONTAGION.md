@@ -174,6 +174,16 @@ Each answers one question on the phone, in the order every study here has used.
 - **Phase 2 and after**: the surface, cities, politics, the pantheon, Delvira; then space. Not planned
   in detail; held as the direction.
 
+## Noah's call for C3 (2026-10-23)
+
+- C2 judged on the phone: "The mother is working as expected, and it's incredibly frustrating, which is what I want.
+  Strong incentive to push back the miasma." Then "Start C3".
+- **C3's scope, in order:** un-turning a captured village by clean meals; the thriving, shrined village as an
+  irritant with its own radius; purify and quickening as real levers on a held village; the retreat made visible on
+  the map and in the keeper's mouth, the irritants' pushes drawn. **C3b, after the phone:** the mason's first stone,
+  the palisade and the watch post as thresholds (SETTLEMENTS.md S5).
+- Alongside, the creature session builds the snatcher tracking (slime slicks and skids at every hide; MOTHER.md).
+
 ## Noah's calls for C2 (2026-10-22)
 
 - C1 judged on the phone: "I love all of this." T7 (every place stands clear) and T8 (the stratum) judged with it.
