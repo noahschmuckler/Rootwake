@@ -1510,11 +1510,17 @@ function frame(now: number) {
 // ===== The mount (STAGS.md, Noah, 2026-10-22): her stag of soil, grass and branches. One block: the summon from healthy soil, the mounting, mode 'ride' =====
 // (the stick drives the stag, she sits its back), the dismount, the stag waiting and following, its health draining in her growth and its collapse,
 // the `stag` button, the health bar, and the `__village.mount` handle. The pure rules are mountModel.ts, the figure mountFigure.ts. Not saved.
-import { createStag, seatClip, type StagFigure } from './mountFigure';
-import { NORMAL_MOBILITY, type Traversal } from './mobility';
-import { refuseSummon, summon as summonMount, stepMount, drive as driveMount, forwardOf, lastsFor, SUMMON_SAP, MOUNT_SPEED, FOLLOW_SPEED, FOLLOW_M, FOLLOW_STOP_M, RIDE_STEP, STAG_R, MOUNT_REACH, MOUNT_S, RISE_AHEAD, HEALTH as STAG_HEALTH, type Mount, type Soil, type SummonCtx } from './mountModel';
+import { createStag, seatClip, loadStagAsset, type StagFigure, type StagAsset } from './mountFigure';
+import type { Traversal } from './mobility';
+import { LONG_PRESS_MS } from './player';
+import { refuseSummon, summon as summonMount, stepMount, drive as driveMount, forwardOf, lastsFor, callMount, sinkToTravel, travelPoint, dismissMount, SUMMON_SAP, MOUNT_SPEED, WALK_SPEED, FOLLOW_SPEED, FOLLOW_M, FOLLOW_STOP_M, CALL_RUN_M, CALL_STOP_M, CALL_SPEED, CALL_STALL_S, SINK_S, SURFACE_S, RIDE_STEP, STAG_R, MOUNT_REACH, MOUNT_S, RISE_AHEAD, HEALTH as STAG_HEALTH, DRAIN as STAG_DRAIN, type Mount, type Soil, type SummonCtx } from './mountModel';
 /** The ride's camera: back and up from the saddle (her walk's is 3.2 back, 1.3 up); the drop a stag refuses at a step (a ledge, not a hillside); the landing beat off a collapse (s); how far the health bar is read (m). Tuning. */
 const RIDE_CAM = { back: 4.4, up: 1.9 }, RIDE_DROP = 0.9, LANDING_S = 0.6, STAG_LABEL_M = 40;
+/** Pass 2: the stag's body and gait from the file (STAG_CREDITS.md); until it is loaded, or if it fails, the procedural figure. `?stagasset=0` keeps the procedural one. */
+let stagAsset: StagAsset | null = null;
+if (query.get('stagasset') !== '0') loadStagAsset(base('models/stag.glb')).then(a => { stagAsset = a; }, e => console.warn('stag asset', e));
+/** Pass 2: the button's long press (the project's LONG_PRESS_MS) dismisses the stag from anywhere. */
+const STAG_HOLD_MS = LONG_PRESS_MS;
 /** The stag up (or rising, or collapsing), its figure and the ground under its feet. */
 let stag: { m: Mount; fig: StagFigure; y: number } | null = null;
 /** Her ride: the mounting beat (her feet carried from the ground to the saddle, the mount clip over it), then riding. */
@@ -1557,7 +1563,7 @@ function summonStag(): boolean {
   const f = player.feet(), fw = forwardOf(player.yaw), spot = stagSpot(f.x + fw.x * RISE_AHEAD, f.z + fw.z * RISE_AHEAD); if (!spot) { say('no room for a stag here'); return false; }
   village.hero.sap -= SUMMON_SAP;
   if (stag) { stag.fig.dispose(); stag = null; }
-  stag = { m: summonMount(spot.x, spot.z, Math.atan2(-(f.x - spot.x), -(f.z - spot.z))), fig: createStag(home.seed), y: spot.y }; scene.add(stag.fig.group);
+  stag = { m: summonMount(spot.x, spot.z, Math.atan2(-(f.x - spot.x), -(f.z - spot.z))), fig: createStag(home.seed, stagAsset), y: spot.y }; scene.add(stag.fig.group);
   fx.spray(new THREE.Vector3(spot.x, spot.y + 0.1, spot.z), new THREE.Vector3(0, 1, 0), 'soil', 22, 2.8); fx.ring(new THREE.Vector3(spot.x, spot.y, spot.z), 2.2, '#9cff6e'); sound.thud(true); sound.roots();
   say('the soil heaves: a stag', 2.5); return true;
 }
@@ -1573,6 +1579,25 @@ function startMount(): boolean {
   const f = player.feet(); if (Math.hypot(f.x - stag.m.x, f.z - stag.m.z) > MOUNT_REACH) { say('the stag is out of reach'); return false; }
   // The camera comes round behind the stag (her yaw its heading): she was facing it.
   player.cancelInput(); lock(); mode = 'ride'; ride = { stage: 'mount', t: 0, from: f.clone() }; rideVigor = village.hero.vigor; stag.m.speed = 0; player.yaw = stag.m.heading; seatAction(); return true;
+}
+/** Pass 2: whether the ground between two points is the stag's to run over: sampled every 1.5 m, each sample ground it can stand on (the land's refusals, the colliders) and not water. */
+function runnableBetween(a: { x: number; z: number }, b: { x: number; z: number }): boolean {
+  const d = Math.hypot(b.x - a.x, b.z - a.z), n = Math.max(1, Math.ceil(d / 1.5)); let y = stagGround(a.x, a.z) ?? relief(a.x, a.z);
+  for (let i = 1; i <= n; i++) { const x = a.x + (b.x - a.x) * i / n, z = a.z + (b.z - a.z) * i / n, g = stagGround(x, z, y); if (g === null || soilAt(x, z) === 'water' || !stagCanStand(x, g, z) || Math.abs(g - y) > RIDE_DROP) return false; y = g; }
+  return true;
+}
+const soilBurst = (x: number, y: number, z: number, n = 22): void => { fx.spray(new THREE.Vector3(x, y + 0.1, z), new THREE.Vector3(0, 1, 0), 'soil', n, 2.6); sound.thud(true); };
+/** Pass 2 (Noah): the stag called to her from anywhere. Near (CALL_RUN_M) over ground it can cross it runs; farther, or with water between, it sinks into the soil where it stands and travels as a root ride does, surfacing beside her. */
+function callStag(): 'run' | 'travel' | false {
+  if (!stag || stag.m.phase !== 'up' || mode === 'ride') return false; const f = player.feet(), m = stag.m;
+  const r = callMount(m, { x: f.x, z: f.z }, runnableBetween({ x: m.x, z: m.z }, { x: f.x, z: f.z }));
+  if (r === 'travel') { soilBurst(m.x, stag.y, m.z, 16); say('the stag sinks into the soil, coming to her', 3); } else if (r === 'run') say('the stag comes', 2);
+  return r;
+}
+/** Pass 2 (Noah): the stag dismissed from anywhere (the button held): it sinks into the soil where it stands; no sap back. Riding, she is set down first. */
+function dismissStag(): boolean {
+  if (!stag) return false; if (mode === 'ride') dismount('button');
+  if (!dismissMount(stag.m)) return false; soilBurst(stag.m.x, stag.y, stag.m.z, 16); say('the stag sinks into the soil', 2.5); return true;
 }
 /** Her mount clip over the mounting beat (MOUNT_S; the clamber's window, parkour.ts), and the landing clip after a collapse: the plan and its time for the traverse layer (presentHulda); null when neither plays. */
 function ridePlan(): { plan: Traversal; t: number } | null {
@@ -1629,32 +1654,41 @@ function stagFrame(sim: number, dt: number): void {
     if (ev === 'collapsed') { fx.spray(new THREE.Vector3(m.x, s.y + 0.6, m.z), new THREE.Vector3(0, 1, 0), 'soil', 26, 2.4); sound.thud(true); if (mode === 'ride') { dismount('collapse'); say('the stag crumbles under her: she lands on her feet', 3); } else say('her stag crumbles into soil', 3); }
     if (ev === 'gone') { s.fig.dispose(); stag = null; }
     else {
-      // Waiting, it follows her at a walk once she is FOLLOW_M off, and stops near; the drive eases its speed either way.
-      if (m.phase === 'up' && mode !== 'ride') { const d = Math.hypot(f.x - m.x, f.z - m.z), going = m.speed > 0.05; if (d > FOLLOW_M || (going && d > FOLLOW_STOP_M)) moveStag(driveMount(m, sim, { x: (f.x - m.x) / d, z: (f.z - m.z) / d }, 1, FOLLOW_SPEED)); else driveMount(m, sim, null, 0); }
+      // Pass 2: under the soil it travels toward where she is now; it surfaces beside her, facing her, with a spray of soil.
+      if (m.phase === 'travelling') { const p = travelPoint(m, { x: f.x, z: f.z }); m.x = p.x; m.z = p.z; }
+      if (ev === 'surfacing') { const fw = forwardOf(player.yaw), spot = stagSpot(f.x + fw.x * RISE_AHEAD, f.z + fw.z * RISE_AHEAD) ?? stagSpot(f.x, f.z); if (spot) { m.x = spot.x; m.z = spot.z; s.y = spot.y; } else s.y = stagGround(m.x, m.z) ?? relief(m.x, m.z); m.heading = Math.atan2(-(f.x - m.x), -(f.z - m.z)); soilBurst(m.x, s.y, m.z); sound.roots(); }
+      // Waiting, it follows her at a walk once she is FOLLOW_M off, and stops near; called, it runs to her and stops CALL_STOP_M off (a run that makes no way for CALL_STALL_S sinks and travels instead); the drive eases its speed either way.
+      if (m.phase === 'up' && mode !== 'ride') {
+        const d = Math.hypot(f.x - m.x, f.z - m.z), going = m.speed > 0.05;
+        if (m.called) { if (d <= CALL_STOP_M) { m.called = false; driveMount(m, sim, null, 0); } else { const was = m.speed; moveStag(driveMount(m, sim, { x: (f.x - m.x) / d, z: (f.z - m.z) / d }, 1, MOUNT_SPEED)); m.stalled = m.speed < Math.min(0.3, was * 0.5) && m.t > 0.5 ? m.stalled + sim : 0; if (m.stalled >= CALL_STALL_S) { sinkToTravel(m, { x: f.x, z: f.z }); soilBurst(m.x, s.y, m.z, 16); } } }
+        else if (d > FOLLOW_M || (going && d > FOLLOW_STOP_M)) moveStag(driveMount(m, sim, { x: (f.x - m.x) / d, z: (f.z - m.z) / d }, 1, FOLLOW_SPEED)); else driveMount(m, sim, null, 0);
+      }
       s.fig.update(m.x, s.y, m.z, m.heading, { phase: m.phase, t: m.t, speed: m.speed, still: m.still, health: m.health }, dt);
       if (mode === 'ride' && ride) {
         const sp = s.fig.saddle(stagV);
         if (ride.stage === 'mount') { const k = Math.min(1, ride.t / MOUNT_S), e = k * k * (3 - 2 * k); stagV.lerpVectors(ride.from, sp, e); stagV.y += Math.sin(e * Math.PI) * 0.25; }
-        place(stagV.clone()); orbitCamera(stagV, RIDE_CAM.back, RIDE_CAM.up, 0.35);
+        place(stagV.clone()); orbitCamera(stagV, RIDE_CAM.back, RIDE_CAM.up, 0.5);
       }
       // The health bar over it, read while near.
-      tmp.set(m.x, s.y + 2.1, m.z); const dist = tmp.distanceTo(camera.position); tmp.project(camera); const show = m.phase !== 'collapsing' && tmp.z < 1 && dist < STAG_LABEL_M && Math.abs(tmp.x) < 1.1;
-      stagLabel.hidden = !show; if (show) { stagLabel.style.transform = `translate(${(tmp.x + 1) * innerWidth / 2}px,${(1 - tmp.y) * innerHeight / 2}px) translate(-50%,-100%)`; stagLabel.style.opacity = '1'; stagHp.style.width = `${m.health / STAG_HEALTH * 100}%`; stagHp.style.background = depth > 0 ? '#c060e0' : '#8fc45a'; stagLabel.firstChild!.textContent = `stag · ${Math.ceil(m.health)}${depth > 0 ? ` · fading, ${Math.ceil(m.health / (STAG_HEALTH / lastsFor(depth)))} s` : m.phase === 'rising' ? ' · rising' : ''}`; }
+      tmp.set(m.x, s.y + 2.1, m.z); const dist = tmp.distanceTo(camera.position); tmp.project(camera); const show = m.phase !== 'collapsing' && m.phase !== 'travelling' && tmp.z < 1 && dist < STAG_LABEL_M && Math.abs(tmp.x) < 1.1;
+      stagLabel.hidden = !show; if (show) { stagLabel.style.transform = `translate(${(tmp.x + 1) * innerWidth / 2}px,${(1 - tmp.y) * innerHeight / 2}px) translate(-50%,-100%)`; stagLabel.style.opacity = '1'; stagHp.style.width = `${m.health / STAG_HEALTH * 100}%`; stagHp.style.background = depth > 0 ? '#c060e0' : '#8fc45a'; stagLabel.firstChild!.textContent = `stag · ${Math.ceil(m.health)}${depth > 0 ? ` · fading, ${Math.ceil(m.health / (STAG_HEALTH / lastsFor(depth)))} s` : m.phase === 'rising' ? ' · rising' : m.phase === 'surfacing' ? ' · surfacing' : m.phase === 'sinking' ? ' · sinking' : m.called ? ' · coming' : ''}`; }
     }
   } else stagLabel.hidden = true;
-  // The button: `stag` on healthy soil with none up, `mount` by one standing, `dismount` riding; hidden elsewhere (and while she is anything but on her feet).
-  const label = mode === 'ride' ? (ride?.stage === 'ride' ? 'dismount' : null) : mode === 'ground' && village.hero.faint === 0 ? (stagUp() ? (stag!.m.phase === 'up' && Math.hypot(f.x - stag!.m.x, f.z - stag!.m.z) <= MOUNT_REACH && !village.stack ? 'mount' : null) : refuseSummon(summonCtx()) === null && !village.stack ? 'stag' : null) : null;
+  // The button (pass 2): `stag` on healthy soil with none up; one standing: `mount` within reach, `call` beyond it (from anywhere); on its way, `coming`; `dismount` riding; hidden elsewhere (and while she is anything but on her feet). Held, it dismisses the stag from anywhere.
+  const label = mode === 'ride' ? (ride?.stage === 'ride' ? 'dismount' : null) : mode === 'ground' && village.hero.faint === 0 ? (stagUp() ? (stag!.m.phase === 'up' ? (Math.hypot(f.x - stag!.m.x, f.z - stag!.m.z) <= MOUNT_REACH && !village.stack ? 'mount' : 'call') : stag!.m.phase === 'collapsing' ? null : 'coming') : refuseSummon(summonCtx()) === null && !village.stack ? 'stag' : null) : null;
   stagBtn.hidden = !label; if (label) { stagBtn.firstElementChild!.textContent = label; stagBtn.classList.toggle('on', mode === 'ride'); }
 }
-stagBtn.addEventListener('pointerdown', e => { e.preventDefault(); sound.wake(); if (mode === 'ride') dismount('button'); else if (stagUp()) startMount(); else summonStag(); });
+{ let hold = 0, held = false; const act = (): void => { if (mode === 'ride') dismount('button'); else if (stagUp()) { if (stag!.m.phase !== 'up') return; const f = player.feet(); if (Math.hypot(f.x - stag!.m.x, f.z - stag!.m.z) <= MOUNT_REACH) startMount(); else callStag(); } else summonStag(); };
+  stagBtn.addEventListener('pointerdown', e => { e.preventDefault(); sound.wake(); held = false; clearTimeout(hold); hold = window.setTimeout(() => { hold = 0; held = true; if (stagUp()) dismissStag(); }, STAG_HOLD_MS); });
+  for (const ev of ['pointerup', 'pointercancel', 'pointerleave'] as const) stagBtn.addEventListener(ev, e => { if (ev === 'pointerup') e.preventDefault(); if (hold) { clearTimeout(hold); hold = 0; if (!held && ev === 'pointerup') act(); } held = false; }); }
 const mountHandle = {
-  summon: summonStag, mount: startMount, dismount: () => dismount('button'), knockOffMount, canSummon: () => refuseSummon(summonCtx()), ctx: summonCtx, soil: soilAt,
-  get state() { return { stag: stag ? { ...stag.m, y: stag.y, triangles: stag.fig.triangles, lasts: lastsFor(depthOf(growthIdx, stag.m.x, stag.m.z)) } : null, ride: ride ? { ...ride, from: undefined } : null, mode, seat: seat?.w ?? 0, landing, riding: mode === 'ride' && ride?.stage === 'ride', driving: !!rideDrive && rideDrive.left > 0 }; },
+  summon: summonStag, mount: startMount, dismount: () => dismount('button'), call: callStag, dismiss: dismissStag, knockOffMount, canSummon: () => refuseSummon(summonCtx()), ctx: summonCtx, soil: soilAt, runnable: (x: number, z: number) => (stag ? runnableBetween({ x: stag.m.x, z: stag.m.z }, { x, z }) : false), get asset() { return !!stagAsset; },
+  get state() { return { stag: stag ? { ...stag.m, y: stag.y, triangles: stag.fig.triangles, meshes: stag.fig.meshes, kind: stag.fig.kind, lasts: lastsFor(depthOf(growthIdx, stag.m.x, stag.m.z)) } : null, ride: ride ? { ...ride, from: undefined } : null, mode, seat: seat?.w ?? 0, landing, riding: mode === 'ride' && ride?.stage === 'ride', driving: !!rideDrive && rideDrive.left > 0 }; },
   /** Dev: drive the stag along (dx, dz) for `seconds` of the ride's clock, as the stick would. */
   ride: (dx: number, dz: number, seconds: number) => { rideDrive = seconds > 0 ? { x: dx, z: dz, left: seconds } : null; },
   /** Dev: set the stag's state (health, phase, t), freeze its clock (for a still of the rise), the constants. */
   set: (p: Partial<Mount>) => { if (stag) Object.assign(stag.m, p); }, set frozen(v: boolean) { stagFrozen = v; }, get frozen() { return stagFrozen; },
-  constants: { SUMMON_SAP, MOUNT_SPEED, FOLLOW_SPEED, FOLLOW_M, RIDE_STEP, MOUNT_REACH, MOUNT_S, RISE_AHEAD, HEALTH: STAG_HEALTH, walk: NORMAL_MOBILITY.runSpeed },
+  constants: { SUMMON_SAP, MOUNT_SPEED, FOLLOW_SPEED, FOLLOW_M, CALL_RUN_M, CALL_STOP_M, CALL_SPEED, SINK_S, SURFACE_S, RIDE_STEP, MOUNT_REACH, MOUNT_S, RISE_AHEAD, HEALTH: STAG_HEALTH, DRAIN: STAG_DRAIN, walk: WALK_SPEED },
 };
 // ===== end of the mount =====
 if (PRACTICE) startPractice();
