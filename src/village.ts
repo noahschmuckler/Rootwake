@@ -1667,7 +1667,8 @@ function stagFrame(sim: number, dt: number): void {
       if (mode === 'ride' && ride) {
         const sp = s.fig.saddle(stagV);
         if (ride.stage === 'mount') { const k = Math.min(1, ride.t / MOUNT_S), e = k * k * (3 - 2 * k); stagV.lerpVectors(ride.from, sp, e); stagV.y += Math.sin(e * Math.PI) * 0.25; }
-        place(stagV.clone()); orbitCamera(stagV, RIDE_CAM.back, RIDE_CAM.up, 0.5);
+        // (Dev: with the stag's clock frozen, for a still, the camera snaps to the saddle instead of easing, so a slow renderer's lag does not put the stag off-centre.)
+        place(stagV.clone()); orbitCamera(stagV, RIDE_CAM.back, RIDE_CAM.up, stagFrozen ? 1 : 0.5);
       }
       // The health bar over it, read while near.
       tmp.set(m.x, s.y + 2.1, m.z); const dist = tmp.distanceTo(camera.position); tmp.project(camera); const show = m.phase !== 'collapsing' && m.phase !== 'travelling' && tmp.z < 1 && dist < STAG_LABEL_M && Math.abs(tmp.x) < 1.1;
