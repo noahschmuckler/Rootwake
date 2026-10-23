@@ -1082,7 +1082,7 @@ function stepSnatchers(v: Village, dt: number, her: Vec2 | null = null): void {
 const xz = (t: { at: Vec2 } | null): [number, number] => (t ? [t.at.x, t.at.z] : [NaN, NaN]);
 // STAGS.md (Noah, 2026-10-22): the tree stag, an oily, leathery, gaunt black figure with a stag's skull, out of the twitching trees. On her way in, now and then one steps out of a twitching tree far ahead, walks to another and is gone into it (an omen: it does not turn on her unless struck). On her way out with an infant she has cut free, they step out round her and fight; a blow knocks her down, the infant tumbles from the papoose, and the snatcher stalking her, hidden, goes for it.
 /** The omen every OMEN_S (spread OMEN_SPREAD) while she is in the grey ring or deeper and carries nothing: out of the twitching tree nearest a point OMEN_AHEAD m toward the breach (within OMEN_SEARCH), to another OMEN_NEXT m on, at STAG_WALK. The ambush: AMBUSH_N stags out of twitching trees AMBUSH_NEAR..AMBUSH_FAR m from her, the far side first (between her and home), once per rescued infant, when she is out past the nursery carrying it; and one snatcher stalks her, STALK_M behind, hidden, and grabs anything dropped within STALK_GRAB_R. A stag stepping out walks EMERGE_M clear of its tree; fighting, it charges at STAG_CHARGE for STAG_AGGRO s, its blow STAG_BLOW and a knock down for KNOCK_S (guarded, the knock down is turned), flinging the carried infant FLING_M away from it; beaten (STAG_HP) or done, it walks back into the nearest twitching tree. Tuning: open for Noah. */
-export const STAG_HP = 40, STAG_WALK = 1.1, STAG_CHARGE = 2.3, STAG_BLOW = 10, STAG_AGGRO = 30, KNOCK_S = 2.2, FLING_M = 1.2, EMERGE_M = 1.6;
+export const STAG_HP = 40, STAG_WALK = 1.1, STAG_CHARGE = 2.3, STAG_BLOW = 10, STAG_AGGRO = 30, KNOCK_S = 2.2, FLING_M = 2.6, EMERGE_M = 1.6;
 export const OMEN_S = 45, OMEN_SPREAD = 30, OMEN_AHEAD = 55, OMEN_SEARCH = 18, OMEN_NEXT = 18, AMBUSH_N = 2, AMBUSH_NEAR = 10, AMBUSH_FAR = 30, STALK_M = 14, STALK_GRAB_R = 40;
 /** The twitching trees near (x, z) within r (the land's frame), as the entry knows them (the grey ring's dead trees). */
 export let twitchingTrees: (x: number, z: number, r: number) => Vec2[] = () => [];
@@ -1150,6 +1150,7 @@ export const broodSpot = (i: number): Vec2 | null => (lairAt ? broodSpotAt(lairA
 /** Where the snatchers bring what they carry: the sac grove. */
 export const groveAt = (): Vec2 | null => broodSpot(0);
 export function carryInfant(v: Village, her: Vec2): 'picked' | 'home' | null {
+  if (v.hero.down) return null; // STAGS.md: down, her hands are not her own
   if (!v.carried) { if (v.stack) return null; const i = v.dropped.findIndex(d => Math.hypot(d.x - her.x, d.z - her.z) <= PICK_RANGE); if (i < 0) return null; v.carried = v.dropped.splice(i, 1)[0].infant; return 'picked'; }
   const ref = v.carried, door = housePlace(ref.home).door; if (Math.hypot(door.x - her.x, door.z - her.z) > HOME_RANGE) return null;
   const home = living(v, ref.home).length < roomPerHouse(v) ? ref.home : houseWithRoom(v)?.id ?? ref.home;

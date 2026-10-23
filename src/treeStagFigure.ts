@@ -18,6 +18,8 @@ export const STAG_HEIGHT = 1.9;
 /** The Colour of its eyes: the in-breath's magenta and, at the out-breath's height, flicker toward its yellow and green (MOTHER.md); the eyes swell with each beat. Tuning. */
 const EYE_IN = new THREE.Color('#ff2fb4'), EYE_OUT = [new THREE.Color('#f4ff3a'), new THREE.Color('#3aff8a'), new THREE.Color('#ff7a1a')], EYE_SWELL = 0.8;
 const HIDE = '#0e0a0d', SKULL = '#3a332c';
+/** How much thinner than its bones its flesh is. Tuning. */
+const GAUNT = 0.62;
 
 interface BoneData { name: string; parent: string | null; position: number[]; quaternion: number[]; scale: number[] }
 const SKELETON: { root: string; bones: BoneData[] } = skeletonData;
@@ -44,16 +46,16 @@ export function createTreeStag(seed = 1): TreeStagFigure {
   const sphere = new THREE.SphereGeometry(1, 12, 8);
   const childOf = (c: string): THREE.Vector3 => J(c).position.clone();
   function segment(parent: string, child: string, mat: THREE.Material, rx: number, rz = rx, along = 1): THREE.Mesh {
-    const d = childOf(child), L = d.length(), m = new THREE.Mesh(sphere, mat); m.position.copy(d).multiplyScalar(0.5 * along); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize()); m.scale.set(rx, L * 0.5 * along, rz); m.castShadow = true; J(parent).add(m); return m;
+    const d = childOf(child), L = d.length(), m = new THREE.Mesh(sphere, mat); m.position.copy(d).multiplyScalar(0.5 * along); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.clone().normalize()); m.scale.set(rx * GAUNT, L * 0.5 * along, rz * GAUNT); m.castShadow = true; J(parent).add(m); return m;
   }
   function blob(parent: THREE.Object3D, mat: THREE.Material, x: number, y: number, z: number, sx: number, sy: number, sz: number): THREE.Mesh { const m = new THREE.Mesh(sphere, mat); m.position.set(x, y, z); m.scale.set(sx, sy, sz); m.castShadow = true; parent.add(m); return m; }
   const tube = (parent: THREE.Object3D, pts: THREE.Vector3[], r0: number, mat: THREE.Material): void => { const m = new THREE.Mesh(taperedTube(new THREE.CatmullRomCurve3(pts), 10, 6, t => r0 * (1 - t * 0.85), 0.02), mat); m.castShadow = true; parent.add(m); };
   // The starved body: a narrow pelvis, a thin spine, a ribcage of hoops over it, collarbones.
-  blob(J('Hips'), hide, 0, -0.01 * s, 0, 0.13 * s, 0.1 * s, 0.09 * s);
+  blob(J('Hips'), hide, 0, -0.01 * s, 0, 0.09 * s, 0.07 * s, 0.065 * s);
   segment('Spine', 'Spine1', hide, 0.075 * s, 0.06 * s, 3.2);
   segment('Spine2', 'Neck', hide, 0.13 * s, 0.085 * s, 0.85);
   const chest = J('Spine2'), ribL = childOf('Neck').length();
-  for (let i = 0; i < 5; i++) { const r = new THREE.Mesh(new THREE.TorusGeometry(1, 0.08, 5, 14, Math.PI * 1.25), hide); r.scale.set(0.12 * s * (1 - i * 0.07), 0.12 * s * (1 - i * 0.07), 0.09 * s); r.rotation.set(Math.PI / 2, 0, -Math.PI * 0.12); r.position.set(0, ribL * (0.75 - i * 0.18), 0.015 * s); chest.add(r); }
+  for (let i = 0; i < 5; i++) { const r = new THREE.Mesh(new THREE.TorusGeometry(1, 0.06, 5, 14, Math.PI * 1.1), hide); r.scale.set(0.085 * s * (1 - i * 0.07), 0.085 * s * (1 - i * 0.07), 0.065 * s); r.rotation.set(Math.PI / 2, 0, -Math.PI * 0.12); r.position.set(0, ribL * (0.75 - i * 0.18), 0.015 * s); chest.add(r); }
   for (const x of [-1, 1]) segment(x < 0 ? 'LeftShoulder' : 'RightShoulder', x < 0 ? 'LeftArm' : 'RightArm', hide, 0.03 * s);
   // The neck, long; the skull on the head bone.
   segment('Neck', 'Head', hide, 0.038 * s, 0.04 * s, 1.1);

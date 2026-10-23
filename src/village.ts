@@ -278,9 +278,9 @@ setTwitchingTrees((x, z, r) => chunks.treesNear(x, z, r).filter(t => ringOf(grow
 const papoose = (() => {
   const g = new THREE.Group(); g.name = 'papoose'; const k = 1 / (hulda.height / hulda.skeletonHeight), m = (v: number): number => v * k, ball = new THREE.SphereGeometry(1, 12, 9);
   const cloth = new THREE.MeshStandardMaterial({ color: '#7a6a3e', roughness: 0.95 }), strap = new THREE.MeshStandardMaterial({ color: '#5a4426', roughness: 0.9 }), face = new THREE.MeshStandardMaterial({ color: '#e8c8a8', roughness: 0.8 }), wrap = new THREE.MeshStandardMaterial({ color: '#efe6cc', roughness: 0.9 });
-  const pouch = new THREE.Mesh(ball, cloth); pouch.scale.set(m(0.075), m(0.1), m(0.06)); pouch.position.set(0, m(0.0), m(-0.1)); g.add(pouch);
-  const bundle = new THREE.Mesh(ball, wrap); bundle.scale.set(m(0.06), m(0.05), m(0.05)); bundle.position.set(0, m(0.085), m(-0.105)); g.add(bundle);
-  const head = new THREE.Mesh(ball, face); head.scale.setScalar(m(0.03)); head.position.set(m(0.012), m(0.115), m(-0.1)); g.add(head);
+  const pouch = new THREE.Mesh(ball, cloth); pouch.scale.set(m(0.06), m(0.08), m(0.05)); pouch.position.set(0, m(0.0), m(-0.1)); g.add(pouch);
+  const bundle = new THREE.Mesh(ball, wrap); bundle.scale.set(m(0.048), m(0.04), m(0.04)); bundle.position.set(0, m(0.07), m(-0.1)); g.add(bundle);
+  const head = new THREE.Mesh(ball, face); head.scale.setScalar(m(0.025)); head.position.set(m(0.012), m(0.095), m(-0.095)); g.add(head);
   const band = new THREE.Mesh(new THREE.TorusGeometry(m(0.1), m(0.008), 5, 18), strap); band.rotation.set(Math.PI / 2, 0.5, 0); band.position.set(0, m(0.02), m(-0.02)); g.add(band);
   hulda.bones.get('mixamorigSpine2')?.add(g); g.visible = false; return g;
 })();

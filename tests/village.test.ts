@@ -441,7 +441,7 @@ test('stags: on her way out with a cut-free infant they step out round her (the 
     stepRaiders(v, 0.1, her); assert.equal(v.raiders.filter(r => r.kind === 'stag').length, AMBUSH_N, 'once per infant');
     let downAt = -1; for (let i = 0; i < 600 && downAt < 0; i++) { stepRaiders(v, 0.05, her); if (v.hero.down) downAt = i; }
     assert.ok(downAt >= 0, 'a blow knocks her down'); assert.ok(Math.abs(v.hero.down! - KNOCK_S) < 0.2); assert.equal(v.carried, null, 'the infant is out of the papoose'); assert.equal(v.dropped.length, 1); assert.ok(Math.hypot(v.dropped[0].x - her.x, v.dropped[0].z - her.z) > 0.5, 'flung');
-    assert.ok(v.events.some(e => e.text.includes('tumbles from the papoose'))); const vig = v.hero.vigor; for (let i = 0; i < 10; i++) stepRaiders(v, 0.1, her); assert.ok(v.hero.vigor >= vig - 1e-9, 'while she is down they stand over her'); assert.ok(STAG_BLOW > 0);
+    assert.ok(v.events.some(e => e.text.includes('tumbles from the papoose'))); assert.equal(carryInfant(v, { x: v.dropped[0].x, z: v.dropped[0].z }), null, 'down, she cannot take it back'); const vig = v.hero.vigor; for (let i = 0; i < 10; i++) stepRaiders(v, 0.1, her); assert.ok(v.hero.vigor >= vig - 1e-9, 'while she is down they stand over her'); assert.ok(STAG_BLOW > 0);
     let grabbed = false; for (let i = 0; i < 600 && !grabbed; i++) { stepRaiders(v, 0.1, her); grabbed = v.snatchers.some(n => n.infant?.id === NEWCOMERS[3].id); } assert.ok(grabbed, 'the stalker grabs it'); assert.ok(STALK_GRAB_R >= 20);
     assert.ok(!par(ser(v)).raiders.some(r => r.kind === 'stag'), 'stags are not saved');
     // Guarding: the blow lands on her guard, no knock down.
