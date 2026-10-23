@@ -1,6 +1,6 @@
 // The village under the vista's look (headless Chromium, SwiftShader): it boots past the intro, the vista's land is drawn and
 // the chunks' own ground and trees are not, the land and the sky change with the clock, the deep hides the land, and no
-// console or shader errors; under the grass the stratum (T8) is on and gone again on surfacing. Screenshots at a phone's portrait aspect land in artifacts/village-vista.
+// console or shader errors; under the grass the stratum (T8) is on and gone again on surfacing; her stag (STAGS.md) rises on the green, outruns her walk and collapses in the growth. Screenshots at a phone's portrait aspect land in artifacts/village-vista.
 import {createRequire} from 'node:module';
 import {createServer} from 'node:http';
 import {readFile,mkdir,writeFile} from 'node:fs/promises';
@@ -57,6 +57,17 @@ try{
   assert.notEqual(report.noon.zenith,report.night.zenith,'the sky follows the clock');assert.ok(report.night.stars>0.5,'stars by night');
   await shot('dusk-karst',()=>{const v=window.__village;v.jumpTo('dusk');v.standAt(-60+160,-330+60,Math.atan2(160,60));});
   await shot('wood-noon',()=>{const v=window.__village;v.jumpTo('noon');v.standAt(120,60,0.4);});
+  // The mount (STAGS.md): on the green's healthy soil a stag of soil, grass and branches rises at her sap's cost; mounted, eight seconds of the ride's clock carry her farther than her walk would.
+  await page.evaluate(()=>{const v=window.__village;v.jumpTo('noon');v.standAt(6,34,Math.PI);});await page.waitForTimeout(1500);
+  report.mount=await page.evaluate(()=>{const v=window.__village,m=v.mount,can=m.canSummon(),ctx=m.ctx(),sapBefore=v.hero.sap,summoned=m.summon();let stags=0;v.scene.traverse(o=>{if(o.name==='stag')stags++;});return {can,ctx,sapBefore,sapAfter:v.hero.sap,summoned,stags,state:m.state.stag,constants:m.constants};});
+  assert.equal(report.mount.can,null,`she can summon on the green (${JSON.stringify(report.mount.ctx)})`);assert.ok(report.mount.summoned&&report.mount.stags===1&&report.mount.state?.phase==='rising',`a stag rises (${JSON.stringify(report.mount.state)})`);assert.equal(report.mount.sapBefore-report.mount.sapAfter,report.mount.constants.SUMMON_SAP,'the summon costs its sap');
+  await page.waitForFunction(()=>window.__village.mount.state.stag?.phase==='up',null,{timeout:60000});
+  assert.ok(await page.evaluate(()=>window.__village.mount.mount()),'she mounts it');await page.waitForFunction(()=>window.__village.mount.state.riding,null,{timeout:60000});
+  report.mount.ride=await page.evaluate(()=>{const v=window.__village,f=v.player.feet();v.mount.ride(0,1,8);return {from:f,mode:v.mode,seat:v.mount.state.seat};});assert.equal(report.mount.ride.mode,'ride');
+  await page.waitForFunction(()=>!window.__village.mount.state.driving,null,{timeout:120000});
+  report.mount.ride.to=await page.evaluate(()=>window.__village.player.feet());report.mount.ride.distance=Math.hypot(report.mount.ride.to.x-report.mount.ride.from.x,report.mount.ride.to.z-report.mount.ride.from.z);report.mount.ride.walkWould=report.mount.constants.walk*8;
+  assert.ok(report.mount.ride.distance>report.mount.ride.walkWould*1.3,`eight seconds mounted carry her farther than her walk would (${report.mount.ride.distance.toFixed(1)} m against ${report.mount.ride.walkWould} m)`);
+  await page.screenshot({path:`${out}/mounted.png`,timeout:180000});
   // C1 (CONTAGION.md): her growth creeps along the roots toward the first village: twelve fed dawns bring the front's nearest claimed hub to its green, ground she could cross on day 0 is hers, the land's tint is drawn again.
   report.growth=await page.evaluate(()=>{const v=window.__village,g=v.growth,bytes=window.__look.world.uniforms.uGround.value.image.data,sum=()=>{let s=0;for(let i=0;i<bytes.length;i+=97)s=(s+bytes[i])|0;return s;},probe=[];for(let x=-600;x<=600;x+=50)for(let z=-600;z<=600;z+=50)probe.push([x,z]);
     const read=()=>{const st=g.state;return {day:st.day,hyphae:st.hyphae.length,claimed:st.claimed.length,nearest:Math.round(g.nearest(0,0).d),sum:sum(),open:probe.filter(([x,z])=>!g.inGrowth(x,z)).length};};
@@ -70,6 +81,16 @@ try{
   report.incremental=await digest();report.fullMs=Math.round(await page.evaluate(()=>window.__village.growth.refresh(true)));report.full=await digest();
   const drawn=d=>{const {parts,...rest}=d;return rest;};assert.deepEqual(drawn(report.incremental),drawn(report.full),`the incremental refresh leaves the land as a full one draws it (${JSON.stringify({incremental:report.incremental,full:report.full})})`);
   assert.ok(report.incremental.parts.chunksRebuilt<report.incremental.chunks&&report.incremental.parts.groundTiles<report.full.parts.groundTiles,`the incremental refresh drew less than the full one (${JSON.stringify({incremental:report.incremental.parts,full:report.full.parts})})`);
+  // The mount in the growth (STAGS.md): ridden into the front (the twelve dawns above), the stag's health drains by the depth where it stands at the model's rate; at nothing it collapses and she is on her feet.
+  await page.evaluate(()=>{const v=window.__village,s=v.mount.state.stag,n=v.growth.nearest(s.x,s.z);v.mount.ride(n.x-s.x,n.z-s.z,40);});
+  await page.waitForFunction(()=>{const v=window.__village,s=v.mount.state.stag;return !!s&&v.growth.depth(s.x,s.z)>0.1;},null,{timeout:180000});await page.evaluate(()=>window.__village.mount.ride(0,0,0));
+  const drain=()=>page.evaluate(()=>{const v=window.__village,s=v.mount.state.stag;return {health:s.health,t:s.t,depth:v.growth.depth(s.x,s.z),phase:s.phase,lasts:s.lasts};});
+  report.mount.growth=await drain();await page.waitForTimeout(3000);report.mount.growthLater=await drain();
+  {const a=report.mount.growth,b=report.mount.growthLater,rate=(a.health-b.health)/(b.t-a.t),expected=5*(a.depth+b.depth)/2;report.mount.drain={rate,expected};assert.ok(b.health<a.health&&b.t>a.t&&Math.abs(rate-expected)<expected*0.5+0.1,`its health drains at DRAIN by depth (${JSON.stringify(report.mount.drain)})`);assert.ok(Math.abs(a.lasts-100/(5*a.depth))<1e-6,'the readout counts the seconds it has');}
+  await page.evaluate(()=>window.__village.mount.set({health:3}));await page.waitForFunction(()=>window.__village.mount.state.stag?.phase==='collapsing',null,{timeout:60000});
+  report.mount.collapsed=await page.evaluate(()=>{const v=window.__village,s=v.mount.state;return {mode:s.mode,riding:s.riding,landing:s.landing,feetY:v.player.feet().y,ground:v.relief(v.player.feet().x,v.player.feet().z)};});
+  assert.ok(report.mount.collapsed.mode==='ground'&&!report.mount.collapsed.riding&&Math.abs(report.mount.collapsed.feetY-report.mount.collapsed.ground)<0.6,`she lands on her feet (${JSON.stringify(report.mount.collapsed)})`);
+  await page.waitForFunction(()=>window.__village.mount.state.stag===null,null,{timeout:60000});
   // C2 (CONTAGION.md, capture and germination): the front at the green (the twelve dawns above) holds the first village: four village days on nothing but her leavings and it is hers (a lesser germ at its green, the second village untouched); that night its own snatcher takes an infant from a house to the sac grove at the green's edge, and the sac is drawn in its scene.
   report.c2=await page.evaluate(()=>{const v=window.__village,c=v.c2,before=c.state('village'),ms=Math.round(c.days(4)),after=c.state('village'),germ=v.growth.state.germs.find(g=>g.id==='germ:village')??null;return {before,after,ms,germ,villages:v.villages().map(x=>({id:x.id,held:x.held,turned:x.turned}))};});
   assert.ok(report.c2.before.held&&!report.c2.before.turned,`held at the twelfth dawn, not yet turned (${JSON.stringify(report.c2.before)})`);assert.ok(report.c2.after.turned&&report.c2.after.state==='turned'&&report.c2.after.darkDays>=3,`turned after four days on her leavings (${JSON.stringify(report.c2.after)})`);

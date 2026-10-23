@@ -49,5 +49,9 @@
 #guard{position:fixed;z-index:22;left:84px;bottom:calc(env(safe-area-inset-bottom,0px) + 22px);width:62px;height:62px;min-height:0;padding:0;border-radius:50%;border:0;font:11px/1 system-ui;color:#f1edcf;background:radial-gradient(circle,#2a3340 0 52%,transparent 53%),conic-gradient(#9ab8d8 0 100%);opacity:.85;touch-action:none}
 #guard.on{background:radial-gradient(circle,#3a4a60 0 52%,transparent 53%),conic-gradient(#d8ecff 0 100%);opacity:1;transform:scale(.94)}
 #guard span{pointer-events:none}
+/* The mount (STAGS.md): the stag button beside the guard: summon, mount, dismount. */
+#stag{position:fixed;z-index:22;left:154px;bottom:calc(env(safe-area-inset-bottom,0px) + 22px);width:54px;height:54px;min-height:0;padding:0;border-radius:50%;border:0;font:11px/1 system-ui;color:#f1edcf;background:radial-gradient(circle,#2e3a26 0 52%,transparent 53%),conic-gradient(#b89a5a 0 100%);opacity:.85;touch-action:none}#stag[hidden]{display:none}
+#stag.on{background:radial-gradient(circle,#3a4a30 0 52%,transparent 53%),conic-gradient(#d8e07a 0 100%);opacity:1;font-size:9px}
+#stag span{pointer-events:none}
 #rootTime{position:fixed;inset:0;z-index:3;pointer-events:none;opacity:0;background:radial-gradient(ellipse at 50% 50%,transparent 38%,#3c5a1499 78%,#1e3008e6 100%)}
 #rootTime svg{position:absolute;inset:0;width:100%;height:100%}
