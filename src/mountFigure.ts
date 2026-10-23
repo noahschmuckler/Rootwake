@@ -22,6 +22,8 @@ const STRIDE_WALK = 1.2, STRIDE_GALLOP = 2.8, GALLOP_FROM = 2.6, GALLOP_TO = 4.8
 const SWING_WALK = 0.42, SWING_GALLOP = 0.85, FOLD_WALK = 0.7, FOLD_GALLOP = 1.15;
 /** The eyes' colour, the loam's, the bark's and the grass's. */
 const EYE = '#9cff6e', LOAM = '#3b2a1b', BARK = '#5c4631', GRASS = '#6f9c3c';
+/** The glow about each eye (m): a deer's eye, not a lantern (Noah, 2026-10-23: the giant green eyes shrunk to a deer's scale; was 0.07). Tuning. */
+const EYE_GLOW_R = 0.022;
 /** How long it stands before its head goes down to graze (s), and the graze's dip and its period (s). */
 export const GRAZE_AFTER = 3, GRAZE_DIP = 0.95, GRAZE_S = 7;
 /** The asset: the metres a second its Walk and Gallop clips were made for (their rate follows the speed from here, clamped), the speeds the walk gives way
@@ -107,7 +109,7 @@ export function createAssetStag(seed: number, asset: StagAsset): StagFigure {
     const poll = new THREE.Vector3(0, 3.98 * fit, -2.3 * fit), at = onBone(head, poll); antlers.position.copy(at.position); antlers.quaternion.copy(at.quaternion); head.add(antlers);
     const ag = antlerGeometry(rand); geometries.push(ag); const am = new THREE.Mesh(ag, bark); am.castShadow = true; am.scale.setScalar(1 / fit); antlers.add(am);
     const sphere = new THREE.SphereGeometry(1, 10, 7); geometries.push(sphere);
-    for (const sx of [-1, 1]) { const e = onBone(head, new THREE.Vector3(sx * 0.3 * fit, 3.87 * fit, -2.5 * fit)); const h = new THREE.Mesh(sphere, glow); h.position.copy(e.position); h.scale.setScalar(0.07 / fit); eyes.add(h); }
+    for (const sx of [-1, 1]) { const e = onBone(head, new THREE.Vector3(sx * 0.3 * fit, 3.87 * fit, -2.5 * fit)); const h = new THREE.Mesh(sphere, glow); h.position.copy(e.position); h.scale.setScalar(EYE_GLOW_R / fit); eyes.add(h); }
     head.add(eyes);
   }
   // Grass along the spine and up the neck: a few tufts on each bone, bottom edge in the loam, built in the bone's own frame (its up turned with it).
