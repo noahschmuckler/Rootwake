@@ -411,6 +411,46 @@ test('brood: a sac gestates (darkening, drawn by sacsOf), splits at due into a D
   } finally { setLair(null); }
 });
 
+// STAGS.md (Noah, 2026-10-22): the tree stag out of the twitching trees; the omen on her way in, the ambush on her way out, the knock down, the stalking snatcher.
+import { setTwitchingTrees, inTree, defense as DEF, STAG_HP, STAG_BLOW, KNOCK_S, AMBUSH_N, AMBUSH_FAR, OMEN_S, OMEN_SPREAD, STALK_GRAB_R } from '../src/villageModel';
+const grey = (): Array<{ x: number; z: number }> => { const out: Array<{ x: number; z: number }> = []; for (let x = -300; x <= 820; x += 7) for (let z = -520; z <= 520; z += 7) { const d = Math.hypot(x - 300, z); if (d > 215 && d < 520) out.push({ x: x + ((x * 13 + z) % 3), z }); } return out; };
+const TREES9 = grey(); const twitch = (x: number, z: number, r: number) => TREES9.filter(t => Math.hypot(t.x - x, t.z - z) <= r);
+test('stags: on her way in, now and then a tree stag steps out of a twitching tree far ahead, walks to another and is gone into it, never turning on her; struck, it fights, and beaten it goes back into a tree', () => {
+  setLair({ x: 300, z: 0, radius: 75 }); setTwitchingTrees(twitch);
+  try {
+    const v = freshV(1), her = { x: 0, z: 0 }; her.x = 300 - 400; // the grey ring, 400 m out, on the village side
+    let seen = null as null | { x: number; z: number }, hunted = false, gone = false, hidden = 0;
+    for (let i = 0; i < (OMEN_S + OMEN_SPREAD) * 10 + 900 && !gone; i++) { stepRaiders(v, 0.1, her); const s = v.raiders.find(r => r.kind === 'stag'); if (s && !seen) seen = { x: s.stag!.fx, z: s.stag!.fz }; if (s?.state === 'hunting') hunted = true; if (s && inTree(s)) hidden++; if (seen && !s) gone = true; }
+    assert.ok(seen, 'a stag stepped out'); assert.ok(Math.hypot(seen!.x - her.x, seen!.z - her.z) > 30, `far ahead (${Math.hypot(seen!.x - her.x, seen!.z - her.z).toFixed(0)} m)`); assert.ok(seen!.x > her.x, 'toward the breach');
+    assert.ok(TREES9.some(t => Math.hypot(t.x - seen!.x, t.z - seen!.z) < 0.01), 'out of a twitching tree'); assert.ok(!hunted, 'it never turned on her'); assert.ok(gone, 'and it was gone into another'); assert.ok(hidden > 0, 'in its tree, hidden');
+    // Struck, it fights; beaten, it walks back into a tree and she has her xp.
+    v.omenClock = 0; let s = null as ReturnType<typeof v.raiders.find> | null; for (let i = 0; i < 2000 && !s; i++) { stepRaiders(v, 0.1, her); s = v.raiders.find(r => r.kind === 'stag') ?? null; }
+    assert.ok(s); her.x = s!.x - 1; her.z = s!.z; const xp = v.hero.xp; strike(v, her, 1, 0); stepRaiders(v, 0.1, her); assert.equal(s!.state, 'hunting', 'struck, it fights');
+    for (let i = 0; i < 20 && s!.state !== 'retreating'; i++) strike(v, { x: s!.x - 1, z: s!.z }, 1, 0, 3); assert.equal(s!.state, 'retreating'); assert.ok(v.hero.xp > xp); assert.ok(STAG_HP > 30);
+    for (let i = 0; i < 1500 && v.raiders.includes(s!); i++) stepRaiders(v, 0.1, null); assert.ok(!v.raiders.includes(s!), 'back into the trees');
+  } finally { setLair(null); setTwitchingTrees(() => []); }
+});
+test('stags: on her way out with a cut-free infant they step out round her (the far side first), a blow knocks her down and flings the infant from the papoose, and the hidden stalker snatches it; guarding turns the knock down; stags are never saved', () => {
+  setLair({ x: 300, z: 0, radius: 75 }); setTwitchingTrees(twitch);
+  try {
+    const v = freshV(1), her = { x: 50, z: 0 }; v.carried = { id: NEWCOMERS[3].id, home: 1, born: 0 }; v.hero.vigor = 1000;
+    stepRaiders(v, 0.1, her); const stags = v.raiders.filter(r => r.kind === 'stag'); assert.equal(stags.length, AMBUSH_N, 'they step out');
+    for (const s of stags) { const d = Math.hypot(s.x - her.x, s.z - her.z); assert.ok(d <= AMBUSH_FAR + 0.01 && d >= 9.9, `round her (${d.toFixed(1)} m)`); }
+    assert.ok(stags.some(s => s.x < her.x), 'between her and home'); const stalker = v.snatchers.find(n => n.stalk); assert.ok(stalker, 'a snatcher stalks her'); assert.ok(stalker!.hide > 0 && stalker!.cover === 'bush', 'hidden');
+    assert.ok(v.events.some(e => e.text.includes('Tree stags step out')));
+    stepRaiders(v, 0.1, her); assert.equal(v.raiders.filter(r => r.kind === 'stag').length, AMBUSH_N, 'once per infant');
+    let downAt = -1; for (let i = 0; i < 600 && downAt < 0; i++) { stepRaiders(v, 0.05, her); if (v.hero.down) downAt = i; }
+    assert.ok(downAt >= 0, 'a blow knocks her down'); assert.ok(Math.abs(v.hero.down! - KNOCK_S) < 0.2); assert.equal(v.carried, null, 'the infant is out of the papoose'); assert.equal(v.dropped.length, 1); assert.ok(Math.hypot(v.dropped[0].x - her.x, v.dropped[0].z - her.z) > 0.5, 'flung');
+    assert.ok(v.events.some(e => e.text.includes('tumbles from the papoose'))); const vig = v.hero.vigor; for (let i = 0; i < 10; i++) stepRaiders(v, 0.1, her); assert.ok(v.hero.vigor >= vig - 1e-9, 'while she is down they stand over her'); assert.ok(STAG_BLOW > 0);
+    let grabbed = false; for (let i = 0; i < 600 && !grabbed; i++) { stepRaiders(v, 0.1, her); grabbed = v.snatchers.some(n => n.infant?.id === NEWCOMERS[3].id); } assert.ok(grabbed, 'the stalker grabs it'); assert.ok(STALK_GRAB_R >= 20);
+    assert.ok(!par(ser(v)).raiders.some(r => r.kind === 'stag'), 'stags are not saved');
+    // Guarding: the blow lands on her guard, no knock down.
+    const w = freshV(1); w.carried = { id: NEWCOMERS[4].id, home: 1, born: 0 }; w.hero.vigor = 1000; DEF.guarding = true;
+    try { for (let i = 0; i < 600; i++) stepRaiders(w, 0.05, her); } finally { DEF.guarding = false; }
+    assert.ok(!w.hero.down, 'guarded, she stays up'); assert.equal(w.carried?.id, NEWCOMERS[4].id, 'and keeps the infant');
+  } finally { setLair(null); setTwitchingTrees(() => []); }
+});
+
 // D4: the blight.
 import { blightTarget, isBlighted, BLIGHT_BASE, BLIGHT_PER_DY, BLIGHT_STEP, setUnkillable } from '../src/villageModel';
 import { TAINT } from '../src/taintModel';

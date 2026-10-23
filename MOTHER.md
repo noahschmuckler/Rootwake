@@ -211,3 +211,58 @@ Noah approved all of the proposed suggestions, with one addition: "the snatchers
   - **Two at once** at high attention, one a noisy decoy.
   - **The vein:** from each sac back to its germ, so that cutting it starves the germ. This is the contagion's accounting, so it needs coordinating with the land session.
   - **Freeing every sac on a turned green** as a step of C3.
+
+## The tree stag and the papoose (Noah, 2026-10-22; STAGS.md)
+
+The brief is in STAGS.md, items 2 and 3. Both are built here, by the creature session; the mount is the land session's.
+
+### The tree stag, as built
+
+- **The figure** (`treeStagFigure.ts`): it wears the X Bot skeleton, so the Mixamo clips walk it and its blow is
+  the attack clip.
+  - **Height:** `STAG_HEIGHT` 1.9 m to the skull.
+  - **Body:** limbs too thin for their bones, knuckled at knee and elbow; a ribcage of hoops over a starved belly;
+    long fingers with bone claws.
+  - **Skin:** oily black (low roughness, a little metal).
+  - **The skull:** a long cranium with a downturned muzzle, empty sockets, and antlers (a main beam with three
+    tines and a brow tine), stained a shade lighter than the hide so it reads.
+  - **The eyes:** deep in the sockets, they beat with the mother's breath (`exhaleAt`). They are her magenta on
+    the in-breath and flicker toward the out-breath's yellow, green and orange as her attention rises.
+  - **Movement:** stepping out of its tree it shudders as the trees do; its tell hunches it and lowers the skull.
+  - **Speed:** its clips are told its speed in Hulda's measure (`MODEL_HEIGHT / STAG_HEIGHT`), so its stride is
+    a long one.
+- **The model** (`villageModel`, the STAGS block): a tree stag is a raider of kind `'stag'`, so her strike, burst,
+  bind and guard, the lock ring and the tells all work on it.
+  - **The omen.** While she is in the grey ring or deeper and carries nothing, every `OMEN_S` seconds (spread by
+    `OMEN_SPREAD`) a stag steps out of the twitching tree nearest a point `OMEN_AHEAD` m ahead of her toward the
+    breach. It walks to another twitching tree and is gone into it. It does not turn on her unless struck.
+  - **The ambush.** On her way out with an infant she has cut free, once per infant, as she passes out of the
+    nursery, `AMBUSH_N` stags step out of twitching trees `AMBUSH_NEAR` to `AMBUSH_FAR` m from her, the far side
+    (between her and home) first.
+    - They charge at `STAG_CHARGE` for `STAG_AGGRO` s.
+    - A blow costs her `STAG_BLOW` and knocks her down for `KNOCK_S`. The infant tumbles out of the papoose,
+      flung `FLING_M` away from the stag. While she is down the stags stand over her.
+    - Her guard turns the knockdown.
+  - **The stalker.** A snatcher stalks the escape `STALK_M` behind her, dashing and hiding as a bush. It goes for
+    anything dropped within `STALK_GRAB_R`, and gives up when she leaves the taint.
+  - **Beaten** (`STAG_HP`), it walks back into the nearest twitching tree, and she has her xp. When its fight
+    runs out, it goes back the same way.
+  - Stags are not saved: a reload clears them.
+- **Wiring** (`village.ts`):
+  - `setTwitchingTrees` gives the model the chunks' trees inside the growth's grey ring: kind 9 in the look, the
+    dead twitching trees.
+  - The stag is labelled "tree stag" with its hp bar while it fights. It is not labelled while it is only an omen
+    or inside its tree.
+  - Knocked down, she falls on her back and lies there, and cannot move until she is up.
+
+### The papoose, as built
+
+- The infant she carries rides on her back, smaller, in a leaf-cloth pouch on her chest bone (`mixamorigSpine2`),
+  slung by a strap, its face peeping over. Her own clips are untouched.
+- The bundle that used to float before her chest is gone. Infants lying on the land are unchanged.
+
+### Open, for Noah
+
+- **Tuning:** the omen's rate; the ambush's size and range; the knockdown's length; the blow; the stag's hp.
+- **The omen's purpose.** Today it only foreshadows. It could also mark the twitching trees as places to avoid.
+- **The papoose's look:** its size and placement on the phone.

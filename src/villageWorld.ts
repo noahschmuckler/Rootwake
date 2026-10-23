@@ -15,6 +15,7 @@ import { spriteMaterial, standees, crownStandees, type Standee } from './sprites
 import { treeParts, taperedTube } from './flora';
 import { createHulda } from './huldaCharacter';
 import { makeWolf, setDireLook } from './wolfFigure';
+import { createTreeStag, type TreeStagFigure, type StagLook } from './treeStagFigure';
 import { createSnatcher, createSac, type SnatcherFigure, type SnatcherLook, type SacFigure } from './broodFigures';
 import { createDarkYoung, DY_SCALE, type DarkYoung } from './darkYoung';
 import { createDireWolf, DIRE_SCALE, type DireWolf } from './direWolf';
@@ -180,7 +181,7 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   };
   /** The figure for a hobbit as they are now; figures of other stages or of the dead are hidden. */
   function figureFor(s: HobbitState): Figure { const key = figureKey(s); let f = figureMap.get(key); if (!f) { f = makeFigure(s); figureMap.set(key, f); } return f; }
-  function setFigureClips(clips: Parameters<Figure['setClips']>[0]): void { figureClips = clips; for (const f of figureMap.values()) f.setClips(clips); }
+  function setFigureClips(clips: Parameters<Figure['setClips']>[0]): void { figureClips = clips; for (const f of figureMap.values()) f.setClips(clips); for (const f of stagFigures.values()) f.setClips(clips); }
   function pruneFigures(v: Village): void { const keep = new Set(v.hobbits.map(figureKey)); for (const [key, f] of figureMap) if (!keep.has(key)) f.group.visible = false; livingNow = v.hobbits; }
   // An armful in the right hand: a basket, a bucket, a bundle of sticks, a sack or a pail, one of them shown while the model says the hobbit carries. The skeleton is in centimetres, so the things are sized in centimetres in the hand's space.
   const carriedMap = new Map<Figure, Record<Store, THREE.Object3D>>();
@@ -223,7 +224,7 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
   /** A blow from (dx, dz) (unit, horizontal) lands on raider `id`; `power` 1 for a strike, more for the thorns or a kill. */
   function react(id: number, dx: number, dz: number, power = 1, killed = false): void { reacts.set(id, { age: 0, dx, dz, power, killed, lunge: false }); raiderFigures.get(id)?.dy.flinch(killed ? 3 : power); direFigures.get(id)?.dw.flinch(power); }
   /** Raider `id` lunges along (dx, dz) to bite. */
-  function lunge(id: number, dx: number, dz: number): void { const r = reacts.get(id); if (r && !r.lunge && r.age < 0.3) return; reacts.set(id, { age: 0, dx, dz, power: 1, killed: false, lunge: true }); raiderFigures.get(id)?.dy.attack(); direFigures.get(id)?.dw.bite(); }
+  function lunge(id: number, dx: number, dz: number): void { const r = reacts.get(id); if (r && !r.lunge && r.age < 0.3) return; reacts.set(id, { age: 0, dx, dz, power: 1, killed: false, lunge: true }); raiderFigures.get(id)?.dy.attack(); direFigures.get(id)?.dw.bite(); stagFigures.get(id)?.attack(); }
   function applyReact(id: number, group: THREE.Group, hide: THREE.MeshStandardMaterial, hurt: number): void {
     const r = reacts.get(id); if (!r) { hide.emissive.set(hurt > 0 ? '#b03030' : '#000000'); return; }
     const t = r.age;
@@ -275,7 +276,14 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
     // F3: in its tell it crouches to spring, nose down, and its eyes flare.
     if (dead <= 0 && tell > 0) { f.group.scale.y *= 1 - 0.22 * tell; f.group.scale.x *= 1 + 0.06 * tell; } for (const e of f.eyes) e.scale.setScalar((f.dire ? 1.5 : 1) * (1 + 1.6 * tell));
   }
-  function hideRaider(id: number): void { const f = raiderFigures.get(id); if (f) f.group.visible = false; const w = wolfFigures.get(id); if (w) w.group.visible = false; const d = direFigures.get(id); if (d) d.group.visible = false; }
+  // STAGS.md: the tree stag (treeStagFigure), on the X Bot skeleton and the same clips as the hobbits.
+  const stagFigures = new Map<number, TreeStagFigure>(), stagClock = new Map<number, number>();
+  function setStag(id: number, x: number, z: number, look: StagLook, t: number): void {
+    let f = stagFigures.get(id); if (!f) { f = createTreeStag(id + 1); foes.add(f.group); if (figureClips) f.setClips(figureClips); stagFigures.set(id, f); }
+    const dt = Math.min(0.1, Math.max(0, (t - (stagClock.get(id) ?? t)) * 0.001)); stagClock.set(id, t);
+    f.group.position.set(x, relief(x, z), z); f.group.rotation.y = -look.heading - Math.PI / 2; f.update(look, dt, t * 0.001);
+  }
+  function hideRaider(id: number): void { const st = stagFigures.get(id); if (st) st.group.visible = false; const f = raiderFigures.get(id); if (f) f.group.visible = false; const w = wolfFigures.get(id); if (w) w.group.visible = false; const d = direFigures.get(id); if (d) d.group.visible = false; }
   // D3: an infant is a pale bundle: lying on the land, or in her arms.
   const bundleMat = new THREE.MeshStandardMaterial({ color: '#efe6cc', emissive: '#3a3020', emissiveIntensity: 0.25, roughness: 0.9 });
   const makeBundle = (): THREE.Mesh => { const b = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), bundleMat); b.scale.set(1.5, 0.8, 0.9); return b; };
@@ -375,6 +383,6 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
     while (markPool.length < list.length) { const mat = new THREE.MeshBasicMaterial({ color: '#e0603a', transparent: true, opacity: 0.85, depthWrite: false }), shaftMat = new THREE.MeshBasicMaterial({ color: '#e0603a', transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide }); const group = new THREE.Group(); group.name = 'incident-mark'; const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.06, 8, 40), mat); ring.rotation.x = Math.PI / 2; ring.position.y = 0.08; const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.16, 9, 8, 1, true), shaftMat); shaft.position.y = 4.5; group.add(ring, shaft); root.add(group); markPool.push({ group, ring, shaft, mat, shaftMat }); }
     markPool.forEach((m, i) => { const d = list[i]; m.group.visible = !!d; if (!d) return; m.group.position.set(d.x, relief(d.x, d.z), d.z); m.mat.color.set(d.colour); m.shaftMat.color.set(d.colour); m.shaft.visible = d.shaft; const k = (d.r ?? 1) * (1 + 0.12 * Math.sin(t * 0.006)); m.ring.scale.set(k, k, 1); });
   }
-  return { root, origin: { x: ox, z: oz }, relief, setMarks, setHedges, setWolf, setHouses, setSite, setSnatcher, hideSnatchersBut, setInfants, setSacs, colliders, get figures() { return livingNow.map(figureFor); }, figureFor, setFigureClips, figure, mass, update, updateLand, updatePrayer, armfuls, setRaider, hideRaider, react, lunge, flashSlash, flashBurst, updateStrokes, setLairAt, setLair, setStation, get activeStation() { return activeStation; }, setStack, stack, spiritFigure, spiritFigures, stream, crownPoint, trunkPoint };
+  return { root, origin: { x: ox, z: oz }, relief, setMarks, setHedges, setStag, setWolf, setHouses, setSite, setSnatcher, hideSnatchersBut, setInfants, setSacs, colliders, get figures() { return livingNow.map(figureFor); }, figureFor, setFigureClips, figure, mass, update, updateLand, updatePrayer, armfuls, setRaider, hideRaider, react, lunge, flashSlash, flashBurst, updateStrokes, setLairAt, setLair, setStation, get activeStation() { return activeStation; }, setStack, stack, spiritFigure, spiritFigures, stream, crownPoint, trunkPoint };
 }
 export type VillageWorld = ReturnType<typeof buildVillage>;

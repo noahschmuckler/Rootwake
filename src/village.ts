@@ -24,7 +24,7 @@ const ROOT_REACH = 2.6, CARRY_SPEED = 9;
 const WALL_CAP = 2;
 import { MODEL_HEIGHT } from './huldaRig';
 import type { HobbitState, VillageEvent, PurifyTarget, Raider } from './villageModel';
-import { THORN_RANGE, spawnFoe, cutSac, sacsOf, hidden, HATCH_AGGRO, DY_AGGRO_S, FINISHER_MULT, HEAVY_MULT, defense, tellOf } from './villageModel';
+import { THORN_RANGE, spawnFoe, setTwitchingTrees, inTree, STAG_HP, STAG_CHARGE, cutSac, sacsOf, hidden, HATCH_AGGRO, DY_AGGRO_S, FINISHER_MULT, HEAVY_MULT, defense, tellOf } from './villageModel';
 import { createRootNetwork, siteTreeId, soilAt as grassCan, type WorldRoot, type Course } from './worldRoots';
 import { TAINT, stepBreath, exhaleAt, colourAt, flareAt } from './taintModel';
 import { freshGrowth, parseGrowth, serializeGrowth, indexGrowth, stepGrowth, inGrowth, depthOf, ringOf, veinOf, hyphaSegments, nearestFront, fieldStamp, WEIGHTS, IRRITANT_R, addGerm, removeGerms, GERM_REACH, type Growth, type GrowthIndex, type Nourish, type Irritant } from './contagionModel';
@@ -272,6 +272,19 @@ karst = createKarstFeature(scene, player, camera, KARST_AT, { orbit: (t, back, u
 if (look) scene.traverse(o => { if (o.name === 'karst-wood' || o.name.startsWith('karst-leaves-')) o.visible = false; });
 { const karstClear = player.cameraClear; player.cameraClear = p => (inWard ? wardInterior.cameraClear(p) : (!karstClear || karstClear(p)) && denField.cameraClear(p)); }
 const hulda = presentation.hulda;
+// STAGS.md: the tree stags step out of the twitching trees: the chunks' trees in her growth's grey ring (kind 9 in the look).
+setTwitchingTrees((x, z, r) => chunks.treesNear(x, z, r).filter(t => ringOf(growthIdx, t.x, t.z) === 'grey'));
+// STAGS.md (Noah): the rescued infant rides in a papoose on her back, small, so her own clips are kept: a bundle in a leaf-cloth pouch on the chest bone, slung by a strap over her shoulder, its face peeping over.
+const papoose = (() => {
+  const g = new THREE.Group(); g.name = 'papoose'; const k = 1 / (hulda.height / hulda.skeletonHeight), m = (v: number): number => v * k, ball = new THREE.SphereGeometry(1, 12, 9);
+  const cloth = new THREE.MeshStandardMaterial({ color: '#7a6a3e', roughness: 0.95 }), strap = new THREE.MeshStandardMaterial({ color: '#5a4426', roughness: 0.9 }), face = new THREE.MeshStandardMaterial({ color: '#e8c8a8', roughness: 0.8 }), wrap = new THREE.MeshStandardMaterial({ color: '#efe6cc', roughness: 0.9 });
+  const pouch = new THREE.Mesh(ball, cloth); pouch.scale.set(m(0.075), m(0.1), m(0.06)); pouch.position.set(0, m(0.0), m(-0.1)); g.add(pouch);
+  const bundle = new THREE.Mesh(ball, wrap); bundle.scale.set(m(0.06), m(0.05), m(0.05)); bundle.position.set(0, m(0.085), m(-0.105)); g.add(bundle);
+  const head = new THREE.Mesh(ball, face); head.scale.setScalar(m(0.03)); head.position.set(m(0.012), m(0.115), m(-0.1)); g.add(head);
+  const band = new THREE.Mesh(new THREE.TorusGeometry(m(0.1), m(0.008), 5, 18), strap); band.rotation.set(Math.PI / 2, 0.5, 0); band.position.set(0, m(0.02), m(-0.02)); g.add(band);
+  hulda.bones.get('mixamorigSpine2')?.add(g); g.visible = false; return g;
+})();
+let knock = 0, knockWas = false; const knockTilt = new THREE.Quaternion(), xAxis = new THREE.Vector3(1, 0, 0);
 // Hulda and the hobbits share the skeleton, so the Mixamo clips drive all nine (public/models/README.md).
 const query = new URLSearchParams(location.search), clipUrls = query.get('clips')?.split(',').filter(Boolean) ?? __HULDA_CLIPS__, base = (c: string) => import.meta.env.BASE_URL + c;
 let clipStatus: 'none' | 'loading' | 'ready' | 'failed' = clipUrls.length ? 'loading' : 'none', clipError = '';
@@ -516,6 +529,9 @@ function presentHulda(dt: number): void {
   else if (mode === 'sink' || mode === 'rise' || mode === 'faint') form = 'ivy';
   const kv = mode === 'karst' ? karst.visual() : null; if (kv) { form = kv.form; visualPosition.copy(kv.position); visualRotation.copy(kv.rotation); }
   if (form === 'human' || form === 'leaf') visualPosition.y += HUMAN_CENTRE;
+  // STAGS.md: knocked down, she falls on her back and lies there, then is up again.
+  knock += (((village.hero.down ?? 0) > 0 && mode === 'ground' ? 1 : 0) - knock) * (1 - Math.exp(-dt * ((village.hero.down ?? 0) > 0 ? 12 : 5)));
+  if (knock > 0.01 && form === 'human') { visualRotation.multiply(knockTilt.setFromAxisAngle(xAxis, knock * Math.PI * 0.48)); visualPosition.y -= HUMAN_CENTRE * 0.8 * knock; }
   if (mode === 'dive' || mode === 'launch') form = 'knot';
   // In the deep she is the camera: her figure, which only fades when hidden, is put far below it, or its leaves fill the view (Noah).
   if (inDeep(mode) && mode !== 'meditate') visualPosition.set(camera.position.x, camera.position.y - 40, camera.position.z);
@@ -606,6 +622,8 @@ function fight(simDt: number, dt: number): void {
   levelEl.textContent = `level ${village.hero.level}${village.hero.level < LEVEL_CAP ? ` · ${village.hero.xp}/${LEVEL_XP[village.hero.level]}` : ''}`; perksEl.hidden = village.hero.choices < 1; if (!perksEl.hidden) perksEl.querySelector('.title')!.textContent = `Level ${village.hero.level}: what grows in her? (${village.hero.choices} to choose)`;
   // The lair: shown, its hp over it while near; the forest's air darkens with the depth.
   { const h = home_(), f = player.feet(), d = Math.hypot(f.x - breach.x, f.z - breach.z); h.world.setLair(h.v.lair.alive, h.v.lair.hurt, time, h.v.lair.hp / LAIR_HP, Math.max(1 - Math.min(1, Math.max(0, (d - 150) / 100)), liftClear)); }
+  // STAGS.md: knocked down by a tree stag she lies a moment and cannot move; up again, she can.
+  { const down = (village.hero.down ?? 0) > 0 && mode === 'ground'; if (down) { player.canMove = false; player.motor.velocity.set(0, 0, 0); knockWas = true; } else if (knockWas) { knockWas = false; player.canMove = true; } }
   if (village.hero.faint > 0 && mode !== 'faint') { const l = herLocal(); dropCarried(village, l.x, l.z); lock(); mode = 'faint'; grass = null; root = null; trunk = null; crown = null; }
   if (mode === 'faint') { const p = player.feet(); place(p); orbitCamera(p, 3.2, 1.3); if (village.hero.faint === 0) { const st = SITES.shrine, a = Math.atan2(st.z, st.x), x = st.x - Math.cos(a) * 1.6, z = st.z - Math.sin(a) * 1.6; standOn(x + ctx.ox, z + ctx.oz, Math.atan2(-(st.x - x), -(st.z - z))); } }
   for (const c of ctxs) c.world.updateStrokes(dt);
@@ -850,22 +868,25 @@ function snatcherVoices(v: Village, dt: number): void {
 }
 /** How far a snatcher's voice carries (m). Tuning. */
 const VOICE_M = 70;
+const stagWas = new Map<number, { x: number; z: number }>();
 function presentRaiders(c: Ctx, dt: number): void {
   const seen = new Set<number>(), village = c.v, world = c.world, raiderLabels = c.raiderLabels, smallLabels = c.smallLabels, relief = c.world.relief, ox = c.ox, oz = c.oz;
   // C2: by day the Dark Young bred of a village whose germ is a turned village's stand about that green (keepers, not raiders; shown, not fought: C3), in the village's own frame at its source's grove.
   const src = germSource(village), keepers: Raider[] = src && src.kind === 'village' && daylightAt(village.tick) > 0.05 ? atHome(village).map((inf, i) => { const p = keeperSpot(i * 3 + (village.folk % 3)); return { id: KEEPER_ID + i, x: src.x - ox + p.x, z: src.z - oz + p.z, heading: Math.atan2(-p.z, -p.x), hp: DY_HP, state: 'coming' as RaiderState, target: null, ate: 0, eatClock: 0, aggro: 0, rooted: 0, biteClock: 0, hurt: 0, gone: 0, site: null, devourClock: 0, held: 0, infant: inf, kind: 'dy' as RaiderKind, den: null, prey: null }; }) : [];
   for (const r of [...village.raiders, ...keepers]) {
     seen.add(r.id); const moving = r.state === 'coming' || r.state === 'hunting' || r.state === 'leaving' || r.state === 'retreating', dead = r.state === 'dead' || r.state === 'melting' ? r.gone : 0;
-    const tell = tellOf(r); if (r.kind === 'wolf') world.setWolf(r.id, r.x, r.z, r.heading, time, moving, r.hurt, r.rooted, dead, isDire(r), tell); else world.setRaider(r.id, r.x, r.z, r.heading, time, moving, r.hurt, r.rooted, dead, r.state === 'retreating' || r.state === 'leaving', tell, r.state === 'eating' || r.state === 'devouring');
+    const tell = tellOf(r);
+    if (r.kind === 'stag') { const was = stagWas.get(r.id) ?? { x: r.x, z: r.z }, sp = dt > 0 ? Math.hypot(r.x - was.x, r.z - was.z) / dt : 0; stagWas.set(r.id, { x: r.x, z: r.z }); world.setStag(r.id, r.x, r.z, { moving: sp > 0.05, speed: Math.min(sp, STAG_CHARGE * 1.2), heading: r.heading, hurt: r.hurt, rooted: r.rooted, inTree: inTree(r), emerging: r.stag?.phase === 'emerge', tell, pulse: exhaleAt(breath), attention: home_().v.lair.attention }, time); }
+    else if (r.kind === 'wolf') world.setWolf(r.id, r.x, r.z, r.heading, time, moving, r.hurt, r.rooted, dead, isDire(r), tell); else world.setRaider(r.id, r.x, r.z, r.heading, time, moving, r.hurt, r.rooted, dead, r.state === 'retreating' || r.state === 'leaving', tell, r.state === 'eating' || r.state === 'devouring');
     let l = raiderLabels.get(r.id); if (!l) { const label = document.createElement('div'); label.className = 'name foe'; label.append(document.createTextNode('dark young')); const meter = document.createElement('i'); meter.className = 'hunger'; const hp = document.createElement('b'); meter.append(hp); label.append(meter); labels.append(label); l = { label, hp }; raiderLabels.set(r.id, l); }
-    tmp.set(r.x + ox, relief(r.x, r.z) + 1.9, r.z + oz); const dist = tmp.distanceTo(camera.position); tmp.project(camera); const show = r.state !== 'dead' && r.state !== 'melting' && tmp.z < 1 && dist < 22 && Math.abs(tmp.x) < 1.1;
-    l.label.hidden = !show; if (show) { const x = (tmp.x + 1) * innerWidth / 2, y = (1 - tmp.y) * innerHeight / 2; l.label.style.transform = `translate(${x}px,${y}px) translate(-50%,-100%)`; l.label.style.opacity = '1'; l.hp.style.width = `${r.hp / (r.kind === 'wolf' ? (isDire(r) ? DIRE_HP : WOLF_HP) : DY_HP) * 100}%`; l.hp.style.background = '#e0603a'; l.label.firstChild!.textContent = r.kind === 'wolf' ? `${isDire(r) ? 'black wolf' : 'wolf'}${r.state === 'hunting' ? ' · hunting' : r.state === 'leaving' ? ' · leaving' : ''}` : r.state === 'retreating' ? (r.rooted > 0 ? 'dark young · held' : 'dark young · fleeing') : r.state === 'devouring' ? 'dark young · devouring' : r.id >= KEEPER_ID ? 'dark young · keeping' : 'dark young'; }
+    tmp.set(r.x + ox, relief(r.x, r.z) + 1.9, r.z + oz); const dist = tmp.distanceTo(camera.position); tmp.project(camera); const show = r.state !== 'dead' && r.state !== 'melting' && !(r.kind === 'stag' && (inTree(r) || r.stag?.omen && r.state !== 'hunting')) && tmp.z < 1 && dist < 22 && Math.abs(tmp.x) < 1.1;
+    l.label.hidden = !show; if (show) { const x = (tmp.x + 1) * innerWidth / 2, y = (1 - tmp.y) * innerHeight / 2; l.label.style.transform = `translate(${x}px,${y}px) translate(-50%,-100%)`; l.label.style.opacity = '1'; l.hp.style.width = `${r.hp / (r.kind === 'wolf' ? (isDire(r) ? DIRE_HP : WOLF_HP) : r.kind === 'stag' ? STAG_HP : DY_HP) * 100}%`; l.hp.style.background = '#e0603a'; l.label.firstChild!.textContent = r.kind === 'stag' ? `tree stag${r.state === 'hunting' ? ' · hunting' : r.state === 'retreating' ? ' · going back into the trees' : ''}` : r.kind === 'wolf' ? `${isDire(r) ? 'black wolf' : 'wolf'}${r.state === 'hunting' ? ' · hunting' : r.state === 'leaving' ? ' · leaving' : ''}` : r.state === 'retreating' ? (r.rooted > 0 ? 'dark young · held' : 'dark young · fleeing') : r.state === 'devouring' ? 'dark young · devouring' : r.id >= KEEPER_ID ? 'dark young · keeping' : 'dark young'; }
   }
   for (const [id, l] of raiderLabels) if (!seen.has(id)) { l.label.remove(); raiderLabels.delete(id); world.hideRaider(id); }
   // D3: the snatchers, named only within a few metres; the infants lying out, named from farther; the one in her arms.
   const ids = new Set<number>(); for (const n of village.snatchers) { ids.add(n.id); const hid = hidden(n); world.setSnatcher(n.id, { x: hid ? n.cx : n.x, z: hid ? n.cz : n.z, heading: n.heading, moving: !hid && n.state !== 'taking', taking: n.state === 'taking', carrying: !!n.infant, cover: n.cover, hidden: hid, size: n.cs }, time); } world.hideSnatchersBut(ids);
   if (c === ctx) snatcherVoices(village, dt);
-  const f = player.feet(), fl = { x: f.x - ox, z: f.z - oz }; const kept = sacsOf(village); world.setSacs(kept, time, village.hatched.map(h => ({ x: h.x, z: h.z, age: (village.tick - h.tick) / TICKS_PER_SECOND }))); if (c === ctx) hatchAt(village, fl); world.setInfants([...village.dropped], c === ctx && village.carried && mode !== 'faint' ? new THREE.Vector3(f.x + Math.sin(player.yaw) * -0.25, f.y + 0.85, f.z + Math.cos(player.yaw) * -0.25) : null);
+  const f = player.feet(), fl = { x: f.x - ox, z: f.z - oz }; const kept = sacsOf(village); world.setSacs(kept, time, village.hatched.map(h => ({ x: h.x, z: h.z, age: (village.tick - h.tick) / TICKS_PER_SECOND }))); if (c === ctx) hatchAt(village, fl); world.setInfants([...village.dropped], null); if (c === ctx) papoose.visible = !!village.carried && mode !== 'faint';
   const near = [...village.snatchers.filter(n => !hidden(n) && Math.hypot(n.x - fl.x, n.z - fl.z) < 6).map(n => ({ x: n.x, z: n.z, h: 0.6, text: n.infant ? `something small, with ${hobbitById(n.infant.id).name}` : 'something small' })), ...village.dropped.map(d => ({ x: d.x, z: d.z, h: 0.5, text: hobbitById(d.infant.id).name })), ...kept.map(k => ({ x: k.x, z: k.z, h: 2.7 + 0.5 * k.stage, text: `${k.name}, in a sac${k.cut > 0 ? ` · cut ${Math.round(k.cut * 100)}%` : k.stage > 0.66 ? ' · near its time' : k.stage > 0.33 ? ' · darkening' : ''}` }))];
   while (smallLabels.length < near.length) { const e = document.createElement('div'); e.className = 'name way'; labels.append(e); smallLabels.push(e); }
   smallLabels.forEach((e, i) => { const m = near[i]; if (!m) { e.hidden = true; return; } tmp.set(m.x + ox, relief(m.x, m.z) + m.h, m.z + oz); const dist = tmp.distanceTo(camera.position); tmp.project(camera); const show = tmp.z < 1 && dist < 40 && Math.abs(tmp.x) < 1.1; e.hidden = !show; if (show) { e.textContent = m.text; e.style.transform = `translate(${(tmp.x + 1) * innerWidth / 2}px,${(1 - tmp.y) * innerHeight / 2}px) translate(-50%,-100%)`; } });
