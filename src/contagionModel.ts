@@ -46,8 +46,15 @@
 //
 // The nourishment and the irritants are the caller's, each day (village.ts): a village weighs folk + 3 ×
 // infants (WEIGHTS), a warren 1, a wallow 1; a woken ward is an irritant of r 170 (RUINS.md WARD_CALM_R), a
-// sanctified grove 120, the karst's foot 140 (IRRITANT_R). Reading those from the live village is not pure, so
+// sanctified grove 120, the karst's foot 140 (IRRITANT_R); C3 (the bulwark): a thriving, shrined village is
+// one of VILLAGE_HOLD_R (villageModel.villageIrritant). Reading those from the live village is not pure, so
 // no helper here builds them.
+//
+// Legibility (C3): what withered is kept for the map. `withered` records every length of hypha lost in a step
+// (a tip that retreated, a hypha dropped with its source, a germ taken away) as the edge with the span it
+// lost (t0..t1) and the day, kept WITHERED_DAYS days and WITHERED_MAX records at most, serialized; the land
+// never reads it (fieldStamp leaves it out). witheredSegments gives them as world segments; hyphaSegments
+// marks each hypha's direction (`dir`, the unit vector of its edge) so the map can draw its tip as an arrowhead.
 import { CHUNK, hubAt } from './chunkModel';
 import { lairPlace } from './overworldModel';
 import { TAINT, ringAt, depthAt, veinAt, type Ring } from './taintModel';
@@ -57,7 +64,9 @@ export interface Germ { id: string; x: number; z: number; kind: GermKind; reach:
 /** A hub by its chunk's coords. */
 export type HubRef = [number, number];
 export interface Hypha { from: HubRef; to: HubRef; t: number }
-export interface Growth { day: number; germs: Germ[]; /** Hub keys, sorted. */ claimed: string[]; hyphae: Hypha[]; food: number; /** Days since the last infant was taken, counted only once fed. */ starved: number; /** It has fed (an infant taken, a Dark Young bred) and can starve; false while it seeks, and again once it has withered back to the breach alone. */ fed: boolean }
+/** C3: a length of hypha lost: the edge, the span of it that withered (t0..t1 along from → to) and the day it did. */
+export interface Withered { from: HubRef; to: HubRef; t0: number; t1: number; day: number }
+export interface Growth { day: number; germs: Germ[]; /** Hub keys, sorted. */ claimed: string[]; hyphae: Hypha[]; food: number; /** Days since the last infant was taken, counted only once fed. */ starved: number; /** It has fed (an infant taken, a Dark Young bred) and can starve; false while it seeks, and again once it has withered back to the breach alone. */ fed: boolean; /** C3: what withered lately, for the map (WITHERED_DAYS). */ withered: Withered[] }
 export interface Nourish { x: number; z: number; w: number }
 export interface Irritant { x: number; z: number; r: number }
 export interface GrowthInputs { nourish: Nourish[]; irritants: Irritant[]; infantsTaken: number; darkYoungBred: number; meals: number }
@@ -76,6 +85,8 @@ export const GERM_RINGS = { nursery: 0.33, grey: 0.8 } as const;
 /** The weights the integrator gives the nourishment (a village: folk × folk + infants × infant; a warren; a wallow) and the irritants' radii (m). Tuning. */
 export const WEIGHTS = { folk: 1, infant: 3, warren: 1, wallow: 1 } as const;
 export const IRRITANT_R = { ward: 170, grove: 120, karst: 140 } as const;
+/** C3: a withered length is kept WITHERED_DAYS days (the day it withered, until the next step), WITHERED_MAX records at most. Tuning. */
+export const WITHERED_DAYS = 1, WITHERED_MAX = 400;
 
 // The germs' rings.
 /** A germ's ring at distance d from it: the breach's are M1's; a lesser germ's are scaled by its reach. */
@@ -113,12 +124,20 @@ function closure(germs: Germ[], hyphae: Hypha[], seed: number): { claimed: strin
   return { claimed: [...claimed].sort(), hyphae: hyphae.filter(h => claimed.has(refKey(h.from))) };
 }
 
+/** C3: what the hyphae lost between two states, as withered records of the day: a tip that drew back (t fell), or a hypha gone (dropped with its source, or withered to nothing). */
+function witherDiff(before: Hypha[], after: Hypha[], day: number): Withered[] {
+  const out: Withered[] = [];
+  for (const b of before) { const a = after.find(h => sameRef(h.from, b.from) && sameRef(h.to, b.to)), t1 = Math.min(1, b.t), t0 = a ? Math.min(1, Math.max(0, a.t)) : 0; if (t0 < t1 - 1e-9) out.push({ from: [b.from[0], b.from[1]], to: [b.to[0], b.to[1]], t0, t1, day }); }
+  return out;
+}
+/** The withered records still worth keeping on a day: those of the last WITHERED_DAYS days, the newest WITHERED_MAX. */
+const keepWithered = (list: Withered[], day: number): Withered[] => list.filter(w => w.day > day - WITHERED_DAYS).slice(-WITHERED_MAX);
 /** The breach only, its hubs claimed. */
-export function freshGrowth(seed: number): Growth { const l = lairPlace(seed), breach: Germ = { id: 'breach', x: l.x, z: l.z, kind: 'breach', reach: TAINT.edge }; return { day: 0, germs: [breach], claimed: [...germHubs([breach], seed)].sort(), hyphae: [], food: 0, starved: 0, fed: false }; }
+export function freshGrowth(seed: number): Growth { const l = lairPlace(seed), breach: Germ = { id: 'breach', x: l.x, z: l.z, kind: 'breach', reach: TAINT.edge }; return { day: 0, germs: [breach], claimed: [...germHubs([breach], seed)].sort(), hyphae: [], food: 0, starved: 0, fed: false, withered: [] }; }
 /** C2: a new germination point; its hubs are claimed at once. */
 export function addGerm(g: Growth, germ: Germ, seed: number): Growth { const germs = [...g.germs.filter(x => x.id !== germ.id), { ...germ }], c = closure(germs, g.hyphae, seed); return { ...g, germs, claimed: c.claimed, hyphae: c.hyphae }; }
-/** C2: a lesser germ taken away (a warren healed, a village begun again); the breach never. The closure is rebuilt: the hubs only it claimed are let go, with the hyphae that grew from them. */
-export function removeGerms(g: Growth, gone: (x: Germ) => boolean, seed: number): Growth { const germs = g.germs.filter(x => x.kind === 'breach' || !gone(x)); if (germs.length === g.germs.length) return g; const c = closure(germs, g.hyphae, seed); return { ...g, germs, claimed: c.claimed, hyphae: c.hyphae }; }
+/** C2: a lesser germ taken away (a warren healed, a village begun again, C3 a village un-turned); the breach never. The closure is rebuilt: the hubs only it claimed are let go, with the hyphae that grew from them (recorded as withered today). */
+export function removeGerms(g: Growth, gone: (x: Germ) => boolean, seed: number): Growth { const germs = g.germs.filter(x => x.kind === 'breach' || !gone(x)); if (germs.length === g.germs.length) return g; const c = closure(germs, g.hyphae, seed); return { ...g, germs, claimed: c.claimed, hyphae: c.hyphae, withered: keepWithered([...g.withered, ...witherDiff(g.hyphae, c.hyphae, g.day)], g.day) }; }
 /** C2 (CONTAGION.md): a lesser germ's reach by its kind: a turned village's nursery ring (a third of it) then covers its green and its houses; a poisoned warren's its burrows. Tuning (open for Noah). */
 export const GERM_REACH = { village: 110, warren: 40 } as const;
 
@@ -169,12 +188,13 @@ export function stepGrowth(g: Growth, seed: number, inputs: GrowthInputs): Growt
   const kept = germs.filter(x => x.kind === 'breach' || !(starving && hubsWithin(x.x, x.z, x.reach, seed).length === 0));
   const cc = kept.length === germs.length ? c : closure(kept, c.hyphae, seed);
   // Withered back to the breach alone, it seeks again.
-  const bare = starving && kept.length === 1 && cc.hyphae.length === 0;
-  return { day: g.day + 1, germs: kept, claimed: cc.claimed, hyphae: cc.hyphae.map(h => ({ ...h, t: Math.min(1, h.t) })), food, starved: bare ? 0 : starved, fed: fed && !bare };
+  const bare = starving && kept.length === 1 && cc.hyphae.length === 0, out = cc.hyphae.map(h => ({ ...h, t: Math.min(1, h.t) }));
+  // C3: what was lost today is kept for the map.
+  return { day: g.day + 1, germs: kept, claimed: cc.claimed, hyphae: out, food, starved: bare ? 0 : starved, fed: fed && !bare, withered: keepWithered([...g.withered, ...witherDiff(g.hyphae, out, g.day + 1)], g.day + 1) };
 }
 
 /** Saved under its own key. */
-export const serializeGrowth = (g: Growth): string => JSON.stringify({ day: g.day, germs: g.germs, claimed: g.claimed, hyphae: g.hyphae.map(h => ({ from: h.from, to: h.to, t: Math.round(h.t * 10000) / 10000 })), food: Math.round(g.food * 1000) / 1000, starved: g.starved, fed: g.fed });
+export const serializeGrowth = (g: Growth): string => JSON.stringify({ day: g.day, germs: g.germs, claimed: g.claimed, hyphae: g.hyphae.map(h => ({ from: h.from, to: h.to, t: Math.round(h.t * 10000) / 10000 })), food: Math.round(g.food * 1000) / 1000, starved: g.starved, fed: g.fed, withered: g.withered.map(w => ({ from: w.from, to: w.to, t0: Math.round(w.t0 * 10000) / 10000, t1: Math.round(w.t1 * 10000) / 10000, day: w.day })) });
 /** Tolerant of garbage: anything unreadable is the breach alone; the breach is always present with M1's reach; claimed is rebuilt as the closure. */
 export function parseGrowth(raw: string | null, seed: number): Growth {
   const fresh = freshGrowth(seed);
@@ -187,8 +207,11 @@ export function parseGrowth(raw: string | null, seed: number): Growth {
     const ref = (x: unknown): HubRef | null => (Array.isArray(x) && x.length === 2 && Number.isInteger(x[0]) && Number.isInteger(x[1]) && Math.abs(x[0]) < 1e5 && Math.abs(x[1]) < 1e5 ? [x[0], x[1]] : null);
     const edges = new Set<string>(), hyphae: Hypha[] = [];
     for (const x of Array.isArray(p.hyphae) ? p.hyphae : []) { const h = x as Hypha, from = ref(h?.from), to = ref(h?.to); if (!from || !to || sameRef(from, to) || !hubNeighbours(from).some(n => sameRef(n, to))) continue; const t = num(h.t, 0, 1, 0); if (t <= 0) continue; const k = `${refKey(from)}>${refKey(to)}`; if (edges.has(k)) continue; edges.add(k); hyphae.push({ from, to, t }); }
-    const all = [fresh.germs[0], ...lesser], c = closure(all, hyphae, seed);
-    return { day: Math.floor(num(p.day, 0, 1e7, 0)), germs: all, claimed: c.claimed, hyphae: c.hyphae, food: num(p.food, 0, 1e6, 0), starved: p.fed === true ? Math.floor(num(p.starved, 0, 1e7, 0)) : 0, fed: p.fed === true };
+    const all = [fresh.germs[0], ...lesser], c = closure(all, hyphae, seed), day = Math.floor(num(p.day, 0, 1e7, 0));
+    // C3: the withered records, each a neighbouring pair with a span in (0, 1] and a day; only the last WITHERED_DAYS days' are kept, WITHERED_MAX at most.
+    const withered: Withered[] = [];
+    for (const x of Array.isArray(p.withered) ? p.withered : []) { const w = x as Withered, from = ref(w?.from), to = ref(w?.to); if (!from || !to || sameRef(from, to) || !hubNeighbours(from).some(n => sameRef(n, to))) continue; const t0 = num(w.t0, 0, 1, 0), t1 = num(w.t1, 0, 1, 0), wd = Math.floor(num(w.day, 0, 1e7, -1)); if (t1 <= t0 || wd < 0) continue; withered.push({ from, to, t0, t1, day: wd }); }
+    return { day, germs: all, claimed: c.claimed, hyphae: c.hyphae, food: num(p.food, 0, 1e6, 0), starved: p.fed === true ? Math.floor(num(p.starved, 0, 1e7, 0)) : 0, fed: p.fed === true, withered: keepWithered(withered, day) };
   } catch { return fresh; }
 }
 
@@ -258,7 +281,9 @@ export function fieldStamp(idx: GrowthIndex, x0: number, z0: number, x1: number,
   return parts.join(';');
 }
 /** The hyphae as world segments with their t (the tip at a + (b - a) t), for the minimap and the look's veins; the germs' own veins are by distance (veinOf), as M1 draws them. */
-export const hyphaSegments = (idx: GrowthIndex): { from: HubRef; to: HubRef; a: { x: number; z: number }; b: { x: number; z: number }; tip: { x: number; z: number }; t: number }[] => idx.segs.map(s => ({ from: s.from, to: s.to, a: { x: s.ax, z: s.az }, b: { x: s.bx, z: s.bz }, tip: { x: s.ax + (s.bx - s.ax) * s.t, z: s.az + (s.bz - s.az) * s.t }, t: s.t }));
+export const hyphaSegments = (idx: GrowthIndex): { from: HubRef; to: HubRef; a: { x: number; z: number }; b: { x: number; z: number }; tip: { x: number; z: number }; t: number; /** C3: the way it grows, the edge's unit vector, for the tip's arrowhead. */ dir: { x: number; z: number } }[] => idx.segs.map(s => ({ from: s.from, to: s.to, a: { x: s.ax, z: s.az }, b: { x: s.bx, z: s.bz }, tip: { x: s.ax + (s.bx - s.ax) * s.t, z: s.az + (s.bz - s.az) * s.t }, t: s.t, dir: { x: s.ux, z: s.uz } }));
+/** C3: the lengths of hypha that withered lately (Growth.withered), as world segments from where the loss began (t0) to where the tip stood (t1), oldest first, for the map. */
+export const witheredSegments = (g: Growth, seed: number): { a: { x: number; z: number }; b: { x: number; z: number }; day: number }[] => g.withered.map(w => { const p = hubAt(w.from[0], w.from[1], seed), q = hubAt(w.to[0], w.to[1], seed); return { a: { x: p.x + (q.x - p.x) * w.t0, z: p.z + (q.z - p.z) * w.t0 }, b: { x: p.x + (q.x - p.x) * w.t1, z: p.z + (q.z - p.z) * w.t1 }, day: w.day }; });
 /** The germ whose rings cover a point (the deepest, the nearer on a tie), else null. */
 export function germAt(idx: GrowthIndex, x: number, z: number): Germ | null { let best: Germ | null = null, rank = 0, bd = Infinity; for (const g of idx.germs) { const d = Math.hypot(x - g.x, z - g.z), r = germRing(g, d); if (!r) continue; const k = RANK[r]; if (k > rank || (k === rank && d < bd)) { best = g; rank = k; bd = d; } } return best; }
 /** The nearest claimed hub to a point, with its bearing in degrees clockwise from north (villageModel.bearingFromGreen's convention, for bearingWords), for the keeper's rumor. */

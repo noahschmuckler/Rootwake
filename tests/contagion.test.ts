@@ -165,3 +165,34 @@ test('C2: removeGerms takes a lesser germ away and rebuilds the closure (the hub
   const fromGerm = g.hyphae.filter(h => !g0.claimed.includes(hubKey(h.from[0], h.from[1]))); assert.ok(fromGerm.length > 0, 'hyphae grew out of the germ\'s hubs');
   const gone = removeGerms(g, x => x.id === 'germ:village', SEED); assert.ok(gone.hyphae.every(h => g0.claimed.includes(hubKey(h.from[0], h.from[1])) || gone.claimed.includes(hubKey(h.from[0], h.from[1]))), 'no hypha left without a claimed source'); assert.ok(gone.hyphae.length < g.hyphae.length);
 });
+
+// C3 (CONTAGION.md, the bulwark): the thriving village's push, and what the map needs: the withered record and the tips' direction.
+import { witheredSegments, WITHERED_DAYS, WITHERED_MAX, type Withered } from '../src/contagionModel';
+import { VILLAGE_HOLD_R } from '../src/villageModel';
+test('C3: a thriving, shrined village is an irritant of VILLAGE_HOLD_R: its hubs are never claimed and the front stops at the ring; the push dropped (pressured), the front claims a hub inside within a few dawns', () => {
+  const push = { x: village.x, z: village.z, r: VILLAGE_HOLD_R }, held = grow(24, fed({ irritants: [push] }));
+  for (const k of held.claimed) { const p = hub(k); assert.ok(Math.hypot(p.x - village.x, p.z - village.z) >= VILLAGE_HOLD_R, `${k} claimed within the village's push`); }
+  assert.ok(nearestTo(held, village.x, village.z) >= VILLAGE_HOLD_R && nearestTo(held, village.x, village.z) < VILLAGE_HOLD_R + 120, `the front waits at the ring (${nearestTo(held, village.x, village.z).toFixed(0)} m)`);
+  let g = held, inside = 0; for (let day = 1; day <= 4 && !inside; day++) { g = stepGrowth(g, SEED, fed()); if (nearestTo(g, village.x, village.z) < VILLAGE_HOLD_R) inside = day; }
+  assert.ok(inside >= 1 && inside <= 4, `the push gone, a hub inside is claimed on day ${inside}`);
+  const back = stepGrowth(g, SEED, fed({ irritants: [push] })); assert.ok(nearestTo(back, village.x, village.z) >= VILLAGE_HOLD_R, 'thriving again, the hub inside is let go at the next dawn'); assert.ok(back.withered.length > 0, 'and the loss is on record');
+});
+test('C3: what withered is kept for the map, with its day, WITHERED_DAYS days and WITHERED_MAX records at most: a tip drawn back by an irritant, a front starved, a germ taken away; hyphaSegments gives each tip its direction; saved and parsed tolerantly', () => {
+  assert.equal(WITHERED_DAYS, 1);
+  const g6 = grow(6); assert.equal(g6.withered.length, 0, 'nothing lost while it only grows'); const idx6 = indexGrowth(g6, SEED), tip = nearestFront(idx6, village.x, village.z)!, ward = { x: tip.x, z: tip.z, r: 100 };
+  const g7 = stepGrowth(g6, SEED, fed({ irritants: [ward] })); assert.ok(g7.withered.length > 0, 'the hyphae into the ward lost length');
+  for (const w of g7.withered) { assert.equal(w.day, 7); assert.ok(w.t0 >= 0 && w.t1 <= 1 && w.t0 < w.t1); const before = g6.hyphae.find(h => hubKey(h.from[0], h.from[1]) === hubKey(w.from[0], w.from[1]) && hubKey(h.to[0], h.to[1]) === hubKey(w.to[0], w.to[1]))!; assert.ok(before, 'an edge that had a hypha'); assert.ok(Math.abs(w.t1 - Math.min(1, before.t)) < 1e-9, 'from where its tip stood'); const after = g7.hyphae.find(h => hubKey(h.from[0], h.from[1]) === hubKey(w.from[0], w.from[1]) && hubKey(h.to[0], h.to[1]) === hubKey(w.to[0], w.to[1])); assert.ok(Math.abs(w.t0 - (after ? after.t : 0)) < 1e-9, 'to where it stands now'); }
+  const segs = witheredSegments(g7, SEED); assert.equal(segs.length, g7.withered.length); for (let i = 0; i < segs.length; i++) { const w = g7.withered[i], a = hub(hubKey(w.from[0], w.from[1])), b = hub(hubKey(w.to[0], w.to[1])); assert.ok(Math.abs(segs[i].a.x - (a.x + (b.x - a.x) * w.t0)) < 1e-9 && Math.abs(segs[i].b.z - (a.z + (b.z - a.z) * w.t1)) < 1e-9, 'on the edge'); assert.equal(segs[i].day, 7); }
+  const g8 = stepGrowth(g7, SEED, fed()); assert.equal(g8.withered.length, 0, 'the next day, with nothing lost, the record is cleared (WITHERED_DAYS)');
+  // Starved: the tips that drew back are on record.
+  let g = g8; for (let i = 0; i < STARVE_DAYS; i++) g = stepGrowth(g, SEED, fed({ infantsTaken: 0 })); assert.ok(g.withered.length > 0 && g.withered.every(w => w.day === g.day), 'the starving front\'s losses, dated today');
+  // A germ taken away: the hyphae that grew from its hubs are on record at once.
+  const withGerm = grow(2, fed(), addGerm(g8, { id: 'germ:village', kind: 'village', x: village.x, z: village.z, reach: GERM_REACH.village }, SEED)); assert.ok(withGerm.hyphae.some(h => germHubs(withGerm.germs, SEED).has(hubKey(h.from[0], h.from[1]))), 'hyphae out of the germ\'s hubs');
+  const gone = removeGerms(withGerm, x => x.id === 'germ:village', SEED); assert.ok(gone.withered.length > 0 && gone.withered.every(w => w.day === withGerm.day && w.t0 === 0), 'dropped whole, today');
+  // The tips' direction.
+  for (const h of hyphaSegments(indexGrowth(g7, SEED))) { const len = Math.hypot(h.b.x - h.a.x, h.b.z - h.a.z); assert.ok(Math.abs(Math.hypot(h.dir.x, h.dir.z) - 1) < 1e-9); assert.ok(Math.abs(h.dir.x - (h.b.x - h.a.x) / len) < 1e-9 && Math.abs(h.dir.z - (h.b.z - h.a.z) / len) < 1e-9); }
+  // Saved, bounded, tolerant.
+  const back = parseGrowth(serializeGrowth(g7), SEED); assert.equal(back.withered.length, g7.withered.length); assert.deepEqual(back.withered.map(w => [w.from, w.to, w.day]), g7.withered.map(w => [w.from, w.to, w.day])); for (let i = 0; i < back.withered.length; i++) assert.ok(Math.abs(back.withered[i].t0 - g7.withered[i].t0) < 1e-4 && Math.abs(back.withered[i].t1 - g7.withered[i].t1) < 1e-4);
+  const w0 = g7.withered[0], many: Withered[] = Array.from({ length: WITHERED_MAX + 50 }, () => ({ ...w0 })), flood = parseGrowth(JSON.stringify({ ...JSON.parse(serializeGrowth(g7)), withered: [...many, { from: w0.from, to: [w0.from[0] + 5, w0.from[1]], t0: 0, t1: 1, day: 7 }, { from: w0.from, to: w0.to, t0: 0.8, t1: 0.2, day: 7 }, { from: w0.from, to: w0.to, t0: 0, t1: 1, day: 2 }, 'junk', null] }), SEED);
+  assert.equal(flood.withered.length, WITHERED_MAX, 'bounded; a far pair, an empty span, a stale day and junk are dropped'); assert.equal(parseGrowth(JSON.stringify({ ...JSON.parse(serializeGrowth(g7)), withered: undefined }), SEED).withered.length, 0, 'an old save loads with none');
+});

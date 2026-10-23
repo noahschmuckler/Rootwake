@@ -433,3 +433,98 @@ block holds the rules and the constants), read by the entry (`village.ts`) at ea
   stone's gap as Nell walks past it to the fire; the map (`map-after.png`) the germ's 110 m ring round the village and the
   warren's small one, the hyphae into it from the south-east. Whether that is too much Colour for a village she must walk
   into to take infants back (the breach's nursery was a delve; this is a home) is the first thing to judge.
+
+## C3, as built (2026-10-23)
+
+The bulwark, to Noah's call above: a captured village won back by clean meals, her levers real on a held village, the
+thriving shrined village a push on the front, and the retreat made legible on the map, in the keeper's mouth and in the panel.
+The rules are `villageModel.ts`'s C3 block (beside C2's) and `contagionModel.ts`'s header; `tests/village.test.ts` and
+`tests/contagion.test.ts` (107 tests under `node scripts/test-village.mjs`, 4 new, one C2 pin changed to the new rule).
+
+- **Un-turning by clean meals.** While held the dawn still re-fouls (the stores emptied, the heap at its cap), but her levers
+  work: **purify at the heap** banishes the leavings while held too (`purifiable('dark')` no longer refuses; `heapBanished`
+  keeps the roots from heaping it again until the dawn's fouling), **purify at a spoiled place** lifts it for the day as before,
+  and **a quickening on a purified place** fills it (it always could once lifted; pinned now). `eat` already counts the day's
+  meals by kind; at dawn `cleanDays` rises by one when a turned village ate at least one meal and every meal was clean (the
+  hunters' meat from an unpoisoned warren, what she brings, purified and quickened places), else goes to 0: a single dark meal,
+  or a day nobody ate, starts it over. At `UNTURN_DAYS` 3, `unturn`: `turned` false, `darkDays` and `cleanDays` 0, the banner
+  "The village is itself again" (`told` set with it, so the fire does not announce the state twice), its sacs drop empty
+  (`homeBrood`: every infant in `v.brood` home to its house or one with room, `returned` counted, an event each "<name> is
+  home: the sac drops empty", parents told), its kept Dark Young (`atHome`: bred, not abroad) leave at once from the stone's
+  gap as retreating raiders ("Her Dark Young leave the green: n of them, for her"), beds and births back to normal (`roomPerHouse`
+  and `BIRTH_DAYS` read `turned`; a village grown to thirteen is crowded again and sets its stakes). The entry takes the germ
+  away at the next dawn's step (`holdStep`: `!turned && germ` → `removeGerms`, `germ` cleared; the hubs only it claimed are let
+  go with their hyphae, recorded as withered today), and brings home the infants a *neighbour* kept at that grove (its source
+  was the germ: `homeBrood` on it too). Until the germ is gone, `germSource` reads past a village germ at the green of a village
+  that is not turned, so the leaving Dark Young run for the next germ or the breach from their first step and are not "home"
+  at their own green (`sourcePoint` is read live by the retreat). A held village un-turned stays held: three dark days turn it
+  again, and a new germ is added (`v.germ` is null again). Fouling lapses when not held, as C2 left it.
+- **The thriving, shrined village as an irritant.** `villageIrritant(v)`: a village in state `thriving` whose prayer has shrined
+  it (`deepModel.isShrined`, `SHRINE_PRAYER` 100: the same threshold the deep places' shrine uses) is `{ x, z, r: VILLAGE_HOLD_R }`
+  at its green, `VILLAGE_HOLD_R` 150; `steady`, `pressured`, `besieged`, unshrined or turned, nothing. The entry adds every
+  village's to the dawn's irritants beside the woken ward, the groves and the karst's foot, so the model's existing rule does
+  the rest: hyphae into the ring wither (a hub claimed by a hypha is let go the first dawn, STEP off a full edge), and its hubs
+  are never claimed. A village that drops to `pressured` loses the push at the next dawn and the front claims a hub inside
+  within a few days (the contagion test measures it); thriving again, the hub inside is let go at the next dawn.
+- **Legibility.** `Growth.withered` (`contagionModel`): every length of hypha lost in a step, as the edge, the span lost
+  (`t0..t1`) and the day: a tip drawn back by an irritant, a starving front's tips, a hypha dropped with its source, a germ taken
+  away; kept `WITHERED_DAYS` 1 (the day it withered, until the next step), `WITHERED_MAX` 400 at most, serialized and parsed
+  tolerantly (a far pair, an empty span, a stale day, junk dropped; an old save loads with none); `fieldStamp` leaves it out
+  (the land never reads it). `hyphaSegments` gives each hypha its `dir` (the edge's unit vector); `witheredSegments` the records
+  as world segments. `drawMap` (one block after C1's hyphae): each growing tip (t < 1) as a small arrowhead in `FRONT_COLOUR`
+  the way it grows; each withered length as a dotted line in the same colour, its alpha fading by age over `WITHERED_DAYS`; every
+  irritant the dawn would read now (`growthInputs().irritants`, so the ward, the groves, the karst's foot and the thriving
+  villages) as a faint pale ring (`#c8f0a8` at 0.35) of its radius; all where the land is revealed or the lair known, as the
+  front is. **Day over day:** at each dawn's step the entry keeps, per village, how far its nearest claimed hub stands and how
+  much farther than at the last step (`fronts`, saved beside `seen` in the growth's record); `setFront`'s reader gains `change`
+  (m, positive receding), the keeper adds "the trees to the X are greening again" after "have gone black" when it is positive
+  (talk at the fire with a bearing, no subject: it is not a hint on the map), and the panel's line reads "the growth: receding /
+  advancing / held · N m from the green" while the front is within `FRONT_TELL_M`. **Banners:** "The village is itself again"
+  (the model's), and once per village the first push-back ("Her growth draws back from the village: the trees to the X are
+  greening again", when the nearest front first stands farther than at the last step, from within the keeper's telling;
+  `fronts[id].pushed`, saved).
+- **Dev.** `__village.c3`: `clean(id, days)` (the village fed only clean meals for n whole days from the next dawn, since the day
+  begun may have had dark meals: the stores filled in quarters through each day and the heap banished, the dawn's step and
+  hold step run as the dawns do), `thrive(id)` (held let
+  go, its Dark Young as if slain and their infants carried home (bred or kept, a village is besieged, not thriving), huts enough for its beds, every place clean and full, the streak at `THRIVE_DAYS`, prayer given to `SHRINE_PRAYER`: the next dawn's step reads it as
+  an irritant; returns the state and the irritant), `unturn(id)` (now, its germ taken away), `front(id)` (the keeper's day-over-day
+  record); `growth.step(days, pushes = true)` gains the switch. `c2.state` unchanged.
+- **CI** (`scripts/browser-village-vista.mjs`). The C1 pace check now steps with the villages' pushes left out (`growth.step(12, false)`):
+  a village left alone shrines itself in about five days (its own prayer passes `SHRINE_PRAYER`) and, thriving, pushed the front off at
+  159 m in the first run; in play her own first snatch (the first infant born is taken that night) breaks its thriving before the front
+  is near, but the CI's village clock stands still through the twelve dawns, so the premise is pinned by the switch and the push is
+  checked in its own block. After the C2 block: `c3.clean('village', 3)` → not turned, no `germ:village` in the
+  growth, brood 0, no sac drawn, no village hers; `c3.thrive('village')` returns `thriving` with an irritant of r 150, then
+  two dawns stepped one at a time, each recorded (state, needs, held, germs, withered, irritants) → thriving and unheld at both, no
+  claimed hub within 150 m of the green, the lost lengths on record, its keeper told the first push-back (`fronts.pushed`) with the
+  front standing off; no console errors. Also in this pass: the mount block's call spot is chosen on the page (the first
+  of a few near-bank spots whose line to the stag crosses the plateau's water and that `runnable` refuses, asserted before the
+  call) instead of the fixed (6, 40) that the ride's clock under SwiftShader left marginal (runs 65–66 red, 'run' for 'travel').
+- **Decisions beyond the rules, flagged:**
+  - a day with no meal at all is not a clean day (the count asks for eating clean, not for not eating dark);
+  - the heap banished while held stays gone until the dawn's fouling, so the day's meals must come from elsewhere or be
+    missed: purify at the heap is a real lever and a real risk (nobody starves in a day);
+  - the leaving Dark Young stay the village's own (`bred`), raiding it from its new source as before: they are not slain;
+  - a neighbour's infants kept at the un-turned village's grove come home with its own (the grove is gone); its keepers stand
+    at the next source from then;
+  - the first push-back banner needs the front within `FRONT_TELL_M` at the step before, so a far front's drift does not announce
+    itself; the keeper's "greening again" line is talk, not a hint (the "gone black" hint already points the way);
+  - `held` reads the growth with the warren germs taken out (`holdStep`): a poisoned warren's germ (reach 40, the first village's own
+    warren 60 m from its green) claimed hubs within `HELD_M` and held the village on the dawn the push freed it, fouling the stores
+    before the same dawn removed the germ as no longer reached; a warren's germ is a consequence of the front, not the front;
+  - the map's irritant rings are the live inputs, not a saved set: a village that stops thriving loses its ring at once, a dawn
+    before the model stops reading it;
+  - a village left alone becomes a bulwark on its own (shrined by its own prayer in about five days, thriving while nothing wants):
+    the front then only reaches it once her first snatch has made it besieged, which the mother does by herself; whether that is the
+    pace Noah wants (twelve days if she does nothing) or the shrine's bar for the push should be higher is the first open item below.
+- **C3b, after the phone** (SETTLEMENTS.md S5): the mason's first stone: the palisade and the watch post as thresholds a village
+  holds at (the push's radius by its works, the hold's `HELD_M` raised by a palisade, the watch post's torches against the
+  snatchers), the granary against the fouling.
+- **Open, for Noah's playtest:** the self-made bulwark above (the push needing more than the deep's shrine: a launch to it, a
+  palisade of C3b, or a longer thriving); `UNTURN_DAYS` 3 (as many as `TURN_DAYS`: symmetric; the levers make a clean day expensive
+  in prayer and meat); `VILLAGE_HOLD_R` 150 (larger than the germ's 110 so a village won back and thriving clears its own former
+  nursery; the ward's 170); the shrine threshold (`SHRINE_PRAYER` 100: the deep's own, so one prayer count serves both; a lower
+  bar for the push alone would make a bulwark of a village before it can be launched to); whether purify at the heap while held
+  should cost more prayer than `PURIFY_COST` (it undoes the fouling's whole point for a day); `WITHERED_DAYS` 1 (a longer
+  memory would draw the retreat as a trail; the map's dotted lines then want their fade); whether the "greening again" line
+  should be a hint on the map as "gone black" is.
