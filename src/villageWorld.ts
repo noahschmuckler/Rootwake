@@ -16,7 +16,7 @@ import { treeParts, taperedTube } from './flora';
 import { createHulda } from './huldaCharacter';
 import { makeWolf, setDireLook } from './wolfFigure';
 import { createTreeStag, type TreeStagFigure, type StagLook } from './treeStagFigure';
-import { createSnatcher, createSac, type SnatcherFigure, type SnatcherLook, type SacFigure } from './broodFigures';
+import { createTrail, type TrailLook, createSnatcher, createSac, type SnatcherFigure, type SnatcherLook, type SacFigure } from './broodFigures';
 import { createDarkYoung, DY_SCALE, type DarkYoung } from './darkYoung';
 import { createDireWolf, DIRE_SCALE, type DireWolf } from './direWolf';
 
@@ -296,6 +296,9 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
     const dt = Math.min(0.1, Math.max(0, (t - (snatchClock.get(id) ?? t)) * 0.001)); snatchClock.set(id, t);
     f.group.visible = true; f.update({ ...s, y: relief(s.x, s.z) }, t * 0.001, dt);
   }
+  const trail = createTrail(foes, (x, z) => relief(x, z));
+  /** The snatchers' trail of slime and skids (village frame; age 0 fresh, 1 a day old). */
+  function setTrail(marks: TrailLook[]): void { trail.set(marks); }
   function hideSnatchersBut(ids: Set<number>): void { for (const [id, f] of snatchFigures) if (!ids.has(id)) f.group.visible = false; }
   // M1 (MOTHER.md): the birth sacs in the nursery, darkening as they gestate, cut open by her or split at due (broodFigures).
   const sacs: SacFigure[] = [], torn: SacFigure[] = [];
@@ -383,6 +386,6 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
     while (markPool.length < list.length) { const mat = new THREE.MeshBasicMaterial({ color: '#e0603a', transparent: true, opacity: 0.85, depthWrite: false }), shaftMat = new THREE.MeshBasicMaterial({ color: '#e0603a', transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide }); const group = new THREE.Group(); group.name = 'incident-mark'; const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.06, 8, 40), mat); ring.rotation.x = Math.PI / 2; ring.position.y = 0.08; const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.16, 9, 8, 1, true), shaftMat); shaft.position.y = 4.5; group.add(ring, shaft); root.add(group); markPool.push({ group, ring, shaft, mat, shaftMat }); }
     markPool.forEach((m, i) => { const d = list[i]; m.group.visible = !!d; if (!d) return; m.group.position.set(d.x, relief(d.x, d.z), d.z); m.mat.color.set(d.colour); m.shaftMat.color.set(d.colour); m.shaft.visible = d.shaft; const k = (d.r ?? 1) * (1 + 0.12 * Math.sin(t * 0.006)); m.ring.scale.set(k, k, 1); });
   }
-  return { root, origin: { x: ox, z: oz }, relief, setMarks, setHedges, setStag, setWolf, setHouses, setSite, setSnatcher, hideSnatchersBut, setInfants, setSacs, colliders, get figures() { return livingNow.map(figureFor); }, figureFor, setFigureClips, figure, mass, update, updateLand, updatePrayer, armfuls, setRaider, hideRaider, react, lunge, flashSlash, flashBurst, updateStrokes, setLairAt, setLair, setStation, get activeStation() { return activeStation; }, setStack, stack, spiritFigure, spiritFigures, stream, crownPoint, trunkPoint };
+  return { root, origin: { x: ox, z: oz }, relief, setMarks, setHedges, setStag, setTrail, setWolf, setHouses, setSite, setSnatcher, hideSnatchersBut, setInfants, setSacs, colliders, get figures() { return livingNow.map(figureFor); }, figureFor, setFigureClips, figure, mass, update, updateLand, updatePrayer, armfuls, setRaider, hideRaider, react, lunge, flashSlash, flashBurst, updateStrokes, setLairAt, setLair, setStation, get activeStation() { return activeStation; }, setStack, stack, spiritFigure, spiritFigures, stream, crownPoint, trunkPoint };
 }
 export type VillageWorld = ReturnType<typeof buildVillage>;

@@ -451,6 +451,24 @@ test('stags: on her way out with a cut-free infant they step out round her (the 
   } finally { setLair(null); setTwitchingTrees(() => []); }
 });
 
+// The trail (Noah, 2026-10-23): every hide leaves a pool of slime and a skid toward where it goes next; she follows them to the grove; one tracked to its hiding place can be struck before it bolts.
+import { TRAIL_TICKS, DASH_M } from '../src/villageModel';
+test('trail: every hide on the way in and back leaves a slick with a skid toward the next; the chain leads to the grove; it lasts a day and is saved; a hidden one tracked down can be struck before it bolts', () => {
+  setLair({ x: 300, z: 0, radius: 75 });
+  try {
+    const v = freshV(4); bear(v); step(v, SNATCH_TICK + 2); const n = v.snatchers[0];
+    for (let i = 0; i < 4000 && v.snatchers.length; i++) stepRaiders(v, 0.1, null);
+    const out = v.trail.filter(m => !m.laden), back = v.trail.filter(m => m.laden);
+    assert.ok(out.length >= 3 && back.length >= 3, `marks both ways (${out.length} in, ${back.length} back)`);
+    for (const list of [out, back]) for (let i = 0; i + 1 < list.length; i++) { const a = list[i], b = list[i + 1], d = Math.hypot(b.x - a.x, b.z - a.z), dot = (Math.cos(a.a) * (b.x - a.x) + Math.sin(a.a) * (b.z - a.z)) / d; assert.ok(dot > 0.6, `the skid points on to the next mark (${dot.toFixed(2)})`); assert.ok(d < DASH_M * 2, `marks a dash apart (${d.toFixed(1)} m)`); }
+    const grove = broodSpot(0)!, last = back[back.length - 1]; assert.ok(Math.hypot(last.x - grove.x, last.z - grove.z) < 40, 'the chain ends near the grove');
+    assert.deepEqual(par(ser(v)).trail.length, v.trail.length, 'saved'); step(v, TRAIL_TICKS + 2); assert.equal(v.trail.length, 0, 'gone in a day'); void n;
+    // Tracked to a hiding place: struck from just inside her reach, it drops what it carries.
+    const w = freshV(4); bear(w); step(w, SNATCH_TICK + 2); const m = w.snatchers[0]; for (let i = 0; i < 4000 && !(m.infant && hidden(m)); i++) stepRaiders(w, 0.1, null); assert.ok(m.infant && hidden(m), 'laden and hidden');
+    const her = { x: m.x - 1.8, z: m.z }; stepRaiders(w, 0.1, her); assert.ok(hidden(m), 'it holds its shape at 1.8 m'); strike(w, her, 1, 0); assert.equal(m.infant, null, 'struck, it drops the infant'); assert.equal(w.dropped.length, 1);
+  } finally { setLair(null); }
+});
+
 // D4: the blight.
 import { blightTarget, isBlighted, BLIGHT_BASE, BLIGHT_PER_DY, BLIGHT_STEP, setUnkillable } from '../src/villageModel';
 import { TAINT } from '../src/taintModel';

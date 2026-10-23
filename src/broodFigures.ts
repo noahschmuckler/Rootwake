@@ -173,3 +173,32 @@ export function createSac(i: number): SacFigure {
     },
   };
 }
+
+/** The snatchers' trail (Noah, 2026-10-23): at every hide a pool of its slime, wet and dark with a violet sheen, and a
+ * skid smeared from it the way it went next, laid on the ground; the older, the smaller and fainter, gone in a day.
+ * Sizes are for reading at walking distance on a phone. Tuning. */
+const SLICK_R = 0.65, SKID_L = 2.4, SKID_W = 0.42;
+export interface TrailLook { x: number; z: number; a: number; age: number; key: string }
+export function createTrail(parent: THREE.Object3D, relief: (x: number, z: number) => number): { set(marks: TrailLook[]): void } {
+  const group = new THREE.Group(); group.name = 'snatch-trail'; parent.add(group);
+  const made = new Map<string, { mesh: THREE.Mesh; mat: THREE.MeshStandardMaterial }>();
+  function build(m: TrailLook) {
+    const r = mulberry32(Math.floor(m.x * 131 + m.z * 71) >>> 0), pos: number[] = [], idx: number[] = [], lift = 0.035;
+    // The pool: a ragged disc, laid on the ground point by point.
+    const N = 14; pos.push(m.x, relief(m.x, m.z) + lift, m.z);
+    for (let i = 0; i < N; i++) { const t = i / N * Math.PI * 2, rr = SLICK_R * (0.7 + r() * 0.5), x = m.x + Math.cos(t) * rr, z = m.z + Math.sin(t) * rr; pos.push(x, relief(x, z) + lift, z); idx.push(0, 1 + i, 1 + (i + 1) % N); }
+    // The skid: a strip smeared out from the pool's edge the way it went, tapering, wobbling a little.
+    const base = pos.length / 3, S = 8, ca = Math.cos(m.a), sa = Math.sin(m.a);
+    for (let k = 0; k <= S; k++) { const u = k / S, along = SLICK_R * 0.6 + u * SKID_L, w = SKID_W * (1 - u * 0.85) * 0.5, wob = Math.sin(u * 5 + r() * 2) * 0.06, cx = m.x + ca * along - sa * wob, cz = m.z + sa * along + ca * wob; for (const s of [-1, 1]) { const x = cx - sa * w * s, z = cz + ca * w * s; pos.push(x, relief(x, z) + lift, z); } if (k) { const a = base + (k - 1) * 2; idx.push(a, a + 2, a + 1, a + 1, a + 2, a + 3); } }
+    const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setIndex(idx); g.computeVertexNormals();
+    const mat = new THREE.MeshStandardMaterial({ color: '#150b18', emissive: '#3a0f48', emissiveIntensity: 0.35, roughness: 0.08, metalness: 0.55, transparent: true, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2 });
+    const mesh = new THREE.Mesh(g, mat); mesh.renderOrder = 2; group.add(mesh); return { mesh, mat };
+  }
+  return {
+    set(marks) {
+      const seen = new Set<string>();
+      for (const m of marks) { seen.add(m.key); let e = made.get(m.key); if (!e) { e = build(m); made.set(m.key, e); } const fresh = 1 - Math.min(1, m.age); e.mat.opacity = 0.25 + 0.65 * fresh; e.mat.emissiveIntensity = 0.1 + 0.35 * fresh; }
+      for (const [k, e] of made) if (!seen.has(k)) { e.mesh.removeFromParent(); e.mesh.geometry.dispose(); e.mat.dispose(); made.delete(k); }
+    },
+  };
+}

@@ -182,6 +182,29 @@ Noah approved all of the proposed suggestions, with one addition: "the snatchers
   - Hidden, silence.
   - Both are panned and fade by distance out to `VOICE_M`.
 
+### The trail (Noah, 2026-10-23)
+
+Noah judged the mother "working as expected, incredibly frustrating, which is what I want". His one ask on the brood:
+
+> "It is exceptionally hard to catch a snatcher when it's coming for an infant, and impossible to catch after it claims
+> the baby and retreats. Need a tracking sense of some kind. Maybe each place the snatcher hides (and it hides every x
+> distance by default) leaves a pool of slime and a directional skid mark."
+
+As built:
+- **It hides every `DASH_M`** (24 m, spread by only `DASH_SPREAD`): at the tree nearest that point, else in the open.
+  Before, its dashes varied widely.
+- **Every hide leaves a mark** (`Village.trail`, saved), drawn by `broodFigures.createTrail`:
+  - a pool of its slime, wet and near black with a violet sheen, about 1.3 m across;
+  - a skid smeared 2.4 m from the pool the way it goes next (toward its goal: the infant on the way in, the grove
+    on the way back).
+  - A mark fades as it ages and is gone in a day (`TRAIL_TICKS`), with at most `TRAIL_MAX` kept.
+  - The chain of marks leads from the village to the sacs.
+- **On the map**, where she has walked, each mark is a violet dot with a tick the way it went.
+- **Catching one:**
+  - Laden with an infant it hides `HIDE_LADEN` times as long, so a quick tracker can catch up to its last mark.
+  - `SPOOKED_R` (now 1.5 m) sits inside her strike's reach (1.9 m), so one tracked to its hiding place can be struck
+    before it bolts, and it drops the infant.
+
 ### The sacs, as built
 
 - **Gestation you can see** (`sacStage`, `sacsOf`; `broodFigures.createSac`).
