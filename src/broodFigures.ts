@@ -62,7 +62,7 @@ class ArmTube {
 }
 
 /** What the scene tells the snatcher each frame. */
-export interface SnatcherLook { x: number; y: number; z: number; heading: number; moving: boolean; taking: boolean; carrying: boolean; cover: 'tree' | 'bush' | null; hidden: boolean; size: number }
+export interface SnatcherLook { x: number; y: number; z: number; heading: number; moving: boolean; taking: boolean; carrying: boolean; cover: 'tree' | 'bush' | null; hidden: boolean; size: number; /** Held by her roots. */ rooted?: boolean }
 export interface SnatcherFigure { group: THREE.Group; update(s: SnatcherLook, t: number, dt: number): void; readonly disguise: number }
 
 const bark = { tree: 'bark-pine', bush: 'bark-oak' } as const;
@@ -106,6 +106,10 @@ export function createSnatcher(seed: number): SnatcherFigure {
       for (let a = 0; a < 8; a++) { const P = hide[a], ang = a / 8 * Math.PI * 2 + phase[a] * 0.2, c = Math.cos(ang), s = Math.sin(ang), r = BUSH_R * lean[a]; P[0].set(c * 0.08, 0.3, s * 0.08); P[1].set(c * r * 0.45, BUSH_H * 0.55, s * r * 0.45); P[2].set(c * r * 0.8 + wind(a, 1), BUSH_H * (0.85 + 0.1 * lean[a]), s * r * 0.8); P[3].set(c * r + wind(a, 2), BUSH_H * (0.8 + 0.15 * lean[a]), s * r + wind(a, 1.5)); }
     }
   }
+  // Her roots, when they hold it: three brown coils up out of the ground round its body, tightening as they rise.
+  const rootMat = new THREE.MeshStandardMaterial({ color: '#6a4a2a', roughness: 0.9 }), coils = new THREE.Group(); coils.visible = false; group.add(coils);
+  for (let i = 0; i < 3; i++) { const a0 = i / 3 * Math.PI * 2, pts: THREE.Vector3[] = []; for (let k = 0; k <= 8; k++) { const u = k / 8, a = a0 + u * Math.PI * 1.6, r = 0.32 - u * 0.12; pts.push(new THREE.Vector3(Math.cos(a) * r, u * 0.5, Math.sin(a) * r)); } const m = new THREE.Mesh(taperedTube(new THREE.CatmullRomCurve3(pts), 16, 5, t => 0.035 * (1 - t * 0.7), 0.01), rootMat); m.castShadow = true; coils.add(m); }
+  let held = 0;
   const fig: SnatcherFigure = {
     group,
     get disguise() { return d; },
@@ -113,7 +117,10 @@ export function createSnatcher(seed: number): SnatcherFigure {
       if (s.cover && d < 0.02) { kind = s.cover; skin.map = floorTexture(bark[kind]); tuftMat.color.copy(kind === 'tree' ? NEEDLE : LEAF); skin.needsUpdate = true; }
       d = ease(d, s.hidden ? 1 : 0, s.hidden ? HIDE_RATE : BOLT_RATE, dt); reach = ease(reach, s.taking ? 1 : 0, 6, dt); if (s.moving) gait += GALLOP * dt;
       group.position.set(s.x, s.y, s.z); group.rotation.y = -s.heading;
-      kidPose(t, s.moving); hidePose(t, s.size);
+      held = ease(held, s.rooted ? 1 : 0, s.rooted ? 10 : 4, dt); coils.visible = held > 0.02; coils.scale.set(1, held, 1); coils.rotation.y = t * 0.3;
+      kidPose(t, s.moving && !s.rooted); hidePose(t, s.size);
+      // Held, its arms thrash against the roots.
+      if (held > 0.02) for (let a = 0; a < 8; a++) for (let k = 1; k < 4; k++) { const P = kid[a][k]; P.y += Math.sin(t * 23 + a * 1.7 + k) * 0.08 * k * held; P.x += Math.cos(t * 19 + a) * 0.05 * k * held; }
       // The arms open from the base outward: each control point takes the disguise a little after the one before it.
       for (let a = 0; a < 8; a++) for (let k = 0; k < 4; k++) { const w = smooth(d * 1.6 - k * 0.2); out[a][k].lerpVectors(kid[a][k], hide[a][k], w); }
       arms.forEach((arm, a) => arm.set(out[a]));

@@ -200,7 +200,7 @@ export interface InfantRef { id: string; home: number; born: number; /** Cut fre
 /** D3: the snatcher, a small octopoid out of the lair at night: to the house with an infant (or an infant lying out), in, and back to the lair with it; struck or bound it drops what it carries and runs. Noah (2026-10-22): fast, but it hides en route, both ways: a dash to a tree or a bush, and there it takes the thing's shape and skin a while (`hide` the seconds left, `cover` what it is being, at cx, cz, `cs` the tree's size), then the next dash. */
 export type SnatcherState = 'coming' | 'taking' | 'fleeing';
 export type SnatchCover = 'tree' | 'bush';
-export interface Snatcher { id: number; x: number; z: number; heading: number; state: SnatcherState; targetId: string | null; clock: number; infant: InfantRef | null; told: boolean; hide: number; cover: SnatchCover | null; cx: number; cz: number; cs: number; /** STAGS.md: it stalks her escape with a rescued infant, hidden, waiting for her to drop it. */ stalk?: boolean }
+export interface Snatcher { id: number; x: number; z: number; heading: number; state: SnatcherState; targetId: string | null; clock: number; infant: InfantRef | null; told: boolean; hide: number; cover: SnatchCover | null; cx: number; cz: number; cs: number; /** STAGS.md: it stalks her escape with a rescued infant, hidden, waiting for her to drop it. */ stalk?: boolean; /** Held by her roots (seconds left; not saved). */ rooted?: number }
 /** Her fighting stat (vigor: bitten down, never to death; at nothing she fades and wakes at the stone, weakened) and her sap (spent by the specials, refilling slowly for now; match-3 is reserved for building it later). */
 export interface Hero { /** STAGS.md: knocked down (seconds left; not saved). */ down?: number; vigor: number; sap: number; faint: number; calm: number; xp: number; level: number; choices: number; perks: { vigor: number; strike: number; sap: number; regen: number }; holding: number }
 /** The lair's manifestation: a local mother of goats at the dark forest's centre, awake while she is near, with its own hp; slain, it is gone for LAIR_PEACE_DAYS and the raids with it, then grows again. */
@@ -531,6 +531,8 @@ export const SNATCH_TICK = 900, SNATCHERS_PER_NIGHT = 1, SNATCH_PACE = 9, SNATCH
 export const DASH_M = 24, DASH_SPREAD = 4, DASH_MIN = 8, COVER_SEARCH = 12, HIDE_S = 3.2, HIDE_SPREAD = 2.4, FINAL_DASH = 14, SPOOKED_R = 1.5, TORCH_R = 9, HEDGE_FEAR = 4, LURK_S = 4;
 /** The trail (Noah, 2026-10-23: "exceptionally hard to catch a snatcher when it's coming for an infant, and impossible to catch after it claims the baby and retreats. Need a tracking sense of some kind. Maybe each place the snatcher hides (and it hides every x distance by default) leaves a pool of slime and a directional skid mark."): it hides every DASH_M (a tree near there, else in the open), and every hide leaves a mark: a pool of its slime and a skid pointing the way it goes next, lingering TRAIL_TICKS (a day), at most TRAIL_MAX of them. Laden with an infant it hides HIDE_LADEN times as long. SPOOKED_R sits inside her strike's reach, so one tracked to its hiding place can be struck before it bolts. Tuning. */
 export const TRAIL_TICKS = DAY_TICKS, TRAIL_MAX = 80, HIDE_LADEN = 1.7;
+/** Noah (2026-10-23, "does the root spell work on snatchers?"): her root bind holds every snatcher within its reach for SNATCH_ROOT_S, pulled out of its disguise and its infant dropped; a blow (strike or thorns) on one held is its death, for her xp. Tuning. */
+export const SNATCH_ROOT_S = 5;
 export interface TrailMark { x: number; z: number; a: number; tick: number; laden: boolean }
 /** The sacs (MOTHER.md): a sac's gestation runs 0..1 to its due; at due it splits and the Dark Young climbs out (a sac hangs torn HATCH_TICKS), and it comes for her if she stands within HATCH_AGGRO. Cut open: she stands at it (within SAC_REACH) SAC_CUT_S seconds, (1 + SAC_LATE) times as long when it is due; the vessel lashes her SAC_LASH vigor every SAC_LASH_S, each lash her attention; the first cut wakes a Dark Young of the grove's at home, the keeper, if there is one; cut past SAC_MARK the child comes home marked. Stepping away the cut closes after SAC_HEAL_S. Tuning: open for Noah. */
 export const HATCH_TICKS = 60, HATCH_AGGRO = 24, SAC_REACH = 2.2, SAC_CUT_S = 4, SAC_LATE = 2, SAC_LASH = 6, SAC_LASH_S = 2.5, SAC_MARK = 0.6, SAC_HEAL_S = 1.5;
@@ -1064,6 +1066,8 @@ export const hidden = (n: Snatcher): boolean => n.hide > 0 && !!n.cover;
 function stepSnatchers(v: Village, dt: number, her: Vec2 | null = null): void {
   const fear: Fear = v.turned ? { torches: [], none: true } : fearOf(v);
   for (const n of v.snatchers) {
+    // Held by her roots, it struggles where it is.
+    if (n.rooted) { n.rooted = Math.max(0, n.rooted - dt); if (!n.rooted) { n.state = 'fleeing'; n.targetId = null; } continue; }
     // Hidden, it holds the thing's shape till its time is up or she is on it.
     if (n.hide > 0) { n.hide -= dt; if (her && Math.hypot(her.x - n.x, her.z - n.z) < SPOOKED_R) n.hide = 0; if (n.hide > 0) continue; n.hide = 0; n.cover = null; }
     // STAGS.md: stalking her escape: an infant dropped near, and it goes for it; else on after her, a dash and a hide, keeping STALK_M behind; she out of the taint, it gives up.
@@ -1147,8 +1151,9 @@ function knockDown(v: Village, her: Vec2, r: Raider): void {
   else event(v, 'The tree stag knocks her down');
 }
 /** Her blows reach the snatchers too: any within `range` drops what it carries and runs. Returns how many. */
-function scare(v: Village, her: Vec2, range: number): number {
-  let k = 0; for (const n of v.snatchers) { if (n.clock < 0 || Math.hypot(n.x - her.x, n.z - her.z) > range) continue; k++; if (n.infant) { v.dropped.push({ infant: n.infant, x: n.x, z: n.z }); event(v, `it drops ${infantName(n.infant)}`); n.infant = null; } n.state = 'fleeing'; n.targetId = null; n.hide = 0; n.cover = null; }
+function scare(v: Village, her: Vec2, range: number, blow = false): number {
+  let k = 0; for (const n of v.snatchers) { if (n.clock < 0 || Math.hypot(n.x - her.x, n.z - her.z) > range) continue; k++;
+    if (n.rooted) { if (blow) { n.clock = -1; n.rooted = 0; v.slain += 1; gainXp(v, XP_DY); event(v, 'Held in the roots, the snatcher dies under her blow', true); } continue; } if (n.infant) { v.dropped.push({ infant: n.infant, x: n.x, z: n.z }); event(v, `it drops ${infantName(n.infant)}`); n.infant = null; } n.state = 'fleeing'; n.targetId = null; n.hide = 0; n.cover = null; }
   return k;
 }
 /** Her arms: an infant lying within PICK_RANGE is taken up (her hands empty); carried to within HOME_RANGE of its door, it is home. */
@@ -1201,16 +1206,21 @@ const bindable = (v: Village): Raider[] => v.raiders.filter(r => r.state !== 'de
 /** F2: the combo's third blow and the held heavy blow hit harder than a strike; their wind ups are longer, so her damage over time stays near the old strike's. Tuning (an open question for the phone). */
 export const FINISHER_MULT = 1.6, HEAVY_MULT = 2.2;
 export function strike(v: Village, her: Vec2, fx: number, fz: number, mult = 1): Raider | null {
-  scare(v, her, STRIKE_RANGE + 0.6);
+  scare(v, her, STRIKE_RANGE + 0.6, true); v.snatchers = v.snatchers.filter(n => n.clock >= 0);
   let best: Raider | null = null, bd = Infinity; for (const r of alive(v)) { const dx = r.x - her.x, dz = r.z - her.z, d = Math.hypot(dx, dz); if (d <= STRIKE_RANGE + 0.6 && (d < 0.5 || (dx * fx + dz * fz) / d > STRIKE_COS) && d < bd) { best = r; bd = d; } }
   if (best) hurt(v, best, strikeDamage(v.hero) * mult); else if (lairAt && v.lair.alive && Math.hypot(her.x - lairAt.x, her.z - lairAt.z) <= LAIR_HURT_RANGE) hurtLair(v, strikeDamage(v.hero) * mult);
   if (best && isHome(v) && inTaint(lairAt, her.x, her.z)) v.lair.attention = provoke(v.lair.attention);
   return best;
 }
 /** Her thorn burst: everything within THORN_RANGE, for THORN_SAP. Returns how many were hurt, or -1 without the sap. */
-export function thornBurst(v: Village, her: Vec2): number { if (v.hero.sap < THORN_SAP) return -1; v.hero.sap -= THORN_SAP; let n = scare(v, her, THORN_RANGE + 0.6); for (const r of alive(v)) if (Math.hypot(r.x - her.x, r.z - her.z) <= THORN_RANGE + 0.6) { hurt(v, r, THORN_DMG); n++; } if (lairAt && v.lair.alive && Math.hypot(her.x - lairAt.x, her.z - lairAt.z) <= LAIR_HURT_RANGE) { hurtLair(v, THORN_DMG); n++; } if (isHome(v) && inTaint(lairAt, her.x, her.z)) v.lair.attention = provoke(v.lair.attention); return n; }
+export function thornBurst(v: Village, her: Vec2): number { if (v.hero.sap < THORN_SAP) return -1; v.hero.sap -= THORN_SAP; let n = scare(v, her, THORN_RANGE + 0.6, true); v.snatchers = v.snatchers.filter(s => s.clock >= 0); for (const r of alive(v)) if (Math.hypot(r.x - her.x, r.z - her.z) <= THORN_RANGE + 0.6) { hurt(v, r, THORN_DMG); n++; } if (lairAt && v.lair.alive && Math.hypot(her.x - lairAt.x, her.z - lairAt.z) <= LAIR_HURT_RANGE) { hurtLair(v, THORN_DMG); n++; } if (isHome(v) && inTaint(lairAt, her.x, her.z)) v.lair.attention = provoke(v.lair.attention); return n; }
 /** Her root bind: the nearest within ROOT_RANGE held for ROOT_S, for ROOT_SAP. Returns it, null when none, or undefined without the sap. */
-export function rootBind(v: Village, her: Vec2): Raider | null | undefined { if (v.hero.sap < ROOT_SAP) return undefined; if (scare(v, her, ROOT_RANGE + 0.6)) v.hero.sap -= ROOT_SAP; let best: Raider | null = null, bd = Infinity; for (const r of bindable(v)) { const d = Math.hypot(r.x - her.x, r.z - her.z); if (d <= ROOT_RANGE + 0.6 && d < bd) { best = r; bd = d; } } if (!best) return null; v.hero.sap -= ROOT_SAP; v.hero.holding = best.id; best.rooted = ROOT_S; best.aggro = Math.max(best.aggro, DY_AGGRO_S); return best; }
+export function rootBind(v: Village, her: Vec2): Raider | null | undefined {
+  if (v.hero.sap < ROOT_SAP) return undefined;
+  // The snatchers within reach are held: out of their disguise, what they carry dropped, held SNATCH_ROOT_S.
+  let held = 0; for (const n of v.snatchers) { if (n.clock < 0 || Math.hypot(n.x - her.x, n.z - her.z) > ROOT_RANGE + 0.6) continue; held++; if (n.infant) { v.dropped.push({ infant: n.infant, x: n.x, z: n.z }); event(v, `the roots hold it: it drops ${infantName(n.infant)}`, true); n.infant = null; } else event(v, 'the roots hold something small'); n.rooted = SNATCH_ROOT_S; n.hide = 0; n.cover = null; n.state = 'fleeing'; n.targetId = null; }
+  let best: Raider | null = null, bd = Infinity; for (const r of bindable(v)) { const d = Math.hypot(r.x - her.x, r.z - her.z); if (d <= ROOT_RANGE + 0.6 && d < bd) { best = r; bd = d; } }
+  if (best || held) v.hero.sap -= ROOT_SAP; if (!best) return null; v.hero.holding = best.id; best.rooted = ROOT_S; best.aggro = Math.max(best.aggro, DY_AGGRO_S); return best; }
 /** Advance the village by whole ticks. Deterministic: the only randomness is the seeded stream, drawn in a fixed order. */
 export function advance(v: Village, ticks: number): void {
   for (let n = 0; n < ticks; n++) {

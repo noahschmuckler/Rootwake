@@ -469,6 +469,22 @@ test('trail: every hide on the way in and back leaves a slick with a skid toward
   } finally { setLair(null); }
 });
 
+// Noah (2026-10-23): her root bind holds a snatcher; a blow on one held kills it.
+import { SNATCH_ROOT_S, ROOT_SAP as RSAP } from '../src/villageModel';
+test('roots: the bind holds every snatcher in reach (out of its disguise, its infant dropped, still for SNATCH_ROOT_S, sap spent once); struck while held it dies; let be, it runs', () => {
+  setLair({ x: 300, z: 0, radius: 75 });
+  try {
+    const v = freshV(4); bear(v); step(v, SNATCH_TICK + 2); const n = v.snatchers[0]; for (let i = 0; i < 4000 && !(n.infant && hidden(n)); i++) stepRaiders(v, 0.1, null); assert.ok(n.infant && hidden(n));
+    const her = { x: n.x - 4, z: n.z }, sap = v.hero.sap = 100; rootBind(v, her);
+    assert.equal(n.infant, null, 'it drops the infant'); assert.equal(v.dropped.length, 1); assert.ok(!hidden(n), 'pulled out of its disguise'); assert.equal(v.hero.sap, sap - RSAP, 'sap spent once');
+    const at = { x: n.x, z: n.z }; for (let i = 0; i < (SNATCH_ROOT_S - 0.5) * 10; i++) stepRaiders(v, 0.1, her); assert.ok(Math.hypot(n.x - at.x, n.z - at.z) < 1e-9, 'held where it is');
+    const slain = v.slain, xp = v.hero.xp; strike(v, { x: n.x - 1, z: n.z }, 1, 0); assert.ok(!v.snatchers.includes(n), 'struck while held, it dies'); assert.equal(v.slain, slain + 1); assert.ok(v.hero.xp > xp);
+    // Let be, it runs when the roots let go.
+    const w = freshV(4); bear(w); step(w, SNATCH_TICK + 2); const m = w.snatchers[0]; for (let i = 0; i < 4000 && !m.infant; i++) stepRaiders(w, 0.1, null); w.hero.sap = 100; rootBind(w, { x: m.x - 3, z: m.z }); const at2 = { x: m.x, z: m.z };
+    for (let i = 0; i < (SNATCH_ROOT_S + 2) * 10; i++) stepRaiders(w, 0.1, null); assert.ok(Math.hypot(m.x - at2.x, m.z - at2.z) > 1, 'free, it runs');
+  } finally { setLair(null); }
+});
+
 // D4: the blight.
 import { blightTarget, isBlighted, BLIGHT_BASE, BLIGHT_PER_DY, BLIGHT_STEP, setUnkillable } from '../src/villageModel';
 import { TAINT } from '../src/taintModel';

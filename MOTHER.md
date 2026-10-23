@@ -204,6 +204,12 @@ As built:
   - Laden with an infant it hides `HIDE_LADEN` times as long, so a quick tracker can catch up to its last mark.
   - `SPOOKED_R` (now 1.5 m) sits inside her strike's reach (1.9 m), so one tracked to its hiding place can be struck
     before it bolts, and it drops the infant.
+- **Her roots hold them** (Noah, 2026-10-23, "does the root spell work on snatchers?"). The root bind holds every
+  snatcher within its reach for `SNATCH_ROOT_S`:
+  - pulled out of its disguise, its infant dropped, thrashing in three coils of root ("something small · held");
+  - a strike or the thorns on one held kills it, for her xp;
+  - let be, it runs when the roots let go;
+  - the bind's sap is spent once, whatever it holds.
 
 ### The sacs, as built
 
