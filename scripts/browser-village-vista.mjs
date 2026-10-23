@@ -87,7 +87,7 @@ try{
   const drain=()=>page.evaluate(()=>{const v=window.__village,s=v.mount.state.stag;return {health:s.health,t:s.t,depth:v.growth.depth(s.x,s.z),phase:s.phase,lasts:s.lasts};});
   report.mount.growth=await drain();await page.waitForTimeout(3000);report.mount.growthLater=await drain();
   {const a=report.mount.growth,b=report.mount.growthLater,rate=(a.health-b.health)/(b.t-a.t),expected=5*(a.depth+b.depth)/2;report.mount.drain={rate,expected};assert.ok(b.health<a.health&&b.t>a.t&&Math.abs(rate-expected)<expected*0.5+0.1,`its health drains at DRAIN by depth (${JSON.stringify(report.mount.drain)})`);assert.ok(Math.abs(a.lasts-100/(5*a.depth))<1e-6,'the readout counts the seconds it has');}
-  await page.evaluate(()=>window.__village.mount.set({health:3}));await page.waitForFunction(()=>window.__village.mount.state.stag?.phase==='collapsing',null,{timeout:60000});
+  /* Set near nothing: at a mild depth DRAIN × depth is under a point a second, and SwiftShader's frames run the ride's clock at a quarter of real time. */await page.evaluate(()=>window.__village.mount.set({health:0.5}));await page.waitForFunction(()=>window.__village.mount.state.stag?.phase==='collapsing',null,{timeout:60000});
   report.mount.collapsed=await page.evaluate(()=>{const v=window.__village,s=v.mount.state;return {mode:s.mode,riding:s.riding,landing:s.landing,feetY:v.player.feet().y,ground:v.relief(v.player.feet().x,v.player.feet().z)};});
   assert.ok(report.mount.collapsed.mode==='ground'&&!report.mount.collapsed.riding&&Math.abs(report.mount.collapsed.feetY-report.mount.collapsed.ground)<0.6,`she lands on her feet (${JSON.stringify(report.mount.collapsed)})`);
   await page.waitForFunction(()=>window.__village.mount.state.stag===null,null,{timeout:60000});
