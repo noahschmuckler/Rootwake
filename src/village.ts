@@ -1758,8 +1758,8 @@ const mountHandle = {
   get state() { return { stag: stag ? { ...stag.m, y: stag.y, triangles: stag.fig.triangles, meshes: stag.fig.meshes, kind: stag.fig.kind, lasts: lastsFor(depthOf(growthIdx, stag.m.x, stag.m.z)) } : null, ride: ride ? { ...ride, from: undefined } : null, mode, seat: seat?.w ?? 0, landing, riding: mode === 'ride' && ride?.stage === 'ride', vaulting: mode === 'ride' && ride?.stage === 'vault', her: herYaw, basket: basket.group.visible, driving: !!rideDrive && rideDrive.left > 0 }; },
   /** Dev: drive the stag along (dx, dz) for `seconds` of the ride's clock, as the stick would. */
   ride: (dx: number, dz: number, seconds: number) => { rideDrive = seconds > 0 ? { x: dx, z: dz, left: seconds } : null; },
-  /** Dev: set the stag's state (health, phase, t), freeze its clock (for a still of the rise), the constants. */
-  set: (p: Partial<Mount>) => { if (stag) Object.assign(stag.m, p); }, set frozen(v: boolean) { stagFrozen = v; }, get frozen() { return stagFrozen; },
+  /** Dev: set the stag's state (health, phase, t, or where it stands: it is put on the ground there), freeze its clock (for a still of the rise), the constants. */
+  set: (p: Partial<Mount>) => { if (stag) { Object.assign(stag.m, p); if (p.x !== undefined || p.z !== undefined) stag.y = stagGround(stag.m.x, stag.m.z) ?? relief(stag.m.x, stag.m.z); } }, set frozen(v: boolean) { stagFrozen = v; }, get frozen() { return stagFrozen; },
   constants: { VAULT_SPEED, SUMMON_SAP, MOUNT_SPEED, FOLLOW_SPEED, FOLLOW_M, CALL_RUN_M, CALL_STOP_M, CALL_SPEED, SINK_S, SURFACE_S, RIDE_STEP, MOUNT_REACH, MOUNT_S, RISE_AHEAD, HEALTH: STAG_HEALTH, DRAIN: STAG_DRAIN, walk: WALK_SPEED },
 };
 // ===== end of the mount =====
