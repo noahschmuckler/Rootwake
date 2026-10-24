@@ -75,6 +75,8 @@ try{
   await page.waitForFunction(()=>window.__village.mount.state.stag?.phase==='travelling',null,{timeout:120000});await page.waitForFunction(()=>window.__village.mount.state.stag?.phase==='up',null,{timeout:240000});
   report.mount.called=await page.evaluate(()=>{const v=window.__village,s=v.mount.state.stag,f=v.player.feet();return {distance:Math.hypot(s.x-f.x,s.z-f.z),health:s.health,x:s.x,z:s.z};});
   assert.ok(report.mount.called.distance<=report.mount.constants.MOUNT_REACH+1.5&&report.mount.called.health>99,`it surfaces beside her, undrained outside the growth (${JSON.stringify(report.mount.called)})`);
+  /* Pass 3: it surfaces at her side facing her way (asserted beside her above); for the ride back it is set on the line x 6, facing over the river (+z), that this crossing was measured on. */
+  await page.evaluate(()=>{const v=window.__village,f=v.player.feet(),s=v.mount.state.stag;v.mount.set({x:f.x,z:Math.min(s.z,f.z-1.6),heading:Math.PI});});
   assert.ok(await page.evaluate(()=>window.__village.mount.mount()),'she mounts it again');await page.waitForFunction(()=>window.__village.mount.state.riding,null,{timeout:60000});
   // Back over the river to where the first ride ended, so the growth's dawn below is stepped from the same standing spot as before the call (C1.1's chunk count reads where she stands).
   await page.evaluate(()=>window.__village.mount.ride(0,1,8));await page.waitForFunction(()=>!window.__village.mount.state.driving,null,{timeout:120000});
