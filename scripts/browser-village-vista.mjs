@@ -58,11 +58,12 @@ try{
   await shot('dusk-karst',()=>{const v=window.__village;v.jumpTo('dusk');v.standAt(-60+160,-330+60,Math.atan2(160,60));});
   await shot('wood-noon',()=>{const v=window.__village;v.jumpTo('noon');v.standAt(120,60,0.4);});
   // The mount (STAGS.md): on the green's healthy soil a stag of soil, grass and branches rises at her sap's cost; mounted, eight seconds of the ride's clock carry her farther than her walk would.
-  /* Pass 3: the stag rises RISE_AHEAD m to her right (her facing +z, so 2 m toward −x): she stands at x 8 so it stands on the line x 6 that the ride and the call below were measured on. */
-  await page.evaluate(()=>{const v=window.__village;v.jumpTo('noon');v.standAt(8,34,Math.PI);});await page.waitForTimeout(1500);
+  await page.evaluate(()=>{const v=window.__village;v.jumpTo('noon');v.standAt(6,34,Math.PI);});await page.waitForTimeout(1500);
   report.mount=await page.evaluate(()=>{const v=window.__village,m=v.mount,can=m.canSummon(),ctx=m.ctx(),sapBefore=v.hero.sap,summoned=m.summon();let stags=0;v.scene.traverse(o=>{if(o.name==='stag')stags++;});return {can,ctx,sapBefore,sapAfter:v.hero.sap,summoned,stags,state:m.state.stag,constants:m.constants};});
   assert.equal(report.mount.can,null,`she can summon on the green (${JSON.stringify(report.mount.ctx)})`);assert.ok(report.mount.summoned&&report.mount.stags===1&&report.mount.state?.phase==='rising',`a stag rises (${JSON.stringify(report.mount.state)})`);assert.equal(report.mount.sapBefore-report.mount.sapAfter,report.mount.constants.SUMMON_SAP,'the summon costs its sap');
   await page.waitForFunction(()=>window.__village.mount.state.stag?.phase==='up',null,{timeout:60000});
+  /* Pass 3: it rises at her side facing her on-screen heading, which varies run to run (the vault block below asserts the heading); for the ride and the call it is set where they were measured, 2 m ahead of her on the line x 6, facing +z. */
+  await page.evaluate(()=>window.__village.mount.set({x:6,z:36,heading:Math.PI}));
   assert.ok(await page.evaluate(()=>window.__village.mount.mount()),'she mounts it');await page.waitForFunction(()=>window.__village.mount.state.riding,null,{timeout:60000});
   report.mount.ride=await page.evaluate(()=>{const v=window.__village,f=v.player.feet();v.mount.ride(0,1,8);return {from:f,mode:v.mode,seat:v.mount.state.seat};});assert.equal(report.mount.ride.mode,'ride');
   await page.waitForFunction(()=>!window.__village.mount.state.driving,null,{timeout:120000});
