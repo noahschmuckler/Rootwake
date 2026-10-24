@@ -528,3 +528,11 @@ The rules are `villageModel.ts`'s C3 block (beside C2's) and `contagionModel.ts`
   should cost more prayer than `PURIFY_COST` (it undoes the fouling's whole point for a day); `WITHERED_DAYS` 1 (a longer
   memory would draw the retreat as a trail; the map's dotted lines then want their fade); whether the "greening again" line
   should be a hint on the map as "gone black" is.
+
+## The other villages as a source (Noah, 2026-10-24)
+
+A held village's land is spoiled every dawn and prayer pays for one place a day, so Noah fed his first village from the others: "I like
+other villages as a source, it creates the beginnings of an economy. Needs some adjustments for viability." Built in the creature session's
+pass (STAGS.md, "The mount, pass 3"): her basket holds `STACK_CAP` 12; she gathers at any village whatever its own store holds (`collect`
+no longer asks the store there for room); the stag carries her with a full basket; the map shows the rivers and their crossings for the ride.
+Open: whether taking from a village should cost it (a trade, its goodwill, the keeper's word), and whether a basket should hold mixed kinds.

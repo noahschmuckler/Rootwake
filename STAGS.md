@@ -171,3 +171,42 @@ what is in view as before (on foot at the green 789k tris / 308 calls, the stag 
 should keep its own horns (hidden now) or a lighter loam; the call's `CALL_RUN_M` 60 and the stall's second; whether a call from inside the
 growth should cost the stag more; the eye glow's size on the file's head; and the first pass's open items (the sap cost, the bridge, the
 fight verbs from its back, the camera holding her yaw).
+
+## The mount, pass 3: the basket, the heading, the vault (2026-10-24)
+
+Noah, after playing C3 and using the other villages as a source of food: "I like other villages as a source, it creates the beginnings
+of an economy. Needs some adjustments for viability. Map needs to show rivers and bridges/fords. Stag must be mountable while carrying
+resources. Resources graphically should not be colored bricks on her head, instead should be a basket on her back that holds smaller
+resource objects. When stag is summoned, must be oriented in same heading as Hulda. Add a rapid dismount - if stag running and user taps
+guard, stag puts head down and hulda dodge rolls over stag neck and head to the ground into fighting stance."
+
+Built by the creature session (the land session handed it the whole batch):
+
+- **The basket** (`basketFigure.ts`). Her stack rides in a woven basket on her chest bone, behind her (`Spine2`, where the papoose
+  hangs; she never wears both, since her hands take one or the other). It holds one small thing per unit: berry clusters, stoppered gourds of
+  water, sticks, tied sheaves of grain, little pails of milk. They fill from halfway up and heap over the rim, drawn `CHUNK` 1.7 times life size so they read at
+  the camera's distance. It shows on foot, mounted and on the catwalk. The village's old coloured slabs are hidden (`setStack(null)`).
+  A double tap with a full basket still wobbles it.
+- **Mounting with a load.** The summon and the mount no longer refuse a stack. The button's `stag` and `mount` labels no longer
+  hide for one. Crossing to another village carries the basket over as it always did (`pickActive`).
+- **The heading.** A summoned stag rises `RISE_AHEAD` m off her right side (else her left, else ahead, else on the spot) facing the way she
+  last faced on screen (`herYaw`, her figure's heading), so she mounts and rides on. A called stag surfacing beside her does the same.
+- **The rapid dismount (the vault).** Riding at `VAULT_SPEED` 3 m/s or more, a tap of guard plants the stag (it brakes three times as hard)
+  and puts its head down (`StagState.bow`: the asset blends to `Idle_Headlow`, the procedural one drops its neck). She leaves the saddle
+  on an arc `VAULT_LIFT` 0.7 m high over `VAULT_S` 0.42 s. Her seated pose eases out, and her dodge clip's dive starts for the arc's
+  last `DIVE_S` (the clip's dive, about 0.21 s at its playback rate). She lands `VAULT_AHEAD` 2.3 m (plus 0.12 s of the stag's speed) ahead
+  of its centre, on the first standable spot in line. She rolls on along the dodge's own travel and holds her fighting stance for `STANCE_S`
+  1.4 s unless the stick moves her. The stag waits. Below `VAULT_SPEED`, or with nowhere ahead to land, the tap is an ordinary dismount.
+  Dev: `__village.mount.guardTap()`, `state.vaulting`, `state.her`, `state.basket`, `stance`.
+- **The cross-village economy** (`villageModel`): her basket holds `STACK_CAP` 12 (it was 8, one meal for eight; now a meal and a half).
+  `collect` no longer refuses when the village she stands in has no room in its own store: she gathers for another village, and the
+  store she delivers to takes what it has room for (`deliver`, cap plus `OVERFILL`), the rest staying in the basket.
+- **The map's water** (`renderMap`, one block after the land's cells, clipped to the revealed cells as the land is): the lake round the island,
+  the rivers at their width but never thinner than a visible stroke. The crossings are marked: a ford as two pale bars, stepping stones as three dots, a footbridge as a plank, the old
+  bridge as a stone band, each named on the full map.
+- **CI** (`browser-village-vista.mjs`, after the collapse): at the second village a stag rises facing her way. With nine grain in her basket she
+  mounts it and the basket shows. At a gallop a guard tap lands her on her feet more than 1.5 m ahead of the stag, the basket kept.
+
+**Open for Noah:** `VAULT_SPEED`; whether the vault should cost anything (sap, or the stag's health); the camera after the vault (it stays behind
+her, so for a moment it can sit inside the stag's body); `STACK_CAP` 12 and whether the basket should hold mixed kinds; whether taking from
+another village should cost it something (a trade, its goodwill), the next step for the economy.

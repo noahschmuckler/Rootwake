@@ -489,7 +489,8 @@ function takeOne(v: Village, kind: Store, carry: Carry | null, room: number): Ca
   const n = kind === 'grain' ? GRAIN_PER_STRIP : 1; v.take[kind] += n; return { kind, n: carried + n };
 }
 /** Her hands: standing in a place's ring she collects one unit into her stack (one kind at a time, up to STACK_CAP), from the same land, counted in the same take; standing in a store's ring she puts one unit in. No sap, only time. */
-export const STACK_CAP = 8;
+/** Noah (2026-10-24): her basket holds STACK_CAP, a meal and a half for eight (it was 8, one meal), so a trip from another village is worth the ride. Tuning. */
+export const STACK_CAP = 12;
 /** A store can overfill by OVERFILL units, as a heap beside it, for what she brings; the villagers keep to the cap. Her collecting is limited to what the store can still take (counting what is on its way), so she is never left holding what has nowhere to go. Tuning. */
 export const OVERFILL = 4;
 export const roomFor = (v: Village, kind: Store): number => STORES[kind].cap + OVERFILL - v.stores[kind] - inFlight(v, kind);
@@ -497,7 +498,7 @@ export const storeFull = (v: Village, kind: Store): boolean => roomFor(v, kind) 
 export function collect(v: Village, keeps: SiteKind): boolean {
   if (v.carried) return false;
   const kind = YIELD_OF[keeps]; if (!kind || (v.stack && v.stack.kind !== kind) || (v.stack?.n ?? 0) >= STACK_CAP || landStock(v, kind) < 1) return false;
-  if (roomFor(v, kind) < (kind === 'grain' ? GRAIN_PER_STRIP : 1)) return false;
+  // Noah (2026-10-24, the other villages as a source): she gathers wherever she stands, whatever that village's own store holds; the store she brings it to takes what it has room for (deliver).
   if (kind === 'grain') { const i = v.land.crops.findIndex(c => c >= 1); v.land.crops[i] = 0; v.stack = { kind, n: Math.min(STACK_CAP, (v.stack?.n ?? 0) + GRAIN_PER_STRIP) }; v.take.grain += GRAIN_PER_STRIP; return true; }
   if (kind === 'berries') v.land.berries -= 1; else if (kind === 'wood') v.land.branches -= 1; else if (kind === 'milk') v.land.milk -= 1;
   v.take[kind] += 1; v.stack = { kind, n: (v.stack?.n ?? 0) + 1 }; return true;

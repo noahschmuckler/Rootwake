@@ -33,7 +33,7 @@ const CLIP_WALK_MS = 1.1, CLIP_GALLOP_MS = 6.5, ASSET_GALLOP = [2.2, 4.6] as con
 const smooth = (x: number): number => { const k = Math.max(0, Math.min(1, x)); return k * k * (3 - 2 * k); };
 const span = (x: number, a: number, b: number): number => smooth((x - a) / (b - a));
 
-export interface StagState { phase: MountPhase; /** Seconds into the phase. */ t: number; speed: number; /** Seconds it has stood still. */ still: number; health: number }
+export interface StagState { phase: MountPhase; /** Seconds into the phase. */ t: number; speed: number; /** Seconds it has stood still. */ still: number; health: number; /** Noah (2026-10-24): her rapid dismount: it plants and puts its head down (0..1) for her to dive over. */ bow?: number }
 export interface StagFigure {
   group: THREE.Group;
   /** Step the figure: the ground it stands on, its heading, its state and the frame's seconds. */
@@ -129,7 +129,7 @@ export function createAssetStag(seed: number, asset: StagAsset): StagFigure {
   const mixer = new THREE.AnimationMixer(model), action = (name: string, once = false): THREE.AnimationAction | null => { const c = asset.clips.find(x => x.name === name); if (!c) return null; const a = mixer.clipAction(c); if (once) { a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; } a.setEffectiveWeight(0); a.play(); return a; };
   const idle = action('Idle'), graze = action('Idle_Headlow'), walk = action('Walk'), gallop = action('Gallop'), death = action('Death', true);
   const grown = [antlers, ...tuftMeshes];
-  const w = { moving: 0, run: 0, graze: 0, death: 0 }; let fadeOn = false, cost = countCost(group);
+  const w = { moving: 0, run: 0, graze: 0, death: 0, bow: 0 }; let fadeOn = false, cost = countCost(group);
   const up = new THREE.Vector3(0, 1, 0), tmpQ = new THREE.Quaternion();
   function update(x: number, y: number, z: number, heading: number, s: StagState, dt: number): void {
     group.position.set(x, y, z); group.quaternion.setFromAxisAngle(up, heading);
@@ -138,9 +138,9 @@ export function createAssetStag(seed: number, asset: StagAsset): StagFigure {
     const ease = Math.min(1, dt / BLEND_S);
     w.moving += (span(s.speed, 0.05, 0.5) - w.moving) * ease; w.run += (span(s.speed, ASSET_GALLOP[0], ASSET_GALLOP[1]) - w.run) * ease;
     const wantGraze = s.phase === 'up' && s.still > GRAZE_AFTER ? 0.5 - 0.5 * Math.cos(((s.still - GRAZE_AFTER) / GRAZE_S) * Math.PI * 2) : 0; w.graze += (wantGraze - w.graze) * Math.min(1, dt * 2);
-    w.death += ((s.phase === 'collapsing' ? 1 : 0) - w.death) * Math.min(1, dt / 0.2);
-    const live = 1 - w.death;
-    idle?.setEffectiveWeight(live * (1 - w.moving) * (1 - w.graze)); graze?.setEffectiveWeight(live * (1 - w.moving) * w.graze);
+    w.death += ((s.phase === 'collapsing' ? 1 : 0) - w.death) * Math.min(1, dt / 0.2); w.bow += ((s.bow ?? 0) - w.bow) * Math.min(1, dt / 0.08);
+    const live = (1 - w.death) * (1 - w.bow);
+    idle?.setEffectiveWeight(live * (1 - w.moving) * (1 - w.graze)); graze?.setEffectiveWeight(live * (1 - w.moving) * w.graze + (1 - w.death) * w.bow);
     walk?.setEffectiveWeight(live * w.moving * (1 - w.run)); gallop?.setEffectiveWeight(live * w.moving * w.run); death?.setEffectiveWeight(w.death);
     walk?.setEffectiveTimeScale(THREE.MathUtils.clamp(Math.max(0.3, s.speed) / CLIP_WALK_MS, 0.6, 2.2)); gallop?.setEffectiveTimeScale(THREE.MathUtils.clamp(Math.max(1, s.speed) / CLIP_GALLOP_MS, 0.6, 2));
     mixer.update(dt);
@@ -203,7 +203,7 @@ export function createProceduralStag(seed = 1): StagFigure {
   for (const g of [sphere, cone, hoofGeo]) g.dispose();
   const saddlePoint = new THREE.Object3D(); saddlePoint.position.set(0, SADDLE.y - body.position.y, SADDLE.z); body.add(saddlePoint);
   const grown = [antlers, back, mane];
-  let phase = 0, run = 0, graze = 0, fadeOn = false; const cost = countCost(group);
+  let phase = 0, run = 0, graze = 0, bow = 0, fadeOn = false; const cost = countCost(group);
   const tmpQ = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0);
   function update(x: number, y: number, z: number, heading: number, s: StagState, dt: number): void {
     group.position.set(x, y, z); group.quaternion.setFromAxisAngle(up, heading);
@@ -228,7 +228,8 @@ export function createProceduralStag(seed = 1): StagFigure {
     for (const g of grown) { const k = span(rising, g === antlers ? 0.45 : 0.6, 1); g.scale.setScalar(Math.max(0.001, k)); }
     const wantGraze = s.phase === 'up' && s.still > GRAZE_AFTER ? 0.5 - 0.5 * Math.cos(((s.still - GRAZE_AFTER) / GRAZE_S) * Math.PI * 2) : 0;
     graze += (wantGraze - graze) * Math.min(1, dt * 2.5);
-    neck.rotation.x = graze * GRAZE_DIP + run * moving * 0.35 + collapse * 1.3 - (1 - rising) * 0.6;
+    bow += ((s.bow ?? 0) - bow) * Math.min(1, dt / 0.08);
+    neck.rotation.x = Math.max(graze * GRAZE_DIP, bow * 1.1) + run * moving * 0.35 * (1 - bow) + collapse * 1.3 - (1 - rising) * 0.6;
     head.rotation.x = -graze * 0.3 - run * moving * 0.3 + collapse * 0.6;
     const lit = s.phase === 'up' ? 1 : s.phase === 'rising' || s.phase === 'surfacing' || s.phase === 'sinking' ? span(rising, 0.7, 1) : 0;
     eye.color.set(EYE).multiplyScalar(0.3 + 0.7 * lit); glow.opacity = 0.35 * lit;
