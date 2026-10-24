@@ -19,7 +19,7 @@ function lathe(radiusAt: (y: number) => number, height: number, rings: number, s
   for (let i = 0; i < pos.count; i++) { const y = pos.getY(i); if (y < 0.2 || y > height - 0.2) continue; const r = Math.hypot(pos.getX(i), pos.getZ(i)); if (r < 0.01) continue; const k = 1 + (rand() - 0.5) * jitter; pos.setXYZ(i, pos.getX(i) * k, y + (rand() - 0.5) * 0.3, pos.getZ(i) * k); }
   geo.computeVertexNormals(); return geo;
 }
-export function buildKarstFlow(scene: THREE.Scene, options: { sharedGround?: boolean } = {}) {
+export function buildKarstFlow(scene: THREE.Scene, options: { sharedGround?: boolean; noSummitTree?: boolean } = {}) {
   const rand = mulberry32(310926);
   // Two-sided: while she rides through the rock the camera is inside it, and glassy walls should still be there.
   const limestone = new THREE.MeshStandardMaterial({ color: '#b9b3a2', roughness: 0.95, flatShading: true, transparent: true, opacity: 1, side: THREE.DoubleSide });
@@ -77,6 +77,7 @@ export function buildKarstFlow(scene: THREE.Scene, options: { sharedGround?: boo
     for (const [h, ring, count, w] of [[2.1, 1.35, 9, 1.35], [2.9, 1.05, 7, 1.15], [3.7, 0.7, 6, 0.95], [4.4, 0.35, 4, 0.75]]) for (let i = 0; i < count; i++) { const a = i / count * Math.PI * 2 + h; cards.needle.push({ position: vec(n.at.x + Math.cos(a) * ring * size * (0.6 + rand() * 0.5), n.at.y + h * size + (rand() - 0.5) * 0.3 * size, n.at.z + Math.sin(a) * ring * size * (0.6 + rand() * 0.5)), yaw: a + Math.PI / 2, width: w * size * (0.85 + rand() * 0.3), height: 1.05 * size, flat: i % 3 === 0 }); }
   }
   for (const n of Object.values(NODES)) {
+    if (options.noSummitTree && n.id === 'pine') continue; // the village's Wellspire bears no tree on its top (Noah, 2026-10-24)
     if (n.kind === 'pine') pine(n);
     else if (n.kind === 'fern') { for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; cards.frond.push({ position: n.at.clone().add(vec(Math.cos(a) * 0.25, 0, Math.sin(a) * 0.25)), yaw: a, width: 0.9 + rand() * 0.3, height: 1.0 + rand() * 0.3 }); } }
     else tree(n);

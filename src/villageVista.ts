@@ -189,7 +189,7 @@ export function villageTrees(land: Land, edge: number, terrain: Terrain, treesOf
   // The karst's own trees (its forest floor, its ledges, the helix on its faces): framed as the free flow frames them, so a trunk climb meets its crown; pines as the vista's conifer (a tenth of its height per size: the karst's pine is 5 m at size 1); ferns stay the karst's.
   const at = new THREE.Matrix4().makeTranslation(KARST_AT.x, 0, KARST_AT.z), m = new THREE.Matrix4();
   for (const n of Object.values(KARST_NODES)) {
-    if (n.kind === 'fern') continue;
+    if (n.kind === 'fern' || n.id === 'pine') continue; // no tree on the Wellspire's top (Noah, 2026-10-24: it will be her progress indicator)
     const pine = n.kind === 'pine', s = pine ? n.size * 0.38 : n.size;
     m.copy(at).multiply(nodeFrame(n)).multiply(new THREE.Matrix4().makeScale(s, s, s));
     out.push({ x: n.at.x + KARST_AT.x, z: n.at.z + KARST_AT.z, y: n.at.y, kind: pine ? 3 : n.leaf === 'maple' ? 8 : 5, scale: s, rot: 0, frame: m.toArray() });

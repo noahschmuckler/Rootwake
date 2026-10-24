@@ -188,3 +188,9 @@ The overworld is a large plateau bounded by mountains, the summit of DiggyDwarve
 - **The taint's extent:** `TAINT.edge` stays 650 m, so the taint ends 1700 m from the karst, inside the rim, about 300 m from the first village.
 - **What it keeps out:** rivers stay out of the taint and its veins (edge plus 120 m); the other villages stay a further 60 m clear (`SITE_LAIR`).
 - **`LAIR_DISTANCE`** (1160) is the village's distance to the breach, rounded up. It sets how far the home village's presentation reaches.
+
+## The Wellspire's summit tree (Noah, 2026-10-24)
+
+On waking, the camera was filled by the summit pine, which was also out of step graphically with the vista's trees. **For now it is gone** from the village: `buildKarstFlow` takes `noSummitTree` (the village's `karstFeature` sets it; the free-flow study keeps its pine) and `villageVista` skips the node `pine` when it draws the karst's trees. The node itself stays in the model, so the root graph, progress saves and the ledge roots are untouched.
+
+**Intention:** the tree on top of the Wellspire will be a **graphical progress indicator**, in time with Hulda's levelling, cultivation and deepening (the pool's tier, the deep node's depth, her level): a sapling at the start, growing through the stages as she advances. Its look should be built in the vista's own pine/oak idiom (not the karst flow's standee tree), placed off the pool and the waking view so it never fills the camera. Not built; nothing reads her progress into it yet.

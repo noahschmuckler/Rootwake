@@ -17,7 +17,7 @@ const LEGACY_KEY = 'rootwake-karst-flow-v2';
 export function createKarstFeature(scene: THREE.Scene, player: Player, camera: THREE.PerspectiveCamera, origin: { x: number; z: number }, hooks: { orbit: (target: THREE.Vector3, back?: number, up?: number, ease?: number) => void; want: () => THREE.Vector3; ground: () => TraversalWorld; locked: TraversalWorld; height?: (x: number, z: number) => number; portal?: (n: Node) => boolean }) {
   const KEY = `rootwake-world-karst:${origin.x},${origin.z}:v1`;
   const offset = new THREE.Vector3(origin.x, 0, origin.z), group = new THREE.Group(); group.position.copy(offset); scene.add(group);
-  const world = buildKarstFlow(group as unknown as THREE.Scene, { sharedGround: true });
+  const world = buildKarstFlow(group as unknown as THREE.Scene, { sharedGround: true, noSummitTree: true });
   // The pillar is the land's landmark (Noah, 2026-10-19: one karst at the centre of the plateau): its rock is drawn from anywhere, so the trees on its faces and summit (which the vista draws far out) never hang in the air without it. The rest (its forest, roots, ferns) only near, below.
   const far = new THREE.Group(); far.position.copy(offset); scene.add(far); { const pillar = group.getObjectByName('pillar-main'); if (pillar) far.add(pillar); }
   const W = (p: THREE.Vector3): THREE.Vector3 => p.clone().add(offset), L = (p: THREE.Vector3): THREE.Vector3 => p.clone().sub(offset);
