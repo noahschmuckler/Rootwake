@@ -51,6 +51,23 @@ export function forestField(seed = 1): (x: number, z: number) => number {
 }
 const fields = new Map<number, (x: number, z: number) => number>();
 export const forestAt = (x: number, z: number, seed = 1): number => { let f = fields.get(seed); if (!f) { f = forestField(seed); fields.set(seed, f); } return f(x, z); };
+/** T4c (PINE BARRENS): where the oaks stand among the pines, 0..1 by a slow noise (groves of oak, and oak scattered through the pine): the look's tree kinds and the leaf mould both read it. */
+export const oakShare = (x: number, z: number, seed: number): number => 0.16 + 0.55 * smooth01((noise(x, z, 75, seed + 81) - 0.42) / 0.26);
+/** T4c: what lies on the wood's floor at a point (needles, leaf mould, moss and peat, bare sand; each 0..1), from how deep in a stand it lies, how many
+ * oaks are about, how near the water it is; null on the meadows, the taint and the karst's island (`karstForest` the island's wood), where the grass is bare
+ * of it. Sand shows where the wood is open; needles thicken with the pines, leaf mould with the oaks, and by the streams the floor is peat and sphagnum.
+ * The look's floor map (villageVista.floorMap) and the overworld map (overworldMap.ts, T9) both read it. Tuning. */
+export function floorSampler(seed: number, karstForest: number): (x: number, z: number) => [number, number, number, number] | null {
+  const lair = places(seed).find(p => p.id === 'lair')!, dark = Math.max(FOREST_RADIUS, TAINT.edge), at = forestField(seed);
+  return (x, z) => {
+    if (beyond(x, z, seed) < 0.62 || noise(x, z, 110, seed + 3) > 0.58 || Math.hypot(x - lair.x, z - lair.z) < dark || Math.hypot(x - KARST_AT.x, z - KARST_AT.z) < karstForest + 30) return null;
+    const f = at(x, z), oak = oakShare(x, z, seed), rip = 1 - smooth01((riverEdge(seed, x, z, RIPARIAN + 14) - 4) / (RIPARIAN + 6)), gap = noise(x, z, 9, seed + 83);
+    // The wooded plains: thin sand and a scatter of needles under the grass; a stand: needles (pine) and leaf mould (oak), sand in its gaps; the streamside: peat.
+    let needles = 0.3 + 0.65 * f * (1 - 0.6 * oak), leaves = (0.1 + 0.75 * f) * oak, sand = 0.3 * (1 - f) + 0.3 * f * smooth01((gap - 0.5) / 0.3), moss = rip * (0.7 + 0.3 * f);
+    const sum = needles + leaves + sand + moss, over = Math.max(1, sum / (0.62 + 0.38 * f + 0.45 * rip)); needles /= over; leaves /= over; sand /= over; moss /= over;
+    return [needles, leaves, moss, sand];
+  };
+}
 /** A forest tree's size by its age: the old giants a few, the mature most, the young filling the gaps. Tuning. */
 export const AGES: { share: number; size: [number, number] }[] = [{ share: 0.14, size: [1.7, 2.4] }, { share: 0.5, size: [1.0, 1.6] }, { share: 0.36, size: [0.55, 0.95] }];
 /** How many trees a chunk may hold, how hard the forest pass tries, and the spacing between trunks (m) on the plains and in a stand's heart (scaled by the trees' sizes). Tuning. */

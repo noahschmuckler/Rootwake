@@ -14,7 +14,7 @@ import type { Terrain } from './worldTerrain';
 import { rng, type Land, type Tree as VTree, type Rock } from './vistaTerrain';
 import { buildVista, QUALITIES, CASTER_LAYER, sunDirection, UNDER_FOG_M, UNDER_COLOUR, type Hour, type Quality, type VistaWorld } from './vistaWorld';
 import { places, dens, ruins, warrens, wallows, ownWarrens, moot, onLand, riverEdge, FOREST_RADIUS as DARK_RADIUS, KARST_AT } from './overworldModel';
-import { convergences, beyond, noise, CHUNK, forestField, forestAt, RIPARIAN } from './chunkModel';
+import { convergences, beyond, noise, CHUNK, forestField, forestAt, RIPARIAN, floorSampler, oakShare } from './chunkModel';
 import { createUnderstory, type Understory } from './understory';
 import { FOREST_RADIUS as KARST_FOREST, NODES as KARST_NODES, nodeFrame } from './karstFlowModel';
 import { TREES, type Tree } from './villageModel';
@@ -76,20 +76,15 @@ function forestOf(land: Land, seed: number): Float32Array {
  * the sand now: the noise that opened the mould to moss opens the needles to sand); how much it covers the wood's own green. Linear rgb. Tuning. */
 const LITTER = [0.2, 0.11, 0.05], MOSS = [0.5, 0.42, 0.27], LITTER_A: [number, number] = [0.4, 0.92];
 /** T4c (PINE BARRENS): where the oaks stand among the pines, 0..1 by a slow noise (groves of oak, and oak scattered through the pine): the look's tree kinds and the leaf mould both read it. */
-export const oakShare = (x: number, z: number, seed: number): number => 0.16 + 0.55 * smooth(0.42, 0.68, noise(x, z, 75, seed + 81));
+export { oakShare } from './chunkModel';
 /** T4c: what lies on the floor, a cell at a time (n×n×4: needles, leaf mould, moss and peat, bare sand; 0..255), from how deep in a stand it lies, how
  * many oaks are about, how near the water it is. Sand shows where the wood is open; needles thicken with the pines, leaf mould with the oaks, and by
  * the streams the floor is peat and sphagnum. Sampled every third cell (as forestOf) and read between. Tuning. */
 export function floorMap(land: Land, seed: number): Uint8Array {
-  const { n, cell, half } = land, STEP = 3, m = Math.ceil((n - 1) / STEP) + 1, g = new Float32Array(m * m * 4), out = new Uint8Array(n * n * 4), lair = places(seed).find(p => p.id === 'lair')!, dark = Math.max(DARK_RADIUS, TAINT.edge), at = forestField(seed);
+  const { n, cell, half } = land, STEP = 3, m = Math.ceil((n - 1) / STEP) + 1, g = new Float32Array(m * m * 4), out = new Uint8Array(n * n * 4), at = floorSampler(seed, KARST_FOREST);
   for (let j = 0; j < m; j++) for (let i = 0; i < m; i++) {
-    const x = Math.min(n - 1, i * STEP) * cell - half, z = Math.min(n - 1, j * STEP) * cell - half, k = (j * m + i) * 4;
-    if (beyond(x, z, seed) < 0.62 || noise(x, z, 110, seed + 3) > 0.58 || Math.hypot(x - lair.x, z - lair.z) < dark || Math.hypot(x - KARST_AT.x, z - KARST_AT.z) < KARST_FOREST + 30) continue;
-    const f = at(x, z), oak = oakShare(x, z, seed), rip = 1 - smooth(4, RIPARIAN + 10, riverEdge(seed, x, z, RIPARIAN + 14)), gap = noise(x, z, 9, seed + 83);
-    // The wooded plains: thin sand and a scatter of needles under the grass; a stand: needles (pine) and leaf mould (oak), sand in its gaps; the streamside: peat.
-    let needles = 0.3 + 0.65 * f * (1 - 0.6 * oak), leaves = (0.1 + 0.75 * f) * oak, sand = 0.3 * (1 - f) + 0.3 * f * smooth(0.5, 0.8, gap), moss = rip * (0.7 + 0.3 * f);
-    const sum = needles + leaves + sand + moss, over = Math.max(1, sum / (0.62 + 0.38 * f + 0.45 * rip)); needles /= over; leaves /= over; sand /= over; moss /= over;
-    g[k] = needles; g[k + 1] = leaves; g[k + 2] = moss; g[k + 3] = sand;
+    const x = Math.min(n - 1, i * STEP) * cell - half, z = Math.min(n - 1, j * STEP) * cell - half, k = (j * m + i) * 4, f = at(x, z);
+    if (!f) continue; g[k] = f[0]; g[k + 1] = f[1]; g[k + 2] = f[2]; g[k + 3] = f[3];
   }
   for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
     const u = i / STEP, v = j / STEP, i0 = Math.min(m - 2, Math.floor(u)), j0 = Math.min(m - 2, Math.floor(v)), tu = Math.min(1, u - i0), tv = Math.min(1, v - j0), k = (j * n + i) * 4;

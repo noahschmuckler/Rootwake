@@ -1,6 +1,6 @@
 // The village under the vista's look (headless Chromium, SwiftShader): it boots past the intro, the vista's land is drawn and
 // the chunks' own ground and trees are not, the land and the sky change with the clock, the deep hides the land, and no
-// console or shader errors; under the grass the stratum (T8) is on and gone again on surfacing; her stag (STAGS.md) rises on the green, outruns her walk, wades the river to a call and collapses in the growth. Screenshots at a phone's portrait aspect land in artifacts/village-vista.
+// console or shader errors; under the grass the stratum (T8) is on and gone again on surfacing; her stag (STAGS.md) rises on the green, outruns her walk, wades the river to a call and collapses in the growth; the map (T9) builds its atlas, pans cheaply and zooms within its bounds. Screenshots at a phone's portrait aspect land in artifacts/village-vista.
 import {createRequire} from 'node:module';
 import {createServer} from 'node:http';
 import {readFile,mkdir,writeFile} from 'node:fs/promises';
@@ -188,6 +188,11 @@ try{
   await page.waitForTimeout(1500);await page.screenshot({path:`${out}/under-grass.png`,timeout:180000});
   await page.evaluate(()=>window.__village.emerge());await page.waitForFunction(()=>window.__village.mode==='ground'&&window.__village.under===0,null,{timeout:90000});
   report.surfaced=await page.evaluate(()=>window.__look.stratum());/* The green is her germ's nursery by now (the village turned above), whose gloom's fog closes to about 60 m (C1's hyphae alone left it about 140): still past the under fog's 24. */assert.ok(report.surfaced.amount===0&&!report.surfaced.rock&&report.surfaced.fogReach>40&&report.surfaced.hidden.length===0,`surfaced: nothing of it left (${JSON.stringify(report.surfaced)})`);
+  // T9 (PLATEAU.md, the map): the land's atlas builds (pushed here by the handle: the idle slices are few under SwiftShader), a pan draw is a blit, the water and the marks (mean of 40, well under the budget), the zoom clamps to its bounds (the whole plateau and belt at the floor, MAP_MAX at the ceiling), and the map closes. No screenshot: the map's look is judged in the scratchpad's sheet.
+  report.map=await page.evaluate(()=>{const v=window.__village,t0=performance.now();let ready=0,rounds=0;while(ready<1&&rounds<400){ready=v.map.build(250);rounds++;}const build={ready,rounds,tileMs:+v.map.stats.tileMs.toFixed(0),wallMs:+(performance.now()-t0).toFixed(0)};v.map.open();const open=v.mapOpen,ms=[];for(let i=0;i<40;i++){v.map.pan(6+i*9,34-i*7);ms.push(v.map.stats.drawMs);}const pan=+(ms.reduce((a,b)=>a+b,0)/ms.length).toFixed(2),bounds=v.map.bounds(),min=v.map.zoom(1e-4),max=v.map.zoom(1e9),fogMs=+v.map.stats.fogMs.toFixed(2);v.map.close();return {build,open,pan,bounds,min,max,fogMs,closed:!v.mapOpen};});
+  console.log('map',JSON.stringify(report.map));
+  assert.equal(report.map.build.ready,1,`the map's atlas built (${JSON.stringify(report.map.build)})`);assert.ok(report.map.open,'the map opens');assert.ok(report.map.pan<30,`a pan draw is cheap (mean ${report.map.pan} ms)`);
+  assert.ok(Math.abs(report.map.min-report.map.bounds.min)<1e-9&&report.map.max===3,`the zoom clamps to its bounds (${JSON.stringify(report.map)})`);assert.ok(report.map.closed,'and the map closes');
   report.hud=await page.evaluate(()=>document.getElementById('look-hud')?.textContent??'');
   assert.match(report.hud,/tris/);
   assert.deepEqual(errors,[],'no console or shader errors');
