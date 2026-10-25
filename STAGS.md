@@ -221,7 +221,10 @@ met a river at its fords, stones and bridges, and a call with a river between sa
 - **It wades every river, anywhere along it.** Water up to **`STAG_WADE_DEPTH` 2.2 m** over its feet is its to cross: the rivers' beds are
   `RIVER_DEPTH` 1.6 under the surface at the channel's middle (and the channel carves 0.15 more), so no river refuses it; the lake
   (`LAKE_DEPTH` 9) still does: it does not swim. Its body goes down the bed (its feet follow the ground under the water as they follow
-  any ground, `stagGround`; so in the shallows it is hoof-deep, at a river's middle in to the belly and past it), and it is **slowed by the
+  any ground, `stagGround`; so in the shallows it is hoof-deep and at a river's middle in to the belly), **no deeper than its belly** (a decision
+  beyond the brief: a river's middle, 1.75 m, is deeper than the saddle is high, 1.32, and the first shots had it under to the antlers and her
+  seat 0.2 m under the water; so in water past **`STAG_BELLY` 1.0** the body rides lifted to that depth, its feet on the bed below as if wading
+  hard, `mountModel.bodyLift`, and her seat stays over the water at any depth it wades), and it is **slowed by the
   depth**: its pace is `MOUNT_SPEED` × `wadeFactor(depth)` (`mountModel.ts`, pure), 1 on dry ground falling in a line to **`STAG_WADE_SLOW`
   0.45** at `STAG_WADE_DEPTH` (belly-deep in a river's middle, about 1.6 m, it keeps 0.6 of its gallop, 5.4 m/s, still twice her walk; a
   ford hardly slows it). The water takes its speed at once as it goes in (`moveStag` reads the water over its feet at each 0.25 m substep and
@@ -248,7 +251,7 @@ met a river at its fords, stones and bridges, and a call with a river between sa
 - **Summoning** is unchanged: not from water; it rises and surfaces on dry spots (`stagSpot`).
 - **Its health** in water neither drains nor heals, as on rock or a yard (pass 1's rule): a soil stag in a river is not worn by it.
 
-**Constants** (tuning, Noah's to change): `STAG_WADE_DEPTH` 2.2, `STAG_WADE_SLOW` 0.45 (`mountModel.ts`); `WAKE_FROM` 0.18, `WAKE_SPEED`
+**Constants** (tuning, Noah's to change): `STAG_WADE_DEPTH` 2.2, `STAG_WADE_SLOW` 0.45, `STAG_BELLY` 1.0 (`mountModel.ts`); `WAKE_FROM` 0.18, `WAKE_SPEED`
 1.2, `WAKE_EVERY` 0.75, `SPLASH_EVERY` 0.55, `STREAM_DEEP` 0.25, `BANK_SEARCH_M` 40, `RUN_SAMPLE_M` 0.5 (`village.ts`, the mount block).
 
 **Tests** (`tests/mount.test.ts`): the depths against the land's (`STAG_WADE_DEPTH` over the deepest bed, under the lake, over her
@@ -264,7 +267,8 @@ unchanged. Dev: `__village.mount.wade` (the water over its feet),
 `.deepWater` (whether she may be set down), `.water(x, z)` (the plateau's water), `state.stag.wade`, the constants.
 
 **Open for Noah.** Whether a soil stag should lose health in water, or dissolve a little at each crossing (not built: today a river neither
-drains nor heals it; a drain by depth, like the growth's, would make the lake's edge and the deep middle a cost); whether it should swim
+drains nor heals it; a drain by depth, like the growth's, would make the lake's edge and the deep middle a cost); whether the body should go all the way down to the bed instead (`STAG_BELLY` raised past 1.75: the brief's words, but she would sit under the
+water at a river's middle); whether it should swim
 the lake (today the lake refuses it: `STAG_WADE_DEPTH` under `LAKE_DEPTH`; raising it past 9 would let it wade the lake's bed too, which
 is not swimming); the slow (`STAG_WADE_SLOW` 0.45 and the line to it, by feel: a current pushing it downstream is not built); the wake (a
 few flecks and a sound, no ripples on the water's surface: the water is the look's, and a ripple ring is the next thing to try); whether

@@ -1,5 +1,5 @@
 import { test } from 'node:test'; import assert from 'node:assert/strict';
-import { refuseSummon, canSummon, summon, stepMount, lastsFor, drive, saddleAt, forwardOf, callMount, sinkToTravel, travelPoint, dismissMount, rideOut, drains, canWade, wadeFactor, SUMMON_SAP, MOUNT_SPEED, WALK_SPEED, CALL_SPEED, CALL_RUN_M, SINK_S, SURFACE_S, HEALTH, DRAIN, HEAL, RISE_S, COLLAPSE_S, FADE_S, TURN_RATE, STAG_WADE_DEPTH, STAG_WADE_SLOW, type SummonCtx } from '../src/mountModel';
+import { refuseSummon, canSummon, summon, stepMount, lastsFor, drive, saddleAt, forwardOf, callMount, sinkToTravel, travelPoint, dismissMount, rideOut, drains, canWade, wadeFactor, bodyLift, SADDLE, STAG_BELLY, SUMMON_SAP, MOUNT_SPEED, WALK_SPEED, CALL_SPEED, CALL_RUN_M, SINK_S, SURFACE_S, HEALTH, DRAIN, HEAL, RISE_S, COLLAPSE_S, FADE_S, TURN_RATE, STAG_WADE_DEPTH, STAG_WADE_SLOW, type SummonCtx } from '../src/mountModel';
 import { RIVER_DEPTH, LAKE_DEPTH, WADE_DEPTH, FORD_DEPTH, plateau, walkable } from '../src/plateauModel';
 import { NORMAL_MOBILITY } from '../src/mobility';
 import { SNATCH_PACE } from '../src/villageModel';
@@ -61,6 +61,9 @@ test('the rivers (pass 4, Noah: "I want the stag to be able to cross rivers"): i
   assert.equal(wadeFactor(0), 1, 'dry: its whole pace'); assert.equal(wadeFactor(-1), 1); assert.ok(Math.abs(wadeFactor(STAG_WADE_DEPTH) - STAG_WADE_SLOW) < 1e-9, 'at the deepest: STAG_WADE_SLOW of it'); assert.ok(Math.abs(wadeFactor(STAG_WADE_DEPTH * 10) - STAG_WADE_SLOW) < 1e-9, 'held there deeper');
   const half = wadeFactor(STAG_WADE_DEPTH / 2); assert.ok(half < 1 && half > STAG_WADE_SLOW && Math.abs(half - (1 + STAG_WADE_SLOW) / 2) < 1e-9, 'falls linearly between'); assert.ok(wadeFactor(FORD_DEPTH) > 0.9, 'a ford hardly slows it');
   assert.ok(STAG_WADE_SLOW > 0 && STAG_WADE_SLOW < 1); assert.ok(MOUNT_SPEED * STAG_WADE_SLOW > WALK_SPEED, 'even belly-deep it outpaces her walk');
+  // Its body rides no deeper than its belly: her seat stays over the water at any depth it wades.
+  assert.equal(bodyLift(0), 0); assert.equal(bodyLift(STAG_BELLY), 0); assert.ok(Math.abs(bodyLift(RIVER_DEPTH + 0.15) - (RIVER_DEPTH + 0.15 - STAG_BELLY)) < 1e-9);
+  assert.ok(STAG_BELLY < SADDLE.y, 'the saddle over the water'); assert.ok(SADDLE.y - STAG_BELLY + bodyLift(STAG_WADE_DEPTH) > 0 && SADDLE.y + bodyLift(STAG_WADE_DEPTH) - STAG_WADE_DEPTH > 0.3, 'her seat over the water at the deepest it wades');
   // The land's rule with the stag's depth: a river's middle refuses her and not it; the lake refuses both.
   const p = plateau(1); let river: { x: number; z: number } | null = null, lake: { x: number; z: number } | null = null;
   for (const r of p.rivers) { const i = Math.floor(r.points.length / 2); const q = r.points[i], w = p.water(q.x, q.z); if (w && w.kind === 'river' && w.depth >= WADE_DEPTH && w.depth <= STAG_WADE_DEPTH) { river = q; break; } }

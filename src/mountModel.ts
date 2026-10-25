@@ -40,6 +40,12 @@ export const SHOULDER = 1.3, STAG_R = 0.55, SADDLE = { y: 1.32, z: 0.05 };
  * plateauModel's RIVER_DEPTH 1.6 plus the channel's 0.15, so no river refuses it; the lake, LAKE_DEPTH 9, still does: it does not swim), its body down on
  * the bed, slowed by the depth: its speed is MOUNT_SPEED × wadeFactor(depth), 1 on dry ground falling to STAG_WADE_SLOW at STAG_WADE_DEPTH. Tuning. */
 export const STAG_WADE_DEPTH = 2.2, STAG_WADE_SLOW = 0.45;
+/** How deep its body goes (m of water over its feet): to its belly. In deeper water its feet still follow the bed (the slow reads the bed's depth) but the
+ * body rides lifted to this depth, as if wading hard with the legs reaching down, so it is seen in to the belly and her seat (SADDLE.y over its feet)
+ * stays over the water; a river's middle (RIVER_DEPTH 1.6 and the channel's 0.15) is deeper than the saddle is high. A decision beyond the brief, flagged. */
+export const STAG_BELLY = 1.0;
+/** The lift of its body over its feet in water `depth` m deep (pass 4): nothing to the belly, the rest beyond it. */
+export const bodyLift = (depth: number): number => Math.max(0, depth - STAG_BELLY);
 /** Whether water `depth` m deep is the stag's to wade (pass 4). */
 export const canWade = (depth: number): boolean => depth <= STAG_WADE_DEPTH;
 /** The share of its pace left to it in water `depth` m deep (pass 4): 1 dry, falling linearly to STAG_WADE_SLOW at STAG_WADE_DEPTH (and held there deeper, though it refuses to go on). */

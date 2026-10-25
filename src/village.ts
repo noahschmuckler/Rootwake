@@ -1577,7 +1577,7 @@ function frame(now: number) {
 import { createStag, seatClip, loadStagAsset, type StagFigure, type StagAsset } from './mountFigure';
 import type { Traversal } from './mobility';
 import { LONG_PRESS_MS } from './player';
-import { refuseSummon, summon as summonMount, stepMount, drive as driveMount, forwardOf, lastsFor, callMount, sinkToTravel, travelPoint, dismissMount, canWade, wadeFactor, SUMMON_SAP, MOUNT_SPEED, WALK_SPEED, FOLLOW_SPEED, FOLLOW_M, FOLLOW_STOP_M, CALL_RUN_M, CALL_STOP_M, CALL_SPEED, CALL_STALL_S, SINK_S, SURFACE_S, RIDE_STEP, STAG_R, MOUNT_REACH, MOUNT_S, RISE_AHEAD, STAG_WADE_DEPTH, STAG_WADE_SLOW, HEALTH as STAG_HEALTH, DRAIN as STAG_DRAIN, type Mount, type Soil, type SummonCtx } from './mountModel';
+import { refuseSummon, summon as summonMount, stepMount, drive as driveMount, forwardOf, lastsFor, callMount, sinkToTravel, travelPoint, dismissMount, canWade, wadeFactor, bodyLift, STAG_BELLY, SUMMON_SAP, MOUNT_SPEED, WALK_SPEED, FOLLOW_SPEED, FOLLOW_M, FOLLOW_STOP_M, CALL_RUN_M, CALL_STOP_M, CALL_SPEED, CALL_STALL_S, SINK_S, SURFACE_S, RIDE_STEP, STAG_R, MOUNT_REACH, MOUNT_S, RISE_AHEAD, STAG_WADE_DEPTH, STAG_WADE_SLOW, HEALTH as STAG_HEALTH, DRAIN as STAG_DRAIN, type Mount, type Soil, type SummonCtx } from './mountModel';
 /** The ride's camera: back and up from the saddle (her walk's is 3.2 back, 1.3 up); the drop a stag refuses at a step (a ledge, not a hillside); the landing beat off a collapse (s); how far the health bar is read (m). Tuning. */
 const RIDE_CAM = { back: 4.4, up: 1.9 }, RIDE_DROP = 0.9, LANDING_S = 0.6, STAG_LABEL_M = 40;
 /** Pass 4 (Noah, 2026-10-25), the wake: water deeper than WAKE_FROM under a stag going faster than WAKE_SPEED throws spray every WAKE_EVERY m of its way (a few flecks at each flank at the surface) and a stride's splash sounds every SPLASH_EVERY s; the step into a river (from shallower than WAKE_FROM) is a bigger splash; the meadow's stream (villageModel.inWater), whose depth the land does not model, counts STREAM_DEEP. Where the stag stands in water deeper than her own WADE_DEPTH she is not set down (the dismount and the vault refused; a knock-off or a collapse there sets her on the nearest bank, BANK_SEARCH_M out at most). Tuning. */
@@ -1787,9 +1787,10 @@ function stagFrame(sim: number, dt: number): void {
         if (s.wade > WAKE_FROM && m.speed > WAKE_SPEED) {
           if (was <= WAKE_FROM) { fx.spray(new THREE.Vector3(m.x + fw.x * 0.6, surface, m.z + fw.z * 0.6), new THREE.Vector3(fw.x * 0.5, 1, fw.z * 0.5), 'water', 18, 3); sound.splash(true); s.splashT = 0; s.wakeM = 0; }
           s.splashT += sim; if (s.splashT >= SPLASH_EVERY) { s.splashT = 0; sound.splash(false); }
-          if (s.wakeM >= WAKE_EVERY) { s.wakeM = 0; for (const k of [1, -1]) fx.spray(new THREE.Vector3(m.x + side.x * k * 0.45 - fw.x * 0.3, surface, m.z + side.z * k * 0.45 - fw.z * 0.3), new THREE.Vector3(side.x * k * 0.7 - fw.x * 0.5, 1, side.z * k * 0.7 - fw.z * 0.5), 'water', 4, 1.6 + m.speed * 0.15); }
+          if (s.wakeM >= WAKE_EVERY) { s.wakeM = 0; for (const k of [1, -1]) fx.spray(new THREE.Vector3(m.x + side.x * k * 0.45 - fw.x * 0.3, surface, m.z + side.z * k * 0.45 - fw.z * 0.3), new THREE.Vector3(side.x * k * 0.7 - fw.x * 0.5, 1, side.z * k * 0.7 - fw.z * 0.5), 'water', 6, 1.8 + m.speed * 0.2); }
         } else { s.wakeM = Math.min(s.wakeM, WAKE_EVERY); s.splashT = SPLASH_EVERY; } }
-      s.fig.update(m.x, s.y, m.z, m.heading, { phase: m.phase, t: m.t, speed: m.speed, still: m.still, health: m.health, bow: mode === 'ride' && ride?.stage === 'vault' ? 1 : 0 }, dt);
+      // (Pass 4: in water past its belly the body rides lifted, STAG_BELLY deep, its feet on the bed below: mountModel.bodyLift.)
+      s.fig.update(m.x, s.y + bodyLift(s.wade), m.z, m.heading, { phase: m.phase, t: m.t, speed: m.speed, still: m.still, health: m.health, bow: mode === 'ride' && ride?.stage === 'vault' ? 1 : 0 }, dt);
       if (mode === 'ride' && ride) {
         const sp = s.fig.saddle(stagV);
         if (ride.stage === 'mount') { const k = Math.min(1, ride.t / MOUNT_S), e = k * k * (3 - 2 * k); stagV.lerpVectors(ride.from, sp, e); stagV.y += Math.sin(e * Math.PI) * 0.25; }
@@ -1821,7 +1822,7 @@ const mountHandle = {
   get wade() { return stag?.wade ?? 0; }, get deepWater() { return stagInDeepWater(); }, water: (x: number, z: number) => plateau(home.seed).water(x, z),
   /** Dev: the line from (ax, az) to (bx, bz) as `runnableBetween` reads it, sample by sample (its ground, the water over it, whether the stag can stand, the drop from the last), for the checks' diagnostics. */
   probeLine: (ax: number, az: number, bx: number, bz: number, every = RUN_SAMPLE_M) => { const d = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(d / every)), out: { x: number; z: number; g: number | null; wade: number; stand: boolean; drop: number }[] = []; let y = stagGround(ax, az) ?? relief(ax, az); for (let i = 0; i <= n; i++) { const x = ax + (bx - ax) * i / n, z = az + (bz - az) * i / n, g = stagGround(x, z, y); out.push({ x: +x.toFixed(2), z: +z.toFixed(2), g: g === null ? null : +g.toFixed(2), wade: g === null ? 0 : +stagWade(x, z, g).toFixed(2), stand: g !== null && stagCanStand(x, g, z), drop: g === null ? 0 : +(g - y).toFixed(2) }); if (g !== null) y = g; } return out; },
-  constants: { VAULT_SPEED, SUMMON_SAP, MOUNT_SPEED, FOLLOW_SPEED, FOLLOW_M, CALL_RUN_M, CALL_STOP_M, CALL_SPEED, SINK_S, SURFACE_S, RIDE_STEP, MOUNT_REACH, MOUNT_S, RISE_AHEAD, STAG_WADE_DEPTH, STAG_WADE_SLOW, WADE_DEPTH, HEALTH: STAG_HEALTH, DRAIN: STAG_DRAIN, walk: WALK_SPEED },
+  constants: { VAULT_SPEED, SUMMON_SAP, MOUNT_SPEED, FOLLOW_SPEED, FOLLOW_M, CALL_RUN_M, CALL_STOP_M, CALL_SPEED, SINK_S, SURFACE_S, RIDE_STEP, MOUNT_REACH, MOUNT_S, RISE_AHEAD, STAG_WADE_DEPTH, STAG_WADE_SLOW, STAG_BELLY, WADE_DEPTH, HEALTH: STAG_HEALTH, DRAIN: STAG_DRAIN, walk: WALK_SPEED },
 };
 // ===== end of the mount =====
 if (PRACTICE) startPractice();

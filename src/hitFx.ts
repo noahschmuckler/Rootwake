@@ -101,7 +101,7 @@ export function createHitFx(scene: THREE.Scene, ground: (x: number, z: number) =
     const pal = PALETTES[kind];
     for (let i = 0; i < count; i++) {
       const k = next; next = (next + 1) % MAX_FLECKS; const f = pool[k];
-      f.live = true; f.age = 0; f.life = rand(FLECK_LIFE[0], FLECK_LIFE[1]); f.size = rand(FLECK_SIZE[0], FLECK_SIZE[1]) * (kind === 'soil' ? 1.2 : 1); f.grounded = false;
+      f.live = true; f.age = 0; f.life = rand(FLECK_LIFE[0], FLECK_LIFE[1]); f.size = rand(FLECK_SIZE[0], FLECK_SIZE[1]) * (kind === 'soil' ? 1.2 : kind === 'water' ? 1.6 : 1); f.grounded = false;
       f.p.copy(at).add(tmp.set(rand(-0.08, 0.08), rand(-0.08, 0.08), rand(-0.08, 0.08)));
       // Mostly along the blow, fanned, and upward.
       const s = speed * rand(0.4, 1.15); f.v.set(dir.x * s + rand(-1, 1) * speed * 0.55, rand(0.6, 1.4) * speed * 0.7, dir.z * s + rand(-1, 1) * speed * 0.55);
