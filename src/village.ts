@@ -1588,7 +1588,7 @@ if (query.get('stagasset') !== '0') loadStagAsset(base('models/stag.glb')).then(
 /** Pass 2: the button's long press (the project's LONG_PRESS_MS) dismisses the stag from anywhere. */
 const STAG_HOLD_MS = LONG_PRESS_MS;
 /** The stag up (or rising, or collapsing), its figure and the ground under its feet; pass 4: the water over its feet (m, 0 dry), the way made since the wake last sprayed (m) and the seconds since a stride's splash. */
-let stag: { m: Mount; fig: StagFigure; y: number; wade: number; wakeM: number; splashT: number } | null = null;
+let stag: { m: Mount; fig: StagFigure; y: number; wade: number; /** In water over WAKE_FROM last frame (the step in is the bigger splash). */ wet: boolean; wakeM: number; splashT: number } | null = null;
 /** Her ride: the mounting beat (her feet carried from the ground to the saddle, the mount clip over it), then riding. */
 let ride: { stage: 'mount' | 'ride' | 'vault'; t: number; from: THREE.Vector3; /** The vault's landing, on the ground ahead of the stag's head, and whether her dive has begun. */ to?: THREE.Vector3; dived?: boolean } | null = null;
 /** The rapid dismount (Noah, 2026-10-24): riding at VAULT_SPEED or more (m/s), a tap of guard: the stag plants and puts its head down, she dives over its neck and head (VAULT_S, the dive of her dodge clip, arcing VAULT_LIFT m over the line) to land VAULT_AHEAD m ahead of its centre and roll on into her fighting stance, held STANCE_S unless the stick moves her. Slower, the tap is an ordinary dismount. Tuning. */
@@ -1641,7 +1641,7 @@ function summonStag(): boolean {
   const f = player.feet(), spot = besideHer(f); if (!spot) { say('no room for a stag here'); return false; }
   village.hero.sap -= SUMMON_SAP;
   if (stag) { stag.fig.dispose(); stag = null; }
-  stag = { m: summonMount(spot.x, spot.z, herHeading()), fig: createStag(home.seed, stagAsset), y: spot.y, wade: 0, wakeM: 0, splashT: 0 }; scene.add(stag.fig.group);
+  stag = { m: summonMount(spot.x, spot.z, herHeading()), fig: createStag(home.seed, stagAsset), y: spot.y, wade: 0, wet: false, wakeM: 0, splashT: 0 }; scene.add(stag.fig.group);
   fx.spray(new THREE.Vector3(spot.x, spot.y + 0.1, spot.z), new THREE.Vector3(0, 1, 0), 'soil', 22, 2.8); fx.ring(new THREE.Vector3(spot.x, spot.y, spot.z), 2.2, '#9cff6e'); sound.thud(true); sound.roots();
   say('the soil heaves: a stag', 2.5); return true;
 }
@@ -1783,12 +1783,13 @@ function stagFrame(sim: number, dt: number): void {
         else if (d > FOLLOW_M || (going && d > FOLLOW_STOP_M)) moveStag(driveWading(m, sim, { x: (f.x - m.x) / d, z: (f.z - m.z) / d }, 1, FOLLOW_SPEED), FOLLOW_SPEED); else driveMount(m, sim, null, 0);
       }
       // Pass 4: the water over its feet; wading at speed, spray at each flank and a stride's splash; the step into a river a bigger one.
-      { const was = s.wade; s.wade = m.phase === 'up' ? stagWade(m.x, m.z, s.y) : 0; const surface = s.y + s.wade, fw = forwardOf(m.heading), side = { x: -fw.z, z: fw.x };
-        if (s.wade > WAKE_FROM && m.speed > WAKE_SPEED) {
-          if (was <= WAKE_FROM) { fx.spray(new THREE.Vector3(m.x + fw.x * 0.6, surface, m.z + fw.z * 0.6), new THREE.Vector3(fw.x * 0.5, 1, fw.z * 0.5), 'water', 18, 3); sound.splash(true); s.splashT = 0; s.wakeM = 0; }
+      { s.wade = m.phase === 'up' ? stagWade(m.x, m.z, s.y) : 0; const surface = s.y + s.wade, fw = forwardOf(m.heading), side = { x: -fw.z, z: fw.x }, wet = s.wade > WAKE_FROM;
+        if (wet && m.speed > WAKE_SPEED) {
+          if (!s.wet) { fx.spray(new THREE.Vector3(m.x + fw.x * 0.6, surface, m.z + fw.z * 0.6), new THREE.Vector3(fw.x * 0.5, 1, fw.z * 0.5), 'water', 18, 3); sound.splash(true); s.splashT = 0; s.wakeM = 0; }
           s.splashT += sim; if (s.splashT >= SPLASH_EVERY) { s.splashT = 0; sound.splash(false); }
           if (s.wakeM >= WAKE_EVERY) { s.wakeM = 0; for (const k of [1, -1]) fx.spray(new THREE.Vector3(m.x + side.x * k * 0.45 - fw.x * 0.3, surface, m.z + side.z * k * 0.45 - fw.z * 0.3), new THREE.Vector3(side.x * k * 0.7 - fw.x * 0.5, 1, side.z * k * 0.7 - fw.z * 0.5), 'water', 6, 1.8 + m.speed * 0.2); }
-        } else { s.wakeM = Math.min(s.wakeM, WAKE_EVERY); s.splashT = SPLASH_EVERY; } }
+        } else { s.wakeM = Math.min(s.wakeM, WAKE_EVERY); s.splashT = SPLASH_EVERY; }
+        s.wet = wet; }
       // (Pass 4: in water past its belly the body rides lifted, STAG_BELLY deep, its feet on the bed below: mountModel.bodyLift.)
       s.fig.update(m.x, s.y + bodyLift(s.wade), m.z, m.heading, { phase: m.phase, t: m.t, speed: m.speed, still: m.still, health: m.health, bow: mode === 'ride' && ride?.stage === 'vault' ? 1 : 0 }, dt);
       if (mode === 'ride' && ride) {
