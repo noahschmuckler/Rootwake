@@ -56,6 +56,8 @@ export class FightSound {
   block(): void { this.tone('triangle', 420, 260, 0.08, 0.5); this.tone('sine', 140, 80, 0.16, 0.6); this.hiss(0.05, 0.08, 0.5, 'bandpass', [2400, 1600, 900], 2); }
   /** F3: the roll. */
   roll(): void { this.hiss(0.4, 0.32, 0.4, 'lowpass', [400, 1400, 300], 0.8); }
+  /** A splash (STAGS.md pass 4, the stag wading): a plunge's thump under a bright wet hiss; `heavy` is the step into the river, else a stride's slap. */
+  splash(heavy = false): void { if (heavy) this.tone('sine', 150, 70, 0.14, 0.35); this.hiss(0.08, heavy ? 0.34 : 0.18, heavy ? 0.5 : 0.28, 'bandpass', [1800, 4200, 900], 0.9); this.hiss(0.3, heavy ? 0.5 : 0.26, heavy ? 0.26 : 0.14, 'highpass', [2600, 5200, 3000], 1.4, 0.04); }
   /** F3: root time beginning: the world drops away under a low drone and a bright bell. */
   rootTime(): void { this.tone('sine', 55, 42, 2.2, 0.35, 0, 0.25); this.tone('sine', 1318, 1310, 1.6, 0.14, 0.02, 0.003); this.tone('sine', 1975, 1970, 1.2, 0.07, 0.05, 0.003); this.hiss(0.15, 0.6, 0.35, 'lowpass', [3000, 900, 150], 0.7); }
   /** She is bitten. */

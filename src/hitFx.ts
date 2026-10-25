@@ -5,8 +5,10 @@
 // wave from her feet. All pooled: nothing is made after the first frame. Tuning constants at the top.
 import * as THREE from 'three';
 
-export type Flecks = 'leaf' | 'ichor' | 'fur' | 'dire' | 'soil';
+export type Flecks = 'leaf' | 'ichor' | 'fur' | 'dire' | 'soil' | 'water';
 const PALETTES: Record<Flecks, string[]> = {
+  // Water (STAGS.md pass 4, the stag's wake): spray, pale and a little of the river's blue-green.
+  water: ['#e8f4f6', '#ffffff', '#b9dde2', '#8fc2cc', '#d7eef2'],
   leaf: ['#717e49', '#b0a258', '#88801d', '#d4652a', '#4a5b31'],
   ichor: ['#2b1838', '#5a2a6a', '#9a4ab0', '#d8ff60'],
   fur: ['#6a655c', '#8d877c', '#4a4640', '#b8b0a0'],

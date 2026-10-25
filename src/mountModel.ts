@@ -4,7 +4,8 @@
 // pass 2 (Noah): called to her from anywhere (it runs when she is near and the ground between is its to cross,
 // else it sinks into the soil and travels as a root ride does, surfacing beside her), dismissed from anywhere
 // (it sinks where it stands), its gallop at root travel's pace, its drain tuned so that called in from the
-// edge to the nursery's rim and ridden straight out it collapses just short of the edge (tests/mount.test.ts).
+// edge to the nursery's rim and ridden straight out it collapses just short of the edge (tests/mount.test.ts);
+// pass 4 (Noah): it wades every river, slowed by the depth, and the lake still refuses it (STAG_WADE_DEPTH, wadeFactor).
 // Nothing here is saved: a reload finds her on foot. The figure is mountFigure.ts, the riding village.ts.
 import { NORMAL_MOBILITY } from './mobility';
 import { SNATCH_PACE } from './villageModel';
@@ -35,6 +36,14 @@ export const RISE_S = 1.5, COLLAPSE_S = 0.8, FADE_S = 1.6;
 export const RISE_AHEAD = 2, MOUNT_REACH = 2.6, MOUNT_S = 1.1;
 /** The stag's body: its shoulder height (a red stag's), its footprint radius for the land's refusals, and where she sits (m above its feet, forward of its centre). */
 export const SHOULDER = 1.3, STAG_R = 0.55, SADDLE = { y: 1.32, z: 0.05 };
+/** Pass 4 (Noah, 2026-10-25: "I want the stag to be able to cross rivers"): it wades any water up to STAG_WADE_DEPTH m deep (set over the deepest river bed,
+ * plateauModel's RIVER_DEPTH 1.6 plus the channel's 0.15, so no river refuses it; the lake, LAKE_DEPTH 9, still does: it does not swim), its body down on
+ * the bed, slowed by the depth: its speed is MOUNT_SPEED × wadeFactor(depth), 1 on dry ground falling to STAG_WADE_SLOW at STAG_WADE_DEPTH. Tuning. */
+export const STAG_WADE_DEPTH = 2.2, STAG_WADE_SLOW = 0.45;
+/** Whether water `depth` m deep is the stag's to wade (pass 4). */
+export const canWade = (depth: number): boolean => depth <= STAG_WADE_DEPTH;
+/** The share of its pace left to it in water `depth` m deep (pass 4): 1 dry, falling linearly to STAG_WADE_SLOW at STAG_WADE_DEPTH (and held there deeper, though it refuses to go on). */
+export const wadeFactor = (depth: number): number => 1 - (1 - STAG_WADE_SLOW) * Math.min(1, Math.max(0, depth) / STAG_WADE_DEPTH);
 
 /** What the ground under (x, z) is, by the land's own reading: grass (the meadow) and wood give a stag; the rest refuse. */
 export type Soil = 'grass' | 'wood' | 'dark' | 'rock' | 'yard' | 'water';

@@ -338,12 +338,13 @@ export function resample(pts: P[], step: number): P[] {
   const last = pts[pts.length - 1]; if (Math.hypot(last.x - out[out.length - 1].x, last.z - out[out.length - 1].z) > step * 0.3) out.push(last);
   return out;
 }
-/** Can she stand here without wading deeper than WADE_DEPTH (a ford, the shallows), and is it on the plateau? The bridge's deck counts. */
-export function walkable(p: Plateau, x: number, z: number): boolean {
+/** Can she stand here without wading deeper than WADE_DEPTH (a ford, the shallows), and is it on the plateau? The bridge's deck counts.
+ * `wade` is the depth that refuses (hers by default; her stag's STAG_WADE_DEPTH, STAGS.md pass 4, lets it through the rivers and not the lake). */
+export function walkable(p: Plateau, x: number, z: number, wade = WADE_DEPTH): boolean {
   if (p.deckAt(x, z) !== null) return true;
   // T6: the belt is too steep but at its passes, and a pass ends at the brink: past it is the fall.
   const d = p.into(x, z); if (d > PASS_FOOT && (d > MOUNTAIN_RISE + BRINK_PAST + 8 || p.passAt(x, z) < 0.5)) return false;
-  const w = p.water(x, z); return !w || w.depth < WADE_DEPTH;
+  const w = p.water(x, z); return !w || w.depth < wade;
 }
 /** T7: the points a footprint is judged at: the centre, a ring at `r` and one at half of it. */
 export function footprint(x: number, z: number, r: number, n = 12): P[] { const out: P[] = [{ x, z }]; for (const k of [0.5, 1]) for (let i = 0; i < n; i++) { const a = (i / n) * Math.PI * 2; out.push({ x: x + Math.cos(a) * r * k, z: z + Math.sin(a) * r * k }); } return out; }

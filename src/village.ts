@@ -9,7 +9,7 @@ import { Player, PITCH_LIMIT, PITCH_FULL } from './player';
 import { createDescentVisit } from './descentVisit';
 import { catwalk as catwalkAt } from './descentModel';
 import { makePortal } from './portalFigure';
-import { plateau, walkable, FOOTBRIDGE_OVER } from './plateauModel';
+import { plateau, walkable, FOOTBRIDGE_OVER, WADE_DEPTH } from './plateauModel';
 import { buildWaterworks } from './plateauWorld';
 import { chooseDire, freshSteward, parseSteward, serializeSteward, wake as wakeUp, send as sendSteward, stepSteward, bite as biteSteward, lyingUp, leftToWalk, WAKE_GEMS, PACE as STEWARD_PACE, type Steward, type Circle } from './stewardModel';
 import { setMoot, setHeroes, assignDuty, guards, hunters, traitsOf, traitWords, GUARDS_MAX, HUNTERS_MAX, setOwnWarrens, huntingGround, groundRabbits, buildRack, RACK_WOOD, searchers, setSearch, setSearchFound, searchParty, SEARCHERS_MAX, setDire, isDire, direDen, DIRE_HP, DEN_REACH_M, bearingWords, bearingFromGreen, setWallows, setQuarry, wallowOf, type Duty } from './villageModel';
@@ -270,11 +270,14 @@ function pickActive(): void {
 }
 // eslint-disable-next-line @typescript-eslint/no-use-before-define
 let karst: ReturnType<typeof createKarstFeature>;
+/** The water depth the land refuses a body at: hers (WADE_DEPTH, a ford's shallows) unless a check sets another for its own call (her stag's wading, STAGS.md pass 4: `stagCanStand` in the mount block). */
+let wadeLimit = WADE_DEPTH;
+const walkableAt = (x: number, z: number): boolean => walkable(plateau(home.seed), x, z, wadeLimit);
 const groundWorld: TraversalWorld = {
   // The land is unbounded: the meadow, and past it the chunks (chunkWorld), whose trees the model's lookups see through setTreeProvider.
   // The land is unbounded: the meadow, and past it the chunks (chunkWorld), whose trees the model's lookups see through setTreeProvider; where the karst stands, its own zone worlds are her ground (karstFeature).
   surfacesAt: (x, z) => (inWard ? wardInterior.surfacesAt(x, z) : karst.owns(x, z) ? karst.traversal().surfacesAt(x, z) : wardField.surfacesAt(x, z) ?? industryField.surfacesAt(x, z) ?? denField.surfacesAt(x, z) ?? [relief(x, z)]),
-  canOccupy: (p, radius, height) => { if (inWard) return wardInterior.canOccupy(p, radius, height); if (karst.owns(p.x, p.z)) return karst.traversal().canOccupy(p, radius, height); const ward = wardField.canOccupy(p, radius, height); if (ward !== null) return ward && walkable(plateau(home.seed), p.x, p.z); const yard = industryField.canOccupy(p, radius); if (yard !== null) return yard && walkable(plateau(home.seed), p.x, p.z); const den = denField.canOccupy(p, radius, height); if (den !== null) return den; return p.y >= relief(p.x, p.z) - 0.03 && !houseNear(p.x, p.z, radius) && !treesNear(p.x, p.z, 6).some(t => Math.hypot(p.x - t.x, p.z - t.z) < trunkRadius(t) + radius) && walkable(plateau(home.seed), p.x, p.z); },
+  canOccupy: (p, radius, height) => { if (inWard) return wardInterior.canOccupy(p, radius, height); if (karst.owns(p.x, p.z)) return karst.traversal().canOccupy(p, radius, height); const ward = wardField.canOccupy(p, radius, height); if (ward !== null) return ward && walkableAt(p.x, p.z); const yard = industryField.canOccupy(p, radius); if (yard !== null) return yard && walkableAt(p.x, p.z); const den = denField.canOccupy(p, radius, height); if (den !== null) return den; return p.y >= relief(p.x, p.z) - 0.03 && !houseNear(p.x, p.z, radius) && !treesNear(p.x, p.z, 6).some(t => Math.hypot(p.x - t.x, p.z - t.z) < trunkRadius(t) + radius) && walkableAt(p.x, p.z); },
 };
 // PLATEAU.md (Noah): the rivers are barriers, crossed at their fords, stepping stones and bridges; the lake rings the island, crossed by its old bridge. Underground (the roots) she passes beneath them.
 /** While she is a bulge, a figure of leaves or a knot in a root, the shared motor stays put but the stick still speaks. */
@@ -1559,16 +1562,18 @@ function frame(now: number) {
 import { createStag, seatClip, loadStagAsset, type StagFigure, type StagAsset } from './mountFigure';
 import type { Traversal } from './mobility';
 import { LONG_PRESS_MS } from './player';
-import { refuseSummon, summon as summonMount, stepMount, drive as driveMount, forwardOf, lastsFor, callMount, sinkToTravel, travelPoint, dismissMount, SUMMON_SAP, MOUNT_SPEED, WALK_SPEED, FOLLOW_SPEED, FOLLOW_M, FOLLOW_STOP_M, CALL_RUN_M, CALL_STOP_M, CALL_SPEED, CALL_STALL_S, SINK_S, SURFACE_S, RIDE_STEP, STAG_R, MOUNT_REACH, MOUNT_S, RISE_AHEAD, HEALTH as STAG_HEALTH, DRAIN as STAG_DRAIN, type Mount, type Soil, type SummonCtx } from './mountModel';
+import { refuseSummon, summon as summonMount, stepMount, drive as driveMount, forwardOf, lastsFor, callMount, sinkToTravel, travelPoint, dismissMount, canWade, wadeFactor, SUMMON_SAP, MOUNT_SPEED, WALK_SPEED, FOLLOW_SPEED, FOLLOW_M, FOLLOW_STOP_M, CALL_RUN_M, CALL_STOP_M, CALL_SPEED, CALL_STALL_S, SINK_S, SURFACE_S, RIDE_STEP, STAG_R, MOUNT_REACH, MOUNT_S, RISE_AHEAD, STAG_WADE_DEPTH, STAG_WADE_SLOW, HEALTH as STAG_HEALTH, DRAIN as STAG_DRAIN, type Mount, type Soil, type SummonCtx } from './mountModel';
 /** The ride's camera: back and up from the saddle (her walk's is 3.2 back, 1.3 up); the drop a stag refuses at a step (a ledge, not a hillside); the landing beat off a collapse (s); how far the health bar is read (m). Tuning. */
 const RIDE_CAM = { back: 4.4, up: 1.9 }, RIDE_DROP = 0.9, LANDING_S = 0.6, STAG_LABEL_M = 40;
+/** Pass 4 (Noah, 2026-10-25), the wake: water deeper than WAKE_FROM under a stag going faster than WAKE_SPEED throws spray every WAKE_EVERY m of its way (a few flecks at each flank at the surface) and a stride's splash sounds every SPLASH_EVERY s; the step into a river (from shallower than WAKE_FROM) is a bigger splash; the meadow's stream (villageModel.inWater), whose depth the land does not model, counts STREAM_DEEP. Where the stag stands in water deeper than her own WADE_DEPTH she is not set down (the dismount and the vault refused; a knock-off or a collapse there sets her on the nearest bank, BANK_SEARCH_M out at most). Tuning. */
+const WAKE_FROM = 0.18, WAKE_SPEED = 1.2, WAKE_EVERY = 0.75, SPLASH_EVERY = 0.55, STREAM_DEEP = 0.25, BANK_SEARCH_M = 40;
 /** Pass 2: the stag's body and gait from the file (STAG_CREDITS.md); until it is loaded, or if it fails, the procedural figure. `?stagasset=0` keeps the procedural one. */
 let stagAsset: StagAsset | null = null;
 if (query.get('stagasset') !== '0') loadStagAsset(base('models/stag.glb')).then(a => { stagAsset = a; }, e => console.warn('stag asset', e));
 /** Pass 2: the button's long press (the project's LONG_PRESS_MS) dismisses the stag from anywhere. */
 const STAG_HOLD_MS = LONG_PRESS_MS;
-/** The stag up (or rising, or collapsing), its figure and the ground under its feet. */
-let stag: { m: Mount; fig: StagFigure; y: number } | null = null;
+/** The stag up (or rising, or collapsing), its figure and the ground under its feet; pass 4: the water over its feet (m, 0 dry), the way made since the wake last sprayed (m) and the seconds since a stride's splash. */
+let stag: { m: Mount; fig: StagFigure; y: number; wade: number; wakeM: number; splashT: number } | null = null;
 /** Her ride: the mounting beat (her feet carried from the ground to the saddle, the mount clip over it), then riding. */
 let ride: { stage: 'mount' | 'ride' | 'vault'; t: number; from: THREE.Vector3; /** The vault's landing, on the ground ahead of the stag's head, and whether her dive has begun. */ to?: THREE.Vector3; dived?: boolean } | null = null;
 /** The rapid dismount (Noah, 2026-10-24): riding at VAULT_SPEED or more (m/s), a tap of guard: the stag plants and puts its head down, she dives over its neck and head (VAULT_S, the dive of her dodge clip, arcing VAULT_LIFT m over the line) to land VAULT_AHEAD m ahead of its centre and roll on into her fighting stance, held STANCE_S unless the stick moves her. Slower, the tap is an ordinary dismount. Tuning. */
@@ -1592,9 +1597,14 @@ function summonCtx(): SummonCtx {
 /** The ground a stag stands on at (x, z): the surface nearest the height it is at (a deck over water is the deck), or null where there is none. */
 function stagGround(x: number, z: number, near = relief(x, z)): number | null { const s = groundWorld.surfacesAt(x, z); if (!s.length) return null; let best = s[0]; for (const y of s) if (Math.abs(y - near) < Math.abs(best - near)) best = y; return best; }
 const stagV = new THREE.Vector3();
-/** Whether a stag's body can stand at (x, y, z): the land's refusals (the rivers and the lake, the houses, the trunks, a yard's walls) at its own footprint, and the live colliders. */
+/** Pass 4: the water over a stag's feet at (x, z) with its feet at `y` (0 dry, or on a deck over the water): the plateau's rivers and lake by their surface, the meadow's stream STREAM_DEEP. */
+function stagWade(x: number, z: number, y: number): number {
+  const w = plateau(home.seed).water(x, z); if (w) return Math.max(0, w.surface - y);
+  return inWater(x, z) ? STREAM_DEEP : 0;
+}
+/** Whether a stag's body can stand at (x, y, z): the land's refusals (the lake, the houses, the trunks, a yard's walls) at its own footprint, and the live colliders; pass 4: a river's water is its to wade (STAG_WADE_DEPTH takes the place of her WADE_DEPTH in the land's rule for this call). */
 function stagCanStand(x: number, y: number, z: number): boolean {
-  if (!groundWorld.canOccupy(stagV.set(x, y, z), STAG_R, 1.3)) return false;
+  wadeLimit = STAG_WADE_DEPTH; const can = groundWorld.canOccupy(stagV.set(x, y, z), STAG_R, 1.3); wadeLimit = WADE_DEPTH; if (!can) return false;
   for (const c of [...ctxs.filter(c => c.near).flatMap(c => c.world.colliders), ...chunks.colliders(), ...karst.colliders]) { if (y >= (c.maxY ?? Infinity) || y + 1.3 <= (c.minY ?? -Infinity)) continue; const n = 'x1' in c ? (() => { const dx = c.x2 - c.x1, dz = c.z2 - c.z1, l2 = dx * dx + dz * dz, t = l2 < 1e-9 ? 0 : Math.min(1, Math.max(0, ((x - c.x1) * dx + (z - c.z1) * dz) / l2)); return { x: c.x1 + dx * t, z: c.z1 + dz * t }; })() : c; if (Math.hypot(x - n.x, z - n.z) < c.radius + STAG_R) return false; }
   return true;
 }
@@ -1616,7 +1626,7 @@ function summonStag(): boolean {
   const f = player.feet(), spot = besideHer(f); if (!spot) { say('no room for a stag here'); return false; }
   village.hero.sap -= SUMMON_SAP;
   if (stag) { stag.fig.dispose(); stag = null; }
-  stag = { m: summonMount(spot.x, spot.z, herHeading()), fig: createStag(home.seed, stagAsset), y: spot.y }; scene.add(stag.fig.group);
+  stag = { m: summonMount(spot.x, spot.z, herHeading()), fig: createStag(home.seed, stagAsset), y: spot.y, wade: 0, wakeM: 0, splashT: 0 }; scene.add(stag.fig.group);
   fx.spray(new THREE.Vector3(spot.x, spot.y + 0.1, spot.z), new THREE.Vector3(0, 1, 0), 'soil', 22, 2.8); fx.ring(new THREE.Vector3(spot.x, spot.y, spot.z), 2.2, '#9cff6e'); sound.thud(true); sound.roots();
   say('the soil heaves: a stag', 2.5); return true;
 }
@@ -1632,10 +1642,11 @@ function startMount(): boolean {
   // The camera comes round behind the stag (her yaw its heading): she was facing it.
   player.cancelInput(); lock(); mode = 'ride'; ride = { stage: 'mount', t: 0, from: f.clone() }; rideVigor = village.hero.vigor; stag.m.speed = 0; player.yaw = stag.m.heading; seatAction(); return true;
 }
-/** Pass 2: whether the ground between two points is the stag's to run over: sampled every 1.5 m, each sample ground it can stand on (the land's refusals, the colliders) and not water. */
+/** Pass 2: whether the ground between two points is the stag's to run over: sampled every RUN_SAMPLE_M, each sample ground it can stand on (the land's refusals, the colliders) within a drop of the last; pass 4: water it can wade (a river) passes, deeper water (the lake) refuses, and the samples are 0.5 m apart (they were 1.5), since a river's bank in the baked land falls about a metre a metre and a sample straddling it read as a ledge the ride's own 0.25 m substeps take in stride. */
+const RUN_SAMPLE_M = 0.5;
 function runnableBetween(a: { x: number; z: number }, b: { x: number; z: number }): boolean {
-  const d = Math.hypot(b.x - a.x, b.z - a.z), n = Math.max(1, Math.ceil(d / 1.5)); let y = stagGround(a.x, a.z) ?? relief(a.x, a.z);
-  for (let i = 1; i <= n; i++) { const x = a.x + (b.x - a.x) * i / n, z = a.z + (b.z - a.z) * i / n, g = stagGround(x, z, y); if (g === null || soilAt(x, z) === 'water' || !stagCanStand(x, g, z) || Math.abs(g - y) > RIDE_DROP) return false; y = g; }
+  const d = Math.hypot(b.x - a.x, b.z - a.z), n = Math.max(1, Math.ceil(d / RUN_SAMPLE_M)); let y = stagGround(a.x, a.z) ?? relief(a.x, a.z);
+  for (let i = 1; i <= n; i++) { const x = a.x + (b.x - a.x) * i / n, z = a.z + (b.z - a.z) * i / n, g = stagGround(x, z, y); if (g === null || !canWade(stagWade(x, z, g)) || !stagCanStand(x, g, z) || Math.abs(g - y) > RIDE_DROP) return false; y = g; }
   return true;
 }
 const soilBurst = (x: number, y: number, z: number, n = 22): void => { fx.spray(new THREE.Vector3(x, y + 0.1, z), new THREE.Vector3(0, 1, 0), 'soil', n, 2.6); sound.thud(true); };
@@ -1666,11 +1677,28 @@ function ridePose(dt: number): void {
   seat.w = want > seat.w ? Math.min(want, seat.w + dt / 0.12) : Math.max(want, seat.w - dt / 0.16);
   seat.action.time = 0; seat.action.setEffectiveWeight(seat.w); if (seat.w > 0) g.suppress = Math.max(g.suppress, seat.w);
 }
-/** One substep of the stag's travel along its heading: the ground must be there within a step up (RIDE_STEP) or a drop (RIDE_DROP), and its body must be able to stand; refused ahead, it slides along x or z as her motor does, else it is stopped. */
+/** One substep of the stag's travel along its heading: the ground must be there within a step up (RIDE_STEP) or a drop (RIDE_DROP), and its body must be able to stand; refused ahead, it slides along x or z as her motor does, else it is stopped. Pass 4: into water it goes on down the bed (the drop rule holds), as long as the water is its to wade. */
 function moveStag(step: number): void {
   if (!stag || step <= 0) return; const s = stag, m = s.m, f = forwardOf(m.heading);
-  const tryTo = (x: number, z: number): boolean => { const y = stagGround(x, z, s.y); if (y === null || y - s.y > RIDE_STEP || s.y - y > RIDE_DROP || !stagCanStand(x, y, z)) return false; m.x = x; m.z = z; s.y = y; return true; };
+  const tryTo = (x: number, z: number): boolean => { const y = stagGround(x, z, s.y); if (y === null || y - s.y > RIDE_STEP || s.y - y > RIDE_DROP || !canWade(stagWade(x, z, y)) || !stagCanStand(x, y, z)) return false; m.x = x; m.z = z; s.y = y; return true; };
   const n = Math.max(1, Math.ceil(step / 0.25)); for (let i = 0; i < n; i++) { const d = step / n; if (!tryTo(m.x + f.x * d, m.z + f.z * d) && !tryTo(m.x + f.x * d, m.z) && !tryTo(m.x, m.z + f.z * d)) { m.speed *= 0.2; break; } }
+  s.wakeM += step;
+}
+/** Pass 4: the stag's pace where it stands, its gallop slowed by the water over its feet (mountModel.wadeFactor). */
+const stagPace = (top = MOUNT_SPEED): number => top * wadeFactor(stag?.wade ?? 0);
+/** Pass 4: the drive at the wade's pace: the water takes its speed at once (the drive's ease is for gathering speed, not for a river's drag), and it gathers it again as it comes out. Returns the step (m). */
+function driveWading(m: Mount, dt: number, want: { x: number; z: number } | null, amount: number, top = MOUNT_SPEED): number {
+  const pace = stagPace(top); let step = driveMount(m, dt, want, amount, pace);
+  if (m.speed > pace + 1e-6) { step *= pace / m.speed; m.speed = pace; }
+  return step;
+}
+/** Pass 4: whether the stag stands in water deeper than she wades (WADE_DEPTH): she is not set down there. */
+const stagInDeepWater = (): boolean => !!stag && stag.wade >= WADE_DEPTH;
+/** Pass 4: the nearest spot she can stand on from the stag, searched outward along its heading and across it (BANK_SEARCH_M at most): the bank, when it stands in the river. */
+function nearestBank(): [number, number] | null {
+  if (!stag) return null; const m = stag.m, f = forwardOf(m.heading), dirs = [f, { x: -f.x, z: -f.z }, { x: f.z, z: -f.x }, { x: -f.z, z: f.x }];
+  for (let r = 1; r <= BANK_SEARCH_M; r += 0.5) for (const d of dirs) { const x = m.x + d.x * r, z = m.z + d.z * r; if (standable(x, z)) return [x, z]; }
+  return null;
 }
 /** The ride, each frame in mode 'ride' (before the stag's own step): a bite or a faint knocks her off; the mount beat runs; then the stick drives the stag. */
 function rideFrame(sim: number): void {
@@ -1679,11 +1707,12 @@ function rideFrame(sim: number): void {
   if (village.hero.faint > 0 || (village.hero.down ?? 0) > 0 || village.hero.vigor < rideVigor - BITE_FELT) { knockOffMount(village.hero.faint > 0 ? 'faint' : 'bitten'); return; } rideVigor = village.hero.vigor;
   if (ride.stage === 'mount') { ride.t += sim; guardTapped = false; if (ride.t >= MOUNT_S) { ride.stage = 'ride'; ride.t = 0; } return; }
   if (ride.stage === 'vault') { ride.t += sim; moveStag(driveMount(stag.m, sim * 3, null, 0) / 3); if (!ride.dived && ride.t >= VAULT_S - VDIVE_S) ride.dived = !!moves?.press('dodge'); if (ride.t >= VAULT_S) landVault(); return; }
-  if (guardTapped) { guardTapped = false; if (stag.m.speed >= VAULT_SPEED && startVault()) return; dismount('button'); return; }
+  // Pass 4: in a river deeper than she wades, neither the vault nor the dismount sets her down.
+  if (guardTapped) { guardTapped = false; if (stagInDeepWater()) { say('not into the water', 2); return; } if (stag.m.speed >= VAULT_SPEED && startVault()) return; dismount('button'); return; }
   ride.t += sim; const g = player.gesture;
   let w: { x: number; z: number } | null = null, amount = 0;
   if (rideDrive && rideDrive.left > 0) { rideDrive.left -= sim; const l = Math.hypot(rideDrive.x, rideDrive.z) || 1; w = { x: rideDrive.x / l, z: rideDrive.z / l }; amount = 1; } else { if (rideDrive) rideDrive = null; const v = want(); if (v.lengthSq() > 0) { w = { x: v.x, z: v.z }; amount = Math.min(1, Math.hypot(g.x, g.y)); } }
-  moveStag(driveMount(stag.m, sim, w, amount));
+  moveStag(driveWading(stag.m, sim, w, amount));
 }
 /** The rapid dismount's start: a landing spot ahead of the stag's head that she can stand on, her dive begun. False (and nothing done) when there is none. */
 function startVault(): boolean {
@@ -1700,12 +1729,14 @@ function landVault(): void {
   const c = moves?.queue.current; if (c && c.move === 'dodge') dodge = { dx: f.x, dz: f.z, heading: m.heading, p: dodgeProgress(c.t) };
   stanceUntil = simSeconds + STANCE_S; fx.spray(new THREE.Vector3(to.x, to.y + 0.05, to.z), new THREE.Vector3(f.x, 0.4, f.z), 'soil', 8, 1.6); sound.thud(false);
 }
-/** She comes off: beside it (the button, a hit), or on her feet where it fell (a collapse, with the landing beat); the stag stands waiting. */
+/** She comes off: beside it (the button, a hit), or on her feet where it fell (a collapse, with the landing beat); the stag stands waiting. Pass 4: in a river deeper than she wades the button refuses; a knock-off or a collapse there sets her on the nearest bank. */
 function dismount(reason: 'button' | 'hit' | 'collapse' | 'faint'): boolean {
   if (mode !== 'ride' || !stag) return false; const m = stag.m, f = forwardOf(m.heading), left = { x: f.z, z: -f.x };
+  if (reason === 'button' && stagInDeepWater()) { say('not into the water', 2); return false; }
   const spots = reason === 'collapse' ? [[m.x, m.z], [m.x + left.x * 1.1, m.z + left.z * 1.1], [m.x - left.x * 1.1, m.z - left.z * 1.1], [m.x + f.x * 1.6, m.z + f.z * 1.6]] : [[m.x + left.x * 1.1, m.z + left.z * 1.1], [m.x - left.x * 1.1, m.z - left.z * 1.1], [m.x - f.x * 1.6, m.z - f.z * 1.6], [m.x + f.x * 1.6, m.z + f.z * 1.6]];
   let at: number[] | null = null; for (const s of spots) if (standable(s[0], s[1])) { at = s; break; }
   if (!at) { for (let r = 1.5; r <= 4 && !at; r += 0.5) for (let k = 0; k < 12 && !at; k++) { const a = (k / 12) * Math.PI * 2, x = m.x + Math.cos(a) * r, z = m.z + Math.sin(a) * r; if (standable(x, z)) at = [x, z]; } }
+  if (!at && stagInDeepWater()) at = nearestBank();
   if (!at) at = [m.x, m.z];
   ride = null; seat?.action.setEffectiveWeight(0); standOn(at[0], at[1], m.heading); player.pitch = Math.min(player.pitch, 0.12);
   if (reason === 'collapse') { landing = 0; sound.thud(false); } else if (reason === 'hit' || reason === 'faint') { landing = 0; moves?.flinch(); } else say('she slips down; the stag waits', 2.5);
@@ -1729,9 +1760,17 @@ function stagFrame(sim: number, dt: number): void {
       // Waiting, it follows her at a walk once she is FOLLOW_M off, and stops near; called, it runs to her and stops CALL_STOP_M off (a run that makes no way for CALL_STALL_S sinks and travels instead); the drive eases its speed either way.
       if (m.phase === 'up' && mode !== 'ride') {
         const d = Math.hypot(f.x - m.x, f.z - m.z), going = m.speed > 0.05;
-        if (m.called) { if (d <= CALL_STOP_M) { m.called = false; driveMount(m, sim, null, 0); } else { const was = m.speed; moveStag(driveMount(m, sim, { x: (f.x - m.x) / d, z: (f.z - m.z) / d }, 1, MOUNT_SPEED)); m.stalled = m.speed < Math.min(0.3, was * 0.5) && m.t > 0.5 ? m.stalled + sim : 0; if (m.stalled >= CALL_STALL_S) { sinkToTravel(m, { x: f.x, z: f.z }); soilBurst(m.x, s.y, m.z, 16); } } }
-        else if (d > FOLLOW_M || (going && d > FOLLOW_STOP_M)) moveStag(driveMount(m, sim, { x: (f.x - m.x) / d, z: (f.z - m.z) / d }, 1, FOLLOW_SPEED)); else driveMount(m, sim, null, 0);
+        // (Pass 4: a called run's step never carries it past CALL_STOP_M of her: a slow renderer's long frame would otherwise put it on her.)
+        if (m.called) { if (d <= CALL_STOP_M) { m.called = false; driveMount(m, sim, null, 0); } else { const was = m.speed; moveStag(Math.min(driveWading(m, sim, { x: (f.x - m.x) / d, z: (f.z - m.z) / d }, 1), Math.max(0, d - CALL_STOP_M))); m.stalled = m.speed < Math.min(0.3, was * 0.5) && m.t > 0.5 ? m.stalled + sim : 0; if (m.stalled >= CALL_STALL_S) { sinkToTravel(m, { x: f.x, z: f.z }); soilBurst(m.x, s.y, m.z, 16); } } }
+        else if (d > FOLLOW_M || (going && d > FOLLOW_STOP_M)) moveStag(driveWading(m, sim, { x: (f.x - m.x) / d, z: (f.z - m.z) / d }, 1, FOLLOW_SPEED)); else driveMount(m, sim, null, 0);
       }
+      // Pass 4: the water over its feet; wading at speed, spray at each flank and a stride's splash; the step into a river a bigger one.
+      { const was = s.wade; s.wade = m.phase === 'up' ? stagWade(m.x, m.z, s.y) : 0; const surface = s.y + s.wade, fw = forwardOf(m.heading), side = { x: -fw.z, z: fw.x };
+        if (s.wade > WAKE_FROM && m.speed > WAKE_SPEED) {
+          if (was <= WAKE_FROM) { fx.spray(new THREE.Vector3(m.x + fw.x * 0.6, surface, m.z + fw.z * 0.6), new THREE.Vector3(fw.x * 0.5, 1, fw.z * 0.5), 'water', 18, 3); sound.splash(true); s.splashT = 0; s.wakeM = 0; }
+          s.splashT += sim; if (s.splashT >= SPLASH_EVERY) { s.splashT = 0; sound.splash(false); }
+          if (s.wakeM >= WAKE_EVERY) { s.wakeM = 0; for (const k of [1, -1]) fx.spray(new THREE.Vector3(m.x + side.x * k * 0.45 - fw.x * 0.3, surface, m.z + side.z * k * 0.45 - fw.z * 0.3), new THREE.Vector3(side.x * k * 0.7 - fw.x * 0.5, 1, side.z * k * 0.7 - fw.z * 0.5), 'water', 4, 1.6 + m.speed * 0.15); }
+        } else { s.wakeM = Math.min(s.wakeM, WAKE_EVERY); s.splashT = SPLASH_EVERY; } }
       s.fig.update(m.x, s.y, m.z, m.heading, { phase: m.phase, t: m.t, speed: m.speed, still: m.still, health: m.health, bow: mode === 'ride' && ride?.stage === 'vault' ? 1 : 0 }, dt);
       if (mode === 'ride' && ride) {
         const sp = s.fig.saddle(stagV);
@@ -1755,12 +1794,16 @@ function stagFrame(sim: number, dt: number): void {
   for (const ev of ['pointerup', 'pointercancel', 'pointerleave'] as const) stagBtn.addEventListener(ev, e => { if (ev === 'pointerup') e.preventDefault(); if (hold) { clearTimeout(hold); hold = 0; if (!held && ev === 'pointerup') act(); } held = false; }); }
 const mountHandle = {
   summon: summonStag, mount: startMount, dismount: () => dismount('button'), /** Dev: a tap of guard while riding (the rapid dismount at a gallop). */ guardTap: () => { if (mode === 'ride') guardTapped = true; }, get stance() { return stanceUntil > simSeconds; }, call: callStag, dismiss: dismissStag, knockOffMount, canSummon: () => refuseSummon(summonCtx()), ctx: summonCtx, soil: soilAt, runnable: (x: number, z: number) => (stag ? runnableBetween({ x: stag.m.x, z: stag.m.z }, { x, z }) : false), get asset() { return !!stagAsset; },
-  get state() { return { stag: stag ? { ...stag.m, y: stag.y, triangles: stag.fig.triangles, meshes: stag.fig.meshes, kind: stag.fig.kind, lasts: lastsFor(depthOf(growthIdx, stag.m.x, stag.m.z)) } : null, ride: ride ? { ...ride, from: undefined } : null, mode, seat: seat?.w ?? 0, landing, riding: mode === 'ride' && ride?.stage === 'ride', vaulting: mode === 'ride' && ride?.stage === 'vault', her: herYaw, basket: basket.group.visible, driving: !!rideDrive && rideDrive.left > 0 }; },
+  get state() { return { stag: stag ? { ...stag.m, y: stag.y, wade: stag.wade, triangles: stag.fig.triangles, meshes: stag.fig.meshes, kind: stag.fig.kind, lasts: lastsFor(depthOf(growthIdx, stag.m.x, stag.m.z)) } : null, ride: ride ? { ...ride, from: undefined } : null, mode, seat: seat?.w ?? 0, landing, riding: mode === 'ride' && ride?.stage === 'ride', vaulting: mode === 'ride' && ride?.stage === 'vault', her: herYaw, basket: basket.group.visible, driving: !!rideDrive && rideDrive.left > 0 }; },
   /** Dev: drive the stag along (dx, dz) for `seconds` of the ride's clock, as the stick would. */
   ride: (dx: number, dz: number, seconds: number) => { rideDrive = seconds > 0 ? { x: dx, z: dz, left: seconds } : null; },
   /** Dev: set the stag's state (health, phase, t, or where it stands: it is put on the ground there), freeze its clock (for a still of the rise), the constants. */
   set: (p: Partial<Mount>) => { if (stag) { Object.assign(stag.m, p); if (p.x !== undefined || p.z !== undefined) stag.y = stagGround(stag.m.x, stag.m.z) ?? relief(stag.m.x, stag.m.z); } }, set frozen(v: boolean) { stagFrozen = v; }, get frozen() { return stagFrozen; },
-  constants: { VAULT_SPEED, SUMMON_SAP, MOUNT_SPEED, FOLLOW_SPEED, FOLLOW_M, CALL_RUN_M, CALL_STOP_M, CALL_SPEED, SINK_S, SURFACE_S, RIDE_STEP, MOUNT_REACH, MOUNT_S, RISE_AHEAD, HEALTH: STAG_HEALTH, DRAIN: STAG_DRAIN, walk: WALK_SPEED },
+  /** Pass 4 (dev): the water over the stag's feet (m) and whether she may be set down where it stands. */
+  get wade() { return stag?.wade ?? 0; }, get deepWater() { return stagInDeepWater(); }, water: (x: number, z: number) => plateau(home.seed).water(x, z),
+  /** Dev: the line from (ax, az) to (bx, bz) as `runnableBetween` reads it, sample by sample (its ground, the water over it, whether the stag can stand, the drop from the last), for the checks' diagnostics. */
+  probeLine: (ax: number, az: number, bx: number, bz: number, every = RUN_SAMPLE_M) => { const d = Math.hypot(bx - ax, bz - az), n = Math.max(1, Math.ceil(d / every)), out: { x: number; z: number; g: number | null; wade: number; stand: boolean; drop: number }[] = []; let y = stagGround(ax, az) ?? relief(ax, az); for (let i = 0; i <= n; i++) { const x = ax + (bx - ax) * i / n, z = az + (bz - az) * i / n, g = stagGround(x, z, y); out.push({ x: +x.toFixed(2), z: +z.toFixed(2), g: g === null ? null : +g.toFixed(2), wade: g === null ? 0 : +stagWade(x, z, g).toFixed(2), stand: g !== null && stagCanStand(x, g, z), drop: g === null ? 0 : +(g - y).toFixed(2) }); if (g !== null) y = g; } return out; },
+  constants: { VAULT_SPEED, SUMMON_SAP, MOUNT_SPEED, FOLLOW_SPEED, FOLLOW_M, CALL_RUN_M, CALL_STOP_M, CALL_SPEED, SINK_S, SURFACE_S, RIDE_STEP, MOUNT_REACH, MOUNT_S, RISE_AHEAD, STAG_WADE_DEPTH, STAG_WADE_SLOW, WADE_DEPTH, HEALTH: STAG_HEALTH, DRAIN: STAG_DRAIN, walk: WALK_SPEED },
 };
 // ===== end of the mount =====
 if (PRACTICE) startPractice();

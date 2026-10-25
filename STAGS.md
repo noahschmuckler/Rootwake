@@ -210,3 +210,65 @@ Built by the creature session (the land session handed it the whole batch):
 **Open for Noah:** `VAULT_SPEED`; whether the vault should cost anything (sap, or the stag's health); the camera after the vault (it stays behind
 her, so for a moment it can sit inside the stag's body); `STACK_CAP` 12 and whether the basket should hold mixed kinds; whether taking from
 another village should cost it something (a trade, its goodwill), the next step for the economy.
+
+## The mount, pass 4 (2026-10-25): rivers
+
+Noah: "I want the stag to be able to cross rivers."
+
+Until now the rivers refused the stag as they refuse her (`walkable`: water only under her `WADE_DEPTH` 0.35, a ford's shallows), so a ride
+met a river at its fords, stones and bridges, and a call with a river between sank and travelled. Built (the land session):
+
+- **It wades every river, anywhere along it.** Water up to **`STAG_WADE_DEPTH` 2.2 m** over its feet is its to cross: the rivers' beds are
+  `RIVER_DEPTH` 1.6 under the surface at the channel's middle (and the channel carves 0.15 more), so no river refuses it; the lake
+  (`LAKE_DEPTH` 9) still does: it does not swim. Its body goes down the bed (its feet follow the ground under the water as they follow
+  any ground, `stagGround`; so in the shallows it is hoof-deep, at a river's middle in to the belly and past it), and it is **slowed by the
+  depth**: its pace is `MOUNT_SPEED` × `wadeFactor(depth)` (`mountModel.ts`, pure), 1 on dry ground falling in a line to **`STAG_WADE_SLOW`
+  0.45** at `STAG_WADE_DEPTH` (belly-deep in a river's middle, about 1.6 m, it keeps 0.6 of its gallop, 5.4 m/s, still twice her walk; a
+  ford hardly slows it). The water takes its speed at once as it goes in (`driveWading`: the drive's target is the wade's pace and the speed is
+  clamped to it, so a slow renderer's long frame does not carry it through a narrow river at the gallop) and it gathers its gallop again as it
+  comes out (the drive's `ACCEL` ease). The land's rule is the one she uses with the stag's depth in place of hers (`plateauModel.walkable(p, x, z, wade)`;
+  `village.ts`'s ground world reads a `wadeLimit` that `stagCanStand` sets for its own call), so the houses, the trunks, a yard's walls and the
+  belt refuse it as before. The meadow's stream (`villageModel.inWater`), whose depth the land does not model, counts `STREAM_DEEP` 0.25.
+  Her seat is unchanged: she sits the saddle 1.32 m over its feet, over the water at any depth it wades.
+- **A wake and splashes.** In water over `WAKE_FROM` 0.18 going faster than `WAKE_SPEED` 1.2 m/s, a few flecks of spray (`hitFx` kind
+  `'water'`, new: pale, a little of the river's blue-green) fly up and out at each flank at the surface every `WAKE_EVERY` 0.75 m of its way,
+  and a stride's splash sounds every `SPLASH_EVERY` 0.55 s (`FightSound.splash()`, new: a wet bandpass hiss, with a plunge's thump when
+  `heavy`); the step into a river (from shallower than `WAKE_FROM`) is a bigger spray ahead of its chest and the heavy splash.
+- **The call** (`runnableBetween`): river water (depth ≤ `STAG_WADE_DEPTH`) no longer refuses the line, and the line is sampled every
+  `RUN_SAMPLE_M` 0.5 m (it was 1.5: the baked channel's banks fall about a metre a metre, and a sample straddling one read as a ledge over
+  `RIDE_DROP` that the ride's own 0.25 m substeps take in stride), so a call from across a river within
+  `CALL_RUN_M` (60 m) **runs**, wading over, at the wade's pace where it is deep; deeper water (the lake) still refuses, and beyond
+  `CALL_RUN_M` it sinks and travels as before (a called run's step is also clamped so it never carries the stag past `CALL_STOP_M` of her: on
+  SwiftShader's long frames it used to land on her). Following her at a walk it wades too (`FOLLOW_SPEED` × the factor).
+- **She is not set down in the water.** Where the stag stands in water deeper than her own `WADE_DEPTH` the button's dismount and the vault
+  are refused ("not into the water"); a knock-off (a bite, a faint, the tree stag) or a collapse there sets her on the **nearest bank**: the
+  nearest spot she can stand on, searched outward along the stag's heading and across it (`nearestBank`, `BANK_SEARCH_M` 40 m at most, after
+  the usual spots beside it fail). In the shallows she comes off as before.
+- **Summoning** is unchanged: not from water; it rises and surfaces on dry spots (`stagSpot`).
+- **Its health** in water neither drains nor heals, as on rock or a yard (pass 1's rule): a soil stag in a river is not worn by it.
+
+**Constants** (tuning, Noah's to change): `STAG_WADE_DEPTH` 2.2, `STAG_WADE_SLOW` 0.45 (`mountModel.ts`); `WAKE_FROM` 0.18, `WAKE_SPEED`
+1.2, `WAKE_EVERY` 0.75, `SPLASH_EVERY` 0.55, `STREAM_DEEP` 0.25, `BANK_SEARCH_M` 40, `RUN_SAMPLE_M` 0.5 (`village.ts`, the mount block).
+
+**Tests** (`tests/mount.test.ts`): the depths against the land's (`STAG_WADE_DEPTH` over the deepest bed, under the lake, over her
+`WADE_DEPTH`), `canWade`, `wadeFactor`'s line (1 dry, `STAG_WADE_SLOW` at the deepest and held there, half way between at half, a ford
+hardly slowing it, belly-deep still faster than her walk), the land's rule letting the stag through a real river's middle that refuses her
+and refusing both the lake, the drive easing to the wade's pace. **CI** (`browser-village-vista.mjs`, the mount block): the call across
+the river is two checks now, on the line x = 12 (x = 6, the old check's line, is the village's footbridge, whose deck the land's height reads,
+so a stag there never wades): set `CALL_RUN_M` + 20 m off it answers `travel` and surfaces beside her as before; set on the north bank, she
+on the south, a call answers `run` and the stag arrives beside her, having waded deeper than her `WADE_DEPTH` on the way (`state.stag.wade`,
+the water over its feet, read each frame while it runs) and never sunk to travel. Then, set in the river at its deepest and mounted, the
+dismount and a guard tap are refused and she rides on; knocked off, she is on the nearest bank, dry. The rides and the pass 3 vault are
+unchanged. Dev: `__village.mount.wade` (the water over its feet),
+`.deepWater` (whether she may be set down), `.water(x, z)` (the plateau's water), `state.stag.wade`, the constants.
+
+**Open for Noah.** Whether a soil stag should lose health in water, or dissolve a little at each crossing (not built: today a river neither
+drains nor heals it; a drain by depth, like the growth's, would make the lake's edge and the deep middle a cost); whether it should swim
+the lake (today the lake refuses it: `STAG_WADE_DEPTH` under `LAKE_DEPTH`; raising it past 9 would let it wade the lake's bed too, which
+is not swimming); the slow (`STAG_WADE_SLOW` 0.45 and the line to it, by feel: a current pushing it downstream is not built); the wake (a
+few flecks and a sound, no ripples on the water's surface: the water is the look's, and a ripple ring is the next thing to try); whether
+her feet, hanging at its flanks, should read as wet; that the plateau's `water(x, z)` reads the model's ground, a little under the baked bank's
+(the erosion), so by the banks it can name water, and a depth, where the drawn ground stands just over the water line (the stag's own `wade`
+reads the baked ground, so it is dry there; her `walkable` reads the model's depth, so a bank's last half metre can refuse her where it
+would not): a land thing, noted here because the knock-off's bank check met it; whether the dismount should instead set her on the bank from mid-river (today it
+refuses, she rides on); and the bank search's reach (40 m, more than any river is wide).

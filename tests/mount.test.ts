@@ -1,5 +1,6 @@
 import { test } from 'node:test'; import assert from 'node:assert/strict';
-import { refuseSummon, canSummon, summon, stepMount, lastsFor, drive, saddleAt, forwardOf, callMount, sinkToTravel, travelPoint, dismissMount, rideOut, drains, SUMMON_SAP, MOUNT_SPEED, WALK_SPEED, CALL_SPEED, CALL_RUN_M, SINK_S, SURFACE_S, HEALTH, DRAIN, HEAL, RISE_S, COLLAPSE_S, FADE_S, TURN_RATE, type SummonCtx } from '../src/mountModel';
+import { refuseSummon, canSummon, summon, stepMount, lastsFor, drive, saddleAt, forwardOf, callMount, sinkToTravel, travelPoint, dismissMount, rideOut, drains, canWade, wadeFactor, SUMMON_SAP, MOUNT_SPEED, WALK_SPEED, CALL_SPEED, CALL_RUN_M, SINK_S, SURFACE_S, HEALTH, DRAIN, HEAL, RISE_S, COLLAPSE_S, FADE_S, TURN_RATE, STAG_WADE_DEPTH, STAG_WADE_SLOW, type SummonCtx } from '../src/mountModel';
+import { RIVER_DEPTH, LAKE_DEPTH, WADE_DEPTH, FORD_DEPTH, plateau, walkable } from '../src/plateauModel';
 import { NORMAL_MOBILITY } from '../src/mobility';
 import { SNATCH_PACE } from '../src/villageModel';
 import { MILD_DEPTH } from '../src/contagionModel';
@@ -53,6 +54,22 @@ test('the call (pass 2): near over ground it can cross it runs; far, or with wat
   const g = summon(0, 0, 0); stepMount(g, RISE_S, 0, true); assert.ok(drains('travelling') && drains('surfacing') && !drains('rising'));
   sinkToTravel(g, { x: 90, z: 0 }); stepMount(g, SINK_S, 1, false); assert.ok(Math.abs(g.health - (HEALTH - DRAIN * SINK_S)) < 1e-9, 'sinking in the growth drains');
   g.health = 0.1; stepMount(g, g.travel!.seconds, 1, false); assert.equal(g.phase, 'surfacing'); assert.equal(stepMount(g, SURFACE_S, 1, false), 'collapsed', 'spent on the way: it collapses where it surfaces');
+});
+test('the rivers (pass 4, Noah: "I want the stag to be able to cross rivers"): it wades water to STAG_WADE_DEPTH, over the deepest river bed and under the lake, slowed by the depth to STAG_WADE_SLOW; the land\'s rule lets it through where it refuses her', () => {
+  assert.ok(STAG_WADE_DEPTH > RIVER_DEPTH + 0.15, 'deeper than any river bed (the channel carves RIVER_DEPTH and 0.15 more)'); assert.ok(STAG_WADE_DEPTH < LAKE_DEPTH, 'the lake still refuses it'); assert.ok(STAG_WADE_DEPTH > WADE_DEPTH, 'more than she wades');
+  assert.ok(canWade(0) && canWade(RIVER_DEPTH + 0.15) && canWade(STAG_WADE_DEPTH) && !canWade(STAG_WADE_DEPTH + 0.01) && !canWade(LAKE_DEPTH));
+  assert.equal(wadeFactor(0), 1, 'dry: its whole pace'); assert.equal(wadeFactor(-1), 1); assert.ok(Math.abs(wadeFactor(STAG_WADE_DEPTH) - STAG_WADE_SLOW) < 1e-9, 'at the deepest: STAG_WADE_SLOW of it'); assert.ok(Math.abs(wadeFactor(STAG_WADE_DEPTH * 10) - STAG_WADE_SLOW) < 1e-9, 'held there deeper');
+  const half = wadeFactor(STAG_WADE_DEPTH / 2); assert.ok(half < 1 && half > STAG_WADE_SLOW && Math.abs(half - (1 + STAG_WADE_SLOW) / 2) < 1e-9, 'falls linearly between'); assert.ok(wadeFactor(FORD_DEPTH) > 0.9, 'a ford hardly slows it');
+  assert.ok(STAG_WADE_SLOW > 0 && STAG_WADE_SLOW < 1); assert.ok(MOUNT_SPEED * STAG_WADE_SLOW > WALK_SPEED, 'even belly-deep it outpaces her walk');
+  // The land's rule with the stag's depth: a river's middle refuses her and not it; the lake refuses both.
+  const p = plateau(1); let river: { x: number; z: number } | null = null, lake: { x: number; z: number } | null = null;
+  for (const r of p.rivers) { const i = Math.floor(r.points.length / 2); const q = r.points[i], w = p.water(q.x, q.z); if (w && w.kind === 'river' && w.depth >= WADE_DEPTH && w.depth <= STAG_WADE_DEPTH) { river = q; break; } }
+  for (let a = 0; a < Math.PI * 2 && !lake; a += 0.3) { const r = (p.islandR + p.lakeR(a)) / 2, q = { x: p.centre.x + Math.cos(a) * r, z: p.centre.z + Math.sin(a) * r }, w = p.water(q.x, q.z); if (w && w.kind === 'lake' && w.depth > STAG_WADE_DEPTH) lake = q; }
+  assert.ok(river, 'a river\'s middle deeper than her wading and within the stag\'s'); assert.ok(lake, 'open lake deeper than the stag wades');
+  assert.ok(!walkable(p, river!.x, river!.z) && walkable(p, river!.x, river!.z, STAG_WADE_DEPTH), 'the river refuses her and lets the stag wade');
+  assert.ok(!walkable(p, lake!.x, lake!.z) && !walkable(p, lake!.x, lake!.z, STAG_WADE_DEPTH), 'the lake refuses both');
+  // Slowed in the drive: at the deepest the gallop eases to STAG_WADE_SLOW of MOUNT_SPEED.
+  const m = summon(0, 0, 0); stepMount(m, RISE_S, 0, true); for (let i = 0; i < 60; i++) drive(m, 0.1, { x: 0, z: 1 }, 1, MOUNT_SPEED * wadeFactor(STAG_WADE_DEPTH)); assert.ok(Math.abs(m.speed - MOUNT_SPEED * STAG_WADE_SLOW) < 0.05, `the wade's pace (${m.speed})`);
 });
 test('dismissed (pass 2): it sinks where it stands and is gone, no sap back; not while on its way', () => {
   const m = summon(3, 4, 1); stepMount(m, RISE_S, 0, true); assert.ok(dismissMount(m)); assert.equal(m.phase, 'sinking'); assert.ok(m.dismissed);
