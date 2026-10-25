@@ -224,8 +224,9 @@ met a river at its fords, stones and bridges, and a call with a river between sa
   any ground, `stagGround`; so in the shallows it is hoof-deep, at a river's middle in to the belly and past it), and it is **slowed by the
   depth**: its pace is `MOUNT_SPEED` × `wadeFactor(depth)` (`mountModel.ts`, pure), 1 on dry ground falling in a line to **`STAG_WADE_SLOW`
   0.45** at `STAG_WADE_DEPTH` (belly-deep in a river's middle, about 1.6 m, it keeps 0.6 of its gallop, 5.4 m/s, still twice her walk; a
-  ford hardly slows it). The water takes its speed at once as it goes in (`driveWading`: the drive's target is the wade's pace and the speed is
-  clamped to it, so a slow renderer's long frame does not carry it through a narrow river at the gallop) and it gathers its gallop again as it
+  ford hardly slows it). The water takes its speed at once as it goes in (`moveStag` reads the water over its feet at each 0.25 m substep and
+  clamps its speed to the pace there, the step left in the frame shrinking with it, so a slow renderer's long frame does not carry it through
+  a narrow river at the gallop; `driveWading` sets the drive's target to the pace where it stands) and it gathers its gallop again as it
   comes out (the drive's `ACCEL` ease). The land's rule is the one she uses with the stag's depth in place of hers (`plateauModel.walkable(p, x, z, wade)`;
   `village.ts`'s ground world reads a `wadeLimit` that `stagCanStand` sets for its own call), so the houses, the trunks, a yard's walls and the
   belt refuse it as before. The meadow's stream (`villageModel.inWater`), whose depth the land does not model, counts `STREAM_DEEP` 0.25.

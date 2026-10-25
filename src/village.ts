@@ -1692,16 +1692,19 @@ function ridePose(dt: number): void {
   seat.w = want > seat.w ? Math.min(want, seat.w + dt / 0.12) : Math.max(want, seat.w - dt / 0.16);
   seat.action.time = 0; seat.action.setEffectiveWeight(seat.w); if (seat.w > 0) g.suppress = Math.max(g.suppress, seat.w);
 }
-/** One substep of the stag's travel along its heading: the ground must be there within a step up (RIDE_STEP) or a drop (RIDE_DROP), and its body must be able to stand; refused ahead, it slides along x or z as her motor does, else it is stopped. Pass 4: into water it goes on down the bed (the drop rule holds), as long as the water is its to wade. */
-function moveStag(step: number): void {
+/** One substep of the stag's travel along its heading: the ground must be there within a step up (RIDE_STEP) or a drop (RIDE_DROP), and its body must be able to stand; refused ahead, it slides along x or z as her motor does, else it is stopped. Pass 4: into water it goes on down the bed (the drop rule holds), as long as the water is its to wade; the water over its feet is read at each substep, and takes its speed at once (its speed is clamped to `top` × wadeFactor, and the step left in this frame shrinks with it), so a long frame does not carry it through a river at the gallop. */
+function moveStag(step: number, top = MOUNT_SPEED): void {
   if (!stag || step <= 0) return; const s = stag, m = s.m, f = forwardOf(m.heading);
   const tryTo = (x: number, z: number): boolean => { const y = stagGround(x, z, s.y); if (y === null || y - s.y > RIDE_STEP || s.y - y > RIDE_DROP || !canWade(stagWade(x, z, y)) || !stagCanStand(x, y, z)) return false; m.x = x; m.z = z; s.y = y; return true; };
-  const n = Math.max(1, Math.ceil(step / 0.25)); for (let i = 0; i < n; i++) { const d = step / n; if (!tryTo(m.x + f.x * d, m.z + f.z * d) && !tryTo(m.x + f.x * d, m.z) && !tryTo(m.x, m.z + f.z * d)) { m.speed *= 0.2; break; } }
-  s.wakeM += step;
+  let left = step; while (left > 1e-6) {
+    const d = Math.min(0.25, left); if (!tryTo(m.x + f.x * d, m.z + f.z * d) && !tryTo(m.x + f.x * d, m.z) && !tryTo(m.x, m.z + f.z * d)) { m.speed *= 0.2; break; }
+    left -= d; s.wakeM += d; s.wade = m.phase === 'up' ? stagWade(m.x, m.z, s.y) : 0;
+    const pace = top * wadeFactor(s.wade); if (m.speed > pace + 1e-6) { left *= pace / m.speed; m.speed = pace; }
+  }
 }
 /** Pass 4: the stag's pace where it stands, its gallop slowed by the water over its feet (mountModel.wadeFactor). */
 const stagPace = (top = MOUNT_SPEED): number => top * wadeFactor(stag?.wade ?? 0);
-/** Pass 4: the drive at the wade's pace: the water takes its speed at once (the drive's ease is for gathering speed, not for a river's drag), and it gathers it again as it comes out. Returns the step (m). */
+/** Pass 4: the drive at the wade's pace: the drive's target is the pace where it stands (the water takes its speed at once in `moveStag`, and it gathers it again as it comes out by the drive's ease). Returns the step (m). */
 function driveWading(m: Mount, dt: number, want: { x: number; z: number } | null, amount: number, top = MOUNT_SPEED): number {
   const pace = stagPace(top); let step = driveMount(m, dt, want, amount, pace);
   if (m.speed > pace + 1e-6) { step *= pace / m.speed; m.speed = pace; }
@@ -1777,7 +1780,7 @@ function stagFrame(sim: number, dt: number): void {
         const d = Math.hypot(f.x - m.x, f.z - m.z), going = m.speed > 0.05;
         // (Pass 4: a called run's step never carries it past CALL_STOP_M of her: a slow renderer's long frame would otherwise put it on her.)
         if (m.called) { if (d <= CALL_STOP_M) { m.called = false; driveMount(m, sim, null, 0); } else { const was = m.speed; moveStag(Math.min(driveWading(m, sim, { x: (f.x - m.x) / d, z: (f.z - m.z) / d }, 1), Math.max(0, d - CALL_STOP_M))); m.stalled = m.speed < Math.min(0.3, was * 0.5) && m.t > 0.5 ? m.stalled + sim : 0; if (m.stalled >= CALL_STALL_S) { sinkToTravel(m, { x: f.x, z: f.z }); soilBurst(m.x, s.y, m.z, 16); } } }
-        else if (d > FOLLOW_M || (going && d > FOLLOW_STOP_M)) moveStag(driveWading(m, sim, { x: (f.x - m.x) / d, z: (f.z - m.z) / d }, 1, FOLLOW_SPEED)); else driveMount(m, sim, null, 0);
+        else if (d > FOLLOW_M || (going && d > FOLLOW_STOP_M)) moveStag(driveWading(m, sim, { x: (f.x - m.x) / d, z: (f.z - m.z) / d }, 1, FOLLOW_SPEED), FOLLOW_SPEED); else driveMount(m, sim, null, 0);
       }
       // Pass 4: the water over its feet; wading at speed, spray at each flank and a stride's splash; the step into a river a bigger one.
       { const was = s.wade; s.wade = m.phase === 'up' ? stagWade(m.x, m.z, s.y) : 0; const surface = s.y + s.wade, fw = forwardOf(m.heading), side = { x: -fw.z, z: fw.x };
