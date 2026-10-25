@@ -1778,8 +1778,8 @@ function stagFrame(sim: number, dt: number): void {
       // Waiting, it follows her at a walk once she is FOLLOW_M off, and stops near; called, it runs to her and stops CALL_STOP_M off (a run that makes no way for CALL_STALL_S sinks and travels instead); the drive eases its speed either way.
       if (m.phase === 'up' && mode !== 'ride') {
         const d = Math.hypot(f.x - m.x, f.z - m.z), going = m.speed > 0.05;
-        // (Pass 4: a called run's step never carries it past CALL_STOP_M of her: a slow renderer's long frame would otherwise put it on her.)
-        if (m.called) { if (d <= CALL_STOP_M) { m.called = false; driveMount(m, sim, null, 0); } else { const was = m.speed; moveStag(Math.min(driveWading(m, sim, { x: (f.x - m.x) / d, z: (f.z - m.z) / d }, 1), Math.max(0, d - CALL_STOP_M))); m.stalled = m.speed < Math.min(0.3, was * 0.5) && m.t > 0.5 ? m.stalled + sim : 0; if (m.stalled >= CALL_STALL_S) { sinkToTravel(m, { x: f.x, z: f.z }); soilBurst(m.x, s.y, m.z, 16); } } }
+        // (Pass 4: a called run's step never carries it past CALL_STOP_M of her, a slow renderer's long frame would otherwise put it on her; so it arrives a hair over CALL_STOP_M, and the stop allows the hair.)
+        if (m.called) { if (d <= CALL_STOP_M + 0.02) { m.called = false; driveMount(m, sim, null, 0); } else { const was = m.speed; moveStag(Math.min(driveWading(m, sim, { x: (f.x - m.x) / d, z: (f.z - m.z) / d }, 1), Math.max(0, d - CALL_STOP_M))); m.stalled = m.speed < Math.min(0.3, was * 0.5) && m.t > 0.5 ? m.stalled + sim : 0; if (m.stalled >= CALL_STALL_S) { sinkToTravel(m, { x: f.x, z: f.z }); soilBurst(m.x, s.y, m.z, 16); } } }
         else if (d > FOLLOW_M || (going && d > FOLLOW_STOP_M)) moveStag(driveWading(m, sim, { x: (f.x - m.x) / d, z: (f.z - m.z) / d }, 1, FOLLOW_SPEED), FOLLOW_SPEED); else driveMount(m, sim, null, 0);
       }
       // Pass 4: the water over its feet; wading at speed, spray at each flank and a stride's splash; the step into a river a bigger one.
