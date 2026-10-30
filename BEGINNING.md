@@ -43,14 +43,21 @@ original study) and no seasons.
   ignition. Fire clears undergrowth, flushes browse and berries, and renews the wood. It is a *good* disturbance, the
   Eden's own. **Proposal:** the first thing Petal tempts the player to do is suppress or misuse fire, so the
   ecology's own keystone becomes the first cost of advancement.
-- **Seasons.** The bear's once-a-season feast needs a clock. **Proposal:** spring fish run at the fords, summer
-  berries and the bog, autumn mast and the spawning fish, winter denning with no feast. That is three feasts, not
-  four. **Open:** does the bear feast in winter, or does the fourth "season" differ?
+- **Seasons (Noah, 2026-10-29): winter is the bear's rest.** The bear feasts once in each of the other three
+  seasons and sleeps through winter. **Proposal for the feasts:** spring fish run at the fords, summer berries and
+  the bog, autumn mast and the spawning fish. Winter is the quiet season for everyone: the bear denned, the
+  hobbits indoors on their stores, the pack leaner. A season is also the natural clock for the bear's waking, so it
+  needs the village entry's day count to grow a calendar.
 - **Mast years.** Acorn crops swing boar, deer and turkey, which swings the wolves, which gives you predator-prey
   cycles without scripting them.
-- **Scale warning.** The world is human-scale (`STAG_HEIGHT` is 1.9 m); the hobbits are 0.46 m. Real-size wolves,
-  deer and bears are enormous beside them. **Open:** are the fauna sized to the world or to the hobbits? Keeping real
-  size makes every animal awe-inspiring at hobbit eye level and makes the thunderbird a true terror.
+- **Scale (Noah, 2026-10-29): the fauna are sized to the world**, not to the hobbits. The world is human-scale
+  (`STAG_HEIGHT` is 1.9 m) and the hobbits are 0.46 m, so a wolf's shoulder stands above a hobbit's head and the
+  bear and thunderbird are vast beside them. Consequences to design for:
+  - Every predator is a real threat to a hobbit, not only to the goats, which is why the hobbits keep a respectful
+    distance from the apex animals and read their signs. The existing rule that wolves "weaken and do not kill"
+    (`villageModel.ts`) will need a second look once they are archetypal rather than raiders.
+  - **Open:** how large is the thunderbird? A real eagle's wingspan is about 2 m; a thunderbird that can carry a
+    deer, and whose shadow crosses a village, is several times that.
 
 ## The hobbits at the start (Noah)
 
@@ -103,8 +110,16 @@ waved away.
   at a distance. Infants and children are the same body at smaller scale.
 - **Comedy** lives in the walk (waddle, short stride, arms swinging wide), the idle, and the face.
 
-**Open:** are the women bearded, or is the hair mass everywhere? Is the 0.46 m height kept? Do the villagers keep
-today's clothes over the fur or go bare, as the dwarf does?
+**Decided (Noah, 2026-10-29): everyone is hairy and nobody wears clothes**, as the dwarf does. So the hair mass is
+on every hobbit, women and children included, and the clothed figures (the leaf-and-cloth `createHulda` colours the
+hobbits use today) are retired. Consequences:
+- Fur carries the identity: hair colour, length and cut, and the nose and skin tint, are all that tell eight to
+  twenty-four folk apart at a distance, so the variety has to be generous.
+- Winter warmth comes from fur and from the fire, so the fire and the wood store matter to the village in the cold
+  season.
+- Carried things (the basket, torch, spear, pail) become the only "costume", which makes them read at a glance.
+
+**Open:** is the 0.46 m height kept now that the fauna are sized to the world?
 
 ## How the Eden breaks (sketch, for later)
 
