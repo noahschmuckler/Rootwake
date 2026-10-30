@@ -114,6 +114,29 @@ Noah asked for a reminder of the distinction ("levers"; the book's word is **lea
   **taker-scale civilization that still keeps the leaver's law**: growth without denying anyone their food. That is a clear
   description of your "perfect magitech utopia," and the failed states (cyberpunk, pirates) are takers who broke the law.
 
+## The first taker quest (Noah's idea, 2026-10-29)
+
+- **Noah:** the hobbits can be **hunter-gatherers who hunt only enough to survive.** A quest asks the hunters to **overhunt the rabbit
+  warren** and **preserve the meat for winter in excess of what they need to maintain their population.** When the wolves come hungry,
+  the hobbits **fight them and kill them.** Noah asked whether this fits Quinn's definition.
+- **It fits, on both counts** (Claude's reading):
+  - *Surplus beyond need, stored, to grow the population* is the engine of totalitarian agriculture. Quinn's "food race": more
+    food, more people, which needs more food. The village already does this: a fed village gains a child every few days
+    (`wellFedDays`, `BIRTH_DAYS` in `villageModel.ts`).
+  - *Taking the competitor's food, then killing the competitor when it comes for it,* is the Law of Limited Competition broken
+    twice: the hobbits destroy the wolves' food (the same warren, `SETTLEMENTS.md` S1) and then hunt the wolves down. The wolves
+    come hungry **because of what the village did.**
+- **The line to make legible.** Quinn's leavers do preserve food, and drying meat for winter is not itself the fault. The fault is
+  quantity past need and denying others. So the game wants a visible "enough": the village's own need is computable (the
+  population's meals through the winter, `SETTLEMENTS.md`), and the quest is the first time the hunters are told to go **past it.**
+- **Proposal, the moral texture.** Fighting wolves that attack the village feels right and uses the existing combat, so the
+  player may not notice it as a fall until its effects show.
+- **Proposal, the cascade.** There is one archetypal pack (`BEGINNING.md`). Killing it removes the pressure on deer and boar,
+  which then overgraze, so the next mast fails and the other species slip. That is the Eden's first real imbalance, and it is
+  Hulda's own domain to restore ("the balance of creatures", `ADVERSARIES.md`), which fits "the mechanics emerge as the player
+  seeks to restore balance" (`VISION.md`).
+- **Effect on the open question below:** it points to **B**. Blood is not the break; the surplus and the war are.
+
 ## Open
 
 - **Which of A, B or C** (above) is the Eden's rule about killing? And does the first blood fall before or after she leaves the
