@@ -63,7 +63,10 @@ The catwalk letters are **reversed from the repo's current order.**
 - **The quests from Petal and the snerk together could be the inciting event that first breaks the Eden.** So the first thing the
   player does with the mountain's machinery is the thing that ends the peace.
 
-## The Eden breaks with a taste of blood (Noah's idea, 2026-10-29)
+## The Eden breaks with a taste of blood (Noah's idea, 2026-10-29; dropped the same day)
+
+**Superseded.** Noah dropped the vegetarian Eden after the leavers-and-takers discussion below: animals and hobbits hunt in the
+Eden, for need. The options are kept as history; the break moved to reproduction and surplus (see the two sections below).
 
 - **Noah:** in Eden there was no eating of meat, everything was vegetarian, and **the first taste of blood breaks it.** He is not
   sure whether that means the wolves are passive in some way, or the hobbits stop being vegetarian gatherers and make their first
@@ -131,17 +134,53 @@ Noah asked for a reminder of the distinction ("levers"; the book's word is **lea
   population's meals through the winter, `SETTLEMENTS.md`), and the quest is the first time the hunters are told to go **past it.**
 - **Proposal, the moral texture.** Fighting wolves that attack the village feels right and uses the existing combat, so the
   player may not notice it as a fall until its effects show.
-- **Proposal, the cascade.** There is one archetypal pack (`BEGINNING.md`). Killing it removes the pressure on deer and boar,
-  which then overgraze, so the next mast fails and the other species slip. That is the Eden's first real imbalance, and it is
+- **Proposal, the cascade.** There is one archetypal pack (`BEGINNING.md`). Killing it removes the pressure on what it eats; with
+  the fruiting creature (below) as the pack's staple, that means the endless meat fruit goes unchecked and "consumes everything".
+  That is the Eden's first real imbalance, and it is
   Hulda's own domain to restore ("the balance of creatures", `ADVERSARIES.md`), which fits "the mechanics emerge as the player
   seeks to restore balance" (`VISION.md`).
-- **Effect on the open question below:** it points to **B**. Blood is not the break; the surplus and the war are.
+- **Result (Noah, 2026-10-29): the vegetarian Eden is dropped.** That is option B above: blood is not the break; the surplus and
+  the war are.
+
+## The Eden before the fall has no children (Noah, 2026-10-29)
+
+- **Noah:** a second difference between the Eden before and after the fall is **reproduction.** The hobbits may have gone for
+  untold eons **without children.** The wolves too. The mammals do not reproduce.
+- **The rabbits become a fruit.** Rabbits **grow continuously like plants**, a kind of **meat fruit of the planet**, and multiply
+  without end. If it were not for the wolves, the hobbits and the other predators, they would consume everything. They are so
+  nutritious that the hobbits need only a small number, along with what they gather, to maintain themselves.
+- **Noah: this wants a different creature**, "more like a popping fungus", so the fruiting animals do not get confused with the
+  mammals (who do not reproduce).
+  - **Proposal, anchors:** (a) the *vegetable lamb of Tartary* (*barometz*), the medieval legend of a plant that bore lambs as its
+    fruit; (b) the real **hen-of-the-woods** (*Grifola*) and **chicken-of-the-woods** (*Laetiporus*), meaty fungi that grow at oak
+    bases and so belong to the Barrens' blackjack oaks; (c) a **puffball** that pops and releases. Any of these gives a creature that
+    is plainly not a mammal, so a mammal that does not reproduce stays clear. **Open:** which look and name?
+  - **Proposal, what it means for the code.** The warren already is a pool that regrows (`WARREN_CAP` 12, `WARREN_REGROW` 4 a day,
+    `villageModel.ts`) and that the pack eats first. This is a reskin of that pool, not a new system.
+- **Petal's first quest unlocks the drive (Noah).** Petal plays on the player's desire for the hobbits to have children, **something
+  the hobbits secretly wish for but do not know about**, and her first quest helps unlock it.
+- **Proposal, how the player comes to want it.** The pool's sight shows each creature's status (above). It could show a faint,
+  unnamed ache in the hobbits that the player sees and Petal then names. The player's yearning and the hobbits' hidden one rhyme.
+- **Proposal, the cost.** In the current build, infants are what the snatchers take and the sacs target (`MOTHER.md`, `D3`
+  in `villageModel.ts`). **With no children there is nothing for the mother to take.** The first wished-for gift is therefore also
+  the enemy's first handle, and Shub-Niggurath ("the mother of a thousand young", fecundity without end; `ADVERSARIES.md`) is the
+  counterpart of exactly this advance. The fruiting creature's endless multiplication is the same pattern, held in balance by
+  predation. That fits the cost-of-advancement rule precisely.
+- **Proposal, the causal chain.** Children, then more mouths, then hunting past need and storing a surplus, then the competitor's
+  food taken and the wolves killed (the first taker quest above), then the fruiting creature loses its predator and "consumes
+  everything" (Noah's own words). Each step is Quinn's food race made playable.
+- **Existing code to gate.** Births (`BIRTH_DAYS`, `wellFedDays`), the den's returning wolves and `PACK_GROW_DAYS` are the places
+  that would be switched off in the beginning state and on at the unlock.
 
 ## Open
 
-- **Which of A, B or C** (above) is the Eden's rule about killing? And does the first blood fall before or after she leaves the
-  spire through the first portal?
-- ~~Who speaks on D?~~ Decided below (Noah, 2026-10-29): a snerk.
+- ~~Which of A, B or C~~ Decided: B (the vegetarian Eden is dropped). **Still open:** does the first blood or the first child
+  come before she leaves the spire through the first portal?
+- **How far does "no reproduction" go?** Hobbits and wolves, said Noah. What of the deer, boar, bear and bobcats; and the
+  thunderbird and the fish, which are not mammals? If the deer do not breed, the wolves cannot hunt them without depleting them, so
+  in the beginning state the pack and the other predators would eat the fruiting creature, and the deer, boar and turkey in
+  `BEGINNING.md` would be a fixed, un-hunted number until the unlock. Is that right?
+- ~~Who speaks on D?~~ Decided above (Noah, 2026-10-29): a snerk.
 - **What the first quest asks.** Something small and teachable that fits the first layer (a browned-out station kept running with the
   board, `DESCENT.md` D3, is the existing idea).
 - **What the pool's sight gains from the first quest.** Range, new categories (the apex animals' dens, the ruins), or detail on
