@@ -103,10 +103,14 @@ mechanic beyond the stag's rise from soil, a camera with no interaction, and the
 player see the fungal cycles before disturbing them, so the later damage can be read. The earlier "task to activate instruments"
 sketch is replaced by this.)
 
+## The larger arc
+
+The stages that follow from this (observation as a deer, the hobbits' wish, the six masters, REVILED, the mother) are in `PROGRESSION.md`.
+
 ## Open
 
-- **Which deer become flesh, and how does the player see the change?** (Does a spirit deer keep its look of soil and branches while a
-  flesh deer looks natural?)
+- ~~Which deer become flesh?~~ **Noah:** spirit deer are soil and branches; flesh deer look like natural deer. Which deer change, and
+  when, is still open.
 - **Does the hobbits' first overharvest come from the player's hand or the hobbits'?** Is the "enough" line visible?
 - **What do wolves do while hungry and not yet attacked?** Do they go for the hobbits' stores, the boar, or each other?
 - **What does the bear do to the village's claims?** Does a claimed berry patch draw it, or only the total harvest?
