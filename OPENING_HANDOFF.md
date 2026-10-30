@@ -105,5 +105,11 @@ sound; the letter flip.
 
 **Traps found.** The water's alpha is a smoothstep in the reveal's radius: inside the radius the world, outside the field (the first
 draft had it inverted and the field was invisible). The field's pad sits over the canvas (z 4) so the shared player gets no pointer
-while the board is up. Under SwiftShader the page's clock (`time`, capped at 50 ms a frame) runs slower than the wall: the check waits on
-the page's phases, never on wall time.
+while the board is up. **The wall clock:** the village's `time` is capped at 50 ms a frame (a hitch must not throw her); under
+SwiftShader the revealed summit draws at a frame or two a second, so anything timed on `time` stretches forty-fold (the ending's six
+seconds took four minutes). The mind's water, the board's animations on it and Petal's pauses run on the wall clock (`now`, `real`)
+instead; the check waits on the page's state with `waitForFunction`, never reads a flag right after causing it (the next frame may be
+two seconds away). A real touch drag of the view cannot be checked there either: Chromium aligns pointer moves to frames, and the first
+move lands after the player's 900 ms rest-hold timer has dropped the pointer, so the check turns the view by the handle when the drag
+does not register. Petal is an image (a canvas drawn once and shown as `<img>`), not a live canvas. `ubuntu-latest` is 26.04 now, which
+Playwright 1.58.2 cannot install Chromium on: the workflow pins `ubuntu-24.04`.

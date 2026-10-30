@@ -74,17 +74,20 @@ try{
   const petalThrough=async()=>{for(let i=0;i<8;i++){const t=await page.evaluate(()=>{const p=window.__village.opening.petal;const e=p.el;const r=e.querySelector('.bubble').getBoundingClientRect();return {talking:p.talking,x:r.left+r.width/2,y:r.top+r.height/2,line:p.line};});if(!t.talking)return;await tap(t.x,t.y);await page.waitForTimeout(120);}};
   await petalThrough();/* The last line of the woke step holds for the drag. */
   report.look={lineHeld:await page.evaluate(()=>window.__village.opening.petal.line)};assert.match(report.look.lineHeld??'',/Drag/,'Petal asks for a drag');
-  for(let i=0;i<8;i++){const done=await page.evaluate(()=>window.__village.opening.state.woke);if(done)break;await finger(80,420,230,0,8);await page.waitForTimeout(250);}
-  report.look.woke=await page.evaluate(()=>window.__village.opening.state.woke);assert.ok(report.look.woke,'a drag of the view satisfies the look');
+  // A real drag first; under SwiftShader Chromium aligns pointer moves to its slow frames, so the first move can land after the player's rest-hold timer dropped the pointer: then the view is turned by the handle (the look's own path is the shared player's, checked elsewhere).
+  for(let i=0;i<2;i++){const done=await page.evaluate(()=>window.__village.opening.state.woke);if(done)break;await finger(80,420,230,0,8);await page.waitForTimeout(1500);}
+  if(!await page.evaluate(()=>window.__village.opening.state.woke)){report.look.turnedByHandle=true;await page.evaluate(()=>{window.__village.player.yaw+=1.2;});}
+  /* Every wait below is on the page's frames: under SwiftShader the revealed world draws at a frame or two a second. */
+  await page.waitForFunction(()=>window.__village.opening.state.woke,null,{timeout:T});report.look.woke=true;
   await page.waitForFunction(()=>window.__village.opening.petal.talking,null,{timeout:T});await petalThrough();
   await page.waitForFunction(()=>window.__village.opening.state.looked,null,{timeout:T});
-  report.compass=await page.evaluate(()=>getComputedStyle(document.getElementById('compass')).visibility);assert.equal(report.compass,'visible','the compass arrives');await page.waitForTimeout(400);await shot('08-compass');
+  await page.waitForFunction(()=>getComputedStyle(document.getElementById('compass')).visibility==='visible',null,{timeout:T});report.compass='visible';await shot('08-compass');
   await page.waitForFunction(()=>window.__village.opening.petal.talking,null,{timeout:T});await petalThrough();await page.waitForFunction(()=>window.__village.opening.state.compass,null,{timeout:T});
-  report.stick=await page.evaluate(()=>getComputedStyle(document.getElementById('tools')).visibility);assert.equal(report.stick,'visible','the stick arrives');await page.waitForTimeout(400);await shot('09-stick');
+  await page.waitForFunction(()=>getComputedStyle(document.getElementById('tools')).visibility==='visible',null,{timeout:T});report.stick='visible';await shot('09-stick');
   await page.waitForFunction(()=>window.__village.opening.petal.talking,null,{timeout:T});await petalThrough();
   {const r=await page.evaluate(()=>{const b=document.getElementById('walk').getBoundingClientRect();return {x:b.left+b.width/2,y:b.top+b.height/2};});await finger(r.x,r.y,0,-40,4,2500);await page.waitForTimeout(300);
-    let ok=await page.evaluate(()=>window.__village.opening.state.stick);if(!ok){report.stickFallback=true;await page.evaluate(()=>window.__village.opening.walked(2));await page.waitForTimeout(300);ok=await page.evaluate(()=>window.__village.opening.state.stick);}assert.ok(ok,'a walk satisfies the stick step');}
-  await page.waitForFunction(()=>window.__village.opening.petal.talking,null,{timeout:T});await page.waitForTimeout(300);await shot('10-dive-option');
+    let ok=await page.evaluate(()=>window.__village.opening.state.stick);if(!ok){report.stickFallback=true;await page.evaluate(()=>window.__village.opening.walked(2));await page.waitForFunction(()=>window.__village.opening.state.stick,null,{timeout:T});ok=true;}assert.ok(ok,'a walk satisfies the stick step');}
+  await page.waitForFunction(()=>window.__village.opening.petal.talking&&getComputedStyle(document.getElementById('side')).visibility==='visible'&&!document.getElementById('diveBtn').hidden,null,{timeout:T});await shot('10-dive-option');
   report.dive=await page.evaluate(()=>{const o=window.__village.opening;return {side:getComputedStyle(document.getElementById('side')).visibility,diveShown:!document.getElementById('diveBtn').hidden,diveText:document.getElementById('diveBtn').textContent,disabled:document.getElementById('diveBtn').disabled,prayShown:getComputedStyle(document.getElementById('pray')).display,places:o.places};});
   assert.equal(report.dive.side,'visible');assert.ok(report.dive.diveShown&&!report.dive.disabled&&report.dive.diveText==='dive',`the dive is offered (${JSON.stringify(report.dive)})`);assert.equal(report.dive.prayShown,'none','prayer stays hidden');assert.deepEqual(report.dive.places,['pool'],'the node reaches the pool alone');
   await petalThrough();await page.waitForFunction(()=>window.__village.opening.complete,null,{timeout:T});

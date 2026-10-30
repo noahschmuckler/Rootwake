@@ -10,7 +10,8 @@ concurrency:
   cancel-in-progress: false
 jobs:
   study:
-    runs-on: ubuntu-latest
+    # Pinned: ubuntu-latest became 26.04 (2026-10), which Playwright 1.58.2 cannot install Chromium's dependencies on.
+    runs-on: ubuntu-24.04
     timeout-minutes: 40
     permissions:
       contents: write
