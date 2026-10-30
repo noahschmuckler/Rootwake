@@ -17,7 +17,14 @@ decisions; **Claude** lines are readings or notes on what exists; **Open** lines
   swipe.**
 - **It no longer needs to be angled or placed in the world.** On entering, **the world fades quickly** and a **background field fills
   the screen** for **strong contrast against the gems,** which are **cel shaded for visibility.**
-- A **numbered meter fills with each match.**
+- A **numbered meter fills with each match,** up to **full clarity points** (Noah: the matches fill the meter to its maximum).
+- **The background is her mind (Noah, 2026-10-30).** At first it is **roiling purple chaos:** a **water shader with highly disturbed,
+  chaotic waves,** lit by **erratically moving, pulsing, multicoloured lights.** As points accumulate, **the water settles, the lights
+  slow to a gentle steady rotation, and the colour settles to a gentle blue.**
+- **At maximum clarity** the board **fades rapidly** and **a single drop of water lands in the middle of the water field.** As the
+  **ripples spread outward, the backdrop fades to show the game world.**
+- **This is every meditation, not only the first (Noah):** whenever Hulda meditates for clarity, **the background shows how chaotic her
+  thoughts are and how they settle,** ending with the still water and the drop.
 - (Claude: this changes the current board, which is "scaled and lifted onto the phone's screen" over the world for meditation, cultivating
   and channelling (`VILLAGE_HANDOFF.md`, G4a). The same screen could serve all of those sessions, but Noah described the opening only.)
 
@@ -25,7 +32,7 @@ decisions; **Claude** lines are readings or notes on what exists; **Open** lines
 
 - **When clarity is full, she opens her eyes for the first time** atop the karst, **standing in the streaming heavenly water.**
   **Distant living things are faintly haloed.**
-- **Dragging on the screen moves the view. No UI is present.**
+- **Dragging on the screen moves the view. No UI is present.** **Petal tells her to look around by dragging her finger across the screen.**
 - Then, one at a time: **the compass appears; then the movement stick; then the dive options.**
 - **Absent at first:** prayer, fighting, guard, stag summoning.
 - (Claude: the pool's sight starts as halos and outlines, as `PLATEAU.md`'s water-droplet telescopes would show, without the
@@ -33,6 +40,7 @@ decisions; **Claude** lines are readings or notes on what exists; **Open** lines
 
 ## 4. Petal (Noah)
 
+- **Hulda's thoughts are the player's thoughts, unspoken.** She does not speak.
 - **The infant Delvira (Petal) appears in 2D,** smiling and speaking in **short sentences.**
 - She is **pleased that Hulda is awake.** She advises her to **look around and take in the world's beauty,** and **encourages her to
   dive to the first level.**
@@ -45,6 +53,8 @@ decisions; **Claude** lines are readings or notes on what exists; **Open** lines
   catwalk.**
 - **Exiting is as designed for level D** (`DESCENT.md`): a **snerk stands at a work station and greets her.** He **invites her to look
   into the work station.**
+- **Her dive brings her to the top layer, D,** which keeps its current design, except that **the area behind the snerk, his station, is
+  like Spock's desktop scope in Star Trek:** a hooded viewer she looks into.
 - **A button press shows a view through a dim tunnel, through the eyes of a deer that has risen from the soil and wanders about.**
 - The snerk **encourages her to look deeper, and she enters and embodies the deer.** (Then the observation stage in `PROGRESSION.md`.)
 
@@ -61,8 +71,10 @@ decisions; **Claude** lines are readings or notes on what exists; **Open** lines
 
 ## Open
 
-- **How many matches fill the first clarity?** (A number shown on the meter. The first session could be short.)
-- **When does Petal appear?** After the dive option, as Noah's order reads, or earlier, as the compass appears?
-- **Does she speak?** Petal's lines are short, but does Hulda answer?
-- **Does the board fade out after the first fill and return later,** or does the first session set how every session looks?
-- **What are the dive options at first?** Only the first level, or also the shrines (locked)?
+- **How many clarity points is the maximum for the first session,** and does the first board start already as a full grid or deal in?
+- **How chaotic is the background at each meditation?** Is its starting state set by her clarity at the time, by what she has seen, or by
+  how many threats are active?
+- **The drop and ripples:** does the world fade in under them from the middle outward, and is it the same on every later meditation?
+- **The first dive:** is D the only dive option at first, as the water bubble suggests?
+- **The scope:** does she see only the deer, or also controls (a dial for time of year, a record of what she has seen)?
+- **Where in the dark does the first match start,** and is there any sound?
