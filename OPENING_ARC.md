@@ -56,11 +56,69 @@ The catwalk letters are **reversed from the repo's current order.**
   counterpart (`VISION.md`). That lets Petal and the keepers want the same thing for different reasons, which is a good place for the
   player to feel the cost.
 
+## Who speaks first on D, and the inciting event (Noah, 2026-10-29)
+
+- **The first voice on D is a snerk.** It gives **technical instruction on how to operate the instruments on that level**, and
+  a **quest to activate them.**
+- **The quests from Petal and the snerk together could be the inciting event that first breaks the Eden.** So the first thing the
+  player does with the mountain's machinery is the thing that ends the peace.
+
+## The Eden breaks with a taste of blood (Noah's idea, 2026-10-29)
+
+- **Noah:** in Eden there was no eating of meat, everything was vegetarian, and **the first taste of blood breaks it.** He is not
+  sure whether that means the wolves are passive in some way, or the hobbits stop being vegetarian gatherers and make their first
+  hunted kill.
+- **This conflicts with `BEGINNING.md`**, where Noah specified the wolves hunting deer, boar and turkey, the bear feasting, and
+  the thunderbird taking fish. Both can stand only if the Eden is a **pocket** (`VISION.md`): a sheltered place with a different
+  law inside it than outside. **Open:** which of these do you want?
+  - **A. Nobody kills in the Eden.** Wolves, bobcats, the bear and the thunderbird eat plants (or are fed by the pocket). The
+    first kill, by anyone, is the break. `BEGINNING.md`'s predator table would be rewritten as a predator *potential*.
+  - **B. Predators hunt, as specced; the break is the hobbits' first hunt.** Blood is natural for the animals and a fall only
+    for the hobbits.
+  - **C. The pocket suppresses killing, and activating the instruments on D lifts the suppression.** The inciting event
+    (the snerk's quest) is then literally what lets hunger back in. Wolves are passive until the machinery wakes, and the first
+    kill (by wolf or hobbit) follows from the player's own act.
+  - **Proposal:** C joins your two ideas best, since it makes the snerk's quest the cause and keeps your ecology. It needs a
+    reason the instruments hold hunger (the karst "soaks up chaos"; hunger and fear are chaos's oldest forms, `DESCENT.md`).
+
+## Leavers and takers (Daniel Quinn, *Ishmael*, 1992)
+
+Noah asked for a reminder of the distinction ("levers"; the book's word is **leavers**) and how it might apply.
+
+- **Takers** are the "civilized" peoples, the culture that arose with the agricultural revolution about 10,000 years ago and
+  grew into today's globalized society. **Leavers** are everyone else, past and present. Takers believe the world was made for
+  humans and that they are the culmination of it; leavers "leave" the order of things alone.
+- **The Law of Limited Competition:** you may compete to the full extent of your capabilities, but you may not hunt down your
+  competitors, destroy their food, or deny them access to it. Species that break it risk extinction. Takers believe they are
+  exempt.
+- **Totalitarian agriculture:** food grown and locked up as a surplus that fuels population growth, and denies others a share.
+- **The Tree of the Knowledge of Good and Evil**, in the book's reading, is not moral knowledge in general. It is **taking the
+  power to decide which species live and which die.** Agricultural peoples do exactly that when they choose which organisms to
+  cultivate, displace or kill.
+- **Cain and Abel**, in the book, is the story of takers (Cain the farmer) wiping out leavers (Abel the herder) and taking their land.
+
+### How it applies here (Claude's reading, for Noah to accept or reject)
+
+- **The lens already fits your hobbits.** Foraging hobbits are leavers; the villages, stores and walls are the takers' way. Hulda
+  is the avatar of agriculture, so she is literally the taker's goddess. Your sense that she is moving them from leavers to takers is
+  the arc the book describes.
+- **Quinn would put the Fall somewhere other than the meat.** In the book, eating meat is not the sin (leavers hunt). The sin is
+  the **judgment**: deciding who is expendable, and denying a competitor its food. So a way to honour both Noah's vegetarian Eden and
+  the book is for the first blood to be **the first kill that is a verdict**: "this one may live and that one may not."
+- **The village mechanics already include taker acts.** The villagers hunt the same warren the wolves eat from and the village reads
+  over-hunting in wolf behaviour (`SETTLEMENTS.md`); the thorn hedge is raised across the wolves' run (`VILLAGE_HANDOFF.md`, G3b);
+  the granary stores a surplus. By the Law of Limited Competition each of those is a taker's move. They could be named as such in
+  play.
+- **Where the game parts from the book.** *Ishmael* treats the takers' story as the disaster. Your philosophy (`VISION.md`) says
+  the advance is necessary and that option 3 borrows from option 2 in proportion. So the game asks whether there can be a
+  **taker-scale civilization that still keeps the leaver's law**: growth without denying anyone their food. That is a clear
+  description of your "perfect magitech utopia," and the failed states (cyberpunk, pirates) are takers who broke the law.
+
 ## Open
 
-- **What breaks the Eden first?** Is it the first deepening (the first unlock, advancing Delvira's counterpart), or the portal out,
-  when a goddess begins walking among animals and hobbits that have never met her?
-- **Who speaks on D?** Does the droplet itself speak as a voice, or does it only set the scene for the keeper?
+- **Which of A, B or C** (above) is the Eden's rule about killing? And does the first blood fall before or after she leaves the
+  spire through the first portal?
+- ~~Who speaks on D?~~ Decided below (Noah, 2026-10-29): a snerk.
 - **What the first quest asks.** Something small and teachable that fits the first layer (a browned-out station kept running with the
   board, `DESCENT.md` D3, is the existing idea).
 - **What the pool's sight gains from the first quest.** Range, new categories (the apex animals' dens, the ruins), or detail on
