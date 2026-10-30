@@ -13,6 +13,10 @@ disturb it, and the mechanics arrive as she tries to restore it (`VISION.md`).
 
 ## The apex animals (Noah)
 
+> **Superseded in part (Noah, 2026-10-29): see `ECOLOGY.md`.** The wolves now eat only chicken-of-the-woods to start, deer and boar rise from
+> the soil and are not hunted at first, birds and fish are fungal, and the bear and thunderbird are singular failsafes that cull. The table
+> below is the first sketch.
+
 Each of these is **one individual or one pack**, an archetype of its kind, not a population of mobs.
 
 | Animal | Role | Does |
@@ -34,7 +38,7 @@ Each of these is **one individual or one pack**, an archetype of its kind, not a
   holds because she holds it, and a player who plays carelessly sees it start to slip.
 - **Open:** is the pack's range the whole plateau, and may it follow prey across the rivers' fords?
 
-## No reproduction in the Eden (Noah, 2026-10-29; details in `OPENING_ARC.md`)
+## No reproduction in the Eden (Noah, 2026-10-29; details in `OPENING_ARC.md` and `ECOLOGY.md`)
 
 The table above is the *creatures*; this is their rule. In the beginning state the mammals (hobbits, wolves and, by Noah, the
 rest to be decided) **do not have children**, and have not for untold eons. The prey base is a **fruiting creature that grows like a
