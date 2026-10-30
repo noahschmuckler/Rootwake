@@ -55,3 +55,9 @@
 #stag span{pointer-events:none}
 #rootTime{position:fixed;inset:0;z-index:3;pointer-events:none;opacity:0;background:radial-gradient(ellipse at 50% 50%,transparent 38%,#3c5a1499 78%,#1e3008e6 100%)}
 #rootTime svg{position:absolute;inset:0;width:100%;height:100%}
+/* O1 (OPENING_SEQUENCE.md §3): the opening entry's staged UI. Nothing at first; the compass, the stick and the dive option arrive in turn (the body's ui- classes); prayer, the fight, the guard and the stag wait for later chapters; the tips, names and readouts stay off. On the first fill the meditation panel is the meter alone. */
+body.opening #fight,body.opening #guard,body.opening #stag,body.opening #bars,body.opening #village,body.opening #clock,body.opening #prayer,body.opening #clarity,body.opening #tip,body.opening #banner,body.opening #timectl,body.opening #labels .name:not(.deep),body.opening #miracles,body.opening #perks,body.opening #pray,body.opening #cultivateBtn,body.opening #help,body.opening #view{display:none!important}
+body.opening #compass,body.opening #tools,body.opening #side{visibility:hidden!important}
+body.opening.ui-compass #compass,body.opening.ui-stick #tools,body.opening.ui-dive #side{visibility:visible!important}
+body.opening-first #meditate .title,body.opening-first #meditate button{display:none}
+body.opening #meditate{background:#0b191866}

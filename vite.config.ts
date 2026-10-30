@@ -29,7 +29,7 @@ export default defineConfig({
     target: 'es2022',
     rollupOptions: {
       // Two entries: the plateau (index.html) and the underworld (under.html).
-      input: { index: 'index.html', under: 'under.html', lab: 'lab.html', rootDiscovery: 'root-discovery.html', ravine: 'ravine.html', watershed: 'watershed.html', karst: 'karst.html', flow: 'flow.html', karstFlow: 'karst-flow.html', village: 'village.html', planet: 'planet.html', vista: 'vista.html', villageVista: 'village-vista.html', hulda: 'hulda.html', fight: 'fight.html', darkYoung: 'dark-young.html', direWolf: 'dire-wolf.html', descent: 'descent.html', parkour: 'parkour.html' },
+      input: { index: 'index.html', under: 'under.html', lab: 'lab.html', rootDiscovery: 'root-discovery.html', ravine: 'ravine.html', watershed: 'watershed.html', karst: 'karst.html', flow: 'flow.html', karstFlow: 'karst-flow.html', village: 'village.html', planet: 'planet.html', vista: 'vista.html', villageVista: 'village-vista.html', hulda: 'hulda.html', fight: 'fight.html', darkYoung: 'dark-young.html', direWolf: 'dire-wolf.html', descent: 'descent.html', parkour: 'parkour.html', opening: 'opening.html' },
     },
   },
 });
