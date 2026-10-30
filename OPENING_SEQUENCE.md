@@ -76,10 +76,9 @@ decisions; **Claude** lines are readings or notes on what exists; **Open** lines
 - **The world fades in from the middle outward** under the ripples, **the same on every later meditation.**
 - **At the scope she sees only the deer, for now.**
 - **Sound design comes later,** in earnest.
+- **Max clarity is 60** (`CLARITY_CAP` in `src/deepModel.ts` already is 60). **The first board deals in.** **D is the only dive option at
+  first.** **The water follows only her current clarity.**
 
 ## Open
 
-- **How many clarity points is the maximum for the first session,** and does the first board start as a full grid or deal in?
-- **The first dive:** is D the only dive option at first, as the water bubble suggests?
-- **What counts as "her clarity" on a later meditation:** the current value only, or does a long streak without meditating also
-  roughen the water?
+- Nothing is open for the first slice. Build scope and conventions are in `OPENING_HANDOFF.md`.
