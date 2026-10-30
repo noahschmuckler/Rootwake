@@ -56,8 +56,8 @@ original study) and no seasons.
   Eden's own. **Proposal:** the first thing Petal tempts the player to do is suppress or misuse fire, so the
   ecology's own keystone becomes the first cost of advancement.
 - **Seasons (Noah, 2026-10-29): winter is the bear's rest.** The bear feasts once in each of the other three
-  seasons and sleeps through winter. **Proposal for the feasts:** spring fish run at the fords, summer berries and
-  the bog, autumn mast and the spawning fish. Winter is the quiet season for everyone: the bear denned, the
+  seasons and sleeps through winter. **Decided (Noah, 2026-10-29, `ECOLOGY.md`): one food per season**: blueberries in spring, fish
+  in summer, acorns in autumn. Winter is the quiet season for everyone: the bear denned, the
   hobbits indoors on their stores, the pack leaner. A season is also the natural clock for the bear's waking, so it
   needs the village entry's day count to grow a calendar.
 - **Mast years.** Acorn crops swing boar, deer and turkey, which swings the wolves, which gives you predator-prey

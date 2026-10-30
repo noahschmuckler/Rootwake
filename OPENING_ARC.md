@@ -185,3 +185,10 @@ Noah asked for a reminder of the distinction ("levers"; the book's word is **lea
   board, `DESCENT.md` D3, is the existing idea).
 - **What the pool's sight gains from the first quest.** Range, new categories (the apex animals' dens, the ruins), or detail on
   status.
+
+## Update (Noah, 2026-10-29; `ECOLOGY.md`)
+
+The snerk on D gives a different first quest: **inhabit a deer.** Hulda rises from the soil as a deer and explores the world, unable to
+interact with it, to observe up close. The first blood is the death of a hungry wolf after the hobbits overharvest the
+chicken-of-the-woods. Wolves and hobbits are kin until the hobbits decide they deserve children at the wolves' expense. The bear and
+thunderbird carry off hobbit elders, but only once the emotional stakes are set.

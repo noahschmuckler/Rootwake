@@ -1,76 +1,114 @@
 # The Eden's ecology: fungus that walks, earth that walks, and the two failsafes
 
 Design discussion with Noah (2026-10-29), a draft spec, not a pass. Nothing here is built. It replaces the creature table in
-`BEGINNING.md` for the beginning state, and builds on `OPENING_ARC.md` (no reproduction among the mammals; the meat-fruit). Lines
-marked **Noah** are his decisions; **Claude** lines are readings or proposals; **Open** lines wait on him.
+`BEGINNING.md` for the beginning state and builds on `OPENING_ARC.md`. Lines marked **Noah** are his decisions; **Claude** lines are
+readings or proposals; **Open** lines wait on him.
 
-## Two kinds of creature
+## Three kinds of creature
 
-The Eden has **fungal creatures**, which reproduce and are the only things ever eaten, and **earth-walkers**, which do not reproduce.
-(**Claude's reading:** this means everything with a mind is permanent, and everything that dies is a fungus. The beginning state is
-then vegetarian in effect.)
+- **Fungal creatures** (chicken-of-the-woods, birds, fish) reproduce, and are the Eden's meat.
+- **Spirit animals** (deer) are the earth itself walking. They eat nothing, are not hunted, and cannot bleed.
+- **Flesh** (hobbits, wolves, boar, bobcats) can bleed. In the initial state none of them reproduce, except where noted.
 
 ### The fungal creatures (Noah)
 
-| Creature | Appearance and life cycle |
+| Creature | Life cycle |
 |---|---|
-| **Chicken / hen of the woods** (the meat-fruit, replacing the rabbit) | Grows at tree bases; **various colourings, some like turkey tail.** Breaks free when mature and **waddles about eating grass and anything else in its path** until it attaches to another tree to rest. **Where it broke off, a new one grows.** |
-| **Birds** | Grow as **puffball-like** growths on **nest-shaped burls high in trees.** When one pops, **flying bird-like fungi** emerge and soar around like enormous spores. **Where they land they settle and start another nest-burl.** |
-| **Fish** | **Waterborne fungus.** Eddies in the river make bubbles; the bubbles **settle into opaque spheres adherent to the river's edge.** When mature the **fish-fungus emerge and swim to the lake,** **bind with fish from other rivers into larger salmon-like fish,** swim **upstream to eddies,** and **dissolve in the frothy water,** which restarts the cycle. |
+| **Chicken / hen of the woods** (the meat-fruit; replaces the rabbit) | Grows at tree bases, in many colourings, some like turkey tail. Breaks free when mature, waddles about eating grass and whatever is in its path, then attaches to another tree to rest. A new one grows where it broke off. |
+| **Birds** | Puffball-like growths on **nest-shaped burls** high in trees. A popped one releases flying bird-like fungi that soar like enormous spores; where they land they settle and start another nest-burl. |
+| **Fish** | Waterborne fungus. Bubbles in river eddies settle into opaque spheres on the river's edge. When mature the fish-fungi swim to the lake, bind with fish from other rivers into larger salmon-like fish, swim upstream to eddies, and dissolve in the froth, which restarts the cycle. |
 
-### The earth-walkers (Noah)
+### Spirit animals: the deer (Noah)
 
-- **Deer** rise from the soil **just as Hulda's stag does** (`STAGS.md`: a stag of soil, grass and branches). They are **the earth
-  "stretching its legs and walking around."** **Nothing hunts them at first.** They are **related to the snerks**, and **their designs
-  should align.**
-- **Boar** are **related to the greeblins**, and **their designs should align.**
-- **Deer and boar crave acorns but settle for chicken-of-the-woods and blueberries** (Claude's reading of "they": Noah named boar
-  just before; deer are the other candidate).
-- **Wolves** eat **only chicken-of-the-woods, to start.**
-- **Bobcats** catch **fish in the rivers**, and also **climb trees and catch birds**; they may **leap from one tree to the next to
-  catch a bird in flight.** They are **related to the Hollowed** and **share their design language.**
-- **Bear** hunt the **salmon-like fish swimming upstream.** **Bobcats** hunt the **smaller fish swimming downstream.**
+- Deer **rise from the soil like Hulda's stag**, wander at random, then **sink back into the soil.** They are the earth "stretching its
+  legs and walking around."
+- **They eat nothing, nothing hunts them, and they are not culled** in the initial state.
+- They are **related to the snerks**; their designs should align.
+- **Later, some deer become flesh,** more like natural deer, to counterbalance the wolves' hunger once the hobbits overharvest the
+  chicken-of-the-woods. (Claude: these would be the first deer that can be hunted, and the first that bleed.)
+
+### Flesh
+
+- **Boar** are related to the greeblins; designs align. **Only boar crave acorns,** and settle for chicken-of-the-woods and
+  blueberries. **They do not reproduce in the initial state.**
+- **Wolves** eat only chicken-of-the-woods, to start. **Wolves and hobbits are related** and may see each other as members of
+  different, coequal tribes.
+- **Bobcats** are related to the Hollowed and share their design language. They catch **fish in the rivers** (the smaller fish
+  swimming downstream), climb trees, and catch birds, sometimes leaping tree to tree to take one in flight.
+- All four **bleed.**
 
 ### Design alignment with the mountain's peoples (Noah)
 
-From `DESCENT.md`, the look of each people to align the animals with:
-
 - **Snerks** (deer): hunched; hooded purple cloak; long pink beak-nose; green face; a huge pack with a hanging lantern.
-- **Greeblins** (boar): green goblins with big ears and tusks. (Tusks already read as boar.)
-- **Hollowed** (bobcats): tall, gaunt, hooded and robed; a beaked mask; glowing red-orange eyes; grey clawed hands. (Claws, eyes and
-  a gaunt, hunting posture would carry across to a bobcat.)
-
-**Claude, how to read "related":** the plateau's animals share a source with the mountain's maintenance peoples, so the Eden's fauna
-read as grown by the same hand as the keepers on the catwalks. That would let a player who meets a snerk on D recognize the deer
-on the surface.
+- **Greeblins** (boar): green goblins with big ears and tusks.
+- **Hollowed** (bobcats): tall, gaunt, hooded and robed; a beaked mask; glowing red-orange eyes; grey clawed hands.
+- **Claude's reading of "related":** the plateau's animals share a source with the mountain's keepers, so a player who meets a snerk
+  on D can recognize the deer on the surface.
 
 ## The two failsafes (Noah)
 
-- **The bear is singular, as is the thunderbird.** They **maintain balance by culling any excess that the predator species fail to
-  hunt.**
-- **When birth is introduced, the bear and the thunderbird carry away the eldest members of a population to keep its numbers
-  low.** They are the **failsafes that maintain the Eden,** but **to the player they will seem like boss enemies to defeat.**
-- **Defeating them makes it possible for the hobbit population to grow,** but **moves toward awakening the mother** (Shub-Niggurath,
-  `MOTHER.md`) **as the symbol of unrestrained fecundity.**
+Both are singular. They cull whatever the predators fail to hunt, and to the player they will seem like boss enemies.
 
-### What follows (Claude's reading)
+### The bear: one food per season
 
-- **It is a real taker act.** Removing the culler means the player takes over the decision of who lives and who dies, which is the
-  Tree of Knowledge in Quinn's reading (`OPENING_ARC.md`). The alternative is to let the failsafes keep taking elders.
-- **It explains the hobbits' lost memory.** If the eldest are always carried away, no hobbit lives long enough to hold the old
-  knowledge, and everything before the present generation is legend. That fits Noah's earlier rule that none of them remember
-  anything beyond legends.
-- **Why the failsafes are mythic.** Their size and singularity (the thunderbird can carry a deer, `BEGINNING.md`) are what make them
-  look like bosses. The game asks the player to see that they are the Eden's immune system.
+| Season | The bear feasts on | Taken from |
+|---|---|---|
+| Spring | blueberries | hobbits, wolves, boar |
+| Summer | fish | hobbits, bobcats |
+| Autumn | acorns | hobbits, boar |
+| Winter | sleeps | (nothing) |
+
+- Each feast **removes a food source seasonally** from those who share it.
+- **As the hobbits expand and claim more of each food source, they risk conflict with the bear.** That is the pressure that sets up
+  the boss fight, before anyone has attacked it.
+- (Claude: this replaces the proposal in `BEGINNING.md` that the spring feast was the fish run at the fords.)
+
+### The thunderbird: the burn
+
+- The **more burls accumulate on a tree, the more likely the thunderbird takes flight.** It soars to the tree and **climbs vertically,
+  gathering thicker and thicker cloud until a thunderstorm forms** and lightning strikes the tree.
+- The forest fire **clears the burl-infested, chicken-of-the-woods-infested trees** and makes room for **acorn and pinecone saplings,**
+  which **mature by the next year** to host more chicken-of-the-woods and burl nests.
+- So the fire is a rotation, not a hazard: the fungus builds up, the bird burns it, the saplings restart it.
+- (Claude: it gives the player something legible to read, because a tree's burl count tells you where lightning will land. It also means
+  hobbits who harvest or plant near heavily burled trees are in the path of a storm.)
+
+### Culling elders (Noah)
+
+- **When birth exists, the bear and the thunderbird carry off the eldest members of a population** to keep it low, and that includes
+  **hobbit elders.**
+- This should happen **only once the emotional stakes are set,** so the player has to have come to care about particular hobbits first.
+- (Claude: this explains why no hobbit remembers anything before the present generation.)
+- Defeating them lets the hobbit population grow, but **moves toward awakening the mother** as the symbol of unrestrained fecundity
+  (`MOTHER.md`).
+
+## The fall, in order (Noah's sequence, Claude's arrangement)
+
+1. **Overharvest.** The hobbits take more chicken-of-the-woods than the web can replace, and the wolves go hungry. (Existing mechanics
+   this touches: warren and larder in `villageModel.ts`, `SETTLEMENTS.md`.)
+2. **First real blood.** A hungry wolf is killed. It is the first death of flesh in the Eden. Wolves and hobbits had been coequal
+   tribes, so it is a killing between kin.
+3. **The counterweight.** Some deer become flesh to feed the wolves' hunger.
+4. **The decision.** The hobbits "decide they deserve to have children at the expense of the wolves," which is the taker act in
+   `OPENING_ARC.md` (surplus, and war on a competitor).
+5. **Birth, and the culling.** Children exist; the bear and thunderbird begin to carry off elders once the player cares about them; the
+   hobbits' growth presses on the bear's foods.
+6. **The boss fights** are the way out of that, and their price is the mother.
+
+## The first quest changes (Noah)
+
+The snerk on D gives Hulda her first quest: **inhabit a deer.** She rises from the soil as a deer and explores the world **unable to
+interact with it,** observing up close. (Claude: this is the pool's-sight HUD from `OPENING_ARC.md` made physical, and it needs no new
+mechanic beyond the stag's rise from soil, a camera with no interaction, and the deer's random wander and sinking. It also lets the
+player see the fungal cycles before disturbing them, so the later damage can be read. The earlier "task to activate instruments"
+sketch is replaced by this.)
 
 ## Open
 
-- **Is first mammal blood now the break?** Everything predators eat is fungal, so the food web is vegetarian in effect. The first
-  time a deer, boar, wolf or hobbit is killed would then be the real first blood, which brings back the idea Noah dropped earlier
-  (`OPENING_ARC.md`) by another route. Does he want that, or is the break only reproduction, surplus and the war on the wolves?
-- **Do the failsafes carry away hobbit elders too,** or only the animal populations? (Dark, and it explains the lost memory; it
-  would also give the hobbits a reason to want the failsafes gone.)
-- **What happens to a deer or boar that is culled?** Does it return to the soil it rose from?
-- **What are the wolves, hobbits, boar and bobcats made of?** Deer rise from soil by Noah's statement; the others are not yet said.
-- **How the bear's three feasts and the salmon run line up** (`BEGINNING.md`: spring, summer, autumn feasts, winter rest). Does each
-  feast follow its own run up the rivers?
+- **Which deer become flesh, and how does the player see the change?** (Does a spirit deer keep its look of soil and branches while a
+  flesh deer looks natural?)
+- **Does the hobbits' first overharvest come from the player's hand or the hobbits'?** Is the "enough" line visible?
+- **What do wolves do while hungry and not yet attacked?** Do they go for the hobbits' stores, the boar, or each other?
+- **What does the bear do to the village's claims?** Does a claimed berry patch draw it, or only the total harvest?
+- **Does a hobbit elder's carrying-off happen on screen,** and how many hobbits must the player have known by name first?
+- **Winter.** The bear sleeps and the thunderbird? Does it still burn in winter?
