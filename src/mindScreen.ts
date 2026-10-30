@@ -36,7 +36,7 @@ export interface MindScreen {
   update(nowMs: number): void;
   render(renderer: THREE.WebGLRenderer): void;
   resize(): void;
-  /** Dev: the shader's uniforms. */ readonly uniforms: Record<string, THREE.IUniform>;
+  /** Dev: the shader's uniforms; the phases' pace (1 = real time; a slow renderer's check slows the ending to catch its beats). */ readonly uniforms: Record<string, THREE.IUniform>; timeScale: number;
   /** Dev: a swipe or a tap at screen pixels, as a finger would; where a cell's gem is on the screen (px). */ swipeAt(x: number, y: number, dx: number, dy: number): boolean; tapAt(x: number, y: number): boolean; cellScreen(cell: { row: number; col: number }): { x: number; y: number } | null;
 }
 
@@ -114,7 +114,7 @@ export function createMindScreen(opts: { meterHost?: HTMLElement; seed?: number 
   const style = document.createElement('style'); style.textContent = `#mindPad{position:fixed;inset:0;z-index:4;touch-action:none}#mindPad[hidden]{display:none}#mindMeter{display:flex;flex-direction:column;align-items:center;gap:4px;width:100%}#mindMeter b{font:600 15px/1 system-ui;letter-spacing:.5px;color:#eaf6ff;text-shadow:0 1px 6px #000}#mindMeter i{display:block;width:100%;height:7px;border-radius:4px;background:#ffffff22;overflow:hidden}#mindMeter i em{display:block;height:100%;width:0;border-radius:4px;background:linear-gradient(90deg,#b387f5,#5cb8f0 60%,#cfeeff);transition:width .25s}`; document.head.append(style);
   const pad = document.createElement('div'); pad.id = 'mindPad'; pad.hidden = true; document.body.append(pad);
   const meter = document.createElement('div'); meter.id = 'mindMeter'; const meterText = document.createElement('b'); const meterBar = document.createElement('i'); const meterFill = document.createElement('em'); meterBar.append(meterFill); meter.append(meterText, meterBar); if (opts.meterHost) opts.meterHost.insertBefore(meter, opts.meterHost.querySelector('button')); else { meter.style.cssText = 'position:fixed;z-index:8;left:50%;top:calc(env(safe-area-inset-top,0px) + 150px);transform:translateX(-50%);width:min(260px,70vw)'; document.body.append(meter); } meter.hidden = true;
-  let phase: MindPhase = 'off', phaseAt = 0, lastMs = 0, chaosWant = 1, chaos = 1, then: (() => void) | null = null, seed = opts.seed ?? 1;
+  let phase: MindPhase = 'off', phaseAt = 0, lastMs = 0, timeScale = 1, chaosWant = 1, chaos = 1, then: (() => void) | null = null, seed = opts.seed ?? 1;
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
   const rayAt = (x: number, y: number): THREE.Raycaster => { ndc.set(x / innerWidth * 2 - 1, -y / innerHeight * 2 + 1); ray.setFromCamera(ndc, camera); return ray; };
   let down: { id: number; x: number; y: number; at: number; done: boolean } | null = null;
@@ -136,7 +136,7 @@ export function createMindScreen(opts: { meterHost?: HTMLElement; seed?: number 
     if (phase === 'off') return;
     const dt = Math.min(0.1, Math.max(0, (nowMs - lastMs) / 1000)); lastMs = nowMs; uniforms.uTime.value += dt;
     chaos += (chaosWant - chaos) * Math.min(1, CHAOS_EASE * dt); uniforms.uChaos.value = chaos;
-    const t = (nowMs - phaseAt) / 1000;
+    const t = (nowMs - phaseAt) / 1000 * timeScale;
     board.update(nowMs);
     switch (phase) {
       case 'dark': { const k = Math.min(1, t / DRIFT_S); uniforms.uDark.value = 0.08 + 0.92 * k * k; if (!board.isBusy) { uniforms.uDark.value = 1; setPhase('play', nowMs); } break; }
@@ -154,7 +154,7 @@ export function createMindScreen(opts: { meterHost?: HTMLElement; seed?: number 
   function render(renderer: THREE.WebGLRenderer): void { if (phase === 'off') return; const ac = renderer.autoClear; renderer.autoClear = false; renderer.clearDepth(); renderer.render(scene, camera); renderer.autoClear = ac; }
   addEventListener('resize', resize);
   return {
-    board, camera, uniforms, get phase() { return phase; }, get active() { return phase !== 'off'; },
+    board, camera, uniforms, get timeScale() { return timeScale; }, set timeScale(k: number) { timeScale = Math.max(0.01, k); }, get phase() { return phase; }, get active() { return phase !== 'off'; },
     get covering() { return (phase === 'dark' || phase === 'play') && uniforms.uAlpha.value >= 1 || (phase === 'ending' && uniforms.uReveal.value <= 0); },
     get chaos() { return chaos; }, get chaosWant() { return chaosWant; },
     enter, end, leave, off, update, render, resize,

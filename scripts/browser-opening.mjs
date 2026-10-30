@@ -59,13 +59,14 @@ try{
   await page.waitForFunction(()=>window.__village.opening.mind.chaos<0.08,null,{timeout:T});
   report.settled=await page.evaluate(()=>{const o=window.__village.opening;return {chaos:o.mind.chaos,want:o.mind.chaosWant,clarity:o.clarity,phase:o.mind.phase};});assert.equal(report.settled.want,0);assert.equal(report.settled.phase,'play','still on the board at the cap until a run or done');
   await shot('03-water-settled-60');
-  await page.evaluate(()=>window.__village.opening.done());
+  /* The ending at a fifth of its pace here: under SwiftShader the revealed world draws a frame every second or two, and the reveal's two seconds would pass between frames. */
+  await page.evaluate(()=>{window.__village.opening.mind.timeScale=0.2;window.__village.opening.done();});
   await page.waitForFunction(()=>window.__village.opening.mind.phase==='ending',null,{timeout:T});
   await page.waitForFunction(()=>{const u=window.__village.opening.mind.uniforms;return u.uRipple.value>0.25;},null,{timeout:T});
   report.ending=await page.evaluate(()=>{const o=window.__village.opening,u=o.mind.uniforms;return {ripple:u.uRipple.value,reveal:u.uReveal.value,covering:o.mind.covering,mode:window.__village.mode};});assert.equal(report.ending.mode,'meditate','she waits through the ending');
   await shot('04-drop-ripple');
   await page.waitForFunction(()=>{const u=window.__village.opening.mind.uniforms;return u.uReveal.value>0.35&&u.uReveal.value<0.8;},null,{timeout:T});await shot('05-reveal-from-the-middle');
-  await page.waitForFunction(()=>window.__village.mode==='ground'&&window.__village.opening.state.opened,null,{timeout:T});
+  await page.waitForFunction(()=>window.__village.mode==='ground'&&window.__village.opening.state.opened,null,{timeout:T});await page.evaluate(()=>{window.__village.opening.mind.timeScale=1;});
   // 4. The summit: no UI; then Petal; then the look, the compass, the stick, the dive.
   report.summit=await page.evaluate(()=>{const v=window.__village,vis=id=>{const e=document.getElementById(id);if(!e)return null;const s=getComputedStyle(e);return s.display!=='none'&&s.visibility!=='hidden';};return {zone:v.karst.zone,step:v.opening.step,compass:vis('compass'),tools:vis('tools'),side:vis('side'),fight:vis('fight'),guard:vis('guard'),pray:vis('pray'),clarity:vis('clarity'),petal:v.opening.petal.talking};});
   assert.equal(report.summit.zone,'summit');assert.equal(report.summit.step,'woke');for(const k of ['compass','tools','side','fight','guard','pray','clarity'])assert.equal(report.summit[k],false,`${k} hidden on waking`);
