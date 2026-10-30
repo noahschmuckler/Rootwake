@@ -76,10 +76,13 @@ third because she writes after the thunderbird has taken an elder (steward or ma
 - It unlocks a **second tier of abilities** for the six masters and for Hulda, so they can **resist and defeat the thunderbird, the
   bear, the hostile wolves and the bobcats.** At its end **the villages are established in their places,** farming the world and
   growing quickly.
-- **Claude's observation, for Noah to check.** DELIVER ends in R and REVILED begins with R. If the column continues down from the R
-  catwalk, sharing it, the whole column reads **DELIVEREVILED**, thirteen letters, the same upward and downward, with R as the nadir.
-  Going down it reads DELIVER, then EVILED. It also fits the earlier ruling that going up reads REVILED. Whether the shared R is
-  intended, and whether the column has seven or thirteen catwalks, is Open. (`LETTERS` in `src/descentModel.ts` holds seven.)
+- **The column is thirteen catwalks and shares the R (Noah, 2026-10-30):** D E L I V E R E V I L E D, the same up and down, R the
+  nadir. Going down it reads DELIVER, then EVILED. The lower catwalks are **a tone, not the sephirot and shells directly.**
+  (`LETTERS` in `src/descentModel.ts` holds seven and needs to hold thirteen.)
+- **Claude's proposal: the lower half mirrors the upper.** Position *n* mirrors position 14 − *n*, so the lower catwalks are the
+  masters' second tiers in reverse: E (alchemist), V (smith), I (sage), L (mason), E (steward), then D at the very bottom, the mirror
+  of observation. The Artificer at R is the pivot. (Which second tier defeats which of the thunderbird, bear, watcher, hostile wolves
+  and bobcats is Open.)
 
 ## The mother: from failsafe to fail-state (Noah)
 
@@ -104,6 +107,56 @@ shown as unwanted mutations:** the problem is **stagnation,** with not much new 
 - **Further advancement needs another karst-plateau,** where a similar path plays out with an **enhanced tech tree unlocked by the
   civilizational hero there** and a **unique end-boss counterpoint.**
 
+## The Watcher in the water (Noah, 2026-10-30)
+
+- None of the creatures except the fish swim well, so the water front's ability needs a keeper. **Noah's idea: a watcher in the water**
+  that **slowly comes closer and grows more threatening the longer you, or anything, stands near the central lake.**
+- It **prevents overfishing.** Killing it **grants underwater breathing and swimming.**
+- (Claude: it makes the water the third failsafe beside the bear and the thunderbird, and it protects the summer fish run that the bear,
+  the bobcats and the hobbits all share. A first sign should be a ring of ripples that follows a fisher along the shore, and the dread
+  is the lake's pull rather than a monster that appears. Whether it is the mother's first tentacle seen early, or a failsafe in its own
+  right, is Open.)
+- **Abilities from the failsafes:** the thunderbird gives **flight;** the Watcher gives **swimming and breathing;** the underground
+  needs one. **Claude's proposal:** the bear's **den** is the way down. It sleeps through winter in a cave that opens into the old
+  ruins, so killing the bear opens the underground front instead of giving an ability.
+
+## Seasons: when each awakening comes
+
+**Noah: the quests decide, and the time of year matches the food needs.** Claude's proposal, from the food each revelation rides on:
+
+| Letter | Master | Season of the decisive step | Why |
+|---|---|---|---|
+| E | Steward | **spring** | the bear eats the blueberries, so the lean season sets parties against each other |
+| L | Mason | **autumn** | acorns and boar; huts before winter |
+| I | Sage | **winter** | the bear sleeps; the village is indoors, so there is time to write |
+| V | Smith | **summer** | storm and burn season; charcoal from the burnt trees |
+| E | Alchemist | **spring** | planting, and the spring melt in the eddies where the fish-fungus is born |
+| R | Artificer | **summer** | lightning, drawn from the thunderbird's storms |
+
+Spring and summer carry two each; autumn and winter one. (Open: even them out?)
+
+## The capstones (Claude's proposal)
+
+Each layer closes with a capstone: a lasting thing in the village that works without her. She can hold the layer's danger back by
+hand until then.
+
+| Master | Capstone | What it automates |
+|---|---|---|
+| **Steward** | **The tally.** Every hunting party swears the rotation at the stone, and Petal offers the Moloch stone's double harvest at a price. | The harvest rotates by itself and nobody races. |
+| **Mason** | **The first hut and its door.** The village sleeps under roofs, and the door-curve that seals a breach is built into every threshold. | Shelter, and the breach drill. |
+| **Sage** | **The first book.** A hobbit reads it aloud after the thunderbird takes an elder, with a gloss added. | Memory outlives any one elder. |
+| **Smith** | **The first copper tool and a shored gallery.** | Tools, with a limit to the digging. |
+| **Alchemist** | **The first field of fertilized grain behind a filter pond.** | Better yield, clean water. |
+| **Artificer** | **The first machine wired to the sage's book.** | Power that carries its own context. |
+
+## The first mushroom patch (Claude's proposal)
+
+- **Conditions:** (1) D is done: all four seasons observed. (2) She has brought the three foods, as deer, bobcat and boar. (3) She has
+  watched a hobbit eat well and sleep badly, the first restless night. (4) Her cultivation reaches the **line the pool shows** (a
+  tuning number, not spent).
+- **The act:** at dusk she comes to the stone as a spirit deer and lies down, and a patch sprouts at the hobbits' feet. The first vision
+  is the steward's. Later patches are the same act at the next layer's line.
+
 ## How this lands on what is built (Claude)
 
 - The pool's sight, deepening and cultivation tiers (G4a, G5) are the D stage's frame; the telescopes are a new look at an existing HUD.
@@ -115,10 +168,10 @@ shown as unwanted mutations:** the problem is **stagnation,** with not much new 
 
 ## Open
 
-- **Does the column share R and run to thirteen catwalks,** or is REVILED seven more of its own?
-- **Layers and the Tree.** Do the REVILED catwalks map onto the sephirot and their shells, or is the mirror only a tone?
-- **Season gates.** Is each master's awakening season-bound, or only the quest's decisive step? (Proposal: tie each to the food it
-  needs, e.g. steward to the spring blueberries, sage to winter's quiet.)
-- **Who takes which ability?** Does killing the thunderbird give flight, the bear swimming, and what gives the underground?
-- **The mushroom threshold.** What number, and which quest objectives, before she can sprout the first patch?
+- **Which second tier beats which threat** (thunderbird, bear, Watcher, hostile wolves, bobcats), and which is the capstone of D at the
+  bottom.
+- **The Watcher:** its own failsafe, or the mother's first tentacle? Its name?
+- **The bear's den as the underground's door:** does killing the bear open it, or is it open all along and dangerous?
+- **The seasons table:** does Noah want the masters spread evenly through the year?
 - **What the instruments reveal** at each observed behaviour, and how many behaviours are needed per season.
+- **The mushroom line:** what number, and does each layer set a higher one?
