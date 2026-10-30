@@ -69,12 +69,17 @@ decisions; **Claude** lines are readings or notes on what exists; **Open** lines
 | Catwalk | built (D1, `descentVisit.ts`) with keepers' first words | a snerk at a work station, a viewing button, the deer |
 | Deer | the stag is her mount, summoned | a spirit deer she inhabits and cannot act through |
 
+## Decided (Noah, 2026-10-30)
+
+- **The background reflects her current clarity:** the level of chaos in the water and the light follows where her clarity is, not a
+  fixed starting state.
+- **The world fades in from the middle outward** under the ripples, **the same on every later meditation.**
+- **At the scope she sees only the deer, for now.**
+- **Sound design comes later,** in earnest.
+
 ## Open
 
-- **How many clarity points is the maximum for the first session,** and does the first board start already as a full grid or deal in?
-- **How chaotic is the background at each meditation?** Is its starting state set by her clarity at the time, by what she has seen, or by
-  how many threats are active?
-- **The drop and ripples:** does the world fade in under them from the middle outward, and is it the same on every later meditation?
+- **How many clarity points is the maximum for the first session,** and does the first board start as a full grid or deal in?
 - **The first dive:** is D the only dive option at first, as the water bubble suggests?
-- **The scope:** does she see only the deer, or also controls (a dial for time of year, a record of what she has seen)?
-- **Where in the dark does the first match start,** and is there any sound?
+- **What counts as "her clarity" on a later meditation:** the current value only, or does a long streak without meditating also
+  roughen the water?
