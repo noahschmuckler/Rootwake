@@ -56,8 +56,12 @@ original study) and no seasons.
   - Every predator is a real threat to a hobbit, not only to the goats, which is why the hobbits keep a respectful
     distance from the apex animals and read their signs. The existing rule that wolves "weaken and do not kill"
     (`villageModel.ts`) will need a second look once they are archetypal rather than raiders.
-  - **Open:** how large is the thunderbird? A real eagle's wingspan is about 2 m; a thunderbird that can carry a
-    deer, and whose shadow crosses a village, is several times that.
+  - **Thunderbird size (Noah, 2026-10-29): it can carry a deer.** **Proposal:** a wingspan of about 6–8 m, the scale
+    of the extinct *Argentavis* (roughly 70 kg), the largest flying bird known. A real eagle spans about 2 m and
+    Haast's eagle about 3 m, so this is a mythic animal, but one with a real-world anchor. At that size it can
+    plunge-hunt lake fish, lift a deer, and throw a shadow across a village. A hobbit (0.46 m) is small prey beside
+    it, so it is a danger to them in the open.
+  - **Hobbit height stays 0.46 m (Noah, 2026-10-29).**
 
 ## The hobbits at the start (Noah)
 
@@ -119,7 +123,7 @@ hobbits use today) are retired. Consequences:
   season.
 - Carried things (the basket, torch, spear, pail) become the only "costume", which makes them read at a glance.
 
-**Open:** is the 0.46 m height kept now that the fauna are sized to the world?
+The 0.46 m height is kept (Noah, 2026-10-29).
 
 ## How the Eden breaks (sketch, for later)
 
