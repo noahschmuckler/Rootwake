@@ -192,3 +192,5 @@ The snerk on D gives a different first quest: **inhabit a deer.** Hulda rises fr
 interact with it, to observe up close. The first blood is the death of a hungry wolf after the hobbits overharvest the
 chicken-of-the-woods. Wolves and hobbits are kin until the hobbits decide they deserve children at the wolves' expense. The bear and
 thunderbird carry off hobbit elders, but only once the emotional stakes are set.
+
+> Refined in `OPENING_SEQUENCE.md` (Noah, 2026-10-30): the dark screen and drifting solids, the full-screen swipeable match-3, the staged reveal of the UI, the infant Petal, and the snerk at the work station.
