@@ -79,6 +79,14 @@ decisions; **Claude** lines are readings or notes on what exists; **Open** lines
 - **Max clarity is 60** (`CLARITY_CAP` in `src/deepModel.ts` already is 60). **The first board deals in.** **D is the only dive option at
   first.** **The water follows only her current clarity.**
 
+## Decided (Noah, 2026-10-30, at the build)
+
+- **Branch and deploy:** `feat/opening` from `docs/vision` (the vista line), its own workflow, live at `/Rootwake/opening/`. **The vista
+  look.** **O1 only** before play. **A first visit starts the phone fresh** (the shared origin's saves go once).
+- **Claude's readings in the build:** Petal's lines are short and tapped through; the one that asks for the drag holds until she drags.
+  The look is a drag of about 50° in all; the walk, a metre and a half. The dive costs its 20 of her 60, as before. The later
+  meditation ends the same way at the cap, and an early "done" fades the field back. The halos on distant living things are not drawn yet.
+
 ## Open
 
-- Nothing is open for the first slice. Build scope and conventions are in `OPENING_HANDOFF.md`.
+- Nothing is open for the first slice. Build scope and conventions are in `OPENING_HANDOFF.md`; what was built, under "O1 as built".
