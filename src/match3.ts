@@ -247,3 +247,14 @@ export class Board {
 function range(from: number, to: number): number[] {
   return Array.from({ length: to - from }, (_, i) => from + i);
 }
+
+/**
+ * O1 (OPENING_SEQUENCE.md): a finger swipe from a gem moves it toward its neighbour. The direction is the larger of the two
+ * screen deltas (dy positive is down the screen, so row + 1); under `minPx` of travel it is not a swipe yet, and a swipe off
+ * the board's edge is none.
+ */
+export function swipeTarget(from: Cell, dx: number, dy: number, rows: number, cols: number, minPx: number): Cell | null {
+  if (Math.hypot(dx, dy) < minPx) return null;
+  const to = Math.abs(dx) >= Math.abs(dy) ? { row: from.row, col: from.col + (dx > 0 ? 1 : -1) } : { row: from.row + (dy > 0 ? 1 : -1), col: from.col };
+  return to.row < 0 || to.col < 0 || to.row >= rows || to.col >= cols ? null : to;
+}
