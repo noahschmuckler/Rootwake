@@ -97,6 +97,20 @@ try{
   // 5. The dive: the node, the catwalk of D, back into the drop, up to the summit.
   assert.ok(await page.evaluate(()=>window.__village.opening.dive()),'she dives');await page.waitForFunction(()=>window.__village.mode==='deep',null,{timeout:T});await page.waitForTimeout(500);await shot('11-node');
   assert.ok(await page.evaluate(()=>window.__village.opening.catwalk()),'out onto the catwalk');await page.waitForFunction(()=>window.__village.mode==='catwalk',null,{timeout:T});await page.waitForTimeout(600);await shot('12-catwalk-D');
+  // O2: at the snerk's station the lines are tapped through, then the act is the scope: her eyes a spirit deer's down a tunnel; deeper, embodied, it wanders; let go, she stands at the station again.
+  assert.ok(await page.evaluate(()=>window.__village.opening.toSnerk()),'to the snerk');await page.waitForFunction(()=>window.__village.deep.visit.near==='listen'&&document.getElementById('descentAct').textContent==='listen to the snerk',null,{timeout:T});
+  report.scope={lines:[]};for(let i=0;i<3;i++){await page.evaluate(()=>window.__village.deep.visit.act());report.scope.lines.push(await page.evaluate(()=>document.getElementById('descentBubble').textContent));}
+  assert.equal(report.scope.lines.length,3);assert.match(report.scope.lines[2],/scope/i,'the snerk points her to the scope');
+  await page.waitForFunction(()=>document.getElementById('descentAct').textContent==='look into the scope',null,{timeout:T});await page.waitForFunction(()=>window.__village.scene.getObjectByName('scope')!==undefined,null,{timeout:T});
+  await page.evaluate(()=>window.__village.deep.visit.act());await page.waitForFunction(()=>window.__village.mode==='deer'&&window.__village.opening.scopeStage==='scope',null,{timeout:T});
+  await page.waitForFunction(()=>window.__village.opening.deer&&window.__village.opening.deer.phase==='up',null,{timeout:T});await shot('13-scope-tunnel');
+  report.scope.deer=await page.evaluate(()=>{const o=window.__village.opening,d=o.deer;return {x:d.x,z:d.z,tunnel:getComputedStyle(document.querySelector('#scope .tunnel')).opacity,caption:document.querySelector('#scope .caption').textContent,act:getComputedStyle(document.getElementById('descentAct')).display};});
+  assert.equal(report.scope.deer.tunnel,'1','the tunnel is drawn');assert.match(report.scope.deer.caption,/Deeper/);assert.equal(report.scope.deer.act,'none','the station\'s act is off');
+  assert.ok(await page.evaluate(()=>window.__village.opening.deeper()),'deeper');await page.waitForFunction(()=>window.__village.opening.scopeStage==='deer'&&getComputedStyle(document.querySelector('#scope .tunnel')).opacity==='0',null,{timeout:T});
+  await page.waitForFunction(([x,z])=>{const d=window.__village.opening.deer;return d&&Math.hypot(d.x-x,d.z-z)>1.5;},[report.scope.deer.x,report.scope.deer.z],{timeout:T});await shot('14-deer');
+  report.scope.after=await page.evaluate(()=>{const d=window.__village.opening.deer;return {x:d.x,z:d.z,phase:d.phase,mode:window.__village.mode,feetNear:Math.hypot(window.__village.player.feet().x-d.x,window.__village.player.feet().z-d.z)};});assert.ok(report.scope.after.feetNear<0.5,'she is where the deer is');
+  assert.ok(await page.evaluate(()=>window.__village.opening.letGo()),'let go');await page.waitForFunction(()=>window.__village.mode==='catwalk'&&!window.__village.opening.deer&&document.getElementById('scope').hidden,null,{timeout:T});
+  await page.waitForFunction(()=>window.__village.deep.visit.near==='listen',null,{timeout:T});/* she stands at the station again */
   assert.ok(await page.evaluate(()=>window.__village.opening.drop()),'back into the drop');await page.waitForFunction(()=>window.__village.mode==='deep',null,{timeout:T});
   assert.ok(await page.evaluate(()=>window.__village.opening.toPool()),'the root up');await page.waitForFunction(()=>window.__village.mode==='ground'&&window.__village.karst.zone==='summit',null,{timeout:T});
   // 6. A later meditation on the water: enter fades the world under the field; done early fades it back.

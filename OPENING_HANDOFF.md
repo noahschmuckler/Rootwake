@@ -1,5 +1,7 @@
 # Handoff: build the opening (slice O1/O2)
 
+> Both slices are built on `feat/opening` and live at https://noahschmuckler.github.io/Rootwake/opening/ : see "O1 as built" and "O2 as built" at the end.
+
 For a fresh Claude Code session. The design is settled and is in **`OPENING_SEQUENCE.md`** (read it first, it is short), with the
 wider story in `OPENING_ARC.md`, `ECOLOGY.md` and `PROGRESSION.md`. Nothing in them is built. This file says what to build, where it
 lands in the code, and how to check it. Written 2026-10-30 on branch `docs/vision`.
@@ -101,8 +103,21 @@ one origin, so a phone that has played `/vista/village/` holds its saves; when t
   `artifacts/opening` (01-dark-opening … 12-catwalk-D). **Passes** locally (2026-10-31) with `test-mobility`, `test-opening`, `test-vista`
   and `test-village`; the workflow runs the same and publishes.
 
-**Not in this slice:** O2 (the snerk's scope and the deer); the faint halos on distant living things (nothing new is drawn for them);
-sound; the letter flip.
+**O2 as built (2026-10-31, same branch).** In the opening entry the snerk at D's work station has three lines of its own
+(`SNERK_SCOPE_LINES` in `openingModel.ts`, tapped through with the act button, `descentVisit.stationAct` taking over the station's act);
+then the act reads "look into the scope". The scope is a hooded viewer beside the lectern (`scopeFigure.ts`, placed by `placeScope` as she
+steps out onto D). Looking in (`startScope`, mode `deer`): a spirit deer (`deerModel.ts`, pure: rises in `RISE_S`, wanders in legs with
+grazes, turns from ground it cannot walk, sinks after `LIFE_S`; the stag's figure dressed by `deerFigureState`) rises from healthy ground
+8–26 m from the first village's green (`deerSpot`), and her eyes are at its head down a dim tunnel (`#scope .tunnel`, a radial vignette),
+with the snerk's word "Deeper. Let it carry you." as a caption and two buttons, "look deeper" and "look away". Deeper (`lookDeeper`) the
+tunnel opens and she is embodied, riding its wander with nothing to do but watch (the stick, the fight and every act are off; her feet
+follow the deer, so the land loads and the map explores about it); "let go" or the deer's sink (`endDeer`) stands her at the station
+again. Dev handle: `__village.opening.toSnerk / scope / deeper / letGo / deer / scopeStage`. The check walks all of it (13-scope-tunnel,
+14-deer). Claude's readings: the deer is seen through its own eyes from the first look (the scope is "tuned to a deer"); the scope offers
+nothing else; nothing of O2 is saved, so it can be looked into again.
+
+**Not in this slice:** the faint halos on distant living things (nothing new is drawn for them); sound; the letter flip; the observation
+stage proper (what the instruments reveal per behaviour, the seasons: PROGRESSION.md).
 
 **Traps found.** The water's alpha is a smoothstep in the reveal's radius: inside the radius the world, outside the field (the first
 draft had it inverted and the field was invisible). The field's pad sits over the canvas (z 4) so the shared player gets no pointer

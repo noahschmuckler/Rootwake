@@ -2,7 +2,7 @@
 
 # Design record and next build (Noah, 2026-10)
 
-On branch `docs/vision`: the design is in **VISION.md**, **BEGINNING.md**, **ECOLOGY.md**, **OPENING_ARC.md**, **PROGRESSION.md** and **OPENING_SEQUENCE.md**. The next build is the opening: read **OPENING_HANDOFF.md** first. Its first slice, O1 (the dark opening, the board flat on her mind's water, Petal and the staged UI, the dive to the summit and D alone), is built on branch **`feat/opening`** (from `docs/vision`) and published by its own workflow to https://noahschmuckler.github.io/Rootwake/opening/ (`opening.html`, `openingModel.ts`, `mindScreen.ts`, `petal.ts`, the opening block of `village.ts`; "O1 as built" in the handoff). O2 waits on its play.
+On branch `docs/vision`: the design is in **VISION.md**, **BEGINNING.md**, **ECOLOGY.md**, **OPENING_ARC.md**, **PROGRESSION.md** and **OPENING_SEQUENCE.md**. The next build is the opening: read **OPENING_HANDOFF.md** first. Its first slice, O1 (the dark opening, the board flat on her mind's water, Petal and the staged UI, the dive to the summit and D alone), is built on branch **`feat/opening`** (from `docs/vision`) and published by its own workflow to https://noahschmuckler.github.io/Rootwake/opening/ (`opening.html`, `openingModel.ts`, `mindScreen.ts`, `petal.ts`, the opening block of `village.ts`; "O1 as built" in the handoff). O2 (the snerk's scope on D and the spirit deer she looks through and embodies: `deerModel.ts`, `scopeFigure.ts`, the O2 block of `village.ts`) is built there too; both wait on Noah's play.
 
 # Graphics study: The Vista
 
