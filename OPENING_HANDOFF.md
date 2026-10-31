@@ -119,11 +119,24 @@ nothing else; nothing of O2 is saved, so it can be looked into again.
 **O2, taking the deer (2026-10-31, Noah's note after play).** Embodied, `CONTROL_AFTER_S` (4 s) after "look deeper" a "take control"
 button joins "let go" (`controlBtn`, shown by `deerFrame`). Taken (`takeControl` → `deerModel.takeDeer`): the deer stops and waits on the
 stick, the stick comes in (`body.deer-taken` shows `#tools`; the player is enabled on the locked world, as on the stag), and the push,
-read by `want()` relative to the deer's facing, drives it (`stepDeer`'s `drive`): it turns toward the push at `DRIVE_TURN` rad/s and goes
+read by `want()` relative to her view, drives it (`stepDeer`'s `drive`): it turns toward the push at `DRIVE_TURN` rad/s and goes
 at `TROT` × the push (2.6 m/s at full, above its own 1.1 m/s walk), stops short of ground it may not walk without turning away by itself,
-stands unpushed (and grazes after a while), and its life does not run, so it stays until "let go". Dev: `__village.opening.control()`,
-`drive(dx, dz, seconds)`, `controlOffered`, `deer.driven`. The check takes it and drives it east (14b-deer-taken). Claude's reading: the
-offer waits on the wander (she watches first); the look-drag still turns nothing (her eyes stay the deer's).
+stands unpushed (and grazes after a while), and its life does not run, so it stays until "let go". Her view while taken is her own on
+foot (Noah's second note): `orbitCamera` behind the deer by her yaw, `DEER_CAM_BACK` back and `DEER_CAM_UP` up, the look drag turning
+it, her yaw no longer written from the deer's heading; watching (not taken) her eyes stay at its head. Dev: `__village.opening.control()`,
+`drive(dx, dz, seconds)`, `controlOffered`, `deer.driven`. The check takes it, drives it east, confirms the camera behind and a turned
+yaw holding (14b-deer-taken). Claude's reading: the offer waits on the wander (she watches first).
+
+**A restart begins again (2026-10-31, Noah's note: "restarting the page as a webapp skips the opening").** The load block treats a
+saved opening that is complete like a first visit: every `rootwake-*` key is wiped and the opening plays again (a reload mid-opening still
+resumes). The world does not persist past a restart for now; `?opening=0` still skips it with everything shown. The check's step 7 now
+expects the board again after a reload.
+
+**The board's finger on the phone (2026-10-31, Noah's note: "minimally responsive").** Three guards in `mindScreen.ts`'s pad, since the
+cause could not be reproduced headless (the pad is on top of every gem there): a new touch always takes over `down` (the pad hidden
+mid-touch at a session's end lost the lift, leaving `down` stale so every later touch was ignored); a flick whose moves never arrived is
+read as a swipe at the lift; and a swipe made while the board is busy is kept `PENDING_MS` (0.7 s) and made when it is free instead of
+dropped. If it is still poor on the phone, the next suspects are the frame rate under the Eden's figures and the render scale.
 
 **Not in this slice:** the faint halos on distant living things (nothing new is drawn for them); sound; the letter flip; the observation
 stage proper (what the instruments reveal per behaviour, the seasons: PROGRESSION.md).

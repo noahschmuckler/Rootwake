@@ -1,7 +1,7 @@
 // The opening (O1, OPENING_HANDOFF.md) under headless Chromium (SwiftShader), at a portrait phone's size with touch: a first launch opens dark with the
 // solids drifting in, the board plays flat on the mind's water at clarity 0 (a real finger swipe and a tap pair each make a run), the water settles at
 // the cap, the ending drops and ripples and reveals the world, she stands on the summit with no UI, Petal appears, the compass, the stick and the dive
-// arrive in turn, the dive offers the summit and the catwalk of D alone, and a second load skips the opening while ?opening=0 skips it with everything
+// arrive in turn, the dive offers the summit and the catwalk of D alone, and a restart after it is complete begins again while ?opening=0 skips it with everything
 // shown. Screenshots of each beat in artifacts/opening.
 import {createRequire} from 'node:module';
 import {createServer} from 'node:http';
@@ -118,8 +118,13 @@ try{
   report.scope.taken=await page.evaluate(()=>{const d=window.__village.opening.deer;return {x:d.x,z:d.z,life:d.life,stick:getComputedStyle(document.getElementById('tools')).visibility,walk:getComputedStyle(document.getElementById('walk')).display,away:document.querySelector('#scope [data-away]').textContent,enabled:window.__village.player.enabled};});
   assert.equal(report.scope.taken.stick,'visible','the stick comes in');assert.notEqual(report.scope.taken.walk,'none');assert.equal(report.scope.taken.away,'let go');assert.ok(report.scope.taken.enabled,'the player takes the stick');
   await page.evaluate(()=>window.__village.opening.drive(1,0,3));await page.waitForFunction(([x,z])=>{const d=window.__village.opening.deer;return d&&d.x-x>1.5&&Math.abs(d.z-z)<2.5;},[report.scope.taken.x,report.scope.taken.z],{timeout:T});await shot('14b-deer-taken');
-  report.scope.driven=await page.evaluate(()=>{const d=window.__village.opening.deer;return {x:d.x,z:d.z,life:d.life,phase:d.phase,heading:d.heading,feetNear:Math.hypot(window.__village.player.feet().x-d.x,window.__village.player.feet().z-d.z)};});
-  assert.equal(report.scope.driven.life,report.scope.taken.life,'its life does not run while taken');assert.equal(report.scope.driven.phase,'up');assert.ok(report.scope.driven.feetNear<0.5,'she is where the deer is');
+  report.scope.driven=await page.evaluate(()=>{const v=window.__village,d=v.opening.deer,c=v.camera.position;return {x:d.x,z:d.z,life:d.life,phase:d.phase,heading:d.heading,feetNear:Math.hypot(v.player.feet().x-d.x,v.player.feet().z-d.z),camBack:Math.hypot(c.x-d.x,c.z-d.z)};});
+  assert.equal(report.scope.driven.life,report.scope.taken.life,'its life does not run while taken');assert.equal(report.scope.driven.phase,'up');assert.ok(report.scope.driven.feetNear<0.5,'she is where the deer is');assert.ok(report.scope.driven.camBack>3&&report.scope.driven.camBack<5.5,`taken, the camera is behind the deer (${report.scope.driven.camBack.toFixed(1)} m)`);
+  // Her look is her own while taken: a turn of her yaw (the drag's doing) holds instead of being written back to the deer's heading, and the camera comes round with it.
+  const turned=await page.evaluate(()=>{const v=window.__village,y=v.player.yaw+1.2;v.player.yaw=y;return y;});
+  await page.waitForFunction(y=>{const v=window.__village,d=v.opening.deer,c=v.camera.position,b=Math.atan2(c.x-d.x,c.z-d.z);return Math.abs(Math.atan2(Math.sin(b-y),Math.cos(b-y)))<0.1;},turned,{timeout:T});
+  report.scope.look=await page.evaluate(y=>{const v=window.__village,d=v.opening.deer,c=v.camera.position;return {set:y,yaw:v.player.yaw,heading:d.heading,behind:Math.atan2(c.x-d.x,c.z-d.z)};},turned);
+  assert.ok(Math.abs(Math.atan2(Math.sin(report.scope.look.yaw-report.scope.look.set),Math.cos(report.scope.look.yaw-report.scope.look.set)))<0.05,'her yaw holds while taken (not written from the deer\'s heading)');
   assert.ok(await page.evaluate(()=>window.__village.opening.letGo()),'let go');await page.waitForFunction(()=>window.__village.mode==='catwalk'&&!window.__village.opening.deer&&document.getElementById('scope').hidden&&!document.body.classList.contains('deer-taken'),null,{timeout:T});
   await page.waitForFunction(()=>window.__village.deep.visit.near==='listen',null,{timeout:T});/* she stands at the station again */
   assert.ok(await page.evaluate(()=>window.__village.opening.drop()),'back into the drop');await page.waitForFunction(()=>window.__village.mode==='deep',null,{timeout:T});
@@ -142,9 +147,9 @@ try{
   assert.ok(await page.evaluate(()=>window.__village.opening.start()),'she meditates again at the pool');await page.waitForFunction(()=>window.__village.opening.mind.phase==='play',null,{timeout:T});
   report.again=await page.evaluate(()=>{const o=window.__village.opening;return {alpha:o.mind.uniforms.uAlpha.value,title:getComputedStyle(document.querySelector('#meditate .title')).display,done:getComputedStyle(document.getElementById('meditateDone')).display};});assert.equal(report.again.alpha,1);assert.notEqual(report.again.title,'none','the panel is whole on a later meditation');
   await page.evaluate(()=>window.__village.opening.done());await page.waitForFunction(()=>window.__village.mode==='ground'&&!window.__village.opening.mind.active,null,{timeout:T});
-  // 7. A second load skips the opening; ?opening=0 skips it with everything shown.
+  // 7. A restart after the opening is complete begins again, fresh (Noah, 2026-10-31: a restarted webapp plays the opening); ?opening=0 skips it with everything shown.
   await page.reload({timeout:T});await page.waitForFunction(()=>window.__village&&window.__village.opening&&window.__village.character.status!=='loading',null,{timeout:T});
-  report.reload=await page.evaluate(()=>({mode:window.__village.mode,complete:window.__village.opening.complete,intro:document.getElementById('intro').open}));assert.equal(report.reload.mode,'ground','a returning player wakes on the ground');assert.ok(report.reload.complete);assert.equal(report.reload.intro,false);
+  report.reload=await page.evaluate(()=>({mode:window.__village.mode,complete:window.__village.opening.complete,step:window.__village.opening.step,phase:window.__village.opening.mind.phase,intro:document.getElementById('intro').open,eden:localStorage.getItem('rootwake-eden-v1')}));assert.equal(report.reload.mode,'meditate','a restart opens on the board again');assert.equal(report.reload.complete,false);assert.equal(report.reload.step,'opened');assert.equal(report.reload.intro,false);assert.equal(report.reload.eden,null,'the world is fresh');
   await page.goto(url+'&opening=0',{timeout:T});await page.waitForFunction(()=>window.__village&&window.__village.opening&&window.__village.character.status!=='loading',null,{timeout:T});
   report.override=await page.evaluate(()=>({on:window.__village.opening.on,bodyOpening:document.body.classList.contains('opening'),intro:document.getElementById('intro').open,fight:getComputedStyle(document.getElementById('fight')).display}));assert.equal(report.override.on,false);assert.equal(report.override.bodyOpening,false);assert.equal(report.override.intro,true,'the journey\'s intro');assert.notEqual(report.override.fight,'none');
   assert.deepEqual(errors,[],'no console or shader errors');

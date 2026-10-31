@@ -86,7 +86,10 @@ decisions; **Claude** lines are readings or notes on what exists; **Open** lines
 - **O2 (2026-10-31):** the snerk's three lines, the scope beside the lectern, the deer seen through its own eyes down the tunnel, "look
   deeper" to embody it, "let go" or its sink to come back; the deer rises by the first village's green and lives 90 s.
 - **Taking the deer (Noah, 2026-10-31, after play):** embodied, after a few seconds of watching a "take control" button appears; taken,
-  the stick comes in and drives the deer, and it does not sink until she lets go.
+  the stick comes in and drives the deer, and it does not sink until she lets go. The look drag works as her own on foot: the camera
+  behind the deer by her yaw, the drag turning it, the stick relative to the view.
+- **A restart plays the opening again (Noah, 2026-10-31):** a restarted page (the webapp) after the opening is complete begins again,
+  the phone fresh; a reload mid-opening resumes it. (So the world does not persist past a restart yet; `?opening=0` still skips.)
 - **Claude's readings in the build:** Petal's lines are short and tapped through; the one that asks for the drag holds until she drags.
   The look is a drag of about 50° in all; the walk, a metre and a half. The dive costs its 20 of her 60, as before. The later
   meditation ends the same way at the cap, and an early "done" fades the field back. The halos on distant living things are not drawn yet.

@@ -85,7 +85,8 @@ const OPENING = openingParam === '0' ? false : openingParam === '1' || (window a
 let opening: Opening = allShown();
 if (OPENING) {
   let raw: string | null = null; try { raw = localStorage.getItem(OPENING_KEY); } catch { /* Storage is optional. */ }
-  if (raw === null || openingParam === '1') { try { for (const k of Object.keys(localStorage)) if (k.startsWith('rootwake-')) localStorage.removeItem(k); } catch { /* Storage is optional. */ } opening = freshOpening(); }
+  // A first visit, `?opening=1`, or a restart after the opening is complete (Noah, 2026-10-31: a restarted webapp plays the opening again) begins again with the phone fresh; a reload mid-opening resumes it.
+  if (raw === null || openingParam === '1' || openingComplete(parseOpening(raw))) { try { for (const k of Object.keys(localStorage)) if (k.startsWith('rootwake-')) localStorage.removeItem(k); } catch { /* Storage is optional. */ } opening = freshOpening(); }
   else opening = parseOpening(raw);
   document.body.classList.add('opening');
 }
@@ -583,7 +584,7 @@ function presentHulda(dt: number): void {
   if (knock > 0.01 && form === 'human') { visualRotation.multiply(knockTilt.setFromAxisAngle(xAxis, knock * Math.PI * 0.48)); visualPosition.y -= HUMAN_CENTRE * 0.8 * knock; }
   if (mode === 'dive' || mode === 'launch') form = 'knot';
   // In the deep she is the camera: her figure, which only fades when hidden, is put far below it, or its leaves fill the view (Noah).
-  if (inDeep(mode) && mode !== 'meditate') visualPosition.set(camera.position.x, camera.position.y - 40, camera.position.z);
+  if ((inDeep(mode) && mode !== 'meditate') || mode === 'deer') visualPosition.set(camera.position.x, camera.position.y - 40, camera.position.z);
   presentation.update(dt, form, visualPosition, visualRotation, player.motor.speed, heading, mode === 'ground' || mode === 'meditate' || mode === 'catwalk', (mode !== 'ground' && mode !== 'catwalk' && mode !== 'dive' && mode !== 'launch' && mode !== 'deep') || player.view === 'third', kv ? kv.present : form);
   player.avatar.visible = false;
 }
@@ -1148,9 +1149,10 @@ function stepOntoCatwalk(): boolean {
 // through) and the act becomes the scope, a hooded viewer beside the lectern (scopeFigure.ts). Looking in, her eyes are a spirit deer's (deerModel.ts, the
 // stag's figure) that rises from healthy ground by the first village, seen down a dim tunnel; the snerk says deeper, and embodied the tunnel opens and she
 // rides its wander, able only to watch, until she lets go or it sinks. Then she stands at the station again. Taking control (Noah, 2026-10-31): embodied,
-// after CONTROL_AFTER_S of watching a "take control" button appears; taken, the stick comes in and drives the deer (deerModel.takeDeer, the push
-// relative to its facing), and it does not sink until she lets go. Tuning: the deer's spot (m from the green), her eye's height on it, the wait. =====
-const DEER_FROM_GREEN = [8, 26], DEER_EYE_H = 1.35, CONTROL_AFTER_S = 4;
+// after CONTROL_AFTER_S of watching a "take control" button appears; taken, it is hers as she is herself on foot: the camera behind it by her yaw
+// (orbitCamera, the look drag turning it), the stick driving it relative to the view (deerModel.takeDeer), and it does not sink until she lets go.
+// Tuning: the deer's spot (m from the green), her eye's height on it, the wait, the taken camera's distance back and up. =====
+const DEER_FROM_GREEN = [8, 26], DEER_EYE_H = 1.35, CONTROL_AFTER_S = 4, DEER_CAM_BACK = 4.2, DEER_CAM_UP = 1.7;
 let scopeLine = 0, deer: { d: Deer; fig: StagFigure; rand: () => number } | null = null, scopeStage: 'off' | 'scope' | 'deer' = 'off', scopeReturn: { at: THREE.Vector3; yaw: number } | null = null, controlDue = 0, deerDrive: { x: number; z: number; left: number } | null = null;
 const scopeEl = document.createElement('div'); scopeEl.id = 'scope'; scopeEl.hidden = true; scopeEl.innerHTML = '<div class="tunnel"></div><div class="caption"></div><div class="buttons"><button data-deeper>look deeper</button><button data-control hidden>take control</button><button data-away>look away</button></div>'; document.body.append(scopeEl);
 const scopeCaption = scopeEl.querySelector('.caption') as HTMLElement, deeperBtn = scopeEl.querySelector('[data-deeper]') as HTMLButtonElement, controlBtn = scopeEl.querySelector('[data-control]') as HTMLButtonElement, awayBtn = scopeEl.querySelector('[data-away]') as HTMLButtonElement;
@@ -1198,7 +1200,7 @@ function lookDeeper(): boolean { if (scopeStage !== 'scope') return false; scope
 /** She takes the deer: the stick comes in (the player enabled on the locked world, as on the stag), the button goes, and the deer waits on her push. */
 function takeControl(): boolean {
   if (scopeStage !== 'deer' || !deer || !takeDeer(deer.d)) return false;
-  controlBtn.hidden = true; document.body.classList.add('deer-taken'); player.yaw = deer.d.heading; player.enabled = true; player.canMove = true; player.cancelInput(); return true;
+  controlBtn.hidden = true; document.body.classList.add('deer-taken'); player.yaw = deer.d.heading; player.pitch = 0.12; player.enabled = true; player.canMove = true; player.cancelInput(); return true;
 }
 function endDeer(): boolean {
   if (mode !== 'deer' || !scopeReturn) return false;
@@ -1216,6 +1218,8 @@ function deerFrame(dt: number): void {
   deer.fig.update(d.x, y, d.z, d.heading, deerFigureState(d), dt);
   if (ev === 'sunk') { endDeer(); return; }
   place(new THREE.Vector3(d.x, y, d.z));
+  // Taken: her view is her own, behind the deer by her yaw and tilted by her pitch, the drag turning it as when she walks; watching, her eyes are at its head.
+  if (d.driven) { orbitCamera(new THREE.Vector3(d.x, y + 0.9, d.z), DEER_CAM_BACK, DEER_CAM_UP); return; }
   const fx = -Math.sin(d.heading), fz = -Math.cos(d.heading), lift = d.phase === 'rising' ? Math.min(1, d.t / DEER_RISE_S) : d.phase === 'sinking' ? Math.max(0, 1 - d.t / DEER_SINK_S) : 1, bob = d.speed > 0 ? Math.sin(simSeconds * 7) * 0.03 : 0, eye = 0.15 + (DEER_EYE_H - 0.15) * lift;
   camera.position.set(d.x + fx * 0.9, y + eye + bob, d.z + fz * 0.9); camera.lookAt(d.x + fx * 5, y + eye - 0.35 + bob, d.z + fz * 5); player.yaw = d.heading;
 }

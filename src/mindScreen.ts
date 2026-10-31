@@ -13,7 +13,7 @@ import { DRIFT_S, LAND_S, endingAt, endingSeconds } from './openingModel';
  * clarity (per second of the gap), the board's share of the view and its place, the ripple's speed (view units/s). */
 export const FADE_S = 0.4, LEAVE_S = 0.35, CHAOS_EASE = 1.3, BOARD_FIT = { width: 0.9, height: 0.62, y: -0.09 }, RIPPLE_SPEED = 0.9;
 /** A tap: this little travel (px), this quickly (ms). Tuning. */
-const TAP_PX = 10, TAP_MS = 450;
+const TAP_PX = 10, TAP_MS = 450, PENDING_MS = 700;
 
 export type MindPhase = 'off' | 'dark' | 'fade' | 'play' | 'ending' | 'leaving';
 
@@ -117,12 +117,20 @@ export function createMindScreen(opts: { meterHost?: HTMLElement; seed?: number 
   let phase: MindPhase = 'off', phaseAt = 0, lastMs = 0, timeScale = 1, chaosWant = 1, chaos = 1, then: (() => void) | null = null, seed = opts.seed ?? 1;
   const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
   const rayAt = (x: number, y: number): THREE.Raycaster => { ndc.set(x / innerWidth * 2 - 1, -y / innerHeight * 2 + 1); ray.setFromCamera(ndc, camera); return ray; };
-  let down: { id: number; x: number; y: number; at: number; done: boolean } | null = null;
-  pad.addEventListener('pointerdown', e => { if (phase !== 'play' || down) return; e.preventDefault(); down = { id: e.pointerId, x: e.clientX, y: e.clientY, at: performance.now(), done: false }; try { pad.setPointerCapture(e.pointerId); } catch { /* synthetic */ } });
-  pad.addEventListener('pointermove', e => { if (!down || down.id !== e.pointerId || down.done) return; const dx = e.clientX - down.x, dy = e.clientY - down.y; if (Math.hypot(dx, dy) >= SWIPE_PX) { down.done = true; board.swipe(rayAt(down.x, down.y), dx, dy); } });
-  const up = (e: PointerEvent): void => { if (!down || down.id !== e.pointerId) return; const d = down; down = null; if (e.type === 'pointerup' && !d.done && Math.hypot(e.clientX - d.x, e.clientY - d.y) < TAP_PX && performance.now() - d.at < TAP_MS) board.tap(rayAt(e.clientX, e.clientY)); };
+  // The finger (Noah, 2026-10-31, the phone's board "minimally responsive"): a new touch always takes over (a lift the pad never saw, hidden mid-touch,
+  // left `down` stale and every later touch ignored); a flick whose moves never arrived is read at the lift; and a swipe made while the board is busy
+  // (a cascade on a slow frame) is kept PENDING_MS and made as soon as it is free, instead of dropped.
+  let down: { id: number; x: number; y: number; at: number; done: boolean } | null = null, pending: { x: number; y: number; dx: number; dy: number; at: number } | null = null;
+  const trySwipe = (x: number, y: number, dx: number, dy: number, at: number): void => { if (board.isBusy) { pending = { x, y, dx, dy, at }; return; } pending = null; board.swipe(rayAt(x, y), dx, dy); };
+  pad.addEventListener('pointerdown', e => { if (phase !== 'play') return; e.preventDefault(); down = { id: e.pointerId, x: e.clientX, y: e.clientY, at: performance.now(), done: false }; try { pad.setPointerCapture(e.pointerId); } catch { /* synthetic */ } });
+  pad.addEventListener('pointermove', e => { if (!down || down.id !== e.pointerId || down.done) return; const dx = e.clientX - down.x, dy = e.clientY - down.y; if (Math.hypot(dx, dy) >= SWIPE_PX) { down.done = true; trySwipe(down.x, down.y, dx, dy, performance.now()); } });
+  const up = (e: PointerEvent): void => {
+    if (!down || down.id !== e.pointerId) return; const d = down; down = null; if (e.type !== 'pointerup' || d.done) return;
+    const dx = e.clientX - d.x, dy = e.clientY - d.y, far = Math.hypot(dx, dy);
+    if (far >= SWIPE_PX) trySwipe(d.x, d.y, dx, dy, performance.now()); else if (far < TAP_PX && performance.now() - d.at < TAP_MS) board.tap(rayAt(e.clientX, e.clientY));
+  };
   pad.addEventListener('pointerup', up); pad.addEventListener('pointercancel', up);
-  function setPhase(p: MindPhase, nowMs: number): void { phase = p; phaseAt = nowMs; pad.hidden = p !== 'play'; }
+  function setPhase(p: MindPhase, nowMs: number): void { phase = p; phaseAt = nowMs; pad.hidden = p !== 'play'; down = null; pending = null; }
   function resize(): void { const a = aspect(); camera.left = -a; camera.right = a; camera.updateProjectionMatrix(); uniforms.uAspect.value = a; water.scale.set(1, 1, 1); board.layout(); }
   function enter(nowMs: number, o: { dark?: boolean; seed?: number } = {}): void {
     resize(); lastMs = nowMs; uniforms.uReveal.value = 0; uniforms.uRipple.value = -1; board.setOpacity(1); drop.visible = false; meter.hidden = false; then = null;
@@ -138,6 +146,7 @@ export function createMindScreen(opts: { meterHost?: HTMLElement; seed?: number 
     chaos += (chaosWant - chaos) * Math.min(1, CHAOS_EASE * dt); uniforms.uChaos.value = chaos;
     const t = (nowMs - phaseAt) / 1000 * timeScale;
     board.update(nowMs);
+    if (pending) { if (nowMs - pending.at > PENDING_MS) pending = null; else if (!board.isBusy) { const p = pending; pending = null; board.swipe(rayAt(p.x, p.y), p.dx, p.dy); } }
     switch (phase) {
       case 'dark': { const k = Math.min(1, t / DRIFT_S); uniforms.uDark.value = 0.08 + 0.92 * k * k; if (!board.isBusy) { uniforms.uDark.value = 1; setPhase('play', nowMs); } break; }
       case 'fade': { uniforms.uAlpha.value = Math.min(1, t / FADE_S); if (t >= FADE_S) setPhase('play', nowMs); break; }
