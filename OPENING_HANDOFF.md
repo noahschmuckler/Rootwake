@@ -98,7 +98,8 @@ one origin, so a phone that has played `/vista/village/` holds its saves; when t
 - `scripts/browser-opening.mjs`: the headless check (SwiftShader, 390×844, touch): the dark first launch, the water at 0, a real swipe
   and a tap pair each a run, the settled water at 60, the drop and the reveal, the summit with no UI, Petal, the compass, the stick, the
   dive, the node's places (`['pool']`), the catwalk of D and back, a later meditation, a reload (skipped) and `?opening=0`. Screenshots in
-  `artifacts/opening` (01-dark-opening … 12-catwalk-D).
+  `artifacts/opening` (01-dark-opening … 12-catwalk-D). **Passes** locally (2026-10-31) with `test-mobility`, `test-opening`, `test-vista`
+  and `test-village`; the workflow runs the same and publishes.
 
 **Not in this slice:** O2 (the snerk's scope and the deer); the faint halos on distant living things (nothing new is drawn for them);
 sound; the letter flip.
