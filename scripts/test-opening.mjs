@@ -2,7 +2,7 @@
 import { build } from 'esbuild';
 import { spawnSync } from 'node:child_process';
 import { rmSync } from 'node:fs';
-const suites = [['tests/opening.test.ts', '.opening-tests.mjs']];
+const suites = [['tests/opening.test.ts', '.opening-tests.mjs'], ['tests/eden.test.ts', '.eden-tests.mjs']];
 try {
   for (const [entry, outfile] of suites) await build({ entryPoints: [entry], bundle: true, platform: 'node', format: 'esm', outfile, packages: 'external' });
   const result = spawnSync(process.execPath, ['--test', ...suites.map(s => s[1])], { stdio: 'inherit' });
