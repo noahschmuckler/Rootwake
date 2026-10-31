@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { freshEden, stepEden, summary, serializeEden, parseEden, BAND, PACK, NEED_PER_DAY, FORAGE_R, FLOWER_SPOTS, ROCK_SPOTS, TRIP_TICKS, HUG_TICKS } from '../src/edenModel';
+import { freshEden, stepEden, summary, serializeEden, parseEden, BAND, PACK, NEED_PER_DAY, FORAGE_R, FLOWER_SPOTS, ROCK_SPOTS, TRIP_TICKS, HUG_TICKS, BURLS_PER_TREE, CAT_MEALS } from '../src/edenModel';
 import { DAY_TICKS } from '../src/villageModel';
 import { mulberry32 } from '../src/colors';
 
@@ -53,4 +53,23 @@ test('E1b: the band\'s antics: idle with the need met they wander to flowers, ro
   const n = world(5); stepEden(n, 700, ctx); const z = n.hobbits[3]; z.act = 'idle'; z.antic = { kind: 'nap', left: 500 }; stepEden(n, 30, ctx); assert.equal(z.antic, null, 'dusk ends the nap'); assert.equal(z.act === 'eating' || z.act === 'idle', true);
   // Saved and loaded, the antics and the spots ride along; an old save without them gets empty lists.
   const back = parseEden(serializeEden(e), () => world(9)); assert.equal(back.flowers.length, FLOWER_SPOTS); const old = JSON.parse(serializeEden(e)); delete old.flowers; delete old.rocks; const o = parseEden(JSON.stringify(old), () => world(9)); assert.deepEqual([o.flowers, o.rocks], [[], []]);
+});
+
+test('E2a, the night: burls on a third of the hosts ripen and pop at night into soaring birds that settle as new burls; the bobcat sleeps by day and by night climbs for eggs and leaps for birds, up to its meals; thirty days keep the burls within the trees', () => {
+  const e = world(6), ctx = { canStand: () => true }; const hosts = e.hosts.length;
+  assert.ok(e.burls.length >= hosts * 0.2 && e.burls.length <= hosts * 0.5, `a third of the hosts burled (${e.burls.length} of ${hosts})`); assert.ok(e.cat && e.cat.act === 'sleeping');
+  for (const b of e.burls) { assert.ok(b.h >= 3 && b.h <= 6); assert.equal(b.eggs, 3); }
+  // By day: no flights, the bobcat asleep at its den.
+  stepEden(e, 400, ctx); assert.equal(e.birds.length, 0, 'no bird flies by day'); assert.equal(e.cat!.act, 'sleeping'); assert.ok(Math.hypot(e.cat!.x - e.cat!.den.x, e.cat!.z - e.cat!.den.z) < 0.1);
+  // Nights: pops, flights, landings; the bobcat prowls, eats and sleeps again by dawn.
+  const kinds = new Set<string>(); let flying = 0, catMeals = 0;
+  for (let d = 0; d < 6; d++) { for (let t = 0; t < DAY_TICKS; t += 20) { stepEden(e, 20, ctx); flying = Math.max(flying, e.birds.length); catMeals = Math.max(catMeals, e.cat!.meals); } for (const ev of e.events) kinds.add(ev.kind); }
+  for (const k of ['burl-pops', 'bird-lands', 'bobcat-prowls', 'bobcat-eats-eggs', 'bobcat-sleeps']) assert.ok(kinds.has(k), `${k} in six days (${[...kinds].join(' ')})`);
+  assert.ok(flying >= 2, `birds in the air at night (${flying})`); assert.ok(catMeals >= 1 && catMeals <= CAT_MEALS, `the bobcat's meals (${catMeals})`);
+  assert.equal(e.cat!.act === 'sleeping' || e.cat!.act === 'homing' || e.cat!.act === 'descending', true, 'asleep or lying up at the day\'s start');
+  const w = world(7); for (let d = 0; d < 30; d++) stepEden(w, DAY_TICKS, ctx);
+  assert.ok(w.burls.length >= 3, `burls remain after thirty days (${w.burls.length})`); assert.ok(w.burls.length <= w.hosts.length * BURLS_PER_TREE, 'and no more than the trees hold'); for (const h of w.hosts) assert.ok(w.burls.filter(b => b.host === h.id).length <= BURLS_PER_TREE);
+  assert.ok(w.chickens.length >= 10, 'the fungus and the band are untouched by the night');
+  const back = parseEden(serializeEden(e), () => world(9)); assert.equal(back.burls.length, e.burls.length); assert.ok(back.cat);
+  const old = JSON.parse(serializeEden(e)); delete old.burls; delete old.birds; delete old.cat; const o = parseEden(JSON.stringify(old), () => world(9)); assert.deepEqual([o.burls, o.birds, o.cat], [[], [], null]);
 });
