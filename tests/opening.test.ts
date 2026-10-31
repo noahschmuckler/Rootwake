@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { freshOpening, allShown, nextStep, advance, complete, chaosOf, serializeOpening, parseOpening, STEPS, PETAL_LINES, endingAt, endingSeconds, ENDING } from '../src/openingModel';
 import { swipeTarget, Board } from '../src/match3';
 import { CLARITY_CAP } from '../src/deepModel';
-import { riseDeer, stepDeer, RISE_S, SINK_S, LIFE_S, WALK, deerFigureState } from '../src/deerModel';
+import { riseDeer, stepDeer, takeDeer, RISE_S, SINK_S, LIFE_S, WALK, TROT, deerFigureState } from '../src/deerModel';
 
 test('O1: the opening stage: a missing save is a new player, steps come in order, the dev override shows everything, saved and read back', () => {
   const o = parseOpening(null); assert.deepEqual(o, freshOpening()); assert.equal(nextStep(o), 'opened'); assert.ok(!complete(o));
@@ -50,4 +50,15 @@ test('O2: the spirit deer rises, wanders on ground it may walk with grazes, turn
   // Its life ends in a sink, then it is gone.
   const e = riseDeer(0, 0, 0); stepDeer(e, RISE_S + 0.01, rand, () => true); let ev: string | null = null; for (let i = 0; i < (LIFE_S + SINK_S + 2) / 0.1 && ev !== 'sunk'; i++) ev = stepDeer(e, 0.1, rand, () => true); assert.equal(ev, 'sunk'); assert.equal(e.phase, 'gone');
   assert.deepEqual(deerFigureState(riseDeer(0, 0, 0)), { phase: 'rising', t: 0, speed: 0, still: 0, health: 100 });
+});
+test('O2, taken: a taken deer waits on the stick, turns toward the push and trots its way, stops short of ground it may not walk, and never sinks until let go', () => {
+  let seed = 5; const rand = (): number => { seed = (seed * 48271) % 2147483647; return (seed - 1) / 2147483646; }; const d = riseDeer(0, 0, 0); assert.equal(takeDeer(d), false, 'not while rising'); stepDeer(d, RISE_S + 0.01, rand, () => true); assert.ok(takeDeer(d)); assert.ok(d.driven);
+  for (let i = 0; i < 40; i++) stepDeer(d, 0.05, rand, () => true); assert.deepEqual([d.x, d.z, d.speed], [0, 0, 0], 'unpushed it stands'); assert.ok(d.still > 1.9, 'and after a while grazes');
+  // Pushed east (+x): the heading comes round to face +x (forward is (-sin h, -cos h), so h = -pi/2) and it moves east at the trot.
+  for (let i = 0; i < 100; i++) stepDeer(d, 0.05, rand, () => true, { x: 1, z: 0, amount: 1 });
+  assert.ok(Math.abs(Math.atan2(Math.sin(d.heading + Math.PI / 2), Math.cos(d.heading + Math.PI / 2))) < 0.02, `faces east (heading ${d.heading.toFixed(2)})`); assert.ok(d.x > 8 && Math.abs(d.z) < 2, `went east (${d.x.toFixed(1)}, ${d.z.toFixed(1)})`); assert.equal(d.speed, TROT);
+  const half = riseDeer(0, 0, -Math.PI / 2); stepDeer(half, RISE_S + 0.01, rand, () => true); takeDeer(half); stepDeer(half, 1, rand, () => true, { x: 1, z: 0, amount: 0.5 }); assert.ok(Math.abs(half.x - TROT * 0.5) < 1e-9, 'half a push, half the trot'); assert.ok(TROT * 0.5 > WALK, 'a half push outpaces its own walk');
+  const w = riseDeer(0, 0, -Math.PI / 2); stepDeer(w, RISE_S + 0.01, rand, () => true); takeDeer(w); for (let i = 0; i < 100; i++) stepDeer(w, 0.05, rand, px => px < 2, { x: 1, z: 0, amount: 1 }); assert.ok(w.x < 2 && w.x > 1, `stopped at the wall (x ${w.x.toFixed(2)})`); assert.equal(w.speed, 0); assert.ok(Math.abs(w.heading + Math.PI / 2) < 1e-9, 'still facing it, not turned away');
+  const e = riseDeer(0, 0, 0); stepDeer(e, RISE_S + 0.01, rand, () => true); takeDeer(e); let ev: string | null = null; for (let i = 0; i < (LIFE_S * 2) / 0.5; i++) { const r = stepDeer(e, 0.5, rand, () => true, i % 2 ? { x: 0, z: 1, amount: 1 } : null); if (r) ev = r; } assert.equal(ev, null); assert.equal(e.phase, 'up'); assert.equal(e.life, 0, 'its life does not run');
+  assert.equal(riseDeer(0, 0, 0).driven, false);
 });

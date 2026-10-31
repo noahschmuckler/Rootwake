@@ -85,6 +85,8 @@ decisions; **Claude** lines are readings or notes on what exists; **Open** lines
   look.** **O1 only** before play. **A first visit starts the phone fresh** (the shared origin's saves go once).
 - **O2 (2026-10-31):** the snerk's three lines, the scope beside the lectern, the deer seen through its own eyes down the tunnel, "look
   deeper" to embody it, "let go" or its sink to come back; the deer rises by the first village's green and lives 90 s.
+- **Taking the deer (Noah, 2026-10-31, after play):** embodied, after a few seconds of watching a "take control" button appears; taken,
+  the stick comes in and drives the deer, and it does not sink until she lets go.
 - **Claude's readings in the build:** Petal's lines are short and tapped through; the one that asks for the drag holds until she drags.
   The look is a drag of about 50° in all; the walk, a metre and a half. The dive costs its 20 of her 60, as before. The later
   meditation ends the same way at the cap, and an early "done" fades the field back. The halos on distant living things are not drawn yet.

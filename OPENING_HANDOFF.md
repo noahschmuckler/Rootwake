@@ -116,6 +116,15 @@ again. Dev handle: `__village.opening.toSnerk / scope / deeper / letGo / deer / 
 14-deer). Claude's readings: the deer is seen through its own eyes from the first look (the scope is "tuned to a deer"); the scope offers
 nothing else; nothing of O2 is saved, so it can be looked into again.
 
+**O2, taking the deer (2026-10-31, Noah's note after play).** Embodied, `CONTROL_AFTER_S` (4 s) after "look deeper" a "take control"
+button joins "let go" (`controlBtn`, shown by `deerFrame`). Taken (`takeControl` → `deerModel.takeDeer`): the deer stops and waits on the
+stick, the stick comes in (`body.deer-taken` shows `#tools`; the player is enabled on the locked world, as on the stag), and the push,
+read by `want()` relative to the deer's facing, drives it (`stepDeer`'s `drive`): it turns toward the push at `DRIVE_TURN` rad/s and goes
+at `TROT` × the push (2.6 m/s at full, above its own 1.1 m/s walk), stops short of ground it may not walk without turning away by itself,
+stands unpushed (and grazes after a while), and its life does not run, so it stays until "let go". Dev: `__village.opening.control()`,
+`drive(dx, dz, seconds)`, `controlOffered`, `deer.driven`. The check takes it and drives it east (14b-deer-taken). Claude's reading: the
+offer waits on the wander (she watches first); the look-drag still turns nothing (her eyes stay the deer's).
+
 **Not in this slice:** the faint halos on distant living things (nothing new is drawn for them); sound; the letter flip; the observation
 stage proper (what the instruments reveal per behaviour, the seasons: PROGRESSION.md).
 
