@@ -125,7 +125,10 @@ stands unpushed (and grazes after a while), and its life does not run, so it sta
 foot (Noah's second note): `orbitCamera` behind the deer by her yaw, `DEER_CAM_BACK` back and `DEER_CAM_UP` up from a point
 `DEER_CAM_AT` over the deer (Noah's third note: high enough to look over its back, not at her own height where it blocked the view), the
 look drag turning it, her yaw no longer written from the deer's heading; a toggle beside "let go" (`viewBtn`, `setDeerView`, kept
-across takes) gives first person at its head along her yaw and pitch and back; watching (not taken) her eyes stay at its head. Dev: `__village.opening.control()`,
+across takes) gives first person at its head along her yaw and pitch and back, the deer's own body then unseen by the camera (its
+materials' colour and depth writes off, `showDeerBody`) while it still casts its shadow (Noah: looking up from inside it); watching
+(not taken) her eyes stay at its head. Its pace is the stag's (Noah: "restore speed as in the stag"): `TROT` 9 m/s at full push,
+easing at `DRIVE_ACCEL` as `mountModel.driveMount` does, so a release coasts to a stop. Dev: `__village.opening.control()`,
 `drive(dx, dz, seconds)`, `controlOffered`, `deer.driven`, `deerView`, `setDeerView(v)`. The check takes it, drives it east, confirms the
 camera behind and above and a turned yaw holding (14b-deer-taken), and the toggle (14c-deer-first-person). Claude's reading: the offer waits on the wander (she watches first).
 

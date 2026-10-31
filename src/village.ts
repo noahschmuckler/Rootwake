@@ -1159,8 +1159,9 @@ let scopeLine = 0, deerView: 'third' | 'first' = 'third', deer: { d: Deer; fig: 
 const scopeEl = document.createElement('div'); scopeEl.id = 'scope'; scopeEl.hidden = true; scopeEl.innerHTML = '<div class="tunnel"></div><div class="caption"></div><div class="buttons"><button data-deeper>look deeper</button><button data-control hidden>take control</button><button data-view hidden>first person</button><button data-away>look away</button></div>'; document.body.append(scopeEl);
 const scopeCaption = scopeEl.querySelector('.caption') as HTMLElement, deeperBtn = scopeEl.querySelector('[data-deeper]') as HTMLButtonElement, controlBtn = scopeEl.querySelector('[data-control]') as HTMLButtonElement, viewBtn = scopeEl.querySelector('[data-view]') as HTMLButtonElement, awayBtn = scopeEl.querySelector('[data-away]') as HTMLButtonElement;
 deeperBtn.addEventListener('click', () => { lookDeeper(); }); controlBtn.addEventListener('click', () => { takeControl(); }); viewBtn.addEventListener('click', () => { setDeerView(deerView === 'third' ? 'first' : 'third'); }); awayBtn.addEventListener('click', () => { endDeer(); });
-/** The taken deer's view; the button offers the other. */
-function setDeerView(v: 'third' | 'first'): void { deerView = v; viewBtn.textContent = v === 'third' ? 'first person' : 'third person'; }
+/** The taken deer's view; the button offers the other. First person, its body is unseen by the camera (no colour, no depth) but still casts its shadow (Noah: looking up from inside it). */
+function setDeerView(v: 'third' | 'first'): void { deerView = v; viewBtn.textContent = v === 'third' ? 'first person' : 'third person'; showDeerBody(!(v === 'first' && !!deer?.d.driven)); }
+function showDeerBody(shown: boolean): void { deer?.fig.group.traverse(o => { if (!(o instanceof THREE.Mesh)) return; for (const m of Array.isArray(o.material) ? o.material : [o.material]) { m.colorWrite = shown; m.depthWrite = shown && !m.transparent; } }); }
 /** The scope beside the snerk's lectern on D, in the opening entry. */
 function placeScope(): void {
   const c = descentVisit.catwalk, w = descentVisit.world; if (!OPENING || !c || !w || c.depth !== 0) return;
