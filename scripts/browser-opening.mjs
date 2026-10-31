@@ -29,7 +29,8 @@ try{
   const tap=async(x,y)=>{await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]});await page.waitForTimeout(40);await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});};
   const shot=async name=>{await page.screenshot({path:`${out}/${name}.png`,timeout:T});};
   const url=`http://127.0.0.1:4195${BASE}opening/?q=low`;
-  await page.goto(url);
+  /* Navigations get the long timeout: CI's runner loads the land, the models and the clips slower than the default 30 s. */
+  await page.goto(url,{timeout:T});
   await page.waitForFunction(()=>window.__village&&window.__village.opening&&window.__village.opening.on&&window.__village.character.status!=='loading',null,{timeout:T});
   // 1. A first launch: the dark opening is the first meditation; no intro, no UI, the solids drifting.
   report.first=await page.evaluate(()=>{const v=window.__village,o=v.opening;return {mode:v.mode,phase:o.mind.phase,step:o.step,intro:document.getElementById('intro').open,bodyOpening:document.body.classList.contains('opening'),dark:o.mind.uniforms.uDark.value};});
@@ -65,7 +66,8 @@ try{
   await page.waitForFunction(()=>{const u=window.__village.opening.mind.uniforms;return u.uRipple.value>0.25;},null,{timeout:T});
   report.ending=await page.evaluate(()=>{const o=window.__village.opening,u=o.mind.uniforms;return {ripple:u.uRipple.value,reveal:u.uReveal.value,covering:o.mind.covering,mode:window.__village.mode};});assert.equal(report.ending.mode,'meditate','she waits through the ending');
   await shot('04-drop-ripple');
-  await page.waitForFunction(()=>{const u=window.__village.opening.mind.uniforms;return u.uReveal.value>0.35&&u.uReveal.value<0.8;},null,{timeout:T});await shot('05-reveal-from-the-middle');
+  /* The reveal at a twenty-fifth of its pace: with the world drawn beneath, CI's frames can be ten seconds apart; then the rest of the ending at full pace. */
+  await page.evaluate(()=>{window.__village.opening.mind.timeScale=0.04;});await page.waitForFunction(()=>window.__village.opening.mind.uniforms.uReveal.value>0.3,null,{timeout:T});await shot('05-reveal-from-the-middle');await page.evaluate(()=>{window.__village.opening.mind.timeScale=1;});
   await page.waitForFunction(()=>window.__village.mode==='ground'&&window.__village.opening.state.opened,null,{timeout:T});await page.evaluate(()=>{window.__village.opening.mind.timeScale=1;});
   // 4. The summit: no UI; then Petal; then the look, the compass, the stick, the dive.
   report.summit=await page.evaluate(()=>{const v=window.__village,vis=id=>{const e=document.getElementById(id);if(!e)return null;const s=getComputedStyle(e);return s.display!=='none'&&s.visibility!=='hidden';};return {zone:v.karst.zone,step:v.opening.step,compass:vis('compass'),tools:vis('tools'),side:vis('side'),fight:vis('fight'),guard:vis('guard'),pray:vis('pray'),clarity:vis('clarity'),petal:v.opening.petal.talking};});
@@ -118,9 +120,9 @@ try{
   report.again=await page.evaluate(()=>{const o=window.__village.opening;return {alpha:o.mind.uniforms.uAlpha.value,title:getComputedStyle(document.querySelector('#meditate .title')).display,done:getComputedStyle(document.getElementById('meditateDone')).display};});assert.equal(report.again.alpha,1);assert.notEqual(report.again.title,'none','the panel is whole on a later meditation');
   await page.evaluate(()=>window.__village.opening.done());await page.waitForFunction(()=>window.__village.mode==='ground'&&!window.__village.opening.mind.active,null,{timeout:T});
   // 7. A second load skips the opening; ?opening=0 skips it with everything shown.
-  await page.reload();await page.waitForFunction(()=>window.__village&&window.__village.opening&&window.__village.character.status!=='loading',null,{timeout:T});
+  await page.reload({timeout:T});await page.waitForFunction(()=>window.__village&&window.__village.opening&&window.__village.character.status!=='loading',null,{timeout:T});
   report.reload=await page.evaluate(()=>({mode:window.__village.mode,complete:window.__village.opening.complete,intro:document.getElementById('intro').open}));assert.equal(report.reload.mode,'ground','a returning player wakes on the ground');assert.ok(report.reload.complete);assert.equal(report.reload.intro,false);
-  await page.goto(url+'&opening=0');await page.waitForFunction(()=>window.__village&&window.__village.opening&&window.__village.character.status!=='loading',null,{timeout:T});
+  await page.goto(url+'&opening=0',{timeout:T});await page.waitForFunction(()=>window.__village&&window.__village.opening&&window.__village.character.status!=='loading',null,{timeout:T});
   report.override=await page.evaluate(()=>({on:window.__village.opening.on,bodyOpening:document.body.classList.contains('opening'),intro:document.getElementById('intro').open,fight:getComputedStyle(document.getElementById('fight')).display}));assert.equal(report.override.on,false);assert.equal(report.override.bodyOpening,false);assert.equal(report.override.intro,true,'the journey\'s intro');assert.notEqual(report.override.fight,'none');
   assert.deepEqual(errors,[],'no console or shader errors');
   console.log('opening browser checks passed');

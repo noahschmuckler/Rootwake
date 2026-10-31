@@ -1167,7 +1167,7 @@ function startScope(): boolean {
   if (mode !== 'catwalk' || deer) return false; const spot = deerSpot(); if (!spot) return false;
   scopeReturn = { at: player.feet().clone(), yaw: player.yaw }; const rand = mulberry32(home.seed * 97 + 3);
   deer = { d: riseDeer(spot.x, spot.z, rand() * Math.PI * 2), fig: createStag(home.seed + 7, stagAsset), rand }; scene.add(deer.fig.group);
-  descentVisit.update(simSeconds, player.feet(), true); lock(); player.enabled = false; player.cancelInput(); mode = 'deer'; scopeStage = 'scope';
+  descentVisit.update(simSeconds, player.feet(), true); lock(); player.enabled = false; player.cancelInput(); mode = 'deer'; scopeStage = 'scope'; document.body.classList.add('as-deer');
   scopeEl.hidden = false; scopeEl.classList.remove('deer'); scopeCaption.textContent = `the snerk: ${SNERK_DEEPER}`; scopeCaption.hidden = false; deeperBtn.hidden = false; awayBtn.textContent = 'look away';
   chunks.update(spot.x, spot.z); return true;
 }
@@ -1175,7 +1175,7 @@ function lookDeeper(): boolean { if (scopeStage !== 'scope') return false; scope
 function endDeer(): boolean {
   if (mode !== 'deer' || !scopeReturn) return false;
   if (deer) { scene.remove(deer.fig.group); deer.fig.dispose(); deer = null; }
-  scopeStage = 'off'; scopeEl.hidden = true; const r = scopeReturn; scopeReturn = null;
+  scopeStage = 'off'; scopeEl.hidden = true; document.body.classList.remove('as-deer'); const r = scopeReturn; scopeReturn = null;
   player.traversalWorld = descentVisit.traversal; player.motor.reset(r.at); place(r.at); player.yaw = r.yaw; player.pitch = 0.12; player.enabled = true; player.canMove = true; player.cancelInput(); mode = 'catwalk'; chunks.update(r.at.x, r.at.z); return true;
 }
 /** Each frame as the deer: it walks its wander; her eyes are at its head, looking its way, swaying with its step, rising and sinking with it. */
