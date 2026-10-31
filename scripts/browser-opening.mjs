@@ -100,7 +100,7 @@ try{
   // O2: at the snerk's station the lines are tapped through, then the act is the scope: her eyes a spirit deer's down a tunnel; deeper, embodied, it wanders; let go, she stands at the station again.
   assert.ok(await page.evaluate(()=>window.__village.opening.toSnerk()),'to the snerk');await page.waitForFunction(()=>window.__village.deep.visit.near==='listen'&&document.getElementById('descentAct').textContent==='listen to the snerk',null,{timeout:T});
   report.scope={lines:[]};for(let i=0;i<3;i++){await page.evaluate(()=>window.__village.deep.visit.act());report.scope.lines.push(await page.evaluate(()=>document.getElementById('descentBubble').textContent));}
-  assert.equal(report.scope.lines.length,3);assert.match(report.scope.lines[2],/scope/i,'the snerk points her to the scope');
+  assert.equal(report.scope.lines.length,3);assert.match(report.scope.lines[1],/scope/i,'the snerk points her to the scope');
   await page.waitForFunction(()=>document.getElementById('descentAct').textContent==='look into the scope',null,{timeout:T});await page.waitForFunction(()=>window.__village.scene.getObjectByName('scope')!==undefined,null,{timeout:T});
   await page.evaluate(()=>window.__village.deep.visit.act());await page.waitForFunction(()=>window.__village.mode==='deer'&&window.__village.opening.scopeStage==='scope',null,{timeout:T});
   await page.waitForFunction(()=>window.__village.opening.deer&&window.__village.opening.deer.phase==='up',null,{timeout:T});await shot('13-scope-tunnel');
