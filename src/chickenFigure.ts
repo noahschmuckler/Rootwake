@@ -5,7 +5,9 @@ import * as THREE from 'three';
 import { mulberry32 } from './colors';
 
 export const SIZE = 2.3;
-export interface ChickenFigure { group: THREE.Group; update(x: number, y: number, z: number, heading: number, stage: 'growing' | 'free' | 'resting', grown: number, speed: number, dt: number): void; dispose(): void }
+export interface ChickenFigure { group: THREE.Group; update(x: number, y: number, z: number, heading: number, stage: 'growing' | 'free' | 'resting', grown: number, speed: number, dt: number, /** E2a: by night (0..1) the shelves glow (Noah: the chicken-of-the-woods luminescent, so the night is alive). */ night?: number): void; dispose(): void }
+/** The shelves' glow by full night. Tuning. */
+const GLOW_NIGHT = 1.4;
 /** The colourings: orange-and-yellow, or a turkey tail's bands. Tuning. */
 const COLOURS: [string, string][] = [['#f08a2a', '#f6c24a'], ['#e8742a', '#f4b03a'], ['#c07a3a', '#e8c070'], ['#b06a40', '#d8a060']];
 
@@ -13,7 +15,7 @@ export function createChicken(seed = 1): ChickenFigure {
   const r = mulberry32((seed * 331 + 7) >>> 0), group = new THREE.Group(), stack = new THREE.Group(); group.add(stack);
   /** The bracket's size: about half a metre across free (the vista's trunks are wide, and a hobbit is 0.46 m). Tuning. */
   stack.scale.setScalar(SIZE);
-  const [c1, c2] = COLOURS[Math.floor(r() * COLOURS.length)], m1 = new THREE.MeshStandardMaterial({ color: c1, roughness: 0.95, flatShading: true }), m2 = new THREE.MeshStandardMaterial({ color: c2, roughness: 0.95, flatShading: true });
+  const [c1, c2] = COLOURS[Math.floor(r() * COLOURS.length)], m1 = new THREE.MeshStandardMaterial({ color: c1, emissive: c1, emissiveIntensity: 0, roughness: 0.95, flatShading: true }), m2 = new THREE.MeshStandardMaterial({ color: c2, emissive: c2, emissiveIntensity: 0, roughness: 0.95, flatShading: true });
   const dark = new THREE.MeshStandardMaterial({ color: '#2a1a10', roughness: 1 }), leg = new THREE.MeshStandardMaterial({ color: '#8a6a3a', roughness: 1, flatShading: true }), hull = new THREE.MeshBasicMaterial({ color: '#2a1408', side: THREE.BackSide });
   const geoms: THREE.BufferGeometry[] = [];
   const n = 4 + Math.floor(r() * 3), shelves: THREE.Mesh[] = [];
@@ -27,8 +29,8 @@ export function createChicken(seed = 1): ChickenFigure {
   const legs: THREE.Mesh[] = [];
   for (const s of [-1, 1]) { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.018, 0.07, 6), leg); geoms.push(l.geometry); l.position.set(s * 0.05, 0.035, -0.02); stack.add(l); legs.push(l); const f = new THREE.Mesh(new THREE.SphereGeometry(0.022, 6, 5), leg); geoms.push(f.geometry); f.scale.set(1, 0.5, 1.4); f.position.y = -0.035; l.add(f); }
   let phase = 0;
-  function update(x: number, y: number, z: number, heading: number, stage: 'growing' | 'free' | 'resting', grown: number, speed: number, dt: number): void {
-    group.position.set(x, y, z); group.rotation.y = heading;
+  function update(x: number, y: number, z: number, heading: number, stage: 'growing' | 'free' | 'resting', grown: number, speed: number, dt: number, night = 0): void {
+    group.position.set(x, y, z); group.rotation.y = heading; m1.emissiveIntensity = m2.emissiveIntensity = GLOW_NIGHT * night;
     const attached = stage !== 'free', k = stage === 'growing' ? 0.25 + 0.75 * grown : 1;
     // Attached: the shelves hug the trunk, legs tucked away, the stack on its side; free: upright on its legs.
     stack.scale.setScalar(SIZE * k); for (const l of legs) l.visible = !attached;

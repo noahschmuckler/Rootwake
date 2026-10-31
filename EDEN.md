@@ -96,11 +96,39 @@ drifting Zs, a rock "la la la", the pond a wondering sparkle.
 - **Claude's readings:** the scuffle has no loser and no harm (a tussle, then the hug, as asked); the trip keeps the load; nothing is
   said aloud yet (names and talk are still "not yet"); the chances and lengths are first guesses to tune by watching.
 
+## E2a as built (2026-10-31): the night
+
+Noah, after play: "the game is currently nighttime, and nothing happens at night. It may be time to add the bobcat, and adapt the
+bird idea: the fungal bird creatures are luminescent, both as eggs in their burl nests and when flying. The chicken of the woods
+should also be luminescent, so nighttime is alive and not just dark." Built from ECOLOGY.md's birds (puffball growths on nest-burls
+high in trees; a popped one releases bird-like fungi that soar like enormous spores and settle where they land as another burl) and
+its bobcat (related to the Hollowed: tall, gaunt, hooded and robed, a beaked mask, glowing red-orange eyes, grey clawed hands; it
+climbs trees and catches birds, sometimes in flight). The fish and the bobcat's fishing are left for E2b.
+
+- **The model** (`edenModel.ts`, E2a block): a third of the hosts start with a **burl** `BURL_H` m up (at most `BURLS_PER_TREE` a
+  tree), its three eggs ripening over `BURL_DAYS`; ripe, it pops at dusk or night into `BIRDS_PER_BURL` **birds** that soar on
+  drifting headings at `BIRD_SPEED`, easing to the trees' middle height, for `FLIGHT_TICKS`, then settle on a host within `LAND_R`
+  as a new burl (`LAND_CHANCE`; the rest soar off and are lost). The **bobcat**, one, sleeps at a den `CAT_DEN_M` from the hearth by
+  day; from dusk, short of `CAT_MEALS`, it prowls: a bird passing within `CAT_LEAP_M` and under `CAT_LEAP_H` it leaps for; else it
+  walks to the nearest burl with eggs within `CAT_HUNT_R`, climbs (`CAT_CLIMB_TICKS`), eats the eggs (`CAT_EAT_TICKS`; the burl is
+  spent) and climbs down; fed or at dawn it lies up at its den. Events: burl-pops, bird-lands, bird-lost, bobcat-prowls,
+  bobcat-eats-eggs, bobcat-takes-bird, bobcat-sleeps. Thirty days keep the burls between a few and the trees' holding (the suite);
+  the fungus, the band and the pack are untouched.
+- **The figures** (`nightFigures.ts`): the burl a lumpy growth out from the trunk (`BURL_OUT`) with three luminescent eggs in its
+  top, their glow by the night (`EGG_GLOW_NIGHT`); the bird a glowing puffball with two membrane wings, flapping slow, rolling
+  gently (`BIRD_GLOW_NIGHT`); the bobcat a gaunt pale-grey cat high on its legs with a hood-like ruff, a dark beaked muzzle, ember
+  eyes that glow by night, ear tufts and grey claws, standing vertical against the trunk when it climbs. The chicken-of-the-woods'
+  shelves glow by night too (`chickenFigure.GLOW_NIGHT`). The entry passes the night (dusk 0.6, night 1, dawn 0.35) to the world;
+  bloom (Medium and High) halos the glows.
+- **The check:** steps to night, waits for a bird in the air and the bobcat out, shoots the hearth at night and a burl (19, 19b).
+- **Claude's readings:** the burls do not yet count toward the thunderbird (E4 reads them); a bird lost beyond the hosts is simply
+  gone (no burl starts outside the band's wood); the chances and glows are first guesses; the bobcat does not fish yet.
+
 ## Passes
 
 - **E1 (this sprint):** the Eden's state; the hobbit band in the cave with its daily round; the chicken-of-the-woods cycle; the pack;
   the deer by the cave. Checked headless; published.
-- **E2:** the birds (nest-burls, the puffball flights) and the fish (eddies, spheres, the lake, upstream); the bobcat that takes both.
+- **E2:** the birds (nest-burls, the puffball flights) and the bobcat: built as E2a, the night (above); **E2b:** the fish (eddies, spheres, the lake, upstream) and the bobcat's fishing.
 - **E3:** the seasons and the bear (its den, its sleep, one feast a season).
 - **E4:** the thunderbird (the burl count, the storm, the strike, the fire, the saplings); boar and acorns.
 - **E5:** the snerk's observation quests: what the instruments reveal per behaviour (PROGRESSION.md's open questions).

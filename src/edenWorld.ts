@@ -5,12 +5,15 @@ import * as THREE from 'three';
 import { createHobbit, hobbitLook } from './hobbitFigure';
 import { createChicken, type ChickenFigure } from './chickenFigure';
 import { makeWolf, type WolfBody } from './wolfFigure';
-import { HOBBIT_WALK, WOLF_WALK, CHICKEN_WALK, TUMBLE_PACE, type Eden } from './edenModel';
+import { createBurl, createBird, createBobcat, type BurlFigure, type BirdFigure } from './nightFigures';
+import { HOBBIT_WALK, WOLF_WALK, CHICKEN_WALK, TUMBLE_PACE, CAT_WALK, type Eden } from './edenModel';
 import { mulberry32 } from './colors';
 
-export interface EdenWorld { root: THREE.Group; cave: THREE.Group; update(e: Eden, dt: number, time: number, fire: boolean): void; /** Dev: every figure put where the model has it now (a check's jump, a slow renderer). */ snap(e: Eden): void; dispose(): void; readonly counts: { hobbits: number; chickens: number; wolves: number } }
+export interface EdenWorld { root: THREE.Group; cave: THREE.Group; /** `night` 0..1: the glows (eggs, birds, the fungus, the bobcat's eyes). */ update(e: Eden, dt: number, time: number, fire: boolean, night?: number): void; /** Dev: every figure put where the model has it now (a check's jump, a slow renderer). */ snap(e: Eden): void; dispose(): void; readonly counts: { hobbits: number; chickens: number; wolves: number; burls: number; birds: number } }
 /** The hearth's fire: its light's reach (m) and the mouth's dark. Tuning. */
 const FIRE_REACH = 9, SIT_ROCK_H = 0.24;
+/** E2a: how far out from a host's centre a burl sits (the vista's trunks are wide). Tuning. */
+const BURL_OUT = 0.95;
 interface Shown { x: number; z: number; heading: number; speed: number }
 const ease = (s: Shown, x: number, z: number, heading: number, pace: number, dt: number): void => {
   const dx = x - s.x, dz = z - s.z, d = Math.hypot(dx, dz);
@@ -52,8 +55,30 @@ export function createEdenWorld(scene: THREE.Scene, relief: (x: number, z: numbe
   const chickens = new Map<number, { f: ChickenFigure; s: Shown }>();
   // ── the pack ──
   const wolves = e.pack.map(w => { const b: WolfBody = makeWolf(); b.group.scale.setScalar(0.95); root.add(b.group); return { b, s: { x: w.x, z: w.z, heading: w.heading, speed: 0 } as Shown, phase: 0 }; });
-  function update(ed: Eden, dt: number, time: number, fire: boolean): void {
+  // ── E2a: the burls on their hosts, the birds in the air, the bobcat ──
+  const burls = new Map<number, BurlFigure>(), birds = new Map<number, { f: BirdFigure; s: Shown & { y: number } }>();
+  const cat = createBobcat(); root.add(cat.group); const catS: Shown = { x: e.cat?.x ?? 0, z: e.cat?.z ?? 0, heading: 0, speed: 0 }; let catUp = 0;
+  function update(ed: Eden, dt: number, time: number, fire: boolean, night = 0): void {
     const t = time / 1000;
+    const seenBurls = new Set<number>();
+    for (const b of ed.burls) {
+      seenBurls.add(b.id); let f = burls.get(b.id); const host = ed.hosts.find(h => h.id === b.host); if (!host) continue;
+      if (!f) { f = createBurl(seed * 7 + b.id); f.group.position.set(host.x + Math.cos(b.side) * BURL_OUT, relief(host.x, host.z) + b.h, host.z + Math.sin(b.side) * BURL_OUT); f.group.rotation.y = -b.side; root.add(f.group); burls.set(b.id, f); }
+      f.update(night, b.eggs > 0, time);
+    }
+    for (const [id, f] of burls) if (!seenBurls.has(id)) { root.remove(f.group); f.dispose(); burls.delete(id); }
+    const seenBirds = new Set<number>();
+    for (const b of ed.birds) {
+      seenBirds.add(b.id); let v = birds.get(b.id); if (!v) { v = { f: createBird(seed * 3 + b.id), s: { x: b.x, y: b.y, z: b.z, heading: b.heading, speed: 0 } }; root.add(v.f.group); birds.set(b.id, v); }
+      ease(v.s, b.x, b.z, b.heading, 2.2, dt); v.s.y += (b.y - v.s.y) * Math.min(1, dt * 3);
+      v.f.update(v.s.x, relief(v.s.x, v.s.z) + v.s.y, v.s.z, v.s.heading, night, dt);
+    }
+    for (const [id, v] of birds) if (!seenBirds.has(id)) { root.remove(v.f.group); v.f.dispose(); birds.delete(id); }
+    if (ed.cat) {
+      const c = ed.cat, climbing = c.act === 'climbing' || c.act === 'eating' || c.act === 'descending'; ease(catS, c.x, c.z, c.heading, CAT_WALK * 1.15, dt); catUp += (c.up - catUp) * Math.min(1, dt * 4);
+      const burl = climbing && c.burl !== null ? ed.burls.find(b => b.id === c.burl) : null, lift = burl ? catUp * (burl.h - 0.3) : 0;
+      cat.group.visible = true; cat.update(catS.x, relief(catS.x, catS.z) + lift, catS.z, climbing && burl ? -burl.side + Math.PI / 2 : catS.heading, { act: c.act, speed: catS.speed, up: catUp }, night, dt);
+    } else cat.group.visible = false;
     for (const h of hobbits) {
       const m = ed.hobbits.find(x => x.id === h.id); if (!m) { h.f.group.visible = false; continue; }
       const an = m.antic?.kind ?? null; ease(h.s, m.x, m.z, m.heading, an === 'tumble' ? TUMBLE_PACE * 1.2 : HOBBIT_WALK * 1.15, dt);
@@ -67,7 +92,7 @@ export function createEdenWorld(scene: THREE.Scene, relief: (x: number, z: numbe
       const attached = c.stage !== 'free', host = attached ? ed.hosts.find(h => h.id === c.host) : null, a = c.id * 2.4;
       const x = host ? host.x + Math.cos(a) * 0.42 : c.x, z = host ? host.z + Math.sin(a) * 0.42 : c.z, heading = host ? Math.atan2(-Math.cos(a), -Math.sin(a)) + Math.PI : c.heading;
       if (attached) { v.s.x = x; v.s.z = z; v.s.heading = heading; v.s.speed = 0; } else ease(v.s, x, z, heading, CHICKEN_WALK * 1.2, dt);
-      v.f.update(v.s.x, relief(v.s.x, v.s.z), v.s.z, v.s.heading, c.stage, c.grown, v.s.speed, dt);
+      v.f.update(v.s.x, relief(v.s.x, v.s.z), v.s.z, v.s.heading, c.stage, c.grown, v.s.speed, dt, night);
     }
     for (const [id, v] of chickens) if (!seen.has(id)) { root.remove(v.f.group); v.f.dispose(); chickens.delete(id); }
     for (let i = 0; i < wolves.length; i++) {
@@ -81,7 +106,7 @@ export function createEdenWorld(scene: THREE.Scene, relief: (x: number, z: numbe
     for (let i = 0; i < flames.length; i++) { flames[i].visible = fire; flames[i].scale.set(1, fire ? 0.85 + Math.sin(t * 13 + i * 2.1) * 0.2 : 0.001, 1); flames[i].rotation.z = Math.sin(t * 9 + i) * 0.12; }
     fireLight.intensity = fire ? 4 + Math.sin(t * 11) * 0.8 : 0;
   }
-  function snap(ed: Eden): void { for (const h of hobbits) { const m = ed.hobbits.find(x => x.id === h.id); if (m) { h.s.x = m.x; h.s.z = m.z; h.s.heading = m.heading; h.s.speed = 0; } } for (const c of ed.chickens) { const v = chickens.get(c.id); if (v) { v.s.x = c.x; v.s.z = c.z; v.s.heading = c.heading; } } for (let i = 0; i < wolves.length; i++) { const m = ed.pack[i]; if (m) { wolves[i].s.x = m.x; wolves[i].s.z = m.z; wolves[i].s.heading = m.heading; } } }
-  function dispose(): void { scene.remove(root); for (const h of hobbits) h.f.dispose(); for (const v of chickens.values()) v.f.dispose(); for (const g of geoms) g.dispose(); for (const m of mats) m.dispose(); }
-  return { root, cave, update, snap, dispose, get counts() { return { hobbits: hobbits.length, chickens: chickens.size, wolves: wolves.length }; } };
+  function snap(ed: Eden): void { if (ed.cat) { catS.x = ed.cat.x; catS.z = ed.cat.z; catS.heading = ed.cat.heading; catUp = ed.cat.up; } for (const [id, v] of birds) { const b = ed.birds.find(x => x.id === id); if (b) { v.s.x = b.x; v.s.z = b.z; v.s.y = b.y; } } for (const h of hobbits) { const m = ed.hobbits.find(x => x.id === h.id); if (m) { h.s.x = m.x; h.s.z = m.z; h.s.heading = m.heading; h.s.speed = 0; } } for (const c of ed.chickens) { const v = chickens.get(c.id); if (v) { v.s.x = c.x; v.s.z = c.z; v.s.heading = c.heading; } } for (let i = 0; i < wolves.length; i++) { const m = ed.pack[i]; if (m) { wolves[i].s.x = m.x; wolves[i].s.z = m.z; wolves[i].s.heading = m.heading; } } }
+  function dispose(): void { scene.remove(root); for (const h of hobbits) h.f.dispose(); for (const v of chickens.values()) v.f.dispose(); for (const f of burls.values()) f.dispose(); for (const v of birds.values()) v.f.dispose(); cat.dispose(); for (const g of geoms) g.dispose(); for (const m of mats) m.dispose(); }
+  return { root, cave, update, snap, dispose, get counts() { return { hobbits: hobbits.length, chickens: chickens.size, wolves: wolves.length, burls: burls.size, birds: birds.size }; } };
 }
