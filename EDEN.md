@@ -43,6 +43,34 @@ build record. It lives on `feat/opening`, in the opening entry (`opening.html`),
 - **The chicken** is stacked fan shelves, orange to yellow, on stubby legs when free; the wolves use the village's wolf body.
 - **The deer** rises by the cave's foraging ground in the Eden, so what she watches is the band and the pack.
 
+## E1 as built (2026-10-31)
+
+- **The era.** The opening entry is the Eden (`ERA`/`EDEN` in `village.ts`; `?era=village` shows the village world instead). In it the
+  villages are never near or drawn and never advance (their tick keeps the day for the light), the growth never steps, and so the mother
+  sleeps. The dens of the old wolves still stand on the land with their sleeping packs (E2 or later takes them away).
+- **The model** (`edenModel.ts`, pure, tested in `tests/eden.test.ts`): `freshEden` seats the cave, the hearth 3.2 m before its mouth,
+  the nearest `HOSTS_MAX` (48) tree bases within `FORAGE_R` the band can walk to, berry spots and the pack's rest; `stepEden` a tick at a
+  time: the fungus grows in `GROW_DAYS` (5), frees, waddles its day, rests two at another tree; the band wakes by each one's hour, each
+  to the nearest free or resting fungus (two to berries), takes it in `TAKE_TICKS`, carries it to the hearth, out again while the hearth
+  needs more (`NEED_PER_DAY` 6) and the day lasts, idles by the hearth, eats at dusk, sleeps inside by night; the pack hunts outside noon
+  and night until `PACK_MEALS` (8), the leader to the nearest fungus no hobbit is after, the rest in file, and turns the whole pack away
+  from any hobbit within `KEEP_OFF_M`. Walking goes round what it cannot stand on and gives a target up after `GIVE_UP` ticks. The
+  thirty-day test holds the free fungus between a few and the hosts' count with both eaters fed. Events (`EdenEvent`) are kept for E5.
+- **The figures.** `hobbitFigure.ts`: the dwarf in code, a shaggy icosphere with a tan face patch, brows, eyes, the pink nose, ears,
+  mitten arms and bare toed feet, a black hull outline, the waddle in code; `hobbitLook` varies hair, skin, nose and height by seed.
+  `chickenFigure.ts`: the bracket fungus, shelves on legs, `SIZE` 2.3 so a free one is about half a metre across. The pack is the
+  village's wolf body (`wolfFigure.makeWolf`) with legs swung in code and a lying pose at rest. `edenWorld.ts` builds the cave (shaggy
+  rocks round a dark mouth and a short hollow), the hearth (a ring of stones, flames and a light at dusk and night), and eases every figure
+  toward the model at its pace (`snap` for checks).
+- **The entry.** `caveSpot` walks the first village's bearing from the karst out to where the belt's rise passes `CAVE_INTO` (10 m past
+  the rim); the hosts come from `chunkTrees` round the hearth; the model is stepped on the day's ticks in place of the villages and saved
+  under `rootwake-eden-v1`; the deer rises by the hearth. Dev: `__village.opening.eden` (`summary`, `model`, `counts`, `step(ticks)`,
+  `toCave()`, `reset()`).
+- **Checked:** `browser-opening.mjs` steps a day, asserts the takes, the dusk meal and the pack's eating, and shoots the hearth at dusk,
+  a hobbit, the fungus and the pack (15–18).
+- **Not yet:** the hobbits' names and talk; the fire as theirs to light; berries as a drawn bush (the pickers walk to a spot and bring a
+  bundle back); the old dens; sound.
+
 ## Passes
 
 - **E1 (this sprint):** the Eden's state; the hobbit band in the cave with its daily round; the chicken-of-the-woods cycle; the pack;
