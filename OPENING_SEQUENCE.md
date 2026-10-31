@@ -87,7 +87,8 @@ decisions; **Claude** lines are readings or notes on what exists; **Open** lines
   deeper" to embody it, "let go" or its sink to come back; the deer rises by the first village's green and lives 90 s.
 - **Taking the deer (Noah, 2026-10-31, after play):** embodied, after a few seconds of watching a "take control" button appears; taken,
   the stick comes in and drives the deer, and it does not sink until she lets go. The look drag works as her own on foot: the camera
-  behind the deer by her yaw, the drag turning it, the stick relative to the view.
+  behind the deer by her yaw, the drag turning it, the stick relative to the view. The taken view is high, over the deer's back (not at
+  her own height, where the deer blocked it), with a first/third person toggle beside "let go" (Noah, same day).
 - **A restart plays the opening again (Noah, 2026-10-31):** a restarted page (the webapp) after the opening is complete begins again,
   the phone fresh; a reload mid-opening resumes it. (So the world does not persist past a restart yet; `?opening=0` still skips.)
 - **Claude's readings in the build:** Petal's lines are short and tapped through; the one that asks for the drag holds until she drags.

@@ -122,10 +122,12 @@ stick, the stick comes in (`body.deer-taken` shows `#tools`; the player is enabl
 read by `want()` relative to her view, drives it (`stepDeer`'s `drive`): it turns toward the push at `DRIVE_TURN` rad/s and goes
 at `TROT` × the push (2.6 m/s at full, above its own 1.1 m/s walk), stops short of ground it may not walk without turning away by itself,
 stands unpushed (and grazes after a while), and its life does not run, so it stays until "let go". Her view while taken is her own on
-foot (Noah's second note): `orbitCamera` behind the deer by her yaw, `DEER_CAM_BACK` back and `DEER_CAM_UP` up, the look drag turning
-it, her yaw no longer written from the deer's heading; watching (not taken) her eyes stay at its head. Dev: `__village.opening.control()`,
-`drive(dx, dz, seconds)`, `controlOffered`, `deer.driven`. The check takes it, drives it east, confirms the camera behind and a turned
-yaw holding (14b-deer-taken). Claude's reading: the offer waits on the wander (she watches first).
+foot (Noah's second note): `orbitCamera` behind the deer by her yaw, `DEER_CAM_BACK` back and `DEER_CAM_UP` up from a point
+`DEER_CAM_AT` over the deer (Noah's third note: high enough to look over its back, not at her own height where it blocked the view), the
+look drag turning it, her yaw no longer written from the deer's heading; a toggle beside "let go" (`viewBtn`, `setDeerView`, kept
+across takes) gives first person at its head along her yaw and pitch and back; watching (not taken) her eyes stay at its head. Dev: `__village.opening.control()`,
+`drive(dx, dz, seconds)`, `controlOffered`, `deer.driven`, `deerView`, `setDeerView(v)`. The check takes it, drives it east, confirms the
+camera behind and above and a turned yaw holding (14b-deer-taken), and the toggle (14c-deer-first-person). Claude's reading: the offer waits on the wander (she watches first).
 
 **A restart begins again (2026-10-31, Noah's note: "restarting the page as a webapp skips the opening").** The load block treats a
 saved opening that is complete like a first visit: every `rootwake-*` key is wiped and the opening plays again (a reload mid-opening still
