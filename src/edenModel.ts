@@ -17,6 +17,10 @@ export const HOSTS_MAX = 48, HOBBIT_WALK = 0.9, BAND = 8, NEED_PER_DAY = 6, TAKE
 export const PACK = 5, WOLF_WALK = 1.4, HUNT_R = 220, PACK_MEALS = 8, EAT_TICKS = 24, KEEP_OFF_M = 8, FOLLOW_M = 3;
 /** Each hobbit's hour out after dawn (ticks), spread over the band; the meal at dusk lasts this long. */
 export const RISE_SPREAD = 80, MEAL_TICKS = 60;
+/** E1b, the band's antics (Noah, 2026-10-31, after DiggyDwarves' dwarf: wandering when idle, sniffing flowers, humming on rocks, dozing under trees; and the Minions and A Bug's Life's pill bugs: pratfalls, tumbles, little scuffles ending in a hug). An idle hobbit at the hearth with the day's need met starts one at ANTIC_CHANCE a tick: a wander (ANTIC_R m from the hearth) ending at what is there, a scuffle with an idle neighbour within SCUFFLE_M, or a tumble. Walking, a trip at TRIP_CHANCE a tick. Durations in ticks. Tuning. */
+export const ANTIC_CHANCE = 1 / 40, ANTIC_R = 9, SCUFFLE_M = 3, TRIP_CHANCE = 1 / 350, TRIP_TICKS = 28, DIZZY_TICKS = 24, HUG_TICKS = 32, TUMBLE_PACE = 2.4, NAP_M = 30;
+export const SMELL_TICKS: [number, number] = [40, 70], SIT_TICKS: [number, number] = [80, 160], NAP_TICKS: [number, number] = [120, 260], SCUFFLE_TICKS: [number, number] = [40, 70], TUMBLE_M: [number, number] = [3, 5];
+export const FLOWER_SPOTS = 6, ROCK_SPOTS = 3;
 // ------------------------------------------------------------------------------------------------------------------------------------
 export interface Vec2 { x: number; z: number }
 export interface Host { id: number; x: number; z: number }
@@ -24,13 +28,16 @@ export type ChickenStage = 'growing' | 'free' | 'resting';
 export interface Chicken { id: number; host: number; x: number; z: number; heading: number; stage: ChickenStage; /** 0..1 while growing. */ grown: number; /** Ticks left in the stage. */ left: number; speed: number; leg: number; turn: number }
 export type HobbitAct = 'sleeping' | 'out' | 'taking' | 'home' | 'idle' | 'eating';
 export type Target = { kind: 'chicken'; id: number } | { kind: 'berries'; x: number; z: number };
-export interface EdenHobbit { id: string; name: string; rises: number; picksBerries: boolean; x: number; z: number; heading: number; act: HobbitAct; target: Target | null; carry: 'chicken' | 'berries' | null; taking: number; inside: boolean; speed: number; hunger: number; trips: number; stuck?: number }
+/** The antics: a wander to a spot (`then` what it does there), sniffing a flower, humming on a rock, dozing under a tree, a scuffle with a partner and the hug it ends in, a pratfall (any walk), a tumble (rolling as a ball along `heading`) and the dizzy stand after it. */
+export type AnticKind = 'wander' | 'smell' | 'sit' | 'nap' | 'scuffle' | 'hug' | 'trip' | 'tumble' | 'dizzy';
+export interface Antic { kind: AnticKind; /** Ticks left (a wander: ticks allowed). */ left: number; at?: Vec2; then?: AnticKind; partner?: string; heading?: number }
+export interface EdenHobbit { id: string; name: string; rises: number; picksBerries: boolean; x: number; z: number; heading: number; act: HobbitAct; target: Target | null; carry: 'chicken' | 'berries' | null; taking: number; inside: boolean; speed: number; hunger: number; trips: number; stuck?: number; antic?: Antic | null }
 export type WolfAct = 'resting' | 'roaming' | 'hunting' | 'eating';
 export interface Wolf { id: number; x: number; z: number; heading: number; act: WolfAct; target: number | null; eating: number; speed: number; stuck?: number; /** Ticks left turning away from a hobbit. */ shy?: number }
-export type EventKind = 'hobbit-takes' | 'hobbit-picks' | 'band-eats' | 'wolf-eats' | 'chicken-frees' | 'chicken-rests' | 'pack-roams' | 'pack-rests';
+export type EventKind = 'hobbit-takes' | 'hobbit-picks' | 'band-eats' | 'wolf-eats' | 'chicken-frees' | 'chicken-rests' | 'pack-roams' | 'pack-rests' | 'hobbit-smells' | 'hobbit-sits' | 'hobbit-naps' | 'hobbit-scuffles' | 'hobbit-hugs' | 'hobbit-trips' | 'hobbit-tumbles';
 export interface EdenEvent { kind: EventKind; tick: number; x: number; z: number; who?: string }
 export interface Eden {
-  seed: number; tick: number; cave: Vec2 & { dir: number }; hearth: Vec2; hosts: Host[]; berries: Vec2[]; chickens: Chicken[]; nextChicken: number;
+  seed: number; tick: number; cave: Vec2 & { dir: number }; hearth: Vec2; hosts: Host[]; berries: Vec2[]; /** E1b: flowers to sniff and rocks to sit on, near the hearth. */ flowers: Vec2[]; rocks: Vec2[]; chickens: Chicken[]; nextChicken: number;
   hobbits: EdenHobbit[]; pack: Wolf[]; packHome: Vec2; packMeals: number; packDay: number; /** Chickens and berries at the hearth today. */ store: number; berriesStore: number; eatenToday: number;
   events: EdenEvent[]; /** A day's counts (dev). */ days: { chickens: number; free: number; taken: number; wolfEaten: number }[];
 }
@@ -48,7 +55,10 @@ export function freshEden(seed: number, cave: Vec2 & { dir: number }, trees: Hos
   const reachable = (p: Vec2): boolean => { const d = dist(hearth, p), n = Math.max(1, Math.ceil(d / 4)); for (let i = 1; i <= n; i++) { const t = i / n; if (!ctx.canStand(hearth.x + (p.x - hearth.x) * t, hearth.z + (p.z - hearth.z) * t)) return false; } return true; };
   // The nearest HOSTS_MAX the band can walk to: the balance is tuned to that many (a wood holds far more trees than the eaters could keep in check).
   const hosts = trees.filter(t => dist(t, hearth) <= FORAGE_R && dist(t, hearth) > 6 && reachable(t)).sort((a, b) => dist(a, hearth) - dist(b, hearth)).slice(0, HOSTS_MAX);
-  const e: Eden = { seed, tick: 0, cave, hearth, hosts, berries: berries.filter(reachable), chickens: [], nextChicken: 1, hobbits: [], pack: [], packHome, packMeals: 0, packDay: -1, store: 0, berriesStore: 0, eatenToday: 0, events: [], days: [] };
+  const e: Eden = { seed, tick: 0, cave, hearth, hosts, berries: berries.filter(reachable), flowers: [], rocks: [], chickens: [], nextChicken: 1, hobbits: [], pack: [], packHome, packMeals: 0, packDay: -1, store: 0, berriesStore: 0, eatenToday: 0, events: [], days: [] };
+  // E1b: flowers 3–9 m from the hearth, rocks 2.5–6 m, on ground the band can stand on, off the cave's own line.
+  for (let i = 0; i < 60 && e.flowers.length < FLOWER_SPOTS; i++) { const a = rand() * Math.PI * 2, d = 3 + rand() * 6, p = { x: hearth.x + Math.cos(a) * d, z: hearth.z + Math.sin(a) * d }; if (ctx.canStand(p.x, p.z) && dist(p, cave) > 3 && !e.flowers.some(f => dist(f, p) < 1.5)) e.flowers.push(p); }
+  for (let i = 0; i < 60 && e.rocks.length < ROCK_SPOTS; i++) { const a = rand() * Math.PI * 2, d = 2.5 + rand() * 3.5, p = { x: hearth.x + Math.cos(a) * d, z: hearth.z + Math.sin(a) * d }; if (ctx.canStand(p.x, p.z) && dist(p, cave) > 3 && !e.flowers.some(f => dist(f, p) < 1.2) && !e.rocks.some(r => dist(r, p) < 2)) e.rocks.push(p); }
   for (const h of hosts) e.chickens.push(newChicken(e, h, rand() * 0.9));
   // A few already free, so the first dawn has something to take.
   for (const c of e.chickens) if (rand() < 0.3) { c.stage = 'free'; c.grown = 1; c.left = Math.floor(FREE_TICKS * rand()); const a = rand() * Math.PI * 2, r = 2 + rand() * 6; c.x += Math.cos(a) * r; c.z += Math.sin(a) * r; const host = hosts.find(h => h.id === c.host)!; e.chickens.push(newChicken(e, host, 0)); }
@@ -75,6 +85,46 @@ function walk(p: { x: number; z: number; heading: number; speed: number; stuck?:
 }
 /** Ticks of going round an obstacle before a target is given up. Tuning. */
 const GIVE_UP = 40;
+// ── E1b: the antics ──
+const between = (rand: () => number, [a, b]: [number, number]): number => Math.floor(a + rand() * (b - a));
+/** Walking, a pratfall now and then: flat on its face for TRIP_TICKS, then up and on (the load kept). */
+function maybeTrip(e: Eden, h: EdenHobbit, rand: () => number): void { if (h.speed > 0 && !h.antic && rand() < TRIP_CHANCE) { h.antic = { kind: 'trip', left: TRIP_TICKS }; h.speed = 0; event(e, 'hobbit-trips', h, h.id); } }
+/** An idle hobbit with the day's need met starts something: a scuffle with an idle neighbour, a tumble, or a wander to a flower, a rock, a tree or nowhere. */
+function startAntic(e: Eden, h: EdenHobbit, rand: () => number, ctx: EdenCtx): void {
+  const r = rand();
+  if (r < 0.22) { const p = e.hobbits.find(o => o !== h && o.act === 'idle' && !o.antic && !o.inside && dist(o, h) <= SCUFFLE_M); if (p) { const t = between(rand, SCUFFLE_TICKS), near = stepTo(p, toward(p, h), 0.9); if (ctx.canStand(near.x, near.z)) { h.x = near.x; h.z = near.z; } h.heading = toward(h, p); p.heading = toward(p, h); h.antic = { kind: 'scuffle', left: t, partner: p.id }; p.antic = { kind: 'scuffle', left: t, partner: h.id }; event(e, 'hobbit-scuffles', { x: (h.x + p.x) / 2, z: (h.z + p.z) / 2 }, h.id); return; } }
+  if (r < 0.36) { const heading = rand() * Math.PI * 2, m = TUMBLE_M[0] + rand() * (TUMBLE_M[1] - TUMBLE_M[0]); h.antic = { kind: 'tumble', left: Math.ceil(m / (TUMBLE_PACE * SECONDS_PER_TICK)), heading }; h.heading = heading; event(e, 'hobbit-tumbles', h, h.id); return; }
+  // A wander: to a flower, a rock or a tree near the hearth when there is one, else a spot at random.
+  const k = rand(), pick = <T extends Vec2>(list: T[]): T | null => (list.length ? list[Math.floor(rand() * list.length)] : null);
+  let at: Vec2 | null = null, then: AnticKind | undefined;
+  if (k < 0.3) { at = pick(e.flowers); then = 'smell'; } else if (k < 0.5) { at = pick(e.rocks); then = 'sit'; } else if (k < 0.65) { const t = pick(e.hosts.filter(t => dist(t, e.hearth) <= NAP_M)); if (t) { at = stepTo(t, toward(t, e.hearth), 0.7); then = 'nap'; } }
+  if (!at) { const a = rand() * Math.PI * 2, d = 2 + rand() * (ANTIC_R - 2); at = { x: e.hearth.x + Math.cos(a) * d, z: e.hearth.z + Math.sin(a) * d }; then = undefined; if (!ctx.canStand(at.x, at.z)) return; }
+  h.antic = { kind: 'wander', left: 200, at, then };
+}
+/** A tick of an antic. True when it took the tick (the act waits); false when it ended or was dropped (dusk, night, a call elsewhere). */
+function runAntic(e: Eden, h: EdenHobbit, phase: Phase, rand: () => number, ctx: EdenCtx): boolean {
+  const a = h.antic!; const end = (): false => { h.antic = null; h.speed = 0; return false; };
+  switch (a.kind) {
+    case 'trip': case 'dizzy': h.speed = 0; if (--a.left <= 0) return end(); return true;
+    case 'smell': case 'sit': case 'nap': h.speed = 0; if (h.act !== 'idle' || phase === 'dusk' || phase === 'night' || --a.left <= 0) return end(); return true;
+    case 'hug': h.speed = 0; if (--a.left <= 0) return end(); return true;
+    case 'scuffle': {
+      const p = e.hobbits.find(o => o.id === a.partner); if (!p || !p.antic || (p.antic.kind !== 'scuffle' && p.antic.kind !== 'hug') || p.antic.partner !== h.id || h.act !== 'idle' || phase === 'dusk' || phase === 'night') return end();
+      h.speed = 0; h.heading = toward(h, p); if (--a.left <= 0) { h.antic = { kind: 'hug', left: HUG_TICKS, partner: p.id }; if (p.antic.kind === 'scuffle') { p.antic = { kind: 'hug', left: HUG_TICKS, partner: h.id }; event(e, 'hobbit-hugs', { x: (h.x + p.x) / 2, z: (h.z + p.z) / 2 }, h.id); } }
+      return true;
+    }
+    case 'tumble': { const n = stepTo(h, a.heading ?? h.heading, TUMBLE_PACE * SECONDS_PER_TICK); if (!ctx.canStand(n.x, n.z) || --a.left <= 0) { h.antic = { kind: 'dizzy', left: DIZZY_TICKS }; h.speed = 0; return true; } h.x = n.x; h.z = n.z; h.speed = TUMBLE_PACE; return true; }
+    case 'wander': {
+      if (h.act !== 'idle' || phase === 'dusk' || phase === 'night' || !a.at) return end();
+      const arrived = walk(h, a.at, HOBBIT_WALK * 0.8, ctx); if (!arrived && --a.left > 0 && (h.stuck ?? 0) <= GIVE_UP) { maybeTrip(e, h, rand); return true; }
+      h.stuck = 0; h.speed = 0;
+      if (arrived && a.then === 'smell') { h.antic = { kind: 'smell', left: between(rand, SMELL_TICKS) }; event(e, 'hobbit-smells', h, h.id); return true; }
+      if (arrived && a.then === 'sit') { h.antic = { kind: 'sit', left: between(rand, SIT_TICKS) }; event(e, 'hobbit-sits', h, h.id); return true; }
+      if (arrived && a.then === 'nap') { h.antic = { kind: 'nap', left: between(rand, NAP_TICKS) }; event(e, 'hobbit-naps', h, h.id); return true; }
+      return end();
+    }
+  }
+}
 function eat(e: Eden, c: Chicken, by: 'hobbit' | 'wolf'): void { e.chickens.splice(e.chickens.indexOf(c), 1); if (by === 'wolf') e.days[e.days.length - 1].wolfEaten++; else e.days[e.days.length - 1].taken++; }
 
 /** The world a tick on: the fungus, the band, the pack. */
@@ -101,12 +151,13 @@ function stepOne(e: Eden, ctx: EdenCtx): void {
   const need = e.store + e.hobbits.filter(h => h.carry === 'chicken').length < NEED_PER_DAY, dayOver = phase === 'dusk' || phase === 'night', atHearth = (h: EdenHobbit): boolean => dist(h, e.hearth) < 1.2;
   for (const h of e.hobbits) {
     h.hunger = Math.min(1, h.hunger + 1 / (DAY_TICKS * 2));
+    if (h.antic && runAntic(e, h, phase, rand, ctx)) continue;
     switch (h.act) {
       case 'sleeping': if (phase !== 'night' && t >= h.rises && t < 700) { h.act = 'idle'; h.inside = false; h.x = e.cave.x; h.z = e.cave.z; h.heading = e.cave.dir + Math.PI; } break;
       case 'idle': {
         if (phase === 'night') { if (walk(h, e.cave, HOBBIT_WALK, ctx)) { h.act = 'sleeping'; h.inside = true; } break; }
         if (phase === 'dusk') { if (walk(h, stepTo(e.hearth, (e.hobbits.indexOf(h) / BAND) * Math.PI * 2, 1.6), HOBBIT_WALK, ctx)) { h.act = 'eating'; h.taking = MEAL_TICKS; h.heading = toward(h, e.hearth); if (e.eatenToday === 0) { e.eatenToday = 1; event(e, 'band-eats', e.hearth); } } break; }
-        if (dayOver || !need && !(h.picksBerries && e.berriesStore < BERRY_PICKERS)) { walk(h, stepTo(e.hearth, (e.hobbits.indexOf(h) / BAND) * Math.PI * 2 + 0.5, 2.2), HOBBIT_WALK, ctx); break; }
+        if (dayOver || !need && !(h.picksBerries && e.berriesStore < BERRY_PICKERS)) { if (!dayOver && rand() < ANTIC_CHANCE) startAntic(e, h, rand, ctx); else walk(h, stepTo(e.hearth, (e.hobbits.indexOf(h) / BAND) * Math.PI * 2 + 0.5, 2.2), HOBBIT_WALK, ctx); break; }
         if (h.picksBerries && e.berries.length) { h.target = { kind: 'berries', ...e.berries[(h.trips + e.hobbits.indexOf(h)) % e.berries.length] }; h.act = 'out'; break; }
         const c = nearest(h, takeable(e, taken).filter(c => dist(c, e.hearth) <= FORAGE_R)); if (c) { h.target = { kind: 'chicken', id: c.id }; taken.add(c.id); h.act = 'out'; } else h.speed = 0;
         break;
@@ -116,6 +167,7 @@ function stepOne(e: Eden, ctx: EdenCtx): void {
         if (h.target.kind === 'chicken') { const tid = h.target.id, c = e.chickens.find(c => c.id === tid); if (!c) { h.target = null; h.act = 'idle'; break; } if (dist(h, c) <= TAKE_M) { h.act = 'taking'; h.taking = TAKE_TICKS; h.speed = 0; } else walk(h, c, HOBBIT_WALK, ctx); }
         else if (walk(h, h.target, HOBBIT_WALK, ctx)) { h.act = 'taking'; h.taking = BERRY_TICKS; }
         if ((h.stuck ?? 0) > GIVE_UP) { h.target = null; h.act = 'idle'; h.stuck = 0; }
+        maybeTrip(e, h, rand);
         break;
       }
       case 'taking': {
@@ -123,7 +175,7 @@ function stepOne(e: Eden, ctx: EdenCtx): void {
         else if (--h.taking <= 0) { h.carry = 'berries'; h.target = null; h.act = 'home'; event(e, 'hobbit-picks', h, h.id); }
         break;
       }
-      case 'home': if (walk(h, e.hearth, HOBBIT_WALK, ctx)) { if (h.carry === 'chicken') e.store++; else if (h.carry === 'berries') e.berriesStore++; h.carry = null; h.trips++; h.act = 'idle'; } break;
+      case 'home': if (walk(h, e.hearth, HOBBIT_WALK, ctx)) { if (h.carry === 'chicken') e.store++; else if (h.carry === 'berries') e.berriesStore++; h.carry = null; h.trips++; h.act = 'idle'; } else maybeTrip(e, h, rand); break;
       case 'eating': h.hunger = Math.max(0, h.hunger - 0.6 / MEAL_TICKS); if (--h.taking <= 0) h.act = 'idle'; break;
     }
     if (h.act !== 'out' && h.act !== 'home' && !(h.act === 'idle' && !atHearth(h))) h.speed = 0;
@@ -159,5 +211,5 @@ export function summary(e: Eden): { chickens: number; free: number; growing: num
 }
 export const serializeEden = (e: Eden): string => JSON.stringify({ v: 1, ...e });
 export function parseEden(raw: string | null, fresh: () => Eden): Eden {
-  try { const p = JSON.parse(raw ?? 'null'); if (!p || typeof p !== 'object' || p.v !== 1 || !Array.isArray(p.hobbits) || !Array.isArray(p.chickens) || !Array.isArray(p.pack) || !Array.isArray(p.hosts)) return fresh(); const { v: _v, ...rest } = p; return rest as Eden; } catch { return fresh(); }
+  try { const p = JSON.parse(raw ?? 'null'); if (!p || typeof p !== 'object' || p.v !== 1 || !Array.isArray(p.hobbits) || !Array.isArray(p.chickens) || !Array.isArray(p.pack) || !Array.isArray(p.hosts)) return fresh(); const { v: _v, ...rest } = p; const e = rest as Eden; e.flowers ??= []; e.rocks ??= []; return e; } catch { return fresh(); }
 }

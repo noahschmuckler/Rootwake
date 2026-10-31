@@ -5,12 +5,12 @@ import * as THREE from 'three';
 import { createHobbit, hobbitLook } from './hobbitFigure';
 import { createChicken, type ChickenFigure } from './chickenFigure';
 import { makeWolf, type WolfBody } from './wolfFigure';
-import { HOBBIT_WALK, WOLF_WALK, CHICKEN_WALK, type Eden } from './edenModel';
+import { HOBBIT_WALK, WOLF_WALK, CHICKEN_WALK, TUMBLE_PACE, type Eden } from './edenModel';
 import { mulberry32 } from './colors';
 
 export interface EdenWorld { root: THREE.Group; cave: THREE.Group; update(e: Eden, dt: number, time: number, fire: boolean): void; /** Dev: every figure put where the model has it now (a check's jump, a slow renderer). */ snap(e: Eden): void; dispose(): void; readonly counts: { hobbits: number; chickens: number; wolves: number } }
 /** The hearth's fire: its light's reach (m) and the mouth's dark. Tuning. */
-const FIRE_REACH = 9;
+const FIRE_REACH = 9, SIT_ROCK_H = 0.24;
 interface Shown { x: number; z: number; heading: number; speed: number }
 const ease = (s: Shown, x: number, z: number, heading: number, pace: number, dt: number): void => {
   const dx = x - s.x, dz = z - s.z, d = Math.hypot(dx, dz);
@@ -41,6 +41,11 @@ export function createEdenWorld(scene: THREE.Scene, relief: (x: number, z: numbe
   for (let i = 0; i < 3; i++) { const f = new THREE.Mesh(keep(new THREE.ConeGeometry(0.12 - i * 0.03, 0.35 + i * 0.12, 6)), flameMat); f.position.set((i - 1) * 0.08, 0.2 + i * 0.05, (i % 2) * 0.06); hearth.add(f); flames.push(f); }
   const ember = new THREE.Mesh(keep(new THREE.CylinderGeometry(0.3, 0.34, 0.08, 10)), mat(new THREE.MeshStandardMaterial({ color: '#2a1a10', emissive: '#c04010', emissiveIntensity: 0.6, roughness: 1 }))); ember.position.y = 0.04; hearth.add(ember);
   const fireLight = new THREE.PointLight('#ffa040', 0, FIRE_REACH, 1.8); fireLight.position.y = 0.8; hearth.add(fireLight);
+  // E1b: the flowers the band sniffs (a stem and three pastel heads) and the rocks it sits on (SIT_ROCK_H tall, flat-topped), at the model's spots.
+  const petalMats = ['#ff8fb0', '#ffd65a', '#c8a2ff', '#ff9a5a'].map(c => mat(new THREE.MeshStandardMaterial({ color: c, roughness: 0.8, flatShading: true }))), stemMat = mat(new THREE.MeshStandardMaterial({ color: '#3f7a2a', roughness: 1 }));
+  const petalGeo = keep(new THREE.SphereGeometry(0.045, 7, 6)), stemGeo = keep(new THREE.CylinderGeometry(0.008, 0.012, 0.22, 5));
+  e.flowers.forEach((f, i) => { const g = new THREE.Group(); g.position.set(f.x, relief(f.x, f.z), f.z); root.add(g); for (let k = 0; k < 3; k++) { const a = (i * 1.7 + k * 2.1), st = new THREE.Mesh(stemGeo, stemMat); st.position.set(Math.cos(a) * 0.09, 0.11, Math.sin(a) * 0.09); st.rotation.z = Math.cos(a) * 0.25; st.rotation.x = Math.sin(a) * 0.25; g.add(st); const h = new THREE.Mesh(petalGeo, petalMats[(i + k) % petalMats.length]); h.position.set(Math.cos(a) * 0.13, 0.23, Math.sin(a) * 0.13); h.scale.set(1, 0.6, 1); g.add(h); } });
+  e.rocks.forEach((r, i) => { const m = new THREE.Mesh(keep(rock(0.3, seed * 17 + i)), stone); m.scale.set(1, 0.7, 1); m.position.set(r.x, relief(r.x, r.z) + 0.1, r.z); root.add(m); });
   // ── the band ──
   const hobbits = e.hobbits.map((h, i) => { const f = createHobbit(hobbitLook(seed, i), seed * 3 + i); root.add(f.group); return { id: h.id, f, s: { x: h.x, z: h.z, heading: h.heading, speed: 0 } as Shown }; });
   // ── the fungus, by id, made as it appears and taken away as it is eaten ──
@@ -49,7 +54,12 @@ export function createEdenWorld(scene: THREE.Scene, relief: (x: number, z: numbe
   const wolves = e.pack.map(w => { const b: WolfBody = makeWolf(); b.group.scale.setScalar(0.95); root.add(b.group); return { b, s: { x: w.x, z: w.z, heading: w.heading, speed: 0 } as Shown, phase: 0 }; });
   function update(ed: Eden, dt: number, time: number, fire: boolean): void {
     const t = time / 1000;
-    for (const h of hobbits) { const m = ed.hobbits.find(x => x.id === h.id); if (!m) { h.f.group.visible = false; continue; } ease(h.s, m.x, m.z, m.heading, HOBBIT_WALK * 1.15, dt); h.f.update(h.s.x, relief(h.s.x, h.s.z), h.s.z, h.s.heading, { speed: h.s.speed, carry: m.carry, eating: m.act === 'eating', taking: m.act === 'taking', inside: m.inside }, dt); }
+    for (const h of hobbits) {
+      const m = ed.hobbits.find(x => x.id === h.id); if (!m) { h.f.group.visible = false; continue; }
+      const an = m.antic?.kind ?? null; ease(h.s, m.x, m.z, m.heading, an === 'tumble' ? TUMBLE_PACE * 1.2 : HOBBIT_WALK * 1.15, dt);
+      // Sitting, it is up on the rock; the rest stand on the ground.
+      h.f.update(h.s.x, relief(h.s.x, h.s.z) + (an === 'sit' ? SIT_ROCK_H : 0), h.s.z, h.s.heading, { speed: h.s.speed, carry: m.carry, eating: m.act === 'eating', taking: m.act === 'taking', inside: m.inside, antic: an }, dt);
+    }
     const seen = new Set<number>();
     for (const c of ed.chickens) {
       seen.add(c.id); let v = chickens.get(c.id); if (!v) { v = { f: createChicken(seed * 5 + c.id), s: { x: c.x, z: c.z, heading: c.heading, speed: 0 } }; root.add(v.f.group); chickens.set(c.id, v); }

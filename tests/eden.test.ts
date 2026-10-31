@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { freshEden, stepEden, summary, serializeEden, parseEden, BAND, PACK, NEED_PER_DAY, FORAGE_R } from '../src/edenModel';
+import { freshEden, stepEden, summary, serializeEden, parseEden, BAND, PACK, NEED_PER_DAY, FORAGE_R, FLOWER_SPOTS, ROCK_SPOTS, TRIP_TICKS, HUG_TICKS } from '../src/edenModel';
 import { DAY_TICKS } from '../src/villageModel';
 import { mulberry32 } from '../src/colors';
 
@@ -36,4 +36,21 @@ test('E1: the balance over thirty days: the fungus neither dies out nor runs awa
   assert.ok(taken >= 30 * NEED_PER_DAY * 0.5, `the band takes its share (${taken} in 30 days)`); assert.ok(wolfAte >= 30 * 1.5, `the pack eats (${wolfAte} in 30 days; it finds fewer when the band has been first)`);
   assert.ok(summary(e).hunger < 0.9, `the band is fed (hunger ${summary(e).hunger.toFixed(2)})`); assert.equal(wolfNear, 0, 'no wolf stands over a hobbit');
   const back = parseEden(serializeEden(e), () => world()); assert.equal(back.tick, e.tick); assert.equal(back.chickens.length, e.chickens.length); assert.equal(parseEden('junk', () => world()).tick, 0);
+});
+
+test('E1b: the band\'s antics: idle with the need met they wander to flowers, rocks and trees to sniff, hum and doze, scuffle in pairs and hug, tumble and trip, and still come home to eat', () => {
+  const e = world(3); assert.equal(e.flowers.length, FLOWER_SPOTS); assert.equal(e.rocks.length, ROCK_SPOTS);
+  const ctx = { canStand: () => true }, kinds = new Set<string>(), pairs: string[] = [];
+  for (let day = 0; day < 6; day++) { stepEden(e, DAY_TICKS, ctx); for (const ev of e.events) { kinds.add(ev.kind); } for (const ev of e.events) if (ev.kind === 'hobbit-hugs') pairs.push(ev.who ?? ''); }
+  for (const k of ['hobbit-smells', 'hobbit-sits', 'hobbit-naps', 'hobbit-scuffles', 'hobbit-hugs', 'hobbit-tumbles', 'hobbit-trips']) assert.ok(kinds.has(k), `${k} happened in six days (${[...kinds].join(' ')})`);
+  assert.ok(pairs.length >= 1, 'a scuffle ended in a hug');
+  // A tripped hobbit lies TRIP_TICKS and goes on with its load; a hug lasts HUG_TICKS and both stand up idle after.
+  const t = world(4); stepEden(t, 200, ctx); const h = t.hobbits[0]; h.act = 'home'; h.carry = 'chicken'; h.antic = { kind: 'trip', left: TRIP_TICKS }; h.x = t.hearth.x + 20; h.z = t.hearth.z;
+  const sx = h.x; stepEden(t, TRIP_TICKS - 1, ctx); assert.equal(h.antic?.kind, 'trip'); assert.equal(h.x, sx, 'flat on its face it goes nowhere'); stepEden(t, 1, ctx); assert.equal(h.antic, null); stepEden(t, 5, ctx); assert.ok(h.x !== sx && h.carry === 'chicken', 'up and on, the load kept');
+  const a = t.hobbits[1], b = t.hobbits[2]; a.act = b.act = 'idle'; a.x = b.x = t.hearth.x + 3; a.z = t.hearth.z; b.z = t.hearth.z + 0.9; a.antic = { kind: 'scuffle', left: 2, partner: b.id }; b.antic = { kind: 'scuffle', left: 2, partner: a.id };
+  stepEden(t, 2, ctx); assert.equal(a.antic?.kind, 'hug'); assert.equal(b.antic?.kind, 'hug'); assert.ok(t.events.some(ev => ev.kind === 'hobbit-hugs' && ev.who === a.id)); stepEden(t, HUG_TICKS + 1, ctx); assert.equal(a.antic, null); assert.equal(b.antic, null);
+  // Dusk drops a nap for the meal; the thirty-day balance holds with the antics (the suite's own test above).
+  const n = world(5); stepEden(n, 700, ctx); const z = n.hobbits[3]; z.act = 'idle'; z.antic = { kind: 'nap', left: 500 }; stepEden(n, 30, ctx); assert.equal(z.antic, null, 'dusk ends the nap'); assert.equal(z.act === 'eating' || z.act === 'idle', true);
+  // Saved and loaded, the antics and the spots ride along; an old save without them gets empty lists.
+  const back = parseEden(serializeEden(e), () => world(9)); assert.equal(back.flowers.length, FLOWER_SPOTS); const old = JSON.parse(serializeEden(e)); delete old.flowers; delete old.rocks; const o = parseEden(JSON.stringify(old), () => world(9)); assert.deepEqual([o.flowers, o.rocks], [[], []]);
 });

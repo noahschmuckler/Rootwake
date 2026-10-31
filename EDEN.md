@@ -71,6 +71,31 @@ build record. It lives on `feat/opening`, in the opening entry (`opening.html`),
 - **Not yet:** the hobbits' names and talk; the fire as theirs to light; berries as a drawn bush (the pickers walk to a spot and bring a
   bundle back); the old dens; sound.
 
+## E1b as built (2026-10-31): the band's antics
+
+Noah, after the first play of E1: "the hobbit models are good, but they should be amusing to watch, interacting with each other and the
+world; cute and funny, with slapstick pratfalls, little fights with each other ending in a hug. Think of the Minions, or the pill bugs
+in A Bug's Life." And DiggyDwarves' dwarf for the idle manner: there (`MetagameScene.wanderDwarf`, the addendum's §5.5) he wanders a
+tile at a time when nothing is asked of him and, bumping something, pauses with a character bubble: flowers "sniff sniff", a tree
+drifting Zs, a rock "la la la", the pond a wondering sparkle.
+
+- **The model** (`edenModel.ts`, E1b block): an idle hobbit at the hearth with the day's need met starts an antic at `ANTIC_CHANCE` a
+  tick: a **wander** within `ANTIC_R` to a flower (then **smell**), a rock (then **sit**, humming), a tree within `NAP_M` (then **nap**)
+  or nowhere; a **scuffle** with an idle neighbour within `SCUFFLE_M` (it hops in to a step away, both face off for `SCUFFLE_TICKS`),
+  ending always in a **hug** (`HUG_TICKS`); or a **tumble** (rolling as a ball `TUMBLE_M` at `TUMBLE_PACE`, then **dizzy**). Any walk
+  (out, home, a wander) has a **trip** at `TRIP_CHANCE` a tick: flat on its face for `TRIP_TICKS`, then up and on with the load. Dusk
+  and night drop the quiet antics for the meal and the cave. Flowers (`FLOWER_SPOTS`, 3–9 m from the hearth) and rocks (`ROCK_SPOTS`,
+  2.5–6 m) are seated at the Eden's making on the band's own ground. Events: hobbit-smells / sits / naps / scuffles / hugs / trips /
+  tumbles. The thirty-day balance holds with them (the suite).
+- **The figure** (`hobbitFigure.ts`): sniffing bent to the flower with little bobs; sitting down on the rock, toes up, swaying to its
+  hum; napping on its side, eyes shut; scuffling leaning in, hopping, arms flailing; hugging leaning in with its arms round; the trip a
+  face-plant blended in, feet kicking; the tumble the ball rolling at its true rate; dizzy reeling. A glyph sprite over the head, the
+  dwarf's own: "sniff", a note, Zs, and the slapstick's stars and a heart.
+- **The world** (`edenWorld.ts`): the flowers as three pastel heads on stems, the sitting rocks flat-topped (`SIT_ROCK_H`, the sitter
+  lifted onto it). The check asserts the events over the stepped days and catches one in the act (15b-eden-antic).
+- **Claude's readings:** the scuffle has no loser and no harm (a tussle, then the hug, as asked); the trip keeps the load; nothing is
+  said aloud yet (names and talk are still "not yet"); the chances and lengths are first guesses to tune by watching.
+
 ## Passes
 
 - **E1 (this sprint):** the Eden's state; the hobbit band in the cave with its daily round; the chicken-of-the-woods cycle; the pack;
