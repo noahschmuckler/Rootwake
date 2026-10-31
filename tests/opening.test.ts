@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { freshOpening, allShown, nextStep, advance, complete, chaosOf, serializeOpening, parseOpening, STEPS, PETAL_LINES, endingAt, endingSeconds, ENDING } from '../src/openingModel';
 import { swipeTarget, Board } from '../src/match3';
 import { CLARITY_CAP } from '../src/deepModel';
+import { riseDeer, stepDeer, RISE_S, SINK_S, LIFE_S, WALK, deerFigureState } from '../src/deerModel';
 
 test('O1: the opening stage: a missing save is a new player, steps come in order, the dev override shows everything, saved and read back', () => {
   const o = parseOpening(null); assert.deepEqual(o, freshOpening()); assert.equal(nextStep(o), 'opened'); assert.ok(!complete(o));
@@ -36,4 +37,17 @@ test('O1: a swipe resolves to the neighbour in the larger direction, needs enoug
   assert.equal(swipeTarget({ row: 0, col: 5 }, 30, 0, 6, 6, 18), null, 'off the right edge'); assert.equal(swipeTarget({ row: 0, col: 5 }, 0, -30, 6, 6, 18), null, 'off the top');
   // On a real board a resolved swipe is an adjacent pair the core accepts or refuses like a tap pair.
   const b = new Board(6, 6, 7); const a = { row: 3, col: 3 }, t = swipeTarget(a, 40, 0, b.rows, b.cols, 18)!; assert.ok(Board.adjacent(a, t)); const r = b.swap(a, t); assert.ok(typeof r.valid === 'boolean');
+});
+
+test('O2: the spirit deer rises, wanders on ground it may walk with grazes, turns from what it may not, and sinks after its life', () => {
+  let x = 1; const rand = (): number => { x = (x * 48271) % 2147483647; return (x - 1) / 2147483646; };
+  const d = riseDeer(0, 0, 0); assert.equal(d.phase, 'rising'); assert.equal(stepDeer(d, RISE_S + 0.01, rand, () => true), 'up'); assert.equal(d.phase, 'up');
+  let moved = 0, grazed = 0, t = 0; const start = { x: d.x, z: d.z };
+  while (t < 40) { const bx = d.x, bz = d.z; stepDeer(d, 0.05, rand, () => true); t += 0.05; if (d.x !== bx || d.z !== bz) moved += Math.hypot(d.x - bx, d.z - bz); if (d.speed === 0 && d.graze > 0) grazed += 0.05; }
+  assert.ok(moved > 10 && moved <= WALK * 40 + 1e-9, `it walks (${moved.toFixed(1)} m in 40 s)`); assert.ok(grazed > 1, `and grazes (${grazed.toFixed(1)} s)`); assert.ok(Math.hypot(d.x - start.x, d.z - start.z) > 3, 'and gets somewhere');
+  // A wall at x = 2: it never crosses it.
+  const w = riseDeer(0, 0, -Math.PI / 2); stepDeer(w, RISE_S + 0.01, rand, () => true); for (let i = 0; i < 1200; i++) stepDeer(w, 0.05, rand, (px) => px < 2); assert.ok(w.x < 2, `turned from the wall (x ${w.x.toFixed(2)})`);
+  // Its life ends in a sink, then it is gone.
+  const e = riseDeer(0, 0, 0); stepDeer(e, RISE_S + 0.01, rand, () => true); let ev: string | null = null; for (let i = 0; i < (LIFE_S + SINK_S + 2) / 0.1 && ev !== 'sunk'; i++) ev = stepDeer(e, 0.1, rand, () => true); assert.equal(ev, 'sunk'); assert.equal(e.phase, 'gone');
+  assert.deepEqual(deerFigureState(riseDeer(0, 0, 0)), { phase: 'rising', t: 0, speed: 0, still: 0, health: 100 });
 });

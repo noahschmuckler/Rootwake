@@ -40,6 +40,10 @@ export const PETAL_LINES: Record<Exclude<Step, 'opened'>, string[]> = {
   dive: ['The pool goes down.', 'Dive, and I will meet you below.'],
 };
 
+/** O2: the snerk at D's work station (OPENING_SEQUENCE.md §5): tapped through, then the act is the scope; its encouragement while she looks. */
+export const SNERK_SCOPE_LINES = ['You came out of the drop. Nobody comes out of the drop.', 'Good. The scope has waited longer than I have.', 'Look in. It is tuned to a deer.'];
+export const SNERK_DEEPER = 'Deeper. Let it carry you.';
+
 /** The dark opening's timing (seconds): the solids drift, ever faster, then land in the grid. Tuning. */
 export const DRIFT_S = 7, LAND_S = 1.6;
 /** The ending's timing (seconds): the board fades, the drop falls, the ripples spread and the world shows from the middle outward. Tuning. */

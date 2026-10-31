@@ -27,6 +27,10 @@ export interface DescentVisit {
   /** The portal's film, opening (0..1) while she channels into it. */
   setPortalOpen(k: number): void;
   /** Press the act button (dev and checks). */ act(): void;
+  /** O2: the entry may take over a station's act (its label and what the press does); null keeps the keeper's lines. */
+  stationAct: ((s: Station) => { label: string; press: () => void } | null) | null;
+  /** A keeper's speech bubble, from the entry. */ speak(s: Station, text: string): void;
+  /** Where a keeper's station spot is in the world (dev: she is placed there), while on a catwalk. */ stationAt(keeper: Station['keeper']): THREE.Vector3 | null;
 }
 
 export function createDescentVisit(scene: THREE.Scene, camera: THREE.Camera, onDrop: () => void, onPortal: () => void = () => {}): DescentVisit {
@@ -50,13 +54,16 @@ export function createDescentVisit(scene: THREE.Scene, camera: THREE.Camera, onD
   document.body.append(act, bubbleEl);
   let near: { kind: 'listen'; station: Station } | { kind: 'drop' } | { kind: 'portal' } | null = null, bubble: { station: Station; until: number } | null = null, clock = 0;
   const said = new Map<string, number>();
+  let stationAct: ((s: Station) => { label: string; press: () => void } | null) | null = null;
   act.addEventListener('pointerdown', e => { e.preventDefault(); press(); });
+  function speak(s: Station, text: string): void { bubbleEl.textContent = text; bubbleEl.hidden = false; bubble = { station: s, until: clock + BUBBLE_S }; }
   function press(): void {
     if (!near || !cw) return;
     if (near.kind === 'drop') { onDrop(); return; }
     if (near.kind === 'portal') { onPortal(); return; }
-    const s = near.station, key = `${cw.depth}:${s.keeper}`, lines = KEEPER_LINES[s.keeper], i = said.get(key) ?? 0; said.set(key, i + 1);
-    bubbleEl.textContent = lines[i % lines.length].replace('{L}', cw.letter); bubbleEl.hidden = false; bubble = { station: s, until: clock + BUBBLE_S };
+    const s = near.station, over = stationAct?.(s); if (over) { over.press(); return; }
+    const key = `${cw.depth}:${s.keeper}`, lines = KEEPER_LINES[s.keeper], i = said.get(key) ?? 0; said.set(key, i + 1);
+    speak(s, lines[i % lines.length].replace('{L}', cw.letter));
   }
   const tmp = new THREE.Vector3();
   function update(t: number, feet: THREE.Vector3, quiet = false): void {
@@ -68,7 +75,7 @@ export function createDescentVisit(scene: THREE.Scene, camera: THREE.Camera, onD
     for (const s of cw.stations) { const p = stationSpot(cw, s); if (Math.hypot(fx - p.x, fz - p.z) < LISTEN_M) next = { kind: 'listen', station: s }; }
     const o = stepOut(cw); if (!next && Math.hypot(fx - o.x, fz - o.z) < DROP_M) next = { kind: 'drop' };
     const ps = portalSpot(cw); if (!next && Math.hypot(fx - ps.x, fz - ps.z) < LISTEN_M) next = { kind: 'portal' };
-    near = next; act.hidden = !near; if (near) act.textContent = near.kind === 'drop' ? 'into the drop' : near.kind === 'portal' ? 'open the portal' : `listen to ${keeperName(near.station)}`;
+    near = next; act.hidden = !near; if (near) act.textContent = near.kind === 'drop' ? 'into the drop' : near.kind === 'portal' ? 'open the portal' : stationAct?.(near.station)?.label ?? `listen to ${keeperName(near.station)}`;
     if (bubble && (clock > bubble.until || !near || near.kind !== 'listen' || near.station !== bubble.station)) { bubble = null; bubbleEl.hidden = true; }
     if (bubble) { const k = world.keepers.find(k => k.station === bubble!.station); if (k) { k.group.getWorldPosition(tmp); tmp.y += HEAD_Y[k.kind]; tmp.project(camera); if (tmp.z > 1) bubbleEl.hidden = true; else { bubbleEl.hidden = false; bubbleEl.style.left = `${(tmp.x + 1) * innerWidth / 2}px`; bubbleEl.style.top = `${(1 - tmp.y) * innerHeight / 2 - 10}px`; } } }
   }
@@ -84,6 +91,7 @@ export function createDescentVisit(scene: THREE.Scene, camera: THREE.Camera, onD
     return { at: new THREE.Vector3(origin.x + Math.cos(a) * r, origin.y, origin.z + Math.sin(a) * r), yaw: Math.atan2(Math.cos(a), Math.sin(a)) };
   }
   function exit(): void { if (world) { world.dispose(); world = null; } cw = null; near = null; bubble = null; act.hidden = true; bubbleEl.hidden = true; }
+  function stationAt(keeper: Station['keeper']): THREE.Vector3 | null { if (!cw) return null; const s = cw.stations.find(st => st.keeper === keeper); if (!s) return null; const p = stationSpot(cw, s); return new THREE.Vector3(origin.x + p.x, origin.y, origin.z + p.z); }
   function portalAt(): THREE.Vector3 | null { if (!world || !cw) return null; const a = cw.portal.angle, r = cw.wallR + 0.3; return new THREE.Vector3(origin.x + Math.cos(a) * r, origin.y + 0.75, origin.z + Math.sin(a) * r); }
-  return { portalAt, setPortalOpen: (k: number) => world?.setPortalOpen(k), get active() { return !!world; }, get catwalk() { return cw; }, get world() { return world; }, traversal, cameraClear, enter, exit, update, get near() { return near?.kind ?? null; }, act: press };
+  return { portalAt, stationAt, setPortalOpen: (k: number) => world?.setPortalOpen(k), get stationAct() { return stationAct; }, set stationAct(f) { stationAct = f; }, speak, get active() { return !!world; }, get catwalk() { return cw; }, get world() { return world; }, traversal, cameraClear, enter, exit, update, get near() { return near?.kind ?? null; }, act: press };
 }
