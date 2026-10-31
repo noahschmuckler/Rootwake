@@ -209,15 +209,15 @@ export function villageRocks(vl: VillageLand, seed: number): Rock[] {
 
 // ── the village's day as the vista's hours ──────────────────────────────
 type Key = Omit<Hour, 'name' | 'elevation' | 'azimuth'> & { at: number };
-/** Tuning: the sky at clock hours through the village's day (dawn 05:30, dusk 19:30); between them every value blends. */
+/** Tuning: the sky at clock hours through the village's day (dawn 05:30, dusk 19:30); between them every value blends. The night keys were raised (Noah, 2026-10-31, the Eden's night: "too dark altogether"): the moon's light doubled, the ambient near a day's, so the forest reads under the glows. */
 const KEYS: Key[] = [
-  { at: 4.6, sun: '#9fb4e0', sunI: 0.35, zenith: '#0a1228', horizon: '#26324e', ambSky: '#3a4a78', ambGround: '#141822', ambI: 0.55, haze: 0.0006, hazeFall: 1 / 200, cloud: 0.35, exposure: 1.4, stars: 1 },
+  { at: 4.6, sun: '#b4c6ec', sunI: 0.75, zenith: '#0a1228', horizon: '#26324e', ambSky: '#5c6ea8', ambGround: '#2c3244', ambI: 1.05, haze: 0.0006, hazeFall: 1 / 200, cloud: 0.35, exposure: 1.4, stars: 1 },
   { at: 5.8, sun: '#ff9a6a', sunI: 1.3, zenith: '#3a5a9a', horizon: '#e8a888', ambSky: '#8a9cc8', ambGround: '#4a4440', ambI: 0.65, haze: 0.0012, hazeFall: 1 / 80, cloud: 0.4, exposure: 1.15, stars: 0.2 },
   { at: 7.5, sun: '#ffd9a8', sunI: 2.1, zenith: '#5d8fd0', horizon: '#d8dde0', ambSky: '#b4cbea', ambGround: '#7a7658', ambI: 0.85, haze: 0.0011, hazeFall: 1 / 90, cloud: 0.4, exposure: 1.0, stars: 0 },
   { at: 12.5, sun: '#fff4e0', sunI: 2.0, zenith: '#3f7fd8', horizon: '#c8def0', ambSky: '#b0cdf2', ambGround: '#7c8656', ambI: 0.9, haze: 0.00042, hazeFall: 1 / 260, cloud: 0.55, exposure: 0.95, stars: 0 },
   { at: 17.6, sun: '#ffc590', sunI: 2.0, zenith: '#5a7bbf', horizon: '#f2c9a0', ambSky: '#aab8de', ambGround: '#6e5c48', ambI: 0.88, haze: 0.0006, hazeFall: 1 / 200, cloud: 0.5, exposure: 1.05, stars: 0 },
   { at: 19.3, sun: '#ff7a4a', sunI: 1.5, zenith: '#2c3a6e', horizon: '#e79a7c', ambSky: '#7680b0', ambGround: '#443a44', ambI: 0.8, haze: 0.0007, hazeFall: 1 / 200, cloud: 0.45, exposure: 1.2, stars: 0.15 },
-  { at: 20.4, sun: '#9fb4e0', sunI: 0.35, zenith: '#0a1228', horizon: '#26324e', ambSky: '#3a4a78', ambGround: '#141822', ambI: 0.55, haze: 0.0006, hazeFall: 1 / 200, cloud: 0.35, exposure: 1.4, stars: 1 },
+  { at: 20.4, sun: '#b4c6ec', sunI: 0.75, zenith: '#0a1228', horizon: '#26324e', ambSky: '#5c6ea8', ambGround: '#2c3244', ambI: 1.05, haze: 0.0006, hazeFall: 1 / 200, cloud: 0.35, exposure: 1.4, stars: 1 },
 ];
 const mixHex = (a: string, b: string, t: number) => '#' + new THREE.Color(a).lerp(new THREE.Color(b), t).getHexString();
 /** The hour at a clock time (0..24): the sun from the east at 05:30 through the south to the west at 19:30, then the moon. */

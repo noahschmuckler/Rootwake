@@ -120,6 +120,10 @@ climbs trees and catches birds, sometimes in flight). The fish and the bobcat's 
   eyes that glow by night, ear tufts and grey claws, standing vertical against the trunk when it climbs. The chicken-of-the-woods'
   shelves glow by night too (`chickenFigure.GLOW_NIGHT`). The entry passes the night (dusk 0.6, night 1, dawn 0.35) to the world;
   bloom (Medium and High) halos the glows.
+- **The night's light (Noah, after play: "the bloom looks great, the forest looks magical, but it's too dark altogether; just increase
+  ambient light at nighttime"):** the shared hour table's two night keys (`villageVista.KEYS` at 20.4 and 4.6) were raised: the moon's
+  light doubled (0.35 → 0.75), the ambient near a day's (0.55 → 1.05, the sky and ground ambient lightened). It is the look every
+  entry under the vista shares, so the village study's night is lighter too.
 - **The check:** steps to night, waits for a bird in the air and the bobcat out, shoots the hearth at night and a burl (19, 19b).
 - **Claude's readings:** the burls do not yet count toward the thunderbird (E4 reads them); a bird lost beyond the hosts is simply
   gone (no burl starts outside the band's wood); the chances and glows are first guesses; the bobcat does not fish yet.
