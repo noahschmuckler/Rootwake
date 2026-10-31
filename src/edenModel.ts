@@ -9,12 +9,12 @@ import { mulberry32 } from './colors';
 export const SECONDS_PER_TICK = DAY_REAL_SECONDS / DAY_TICKS;
 // ---- Tuning ----------------------------------------------------------------------------------------------------------------------
 /** The fungus: days to grow at a host's base; ticks free (waddling), ticks resting at a tree; its waddle (m/s), how far it strays from its host (m), how far it looks for a tree to rest at (m). */
-export const GROW_DAYS = 4, FREE_TICKS = DAY_TICKS, REST_TICKS = DAY_TICKS * 2, CHICKEN_WALK = 0.35, CHICKEN_STRAY = 14, REST_LOOK = 30;
+export const GROW_DAYS = 5, FREE_TICKS = DAY_TICKS, REST_TICKS = DAY_TICKS * 2, CHICKEN_WALK = 0.35, CHICKEN_STRAY = 14, REST_LOOK = 30;
 /** The balance (ECOLOGY.md: the fungus multiplies without end and only its eaters hold it): a host yields a chicken every GROW_DAYS, so 46 hosts in reach give about 11 a day, and the band's need plus the pack's meals take about 12 when they can find them; when the free ones run short the takers find fewer, and the count settles low rather than running away. Tuning, all of it.
 /** The band: its pace (m/s), the hearth's need in chickens a day (a chicken feeds one, the berry pickers eat berries), how long a take is (ticks), how near to take (m), how far a hobbit forages (m), how many of the band gather berries, a berry trip's take (ticks). */
-export const HOBBIT_WALK = 0.9, BAND = 8, NEED_PER_DAY = 6, TAKE_TICKS = 30, TAKE_M = 1.0, FORAGE_R = 140, BERRY_PICKERS = 2, BERRY_TICKS = 50;
+export const HOSTS_MAX = 48, HOBBIT_WALK = 0.9, BAND = 8, NEED_PER_DAY = 6, TAKE_TICKS = 30, TAKE_M = 1.0, FORAGE_R = 140, BERRY_PICKERS = 2, BERRY_TICKS = 50;
 /** The pack: its number, pace, how far it hunts from its rest (m), chickens a day, an eating's ticks, the distance it keeps from a hobbit (m), the followers' spread (m). */
-export const PACK = 5, WOLF_WALK = 1.4, HUNT_R = 220, PACK_MEALS = 6, EAT_TICKS = 24, KEEP_OFF_M = 8, FOLLOW_M = 3;
+export const PACK = 5, WOLF_WALK = 1.4, HUNT_R = 220, PACK_MEALS = 8, EAT_TICKS = 24, KEEP_OFF_M = 8, FOLLOW_M = 3;
 /** Each hobbit's hour out after dawn (ticks), spread over the band; the meal at dusk lasts this long. */
 export const RISE_SPREAD = 80, MEAL_TICKS = 60;
 // ------------------------------------------------------------------------------------------------------------------------------------
@@ -44,9 +44,10 @@ const stepTo = (p: Vec2, heading: number, m: number): Vec2 => ({ x: p.x - Math.s
 /** The Eden at a cave: hosts are the tree bases within FORAGE_R the band can walk to (the entry supplies the trees, the model keeps those it can reach), berries a few spots; a chicken on every host at a random growth; the band asleep inside; the pack at its rest. */
 export function freshEden(seed: number, cave: Vec2 & { dir: number }, trees: Host[], berries: Vec2[], packHome: Vec2, names: { id: string; name: string; rises: number }[], ctx: EdenCtx): Eden {
   const rand = mulberry32((seed * 7331 + 11) >>> 0);
-  const hearth = stepTo(cave, cave.dir + Math.PI, 3.2);
+  const hearth = stepTo(cave, cave.dir, 3.2);
   const reachable = (p: Vec2): boolean => { const d = dist(hearth, p), n = Math.max(1, Math.ceil(d / 4)); for (let i = 1; i <= n; i++) { const t = i / n; if (!ctx.canStand(hearth.x + (p.x - hearth.x) * t, hearth.z + (p.z - hearth.z) * t)) return false; } return true; };
-  const hosts = trees.filter(t => dist(t, hearth) <= FORAGE_R && dist(t, hearth) > 6 && reachable(t));
+  // The nearest HOSTS_MAX the band can walk to: the balance is tuned to that many (a wood holds far more trees than the eaters could keep in check).
+  const hosts = trees.filter(t => dist(t, hearth) <= FORAGE_R && dist(t, hearth) > 6 && reachable(t)).sort((a, b) => dist(a, hearth) - dist(b, hearth)).slice(0, HOSTS_MAX);
   const e: Eden = { seed, tick: 0, cave, hearth, hosts, berries: berries.filter(reachable), chickens: [], nextChicken: 1, hobbits: [], pack: [], packHome, packMeals: 0, packDay: -1, store: 0, berriesStore: 0, eatenToday: 0, events: [], days: [] };
   for (const h of hosts) e.chickens.push(newChicken(e, h, rand() * 0.9));
   // A few already free, so the first dawn has something to take.
@@ -130,7 +131,8 @@ function stepOne(e: Eden, ctx: EdenCtx): void {
   // ── the pack ── (the band's targets of this tick are its own: the pack leaves them)
   for (const h of e.hobbits) if (h.target?.kind === 'chicken') taken.add(h.target.id);
   if (e.packDay !== day) { e.packDay = day; e.packMeals = 0; }
-  const leader = e.pack[0], hunts = (phase === 'dawn' || phase === 'morning' || phase === 'dusk') && e.packMeals < PACK_MEALS;
+  // The pack hunts from dawn through the afternoon and at dusk while it is short of its meals, and rests through noon and the night.
+  const leader = e.pack[0], hunts = phase !== 'night' && phase !== 'noon' && e.packMeals < PACK_MEALS;
   if (leader) {
     const hobbitNear = (p: Vec2): boolean => e.hobbits.some(h => !h.inside && dist(h, p) < KEEP_OFF_M);
     // Coequal tribes: a hobbit within KEEP_OFF_M and the leader turns the pack away from it (and from whatever it was after).

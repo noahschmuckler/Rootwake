@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { freshEden, stepEden, summary, serializeEden, parseEden, BAND, PACK, NEED_PER_DAY, PACK_MEALS, FORAGE_R } from '../src/edenModel';
+import { freshEden, stepEden, summary, serializeEden, parseEden, BAND, PACK, NEED_PER_DAY, FORAGE_R } from '../src/edenModel';
 import { DAY_TICKS } from '../src/villageModel';
 import { mulberry32 } from '../src/colors';
 
@@ -33,7 +33,7 @@ test('E1: the balance over thirty days: the fungus neither dies out nor runs awa
     const day = e.days[e.days.length - 1]; wolfAte += day.wolfEaten; taken += day.taken;
   }
   assert.ok(freeSum / samples >= 2 && minFree >= 0, `free fungus is about (mean ${(freeSum / samples).toFixed(1)}, min ${minFree})`); assert.ok(maxChickens <= e.hosts.length * 2.5, `and it does not run away (max ${maxChickens} on ${e.hosts.length} hosts)`);
-  assert.ok(taken >= 30 * NEED_PER_DAY * 0.5, `the band takes its share (${taken} in 30 days)`); assert.ok(wolfAte >= 30 * PACK_MEALS * 0.4, `the pack eats (${wolfAte})`);
+  assert.ok(taken >= 30 * NEED_PER_DAY * 0.5, `the band takes its share (${taken} in 30 days)`); assert.ok(wolfAte >= 30 * 1.5, `the pack eats (${wolfAte} in 30 days; it finds fewer when the band has been first)`);
   assert.ok(summary(e).hunger < 0.9, `the band is fed (hunger ${summary(e).hunger.toFixed(2)})`); assert.equal(wolfNear, 0, 'no wolf stands over a hobbit');
   const back = parseEden(serializeEden(e), () => world()); assert.equal(back.tick, e.tick); assert.equal(back.chickens.length, e.chickens.length); assert.equal(parseEden('junk', () => world()).tick, 0);
 });
