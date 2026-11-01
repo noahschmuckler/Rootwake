@@ -126,8 +126,12 @@ fruit to harvest instead of a slow, dodo-like creature. His headcanon keeps the 
     tresses on lanky legs,** carrying **only a few small brackets: a miniskirt on stilts.**
   - **Recovery:** it **runs to the nearest budded tree,** **flips its skirt up briefly** (a tiny white bottom), and **sits against the
     tree,** **eyestalks bobbing as if sighing with relief.**
-  - (Claude, open: if the piece that tears free is the stem, cap and fat legs, what springs out of the dress afterward is a new lanky-legged
-    occupant. A tidy reading: **fatness lives in the fat legs and bottom,** and a lean hen has stilts. Is that right?)
+  - **What comes out, and what grows back (Noah, 2026-11-01).** The harvested piece is **the legs, the bottom and part of the torso,
+    topped with a soft mushroom cap that was inserted into the creature's chest.** In response to the pulling, **the eyestalks retract
+    into the main body.** Lying flat, the creature **grows lanky legs, folded and ready to spring.** It **draws energy from the largest,
+    lowest brackets** and **keeps only the top few, youngest brackets,** just enough to grow legs and resprout its eyestalks. Then the new
+    legs **spring,** and it **bursts out of the tresses with its lanky legs scrambling,** a **miniskirt covering its tiny torso and
+    bottom,** the **eyestalks resprouted above.**
   - (Claude: the dress is the woody, tasteless part; the pale body and its meaty centre are the meat. This replaces the turtle-roll as the
     stun, and it gives fatness a clear read: a miniskirt on stilts when lean, a ballgown when fat. Open: what exactly is removed, and
     does the occupant keep its legs and eyes while the meat goes?)

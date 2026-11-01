@@ -30,6 +30,10 @@ form I could find by search. Find it on the branch Noah is playing (the village 
    legs; no beak, no feathers, no shell.
 5. **Colourways** (a few: sulphur-orange with yellow edges, grey-brown ruffled hen, turkey-tail bands) as a tint parameter, not new models.
 
+## Two body parts
+
+The body is **two pieces:** a lower, detachable **meat piece** (legs, bottom and part of the torso, topped by a soft mushroom cap socketed into the chest) and an upper core (the eyestalks and the rest of the torso). The meat piece pulls out for the harvest. Afterward the core grows folded lanky legs, **absorbing the biggest lower brackets** (they shrink away) and keeping the top few youngest, then springs out in a miniskirt.
+
 ## States and animations
 
 wander (a waddle, side-to-side sway, eyestalks lagging) · graze (head tipped forward, eating a grass tuft) · approach a budded tree base

@@ -28,6 +28,8 @@ Noah, and two screenshots of the current in-game model. They are inspiration, no
 and pulls the legs until the piece tears free: **a mushroom stem with a small colourful cap, a bare cartoon bottom and two floppy fat
 legs.** (Keep it comic, not bloody.)
 
+**What comes out and what regrows (Noah):** the piece is the legs, bottom and part of the torso, topped with a soft mushroom cap that was *inserted into the chest.* The eyestalks retract in. Flat on the ground, the creature grows folded lanky legs, drawing energy from the largest lower brackets and keeping only the top few young ones; then it springs out in a miniskirt and its eyestalks resprout.
+
 ## What the images agree on (Noah's likes)
 
 - **Eyes on thin curved stalks** rising from the top tier.
