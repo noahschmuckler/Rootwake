@@ -8,6 +8,7 @@ Noah, and two screenshots of the current in-game model. They are inspiration, no
 | `pulling-free.jpg` | **The best "tearing free" image.** A shelf-fungus body on a torn slab of bark pulling off a trunk, mycelium threads stretching, splinters flying, a raw pale wound on the tree, a small new yellow bud at the base. Two pale stem legs, eyestalks. | **Keep.** The reference for the tear-away and the bud left behind. |
 | `life-cycle-five-panels.jpg` | Budding at the tree base, tiers on the trunk, tearing free, walking with the slab, settling on a new tree. | Keep for the cycle. Its first panel (a sapling) is wrong: the buds are the pale lumps at its foot. |
 | `bracket-ambulator-slab.jpg` | The body as half-moon shelf tiers up a flat, hollowed, bark-textured slab, on two stem legs. | Keep for the silhouette and the tier fan. |
+| `backing-onto-tree-best.jpg` | **The best attached form.** The creature backed against a pine trunk: a fan of tiers cascading down and away from the tree, two long curved eyestalks drooping forward, pale stubby legs, a hollowed bark patch on the trunk beside it with threads. Generated fresh, not edited. | **Keep.** The reference for the attached pose and the tier cascade. |
 | `life-stages-four.jpg` | **Fatness stages:** emergence (thin, long legs, few tiers), growth, maturity (round, short legs, waddling), obesity (too heavy to walk). | **Keep** for the stages and for how fatness reads from the silhouette. Its round body is the *walking* form (see below). |
 | `rosette-walking.jpg` | A full rosette of ruffled tiers, eyestalks, two legs, mid-step. | Keep for the **waddle and the legs**. Not the body shape (a rosette cannot sit on a trunk). |
 | `rosette-with-log-rejected.jpg` | The rosette with a log stuck on its back. | Rejected, kept to show what not to make (a whole log). |
@@ -31,3 +32,5 @@ Fatness should read from the silhouette alone.
 
 The walking body is a **round, fluffed rosette.** To attach, it **swivels its tiers to one side** and exposes a flat, bark-textured attachment
 face against the trunk; after tearing free it **fluffs back out** to the round form. A sphere also rolls, which suits the stun-and-roll-upright.
+
+**Note on generation:** editing an image with Gemini kept putting the bark face on the wrong side (front against the tree). A fresh prompt that says the creature *backs against* the trunk, with no log named, worked. Prefer fresh generation.
