@@ -65,6 +65,23 @@ Sound is out of scope (later). The letter flip (`LETTERS` to D E L I V E R E V I
   (e.g. `feat/opening`); decide with Noah whether to merge into `feat/village` or add a workflow so he can play it on his phone.
 - Standing rule from Noah: record every decision in the docs as you go, and keep commits small.
 
+## Free mode (2026-11-01)
+
+Noah: "my 4 year old daughter likes to play it, but she always wants to play as 'the girl' and gets frustrated when the deer is her only
+option. She likes roaming the world as Hulda and summoning the stag from time to time. Can you add a corner button to toggle 'free mode'
+where Hulda becomes playable in the world regardless of what we're doing with the story mode?"
+
+- **The button** (`#free`, the opening entry only, under the bars at the top left, above every layer, shown in every mode of the story,
+  the dark board included) sets `rootwake-free` and reloads; the entry then boots as **plain play** (`OPENING` false, as `?opening=0`,
+  but in the Eden's world: `ERA` stays `eden`) with the whole village UI, the stick, the stag and the fight, no intro dialog, **her stood
+  before the hearth** looking at the cave (`standBeforeHearth`, the dev `toCave`). The button reads "story" there: tapped, the key is
+  cleared and the page reloads into the story **where it was** (the opening's save is neither read nor written in free mode; the Eden's
+  and the deep's saves are shared, so the band's days go on). A story that was complete begins again, as a restart does.
+- **Why a reload:** the story's modes (the dark board, the dive, the catwalk, the scope, the deer) hold too much transient state to
+  suspend and resume in place; a reload is the one switch every mode survives, at the cost of the land loading again.
+- **Dev:** `__village.opening.free` = `{ on, able, key }`. **The check:** taps the button at the end, asserts plain play at the hearth
+  with the stick and the stag, shoots `20-free`, taps it again and asserts the story is back.
+
 ## O1 as built (2026-10-30, branch `feat/opening`)
 
 **Decisions with Noah (2026-10-30):** the opening is built on `feat/opening`, branched from `docs/vision` (the vista line: `docs/vision` is
