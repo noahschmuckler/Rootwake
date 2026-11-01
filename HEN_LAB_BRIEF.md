@@ -19,11 +19,11 @@ form I could find by search. Find it on the branch Noah is playing (the village 
    - **Attaching:** it approaches a budded tree base, **hoists the gown** to show a bare white bottom, **backs up and sits against the
      trunk,** the dress's folds bunched up behind it around its neck and the tiers spilling down in front. (Reference:
      `backing-onto-tree-best.jpg`.) While sitting, **new tresses grow and the body thickens.**
-   - **Harvested:** the meat is pulled from beneath, the eyestalks yoink in, and the dress lies **flat and splayed with no occupant.**
+   - **Harvested (Noah: flip it upside down, the dress falls, bare bottom and legs kick; a wolf or hobbit steps on the dress and pulls the legs until the stem, small cap, bottom and two fat legs tear free; comic, not gory):** the meat is pulled from beneath, the eyestalks yoink in, and the dress lies **flat and splayed with no occupant.**
      Then two eyestalks pop up from the middle, and the occupant **springs out on stilt legs wearing a miniskirt of a few small
      brackets.**
    - **Recovery:** it runs to the nearest budded tree, flips its skirt up for a moment, sits against the tree, and its eyestalks bob in relief.
-   - Comedy is the point: keep it cartoonish and gentle.
+   - No arms and no face on the occupant, only eyestalks with eyes. Legs are tucked in while sitting. Comedy is the point: keep it cartoonish and gentle.
 3. **Fatness 0 to 1** read from the silhouette alone: lean (few thin tiers, long thin legs, tall), middle, fat (broad, round,
    short legs), and the heaviest (too heavy to walk). Reference: `life-stages-four.jpg`. Speed falls as fatness rises.
 4. **Face:** two glossy black eyes on thin curved stalks from the top, each able to droop, lean back or flare; pale stubby mushroom-stem

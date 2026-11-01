@@ -14,6 +14,20 @@ Noah, and two screenshots of the current in-game model. They are inspiration, no
 | `rosette-with-log-rejected.jpg` | The rosette with a log stuck on its back. | Rejected, kept to show what not to make (a whole log). |
 | `game-model-current-1.jpg`, `-2.jpg` | The current in-game model in the village entry: stacked cone tiers and two black dots for eyes. | The starting point to replace. |
 
+## The dress images (2026-11-01, Noah's verdicts)
+
+| File | Verdict |
+|---|---|
+| `dress-walk-hoist-sit.jpg` | **Close enough to start the 3D model.** Walking fluffed up, approaching with the gown lifted (bare white bottom), backing toward the tree, sitting with the dress bunched round. Ignore the smiling face on the first panel. |
+| `dress-harvest-flat-dress.jpg` | Panel 1 is **too gory** (a wolf pulling out a bloody mass). **Panels 2 and 3 work:** the flat splayed dress, then two eyestalks popping up from its middle. |
+| `dress-escape-miniskirt.jpg` | **Right direction:** a lanky-legged little creature springing out of the flat dress in a miniskirt of a few brackets. **Drop the arms and the face** (eyestalks with eyes only). |
+| `dress-relief-sit.jpg` | Hits the emotional beat ("whew") but **not the action wanted**: it should run up, flip the skirt briefly, and sit with legs tucked. |
+| `dress-regrowth-five.jpg` | **Right direction:** the skirt grows from a few brackets to a full gown. **Legs must be tucked in against the tree, not splayed forward; no arms, no face.** |
+
+**How it is hunted (Noah):** flip it upside down; the dress falls; the bare bottom and legs kick in the air. A wolf or hobbit steps on the dress
+and pulls the legs until the piece tears free: **a mushroom stem with a small colourful cap, a bare cartoon bottom and two floppy fat
+legs.** (Keep it comic, not bloody.)
+
 ## What the images agree on (Noah's likes)
 
 - **Eyes on thin curved stalks** rising from the top tier.

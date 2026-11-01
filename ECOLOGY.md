@@ -119,11 +119,15 @@ fruit to harvest instead of a slow, dodo-like creature. His headcanon keeps the 
   - **Walking:** it goes about **fluffed up** in the full dress.
   - **Attaching:** it approaches a tree, **hoists the gown** (showing a bare white bottom), **backs up and sits against the tree** with
     the folds of the dress **ruffled up behind it around its neck.** While it sits, **new tresses grow and the body thickens.**
-  - **Harvest:** wolves or hobbits remove **the innards from beneath.** The **eyestalks are yoinked in,** and at first there is only **a
+  - **Harvest (revised, Noah 2026-11-01):** the hen is **flipped upside down;** the dress falls and the bare bottom and legs kick in the air; a
+    wolf or hobbit **steps on the dress and pulls the legs until they tear free:** a **mushroom stem with a small colourful cap, a bare
+    cartoon bottom and two floppy fat legs** (comic, not gory). (Earlier version: wolves or hobbits remove **the innards from beneath.** The **eyestalks are yoinked in,** and at first there is only **a
     flattened dress splayed out with no occupant.** Then **two eyestalks pop up from the middle,** and the occupant **springs out of the
     tresses on lanky legs,** carrying **only a few small brackets: a miniskirt on stilts.**
   - **Recovery:** it **runs to the nearest budded tree,** **flips its skirt up briefly** (a tiny white bottom), and **sits against the
     tree,** **eyestalks bobbing as if sighing with relief.**
+  - (Claude, open: if the piece that tears free is the stem, cap and fat legs, what springs out of the dress afterward is a new lanky-legged
+    occupant. A tidy reading: **fatness lives in the fat legs and bottom,** and a lean hen has stilts. Is that right?)
   - (Claude: the dress is the woody, tasteless part; the pale body and its meaty centre are the meat. This replaces the turtle-roll as the
     stun, and it gives fatness a clear read: a miniskirt on stilts when lean, a ballgown when fat. Open: what exactly is removed, and
     does the occupant keep its legs and eyes while the meat goes?)
