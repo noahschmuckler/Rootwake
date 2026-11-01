@@ -9,6 +9,7 @@ Noah, and two screenshots of the current in-game model. They are inspiration, no
 | `life-cycle-five-panels.jpg` | Budding at the tree base, tiers on the trunk, tearing free, walking with the slab, settling on a new tree. | Keep for the cycle. Its first panel (a sapling) is wrong: the buds are the pale lumps at its foot. |
 | `bracket-ambulator-slab.jpg` | The body as half-moon shelf tiers up a flat, hollowed, bark-textured slab, on two stem legs. | Keep for the silhouette and the tier fan. |
 | `backing-onto-tree-best.jpg` | **The best attached form.** The creature backed against a pine trunk: a fan of tiers cascading down and away from the tree, two long curved eyestalks drooping forward, pale stubby legs, a hollowed bark patch on the trunk beside it with threads. Generated fresh, not edited. | **Keep.** The reference for the attached pose and the tier cascade. |
+| `cushion-growth-stages.jpg` | **The bud, four stages (Noah: "about right").** A fine white mycelial web on pine bark with a tiny nub; the nub swelling; a small pale cushion; a larger cushion with a dent in the middle ready to sit on. **Photorealistic:** use it for the **shape, colour (cream) and growth steps,** and draw it in the cartoon cel style. | **Keep.** The reference for the bud / sitting cushion. |
 | `life-stages-four.jpg` | **Fatness stages:** emergence (thin, long legs, few tiers), growth, maturity (round, short legs, waddling), obesity (too heavy to walk). | **Keep** for the stages and for how fatness reads from the silhouette. Its round body is the *walking* form (see below). |
 | `rosette-walking.jpg` | A full rosette of ruffled tiers, eyestalks, two legs, mid-step. | Keep for the **waddle and the legs**. Not the body shape (a rosette cannot sit on a trunk). |
 | `rosette-with-log-rejected.jpg` | The rosette with a log stuck on its back. | Rejected, kept to show what not to make (a whole log). |
@@ -56,3 +57,5 @@ gown: `backing-onto-tree-best.jpg`; for the lean stilt-legged stage: `life-stage
 **See `../../../HEN_LAB_BRIEF.md`:** the prompt for the modelling agent, with each state tied to its reference image.
 
 **Leaving the tree (Noah):** no bark slab is torn off, but it strains comically to rip free, leaving **a mycelial patch with a small central nub that slowly inflates into a tiny pillowy cushion** (the bud) for a hen to sit on.
+
+**Not generated (2026-11-01):** the comic strain (creature ripping free of the tree) and the creature sitting on the cushion both came out as an anthropomorphic slug; no reference image exists for either. The brief tells the agent to derive them from the approved images.
