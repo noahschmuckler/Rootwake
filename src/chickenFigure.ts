@@ -2,6 +2,7 @@
 // grow at a tree's base, break free on stubby legs to waddle and graze, and attach to another trunk to rest. Comical: a bracket
 // fungus with feet and two small dark eyes on the top shelf. Cel look: flat shading and a black back-face hull.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { mulberry32 } from './colors';
 
 export const SIZE = 2.3;
@@ -18,16 +19,22 @@ export function createChicken(seed = 1): ChickenFigure {
   const [c1, c2] = COLOURS[Math.floor(r() * COLOURS.length)], m1 = new THREE.MeshStandardMaterial({ color: c1, emissive: c1, emissiveIntensity: 0, roughness: 0.95, flatShading: true }), m2 = new THREE.MeshStandardMaterial({ color: c2, emissive: c2, emissiveIntensity: 0, roughness: 0.95, flatShading: true });
   const dark = new THREE.MeshStandardMaterial({ color: '#2a1a10', roughness: 1 }), leg = new THREE.MeshStandardMaterial({ color: '#8a6a3a', roughness: 1, flatShading: true }), hull = new THREE.MeshBasicMaterial({ color: '#2a1408', side: THREE.BackSide });
   const geoms: THREE.BufferGeometry[] = [];
-  const n = 4 + Math.floor(r() * 3), shelves: THREE.Mesh[] = [];
+  // The shelves (the fans, one geometry in its two materials; their black hull another), the eyes, and each leg with its foot: six draws a fungus,
+  // where every shelf and its hull were meshes of their own (2026-11-01, the judder: the Eden's 66 made ~900 of the draws in view from the summit).
+  const n = 4 + Math.floor(r() * 3), m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), one = new THREE.Vector3(1, 1, 1), parts: THREE.BufferGeometry[][] = [[], []], hulls: THREE.BufferGeometry[] = [];
   for (let i = 0; i < n; i++) {
-    const rad = 0.2 - i * 0.028, g = new THREE.CylinderGeometry(rad * 0.4, rad, 0.035, 9, 1, false, 0, Math.PI * 1.1); geoms.push(g);
-    const sh = new THREE.Mesh(g, i % 2 ? m2 : m1); sh.position.y = 0.05 + i * 0.045; sh.rotation.y = (r() - 0.5) * 0.5 - Math.PI * 0.55; sh.rotation.z = 0.12; stack.add(sh); shelves.push(sh);
-    const o = new THREE.Mesh(g, hull); o.scale.setScalar(1.06); o.renderOrder = -1; sh.add(o);
+    const rad = 0.2 - i * 0.028, g = new THREE.CylinderGeometry(rad * 0.4, rad, 0.035, 9, 1, false, 0, Math.PI * 1.1);
+    m4.compose(new THREE.Vector3(0, 0.05 + i * 0.045, 0), q.setFromEuler(new THREE.Euler(0, (r() - 0.5) * 0.5 - Math.PI * 0.55, 0.12)), one);
+    parts[i % 2].push(g.clone().applyMatrix4(m4)); hulls.push(g.applyMatrix4(m4.clone().multiply(new THREE.Matrix4().makeScale(1.06, 1.06, 1.06))));
   }
+  const count = (g: THREE.BufferGeometry): number => (g.index ? g.index.count : g.attributes.position.count);
+  const merged = (list: THREE.BufferGeometry[]): THREE.BufferGeometry => { const g = mergeGeometries(list)!; for (const part of list) part.dispose(); geoms.push(g); return g; };
+  const shelfGeo = merged([...parts[0], ...parts[1]]), c0 = parts[0].reduce((t, g) => t + count(g), 0); shelfGeo.clearGroups(); shelfGeo.addGroup(0, c0, 0); shelfGeo.addGroup(c0, count(shelfGeo) - c0, 1);
+  stack.add(new THREE.Mesh(shelfGeo, [m1, m2])); const hullMesh = new THREE.Mesh(merged(hulls), hull); hullMesh.renderOrder = -1; stack.add(hullMesh);
   // The eyes on the top shelf's lip, looking the way it waddles (-z).
-  for (const s of [-1, 1]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.014, 6, 5), dark); geoms.push(e.geometry); e.position.set(s * 0.04, 0.05 + (n - 1) * 0.045 + 0.02, -0.14); stack.add(e); }
+  stack.add(new THREE.Mesh(merged([-1, 1].map(s => new THREE.SphereGeometry(0.014, 6, 5).translate(s * 0.04, 0.05 + (n - 1) * 0.045 + 0.02, -0.14))), dark));
   const legs: THREE.Mesh[] = [];
-  for (const s of [-1, 1]) { const l = new THREE.Mesh(new THREE.CylinderGeometry(0.014, 0.018, 0.07, 6), leg); geoms.push(l.geometry); l.position.set(s * 0.05, 0.035, -0.02); stack.add(l); legs.push(l); const f = new THREE.Mesh(new THREE.SphereGeometry(0.022, 6, 5), leg); geoms.push(f.geometry); f.scale.set(1, 0.5, 1.4); f.position.y = -0.035; l.add(f); }
+  for (const s of [-1, 1]) { const l = new THREE.Mesh(merged([new THREE.CylinderGeometry(0.014, 0.018, 0.07, 6), new THREE.SphereGeometry(0.022, 6, 5).scale(1, 0.5, 1.4).translate(0, -0.035, 0)]), leg); l.position.set(s * 0.05, 0.035, -0.02); stack.add(l); legs.push(l); }
   let phase = 0;
   function update(x: number, y: number, z: number, heading: number, stage: 'growing' | 'free' | 'resting', grown: number, speed: number, dt: number, night = 0): void {
     group.position.set(x, y, z); group.rotation.y = heading; m1.emissiveIntensity = m2.emissiveIntensity = GLOW_NIGHT * night;
