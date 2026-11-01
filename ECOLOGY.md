@@ -114,6 +114,9 @@ fruit to harvest instead of a slow, dodo-like creature. His headcanon keeps the 
   budded base, absorb, rest, tear free); a stunned state with a roll-over-and-right animation; and a bud on each tree base that regrows
   after it is taken.
 
+- **Two forms (Noah, 2026-11-01).** After tearing free it **fluffs its tiers into a round body** to walk; to attach it **swivels the tiers to one
+  side** and exposes its flat attachment face. (Claude: this joins the rosette and shelf images, and a round body suits the roll.)
+
 ### Open (the hen)
 
 - **Are the buds edible?** Noah's first thought was that the young buds are the edible form. The headcanon makes the fat hens the meat.
