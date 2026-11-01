@@ -128,6 +128,36 @@ climbs trees and catches birds, sometimes in flight). The fish and the bobcat's 
 - **Claude's readings:** the burls do not yet count toward the thunderbird (E4 reads them); a bird lost beyond the hosts is simply
   gone (no burl starts outside the band's wood); the chances and glows are first guesses; the bobcat does not fish yet.
 
+## Assets for the animals (2026-11-01): the wolf from a file
+
+Noah: "Are there public assets available for the wolves, birds, and bobcats, for their model and animations?" Then "Ok to proceed."
+What was found, and what was done:
+
+- **Wolf: yes, twice over.** Quaternius's *Ultimate Animated Animal Pack* (CC0, the pack `public/models/stag.glb` came from) holds a
+  Wolf glTF with the stag's clip family (idle, walk, gallop, jump, eating, two attacks, two hit reacts, death); its public Drive
+  folder refused the download all day ("quota exceeded", a per-file daily cap), so the **Wolf of his *Animal Pack Vol.2*** (CC0,
+  OpenGameArt, 2017: Idle and Walking only, FBX) was converted and used: **`public/models/wolf.glb`** (218 KB, 622 triangles, 34
+  bones; `WOLF_CREDITS.md` beside it). `wolfFigure.createAssetWolf` clones it with its skeleton per wolf, fits it to `WOLF_LENGTH`,
+  gives it the hide material and our eyes on its head bone (the bone furthest forward), and blends Idle and Walking by speed, the
+  walk paced to `WOLF_CLIP_WALK_MS`; it faces +x like `makeWolf`'s body, so `edenWorld` places both the same way. The Eden's pack
+  is the procedural body until the file has loaded (at boot, `village.ts`, `?wolfasset=0` keeps the body), then swaps
+  (`EdenWorld.useWolfAsset`); the village's own wolves and the dens still draw the body. When the Ultimate pack's wolf can be
+  fetched, the same loader takes it (its clip names differ: `Walk`, `Gallop`; `createAssetWolf` reads `Walking`).
+- **Birds: tried and left out.** The Vol.2 pack's Eagle (CC0, Flying and Idle clips) is 24,800 triangles of scalloped feather
+  shells; it only holds together at full detail (three's SimplifyModifier tears the shells apart at a tenth), and a flock of them is
+  too heavy for the phone, nor is a feathered eagle the fungal spore-bird. The other free animated birds are CC-BY on Sketchfab
+  (a credit line, and a login to download) or `.blend` only. The birds stay procedural (`nightFigures.createBird`).
+- **Bobcat: nothing free and animated.** Every rigged bobcat or lynx is a paid marketplace model; the one free "rigged lynx" is a
+  Fortnite rip. The nearest CC0 base would be the Ultimate pack's Fox (same rig, a leap and attacks), retextured; since ours is in the
+  Hollowed's language (hooded, robed, climbing) the procedural figure stays.
+- **Tooling:** `scripts/fbx-to-glb.mjs` (an FBX through three's FBXLoader and GLTFExporter under node: clips renamed past the
+  armature bar and kept once by name, `--keep`, `--scale`, `--simplify N` per material group with the skin put back from the
+  nearest original vertex) and `scripts/view-glb.mjs` (a file rendered headless with its axes, a clip advanced, its bounds printed:
+  how a file's facing and size are judged before a figure is written round it).
+- **The check:** waits for the file wolf before the pack shot (18) and asserts it.
+- **Claude's readings:** `WOLF_LENGTH` 1.55 m and the walk's pace are by eye; the Vol.2 wolf has no lying clip (resting, it is
+  lowered and tilted as the body was, legs standing); the eyes sit at a guessed offset from the head bone's tip.
+
 ## Passes
 
 - **E1 (this sprint):** the Eden's state; the hobbit band in the cave with its daily round; the chicken-of-the-woods cycle; the pack;
