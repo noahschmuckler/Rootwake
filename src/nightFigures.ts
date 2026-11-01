@@ -5,6 +5,7 @@
 // cat with a hood-like ruff, a dark beaked muzzle, ember eyes and grey claws, that prowls, climbs a trunk and leaps. Cel look: flat
 // shading and black back-face hulls, as the Eden's other figures.
 import * as THREE from 'three';
+import { clone as cloneSkeleton } from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { mulberry32 } from './colors';
 
 /** The eggs' and the birds' glow colour, and how bright they get by full night (bloom catches what is brighter than sunlit ground). Tuning. */
@@ -47,7 +48,8 @@ export function createBird(seed = 1): BirdFigure {
 
 export interface BobcatState { act: 'sleeping' | 'prowling' | 'climbing' | 'eating' | 'descending' | 'leaping' | 'homing'; speed: number; /** 0..1 up the trunk. */ up: number }
 export interface BobcatFigure { group: THREE.Group; update(x: number, y: number, z: number, heading: number, s: BobcatState, night: number, dt: number): void; dispose(): void }
-export function createBobcat(): BobcatFigure {
+export function createBobcat(asset: BobcatAsset | null = null): BobcatFigure { return asset ? createAssetBobcat(asset) : createProceduralBobcat(); }
+export function createProceduralBobcat(): BobcatFigure {
   const group = new THREE.Group(), body = new THREE.Group(); group.add(body); const geoms: THREE.BufferGeometry[] = [];
   const hide = new THREE.MeshStandardMaterial({ color: '#b4b0a6', roughness: 0.95, flatShading: true }), robe = new THREE.MeshStandardMaterial({ color: '#5c5864', roughness: 1, flatShading: true }), mask = new THREE.MeshStandardMaterial({ color: '#1e1a1c', roughness: 0.9, flatShading: true }), claw = new THREE.MeshStandardMaterial({ color: '#b8b4ac', roughness: 0.8 }), eye = new THREE.MeshStandardMaterial({ color: EYE_GLOW, emissive: EYE_GLOW, emissiveIntensity: 1.5 }), hull = hullMat();
   const mk = (g: THREE.BufferGeometry, m: THREE.Material, parent: THREE.Object3D = body): THREE.Mesh => { geoms.push(g); const o = new THREE.Mesh(g, m); parent.add(o); return o; };
@@ -70,5 +72,58 @@ export function createBobcat(): BobcatFigure {
     body.rotation.x = climbing ? -Math.PI / 2 + 0.15 : s.act === 'leaping' ? -0.35 : 0; body.position.y = climbing ? 0.3 : lying ? -0.22 : s.act === 'leaping' ? 0.25 + Math.sin(phase) * 0.1 : 0; body.rotation.z = lying ? 0.25 : 0; head.rotation.x = s.act === 'eating' ? 0.6 + Math.sin(phase * 3) * 0.2 : 0; tail.rotation.z = Math.sin(phase * 0.7) * 0.3;
   }
   function dispose(): void { for (const g of geoms) g.dispose(); hide.dispose(); robe.dispose(); mask.dispose(); claw.dispose(); eye.dispose(); hull.dispose(); }
+  return { group, update, dispose };
+}
+
+// ── The file bobcat (Noah, 2026-11-01: "could you make the bobcat by modifying the fox model?") ──
+// The Ultimate pack's Fox was out of reach (Drive's daily cap), so the Cat of Quaternius's Animal Pack Vol.2 (CC0; public/models/
+// bobcat.glb, BOBCAT_CREDITS.md beside it), nearer a bobcat anyway, is made one in the Hollowed's language: stretched tall and narrow
+// (CAT_STRETCH), its tail bobbed (the tail bones past the first shrunk after each mixer step, since the clips scale them), a hood-like
+// ruff on its neck bone, a dark beaked muzzle, ember eyes and ear tufts on its head bone, every material the grey hide. Its Idle and
+// Walking clips are blended by speed; climbing, the body stands vertical with the walk slowed to a clamber; leaping, the walk races.
+export interface BobcatAsset { scene: THREE.Group; clips: THREE.AnimationClip[] }
+export async function loadBobcatAsset(url: string): Promise<BobcatAsset> {
+  const { GLTFLoader } = await import('three/examples/jsm/loaders/GLTFLoader.js');
+  const gltf = await new GLTFLoader().loadAsync(url); return { scene: gltf.scene, clips: gltf.animations };
+}
+/** The bobcat's body length (m, nose to rump), the file's own (its units), the stretch (y tall, z narrow) that makes it gaunt, the tail
+ * bones' remaining scale, and the walk clip's pace (m/s at its own rate, by eye). Tuning. */
+export const CAT_LENGTH = 0.9, ASSET_CAT_LENGTH = 400, CAT_STRETCH: [number, number, number] = [1, 1.25, 0.8], CAT_TAIL_SCALE = 0.18, CAT_CLIP_WALK_MS = 0.6, CAT_BLEND_S = 0.15;
+/** The file's bones: the neck, the head and the first tail bone to shrink (the rest hang from it). */
+const CAT_NECK = 'Bone002', CAT_HEAD = 'Bone003', CAT_TAIL = 'Bone005';
+export function createAssetBobcat(asset: BobcatAsset): BobcatFigure {
+  const group = new THREE.Group(), body = new THREE.Group(); group.add(body); const geoms: THREE.BufferGeometry[] = [];
+  const hide = new THREE.MeshStandardMaterial({ color: '#b4b0a6', roughness: 0.95, flatShading: true }), robe = new THREE.MeshStandardMaterial({ color: '#5c5864', roughness: 1, flatShading: true, side: THREE.DoubleSide }), mask = new THREE.MeshStandardMaterial({ color: '#1e1a1c', roughness: 0.9, flatShading: true }), eye = new THREE.MeshStandardMaterial({ color: EYE_GLOW, emissive: EYE_GLOW, emissiveIntensity: 1.5 });
+  const model = cloneSkeleton(asset.scene) as THREE.Group; body.add(model);
+  model.traverse(o => { if (o instanceof THREE.Mesh) { o.castShadow = true; o.frustumCulled = false; o.material = hide; } });
+  const bone = (name: string): THREE.Object3D | null => model.getObjectByName(name) ?? null;
+  // The dressing is placed in the file's own units at its bind pose (the model unscaled), then the model is fitted and stretched.
+  model.updateMatrixWorld(true); const fit = CAT_LENGTH / ASSET_CAT_LENGTH, u = 1 / fit;
+  const part = (b: THREE.Object3D, g: THREE.BufferGeometry, m: THREE.Material, at: THREE.Vector3, rz = 0): THREE.Mesh => { geoms.push(g); const o = new THREE.Mesh(g, m); const sc = b.getWorldScale(new THREE.Vector3()).x || 1; o.position.copy(b.worldToLocal(at.clone())); o.quaternion.copy(b.getWorldQuaternion(new THREE.Quaternion()).invert()).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 0, 1), rz)); o.scale.setScalar(u / sc); o.castShadow = true; b.add(o); return o; };
+  const head = bone(CAT_HEAD) ?? model, neck = bone(CAT_NECK) ?? model, tail = bone(CAT_TAIL);
+  // The file's cat faces +x, its head bone at (202, 268), the nose near 323: the beak forward of the nose, the eyes and tufts on the head, the ruff about the neck, open toward the head.
+  const beak = part(head, new THREE.ConeGeometry(0.05, 0.16, 6), mask, new THREE.Vector3(345, 258, 0), -Math.PI / 2);
+  const eyes: THREE.Mesh[] = [];
+  for (const sx of [-1, 1]) { eyes.push(part(head, new THREE.SphereGeometry(0.03, 6, 5), eye, new THREE.Vector3(290, 290, sx * 38))); part(head, new THREE.ConeGeometry(0.012, 0.06, 3), mask, new THREE.Vector3(215, 350, sx * 42)); }
+  part(neck, new THREE.ConeGeometry(0.21, 0.26, 8, 1, true), robe, new THREE.Vector3(135, 215, 0), -Math.PI / 2);
+  model.scale.set(fit * CAT_STRETCH[0], fit * CAT_STRETCH[1], fit * CAT_STRETCH[2]); model.rotation.y = Math.PI / 2; // +x to −z: the figure faces −z.
+  void beak;
+  const mixer = new THREE.AnimationMixer(model), action = (name: string): THREE.AnimationAction | null => { const c = asset.clips.find(x => x.name === name); if (!c) return null; const a = mixer.clipAction(c); a.setEffectiveWeight(0); a.play(); return a; };
+  const idle = action('Idle'), walk = action('Walking'); let moving = 0, phase = 0;
+  function update(x: number, y: number, z: number, heading: number, s: BobcatState, night: number, dt: number): void {
+    group.position.set(x, y, z); group.rotation.y = heading; eye.emissiveIntensity = 0.6 + 2.2 * night;
+    const climbing = s.act === 'climbing' || s.act === 'eating' || s.act === 'descending', lying = s.act === 'sleeping', leaping = s.act === 'leaping';
+    const wantMove = s.speed > 0.05 || leaping || s.act === 'climbing' || s.act === 'descending' ? 1 : 0; moving += (wantMove - moving) * Math.min(1, dt / CAT_BLEND_S);
+    idle?.setEffectiveWeight(1 - moving); walk?.setEffectiveWeight(moving);
+    walk?.setEffectiveTimeScale(leaping ? 2.6 : s.act === 'climbing' || s.act === 'descending' ? 0.7 : THREE.MathUtils.clamp(Math.max(0.3, s.speed) / CAT_CLIP_WALK_MS, 0.6, 2.4));
+    mixer.update(dt); phase += dt;
+    if (tail) tail.scale.setScalar(CAT_TAIL_SCALE); // After the mixer, which scales the tail bones too: bobbed.
+    if (s.act === 'eating') head.rotation.x += 0.5 + Math.sin(phase * 3) * 0.2; // The head dips to the eggs (over the clip's pose, for this frame's render).
+    // Up a trunk: the body stands vertical against it, head up. Asleep: low, rolled a little. Leaping: stretched forward and up.
+    // Asleep it lies on its side (the file has no lying clip: the standing idle rolled over and dropped to the ground).
+    // (The figure faces −z; turned +π/2 about x its nose points up the trunk, −π/2 down it: it climbs and eats head-up, comes down head-first.)
+    body.rotation.x = s.act === 'descending' ? -Math.PI / 2 + 0.15 : climbing ? Math.PI / 2 - 0.15 : leaping ? -0.35 : 0; body.position.y = climbing ? 0.3 : lying ? 0.04 : leaping ? 0.25 + Math.sin(phase * 14) * 0.1 : 0; body.rotation.z = lying ? 1.25 : 0; body.position.x = lying ? 0.28 : 0; // The roll is about the feet: the body is moved back over its spot.
+  }
+  function dispose(): void { mixer.stopAllAction(); group.removeFromParent(); for (const g of geoms) g.dispose(); hide.dispose(); robe.dispose(); mask.dispose(); eye.dispose(); }
   return { group, update, dispose };
 }

@@ -77,6 +77,7 @@ import { SNERK_SCOPE_LINES, SNERK_DEEPER } from './openingModel';
 import { freshEden, stepEden, summary as edenSummary, serializeEden, parseEden, FORAGE_R, type Eden } from './edenModel';
 import { createEdenWorld, type EdenWorld } from './edenWorld';
 import { loadWolfAsset } from './wolfFigure';
+import { loadBobcatAsset } from './nightFigures';
 // ===== O1 (OPENING_HANDOFF.md, Noah 2026-10-30): the opening entry (opening.html, or ?opening=1 on any village entry): the dark opening on a first
 // launch, the board flat on her mind's water for every meditation, Petal and the staged UI, the dive to the summit and D alone. `?opening=0` is the
 // dev override the browser journeys use: everything shown, the opening skipped, nothing saved for it. A new player (no opening save) or ?opening=1
@@ -1739,6 +1740,8 @@ let stagAsset: StagAsset | null = null;
 if (query.get('stagasset') !== '0') loadStagAsset(base('models/stag.glb')).then(a => { stagAsset = a; }, e => console.warn('stag asset', e));
 // The Eden's pack from the wolf file (wolfFigure.ts; `?wolfasset=0` keeps the procedural body).
 if (edenWorld && query.get('wolfasset') !== '0') loadWolfAsset(base('models/wolf.glb')).then(a => edenWorld.useWolfAsset(a), e => console.warn('wolf asset', e));
+// The Eden's bobcat from the cat file (nightFigures.ts; `?catasset=0` keeps the procedural figure).
+if (edenWorld && query.get('catasset') !== '0') loadBobcatAsset(base('models/bobcat.glb')).then(a => edenWorld.useBobcatAsset(a), e => console.warn('bobcat asset', e));
 /** Pass 2: the button's long press (the project's LONG_PRESS_MS) dismisses the stag from anywhere. */
 const STAG_HOLD_MS = LONG_PRESS_MS;
 /** The stag up (or rising, or collapsing), its figure and the ground under its feet; pass 4: the water over its feet (m, 0 dry), the way made since the wake last sprayed (m) and the seconds since a stride's splash. */

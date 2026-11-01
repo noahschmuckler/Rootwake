@@ -147,15 +147,25 @@ What was found, and what was done:
   shells; it only holds together at full detail (three's SimplifyModifier tears the shells apart at a tenth), and a flock of them is
   too heavy for the phone, nor is a feathered eagle the fungal spore-bird. The other free animated birds are CC-BY on Sketchfab
   (a credit line, and a login to download) or `.blend` only. The birds stay procedural (`nightFigures.createBird`).
-- **Bobcat: nothing free and animated.** Every rigged bobcat or lynx is a paid marketplace model; the one free "rigged lynx" is a
-  Fortnite rip. The nearest CC0 base would be the Ultimate pack's Fox (same rig, a leap and attacks), retextured; since ours is in the
-  Hollowed's language (hooded, robed, climbing) the procedural figure stays.
+- **Bobcat: nothing free and animated**, so one was made (Noah: "could you make the bobcat by modifying the fox model?"). The
+  Ultimate pack's Fox was behind the same Drive cap, so the **Cat of the Vol.2 pack** (CC0, Idle and Walking, nearer a bobcat anyway)
+  is **`public/models/bobcat.glb`** (267 KB, 807 triangles; `BOBCAT_CREDITS.md`), made the bobcat in the Hollowed's language by
+  `nightFigures.createAssetBobcat`: fitted to `CAT_LENGTH` and stretched tall and narrow (`CAT_STRETCH`), its tail bobbed (the tail
+  bones from `CAT_TAIL` shrunk to `CAT_TAIL_SCALE` after each mixer step, since the clips scale them), a hood-like ruff on its neck
+  bone, a dark beaked muzzle, ember eyes and ear tufts on its head bone, every material the grey hide. Idle and Walking blend by
+  speed; climbing, the body stands vertical head-up with the walk slowed to a clamber (descending head-first); leaping, the walk
+  races and the body pitches up; asleep it lies on its side (the idle rolled over). The Eden swaps it in once loaded
+  (`EdenWorld.useBobcatAsset`, `?catasset=0` keeps the procedural figure). The fox, when fetchable, would bring a leap and attacks
+  of its own to the same loader.
 - **Tooling:** `scripts/fbx-to-glb.mjs` (an FBX through three's FBXLoader and GLTFExporter under node: clips renamed past the
   armature bar and kept once by name, `--keep`, `--scale`, `--simplify N` per material group with the skin put back from the
   nearest original vertex) and `scripts/view-glb.mjs` (a file rendered headless with its axes, a clip advanced, its bounds printed:
   how a file's facing and size are judged before a figure is written round it).
-- **The check:** waits for the file wolf before the pack shot (18) and asserts it.
-- **Claude's readings:** `WOLF_LENGTH` 1.55 m and the walk's pace are by eye; the Vol.2 wolf has no lying clip (resting, it is
+- **The check:** waits for the file wolf before the pack shot (18) and the file bobcat in the night beat, asserting both, and shoots
+  the bobcat from its side where it is (19c).
+- **Claude's readings:** the bobcat's dressing sits at guessed offsets from its head and neck bones, its stretch and the climb's
+  clamber rate are by eye, and it has no outline hull (nor has the wolf: a skinned mesh's back-face hull is a later pass);
+  `WOLF_LENGTH` 1.55 m and the walk's pace are by eye; the Vol.2 wolf has no lying clip (resting, it is
   lowered and tilted as the body was, legs standing); the eyes sit at a guessed offset from the head bone's tip.
 
 ## Passes

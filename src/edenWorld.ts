@@ -5,11 +5,11 @@ import * as THREE from 'three';
 import { createHobbit, hobbitLook } from './hobbitFigure';
 import { createChicken, type ChickenFigure } from './chickenFigure';
 import { makeWolf, createAssetWolf, type WolfAsset } from './wolfFigure';
-import { createBurl, createBird, createBobcat, type BurlFigure, type BirdFigure } from './nightFigures';
+import { createBurl, createBird, createBobcat, type BurlFigure, type BirdFigure, type BobcatAsset } from './nightFigures';
 import { HOBBIT_WALK, WOLF_WALK, CHICKEN_WALK, TUMBLE_PACE, CAT_WALK, type Eden } from './edenModel';
 import { mulberry32 } from './colors';
 
-export interface EdenWorld { root: THREE.Group; cave: THREE.Group; /** `night` 0..1: the glows (eggs, birds, the fungus, the bobcat's eyes). */ update(e: Eden, dt: number, time: number, fire: boolean, night?: number): void; /** Dev: every figure put where the model has it now (a check's jump, a slow renderer). */ snap(e: Eden): void; dispose(): void; readonly counts: { hobbits: number; chickens: number; wolves: number; burls: number; birds: number }; /** The pack redrawn from the wolf file once it has loaded (wolfFigure.ts). */ useWolfAsset(asset: WolfAsset): void; readonly assets: { wolf: boolean } }
+export interface EdenWorld { root: THREE.Group; cave: THREE.Group; /** `night` 0..1: the glows (eggs, birds, the fungus, the bobcat's eyes). */ update(e: Eden, dt: number, time: number, fire: boolean, night?: number): void; /** Dev: every figure put where the model has it now (a check's jump, a slow renderer). */ snap(e: Eden): void; dispose(): void; readonly counts: { hobbits: number; chickens: number; wolves: number; burls: number; birds: number }; /** The pack redrawn from the wolf file once it has loaded (wolfFigure.ts). */ useWolfAsset(asset: WolfAsset): void; /** The bobcat redrawn from the cat file once loaded (nightFigures.ts). */ useBobcatAsset(asset: BobcatAsset): void; readonly assets: { wolf: boolean; bobcat: boolean } }
 /** The hearth's fire: its light's reach (m) and the mouth's dark. Tuning. */
 const FIRE_REACH = 9, SIT_ROCK_H = 0.24;
 /** E2a: how far out from a host's centre a burl sits (the vista's trunks are wide). Tuning. */
@@ -66,7 +66,9 @@ export function createEdenWorld(scene: THREE.Scene, relief: (x: number, z: numbe
   function useWolfAsset(a: WolfAsset): void { for (const w of wolves) { root.remove(w.f.group); w.f.dispose(); w.f = fileWolf(a); root.add(w.f.group); } wolfAsset = true; }
   // ── E2a: the burls on their hosts, the birds in the air, the bobcat ──
   const burls = new Map<number, BurlFigure>(), birds = new Map<number, { f: BirdFigure; s: Shown & { y: number } }>();
-  const cat = createBobcat(); root.add(cat.group); const catS: Shown = { x: e.cat?.x ?? 0, z: e.cat?.z ?? 0, heading: 0, speed: 0 }; let catUp = 0;
+  let cat = createBobcat(); root.add(cat.group); let bobcatAsset = false;
+  function useBobcatAsset(a: BobcatAsset): void { root.remove(cat.group); cat.dispose(); cat = createBobcat(a); root.add(cat.group); bobcatAsset = true; }
+  const catS: Shown = { x: e.cat?.x ?? 0, z: e.cat?.z ?? 0, heading: 0, speed: 0 }; let catUp = 0;
   function update(ed: Eden, dt: number, time: number, fire: boolean, night = 0): void {
     const t = time / 1000;
     const seenBurls = new Set<number>();
@@ -117,5 +119,5 @@ export function createEdenWorld(scene: THREE.Scene, relief: (x: number, z: numbe
   }
   function snap(ed: Eden): void { if (ed.cat) { catS.x = ed.cat.x; catS.z = ed.cat.z; catS.heading = ed.cat.heading; catUp = ed.cat.up; } for (const [id, v] of birds) { const b = ed.birds.find(x => x.id === id); if (b) { v.s.x = b.x; v.s.z = b.z; v.s.y = b.y; } } for (const h of hobbits) { const m = ed.hobbits.find(x => x.id === h.id); if (m) { h.s.x = m.x; h.s.z = m.z; h.s.heading = m.heading; h.s.speed = 0; } } for (const c of ed.chickens) { const v = chickens.get(c.id); if (v) { v.s.x = c.x; v.s.z = c.z; v.s.heading = c.heading; } } for (let i = 0; i < wolves.length; i++) { const m = ed.pack[i]; if (m) { wolves[i].s.x = m.x; wolves[i].s.z = m.z; wolves[i].s.heading = m.heading; } } }
   function dispose(): void { scene.remove(root); for (const h of hobbits) h.f.dispose(); for (const v of chickens.values()) v.f.dispose(); for (const f of burls.values()) f.dispose(); for (const v of birds.values()) v.f.dispose(); for (const w of wolves) w.f.dispose(); cat.dispose(); for (const g of geoms) g.dispose(); for (const m of mats) m.dispose(); }
-  return { root, cave, update, snap, dispose, get counts() { return { hobbits: hobbits.length, chickens: chickens.size, wolves: wolves.length, burls: burls.size, birds: birds.size }; }, useWolfAsset, get assets() { return { wolf: wolfAsset }; } };
+  return { root, cave, update, snap, dispose, get counts() { return { hobbits: hobbits.length, chickens: chickens.size, wolves: wolves.length, burls: burls.size, birds: birds.size }; }, useWolfAsset, useBobcatAsset, get assets() { return { wolf: wolfAsset, bobcat: bobcatAsset }; } };
 }
