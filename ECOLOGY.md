@@ -158,3 +158,5 @@ The stages that follow from this (observation as a deer, the hobbits' wish, the 
 - **What does the bear do to the village's claims?** Does a claimed berry patch draw it, or only the total harvest?
 - **Does a hobbit elder's carrying-off happen on screen,** and how many hobbits must the player have known by name first?
 - **Winter.** The bear sleeps and the thunderbird? Does it still burn in winter?
+
+> Reference images for the model: `design/reference/hen-of-the-woods/` (see its README).
