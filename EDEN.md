@@ -202,7 +202,7 @@ cycle about three minutes), beside the band's own fungus, which keep `chickenFig
 
 - **The figure** (`henFigure.ts`): three parts posed by numbers. **The dress:** up to nine scalloped, drooping shelves, banded cream to
   orange with a cream lip and pale pores under, few, small and spaced when lean (a miniskirt on stilts) and many and round when fat (a
-  ballgown); hoisted at the back by turning about the neck; bunched behind the neck sitting; fallen flat and splayed on the ground,
+  ballgown); hoisted by bunching (Noah, 2026-11-01: lifting the whole gown back made the body pass through it and lost the joke): it stays on the body's axis and each shelf's back is gathered in toward the axis, flipped up and crumpled, the lower shelves most, so the round cartoon bottom shows (`BUNCH_IN`, `BUNCH_UP`); bunched at the back sitting; fallen flat and splayed on the ground,
   the largest underneath. **The core:** a pale upper torso inside the gown and two thin curved eyestalks with glossy black eyes and a
   glint, lagging the waddle, retracting and resprouting. **The meat piece:** two-segment legs, a bare cartoon bottom, a pale stem up
   into the chest and a soft orange cap on it (a king oyster mushroom with a butt and legs); `henFrame(f)` sets the hip (long thin legs

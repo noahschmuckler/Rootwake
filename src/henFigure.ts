@@ -12,6 +12,8 @@ import { mulberry32 } from './colors';
 
 /** Tiers in the fullest gown. */
 export const MAX_TIERS = 9;
+/** The hoist's bunch at the back of each shelf, at full hoist: how far the rim gathers in toward the body's axis (0..1 of its radius), how far it flips up (unit radii). Tuning. */
+export const BUNCH_IN = 0.68, BUNCH_UP = 0.62;
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
 const SKIN = '#f1e8d2', HULL = '#22140a';
@@ -56,8 +58,27 @@ export function createDress(seed = 1, tint = '#ffffff'): Dress {
   const tiers = Array.from({ length: MAX_TIERS }, (_, i) => {
     const g = shelfGeometry(seed * 31 + i * 7); geoms.push(g);
     const m = new THREE.Mesh(g, mat), h = new THREE.Mesh(g, hull); h.scale.setScalar(1.07); h.position.y = 0.004; h.renderOrder = -1; m.add(h); group.add(m);
-    return { m, yaw: r() * 6.28, jitter: 0.92 + r() * 0.16, tilt: (r() - 0.5) * 0.12 };
+    return { m, g, base: Float32Array.from(g.attributes.position.array as Float32Array), bunched: 0, yaw: r() * 6.28, jitter: 0.92 + r() * 0.16, tilt: (r() - 0.5) * 0.12 };
   });
+  // The hoist (Noah, 2026-11-01: lifting the whole gown back made the body pass through it and lost the bare bottom): the gown stays on the
+  // body's axis and each shelf bunches at the back instead, its rim there gathered in toward the axis, flipped up and crumpled, most at
+  // the back and fading round the sides, so the cartoon bottom shows under it. Done on the shelf's own vertices (its hull shares them).
+  const back = new THREE.Vector3(), inv = new THREE.Quaternion();
+  function bunch(t: (typeof tiers)[number], amount: number): void {
+    if (amount < 0.002 && t.bunched < 0.002) return; t.bunched = amount;
+    // The back (+z of the gown) in the shelf's own frame, as an angle round its ring.
+    back.set(0, 0, 1).applyQuaternion(inv.copy(t.m.quaternion).invert()); const ba = Math.atan2(back.z, back.x);
+    const pos = t.g.attributes.position as THREE.BufferAttribute, arr = pos.array as Float32Array, b = t.base;
+    for (let k = 0; k < arr.length; k += 3) {
+      const x = b[k], y = b[k + 1], z = b[k + 2], rho = Math.hypot(x, z), a = Math.atan2(z, x);
+      const c = Math.cos(a - ba), w = c > 0 ? Math.pow(c, 1.6) : 0, out = Math.min(1, Math.max(0, (rho - 0.22) / 0.85)), s = amount * w;
+      if (s <= 0) { arr[k] = x; arr[k + 1] = y; arr[k + 2] = z; continue; }
+      // Gathered toward the axis, ruffled as it gathers; the drooping rim flipped up; crumpled up and down.
+      const k2 = (1 - BUNCH_IN * s * out) * (1 + 0.09 * s * Math.sin(a * 13 + 1.3)), lift = BUNCH_UP * s * out + 0.06 * s * out * Math.sin(a * 9);
+      arr[k] = x * k2; arr[k + 1] = y + lift; arr[k + 2] = z * k2;
+    }
+    pos.needsUpdate = true;
+  }
   const wiltTo = new THREE.Color('#5a4030'), base = new THREE.Color(tint);
   function set(p: DressPose): void {
     const f = clamp01(p.f), fr = henFrame(f), nF = 2.6 + 6.4 * f, n = Math.ceil(nF);
@@ -77,6 +98,8 @@ export function createDress(seed = 1, tint = '#ffffff'): Dress {
       t.m.scale.set(sx, sy, sx);
       t.m.position.set(Math.sin(p.sway + i) * 0.004 * (1 - p.fall), lerp(y + Math.sin(p.bounce + i * 0.7) * 0.006, fy - 0.04 * wilt, p.fall), lerp(0.012 * u, 0, p.fall));
       t.m.rotation.set(lerp(t.tilt - 0.12 * u, 0, p.fall), t.yaw, lerp(Math.sin(p.sway) * 0.15 * (1 - u), 0, p.fall));
+      // The lower shelves bunch most (the bottom is down there); none when fallen flat.
+      bunch(t, p.hoist * (1 - p.fall) * lerp(1, 0.3, u));
     }
   }
   function dispose(): void { for (const g of geoms) g.dispose(); mat.dispose(); hull.dispose(); }
@@ -111,8 +134,8 @@ export function createMeat(_seed = 1): Meat {
     const stemR = lerp(0.026, 0.065, f), stemL = fr.torso * 0.62;
     stem.scale.set(stemR * 2, stemL / 2, stemR * 2); stem.position.set(0, stemL / 2 + 0.01, 0);
     const capR = lerp(0.034, 0.08, f); capTop.scale.set(capR, capR * 0.75, capR); capTop.position.set(0, stemL + 0.005, 0);
-    const cr = lerp(0.03, 0.075, f);
-    for (const { c, s } of cheeks) { c.scale.setScalar(cr * g); c.position.set(s * cr * 0.62, -cr * 0.25, cr * 0.55); }
+    const cr = lerp(0.044, 0.088, f); // the cheeks: a round cartoon bottom even when lean, shown when the gown is hoisted
+    for (const { c, s } of cheeks) { c.scale.setScalar(cr * g); c.position.set(s * cr * 0.6, -cr * 0.05, cr * 0.75); }
     const L = fr.hip * g, half = L / 2, legR = lerp(0.013, 0.05, f) * Math.max(0.3, g), spread = lerp(0.028, 0.06, f);
     for (const l of legs) {
       l.hip.position.set(l.s * spread, -cr * 0.2, 0);
@@ -165,7 +188,7 @@ export function createHen(seed = 1, tint = '#ffffff'): HenFigure {
   const meat = createMeat(seed), meatHolder = new THREE.Group(); body.add(meatHolder); meatHolder.add(meat.group);
   const meatAnchor = new THREE.Object3D(); meat.group.add(meatAnchor);
   let phase = 0, clock = 0, swayLag = 0;
-  const attach = new THREE.Matrix4(), pA = new THREE.Vector3(), qA = new THREE.Quaternion(), sA = new THREE.Vector3(), qFlat = new THREE.Quaternion(), hoistM = new THREE.Matrix4();
+  const attach = new THREE.Matrix4(), pA = new THREE.Vector3(), qA = new THREE.Quaternion(), sA = new THREE.Vector3(), qFlat = new THREE.Quaternion();
   function update(x: number, y: number, z: number, heading: number, p: HenPose, dt: number): void {
     clock += dt; group.position.set(x, y, z); group.rotation.y = heading;
     const f = clamp01(p.f), fr = henFrame(f), walk = Math.min(1, p.speed / 0.25);
@@ -185,8 +208,8 @@ export function createHen(seed = 1, tint = '#ffffff'): HenFigure {
     // The meat: socketed at the hip, drawn out toward its feet (up, when flipped).
     meatHolder.visible = p.meat; meatHolder.position.set(0, fr.hip - p.pull * (fr.torso * 0.95 + 0.05), 0); meatHolder.scale.set(1, 1 + 0.25 * Math.sin(Math.PI * clamp01(p.pull * 1.1)), 1);
     meat.set({ f, phase, walk, tuck: p.sit, kick: p.invert > 0.7 && p.pull < 0.95 ? 1 : 0, flop: 0, brace: p.strain, clock, grow: p.legs, cooked: 0 });
-    // The dress: attached at the neck (hoisted at the back by turning about the neck), or fallen flat on the ground at the centre.
-    body.updateMatrix(); attach.copy(body.matrix).multiply(new THREE.Matrix4().makeTranslation(0, fr.neck, 0)).multiply(hoistM.makeRotationX(-0.8 * p.hoist));
+    // The dress: attached at the neck on the body's axis (the hoist bunches its shelves at the back, in the dress), or fallen flat on the ground at the centre.
+    body.updateMatrix(); attach.copy(body.matrix).multiply(new THREE.Matrix4().makeTranslation(0, fr.neck, 0));
     attach.decompose(pA, qA, sA);
     holder.position.set(lerp(pA.x, 0, p.fall), lerp(pA.y, 0, p.fall), lerp(pA.z, 0, p.fall)); holder.quaternion.copy(qA).slerp(qFlat, p.fall);
     // Flat, the dress's tiers are laid out from the ground; attached, from the neck: the dress sets them in its own frame, so the holder is at the ground when fallen.
