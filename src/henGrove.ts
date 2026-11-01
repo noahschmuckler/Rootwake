@@ -38,7 +38,7 @@ const angleTo = (from: number, to: number, k: number): number => from + Math.ata
 
 /** Where the grove goes: two trunks GROVE_GAP apart whose midpoint is GROVE_FROM_HEARTH from the hearth on the side away from the cave, the pair across the hobbit's line of approach, on level dry ground (`ok`) with no tree of the forest within `clear` m (`treeNear`). Null when nothing fits. */
 export function chooseGrove(hearth: Vec2, caveDir: number, ok: (x: number, z: number) => boolean, height: (x: number, z: number) => number, treeNear: (x: number, z: number, r: number) => boolean, clear = 5): { a: Vec2; b: Vec2 } | null {
-  const out = caveDir + Math.PI;
+  const out = caveDir; // the cave faces `caveDir` (from the mountain out past the hearth), so the grove stands on into the plateau
   for (const d of [13, 11, 15, 17, 19]) for (const da of [0.5, -0.5, 0.9, -0.9, 0.2, -0.2, 1.3, -1.3, 1.7, -1.7]) {
     const h = out + da, m = { x: hearth.x - Math.sin(h) * d, z: hearth.z - Math.cos(h) * d }, px = Math.cos(h), pz = -Math.sin(h);
     const a = { x: m.x + px * GROVE_GAP / 2, z: m.z + pz * GROVE_GAP / 2 }, b = { x: m.x - px * GROVE_GAP / 2, z: m.z - pz * GROVE_GAP / 2 };
@@ -80,8 +80,8 @@ export function createHenGrove(scene: THREE.Scene, relief: (x: number, z: number
   const webMat = mat(new THREE.MeshBasicMaterial({ map: web, transparent: true, depthWrite: false, opacity: 0.75, side: THREE.DoubleSide, color: '#ffffff' }));
   const barkWebMat = mat(new THREE.MeshBasicMaterial({ map: web, transparent: true, depthWrite: false, opacity: 0.4, side: THREE.DoubleSide }));
   const creamMat = mat(new THREE.MeshStandardMaterial({ color: '#efe2c0', roughness: 0.85, flatShading: true, emissive: '#d8c49a', emissiveIntensity: 0 })), hullMat = mat(new THREE.MeshBasicMaterial({ color: '#22140a', side: THREE.BackSide }));
-  // The cushion: a lathed pillow, rounded at the rim and dented in the middle (cushion-growth-stages.jpg's last panel).
-  const pillow = keep(new THREE.LatheGeometry([[0.0, 0.62], [0.25, 0.66], [0.5, 0.8], [0.75, 0.94], [0.92, 0.86], [1.0, 0.55], [0.95, 0.22], [0.75, 0.04], [0.0, 0.0]].map(([x, y]) => new THREE.Vector2(x, y)), 18));
+  // The cushion: a lathed pillow, rounded at the rim and dented in the middle (cushion-growth-stages.jpg's last panel); the profile runs bottom to top so its faces point out.
+  const pillow = keep(new THREE.LatheGeometry([[0.0, 0.0], [0.75, 0.04], [0.95, 0.22], [1.0, 0.55], [0.92, 0.86], [0.75, 0.94], [0.5, 0.8], [0.25, 0.66], [0.0, 0.62]].map(([x, y]) => new THREE.Vector2(x, y)), 18));
   const nubGeo = keep(new THREE.SphereGeometry(1, 12, 10));
   const patches = trees.map((_t, i) => {
     const u = out(i), s = seatOf(i), y = relief(s.x, s.z), g = new THREE.Group(); g.position.set(s.x, y, s.z); g.rotation.y = Math.atan2(u.x, u.z); root.add(g);

@@ -157,6 +157,8 @@ export const treeCache = (): TreeCache => ({ land: '', byChunk: new Map(), chunk
 /** Every tree the village knows, as the vista draws it: the chunks' (all of them, built or not) and each village's own wood. Kind 5 the village tree, 6 in the dark forest, 7 blighted.
  * C1.1 (the dawn hitch): given a `cache`, a chunk's trees are kept while the field's stamp over its square (`taint.stamp`) and the land's (`landStamp`, what `blighted` reads) are what they
  * were drawn under: a tree's kind depends on nothing else that moves (the breach's lines and the hyphae within VEIN_TREE_M are in the stamp: a hypha is listed over its whole edge). */
+/** Trees placed by hand (the Eden's hen grove by the cave at the mountain's foot, henGrove.ts) have ids from here and are drawn even near the edge. */
+export const HAND_PLACED_TREES = 990000;
 export function villageTrees(land: Land, edge: number, terrain: Terrain, treesOf: (cx: number, cz: number) => Tree[], origins: { x: number; z: number }[], dark: (x: number, z: number) => boolean, blighted: (x: number, z: number) => boolean, taint?: TaintLook, seed = 1, cache?: TreeCache, landStamp = '', full = false): VTree[] {
   const out: VTree[] = [], reach = Math.ceil(edge / CHUNK), vein = taint ? veinIndex(taint.veins, hyphaLines(taint)) : null;
   // MOTHER.md: in the taint, kind 10 (the nursery's growths, the heart's) where the trees are gone, 9 (grey, dead, twitching) through the grey and more and more of the mild ring, and along the veins a little way past the edge. C1: the rings and the veins' strength are her growth's (a hypha's claimed length is grey within VEIN_W, so its trees grey with it; past its tip the vein fades).
@@ -176,7 +178,7 @@ export function villageTrees(land: Land, edge: number, terrain: Terrain, treesOf
     // A chunk's trees stand within its square (chunkModel.chunkTrees), so the stamp is read just short of its far edges.
     const key = `${cx},${cz}`, stamp = taint ? taint.stamp(cx * CHUNK, cz * CHUNK, (cx + 1) * CHUNK - 1e-3, (cz + 1) * CHUNK - 1e-3) : '', have = cache?.byChunk.get(key);
     if (have && have.stamp === stamp) { for (const t of have.trees) out.push(t); continue; }
-    const list: VTree[] = []; for (const t of treesOf(cx, cz)) if (norm4(t.x, t.z) < edge - 40) list.push(treeOf(t.x, t.z, t.size, t.id, true));
+    const list: VTree[] = []; for (const t of treesOf(cx, cz)) if (norm4(t.x, t.z) < edge - 40 || t.id >= HAND_PLACED_TREES) list.push(treeOf(t.x, t.z, t.size, t.id, true));
     cache?.byChunk.set(key, { stamp, trees: list }); drawn++; for (const t of list) out.push(t);
   }
   if (cache) cache.chunks = drawn;
