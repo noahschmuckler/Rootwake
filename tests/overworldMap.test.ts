@@ -1,6 +1,6 @@
 // T9 (PLATEAU.md): the overworld map's pure parts: the atlas's extent and the tiles a view needs, the zoom's bounds and clamp, the fog's cells from the revealed set, the contours and the colour ramp.
 import { test } from 'node:test'; import assert from 'node:assert/strict';
-import { mapExtent, tilesInView, zoomBounds, clampZoom, fogGrid, contourAt, contourBold, landRgb, MAP_MAX, WORLD_SPAN, TILE_M, TILE_PX, BASE_PX_PER_M, MAP_REACH, CONTOUR_M, CONTOUR_BOLD, PALETTE, type LandSample } from '../src/overworldMap';
+import { createTileBuilder, OVERVIEW_DIV, mapExtent, tilesInView, zoomBounds, clampZoom, fogGrid, contourAt, contourBold, landRgb, MAP_MAX, WORLD_SPAN, TILE_M, TILE_PX, BASE_PX_PER_M, MAP_REACH, CONTOUR_M, CONTOUR_BOLD, PALETTE, type LandSample } from '../src/overworldMap';
 import { plateau, PLATEAU_R, MOUNTAIN_RISE, CLOUD_Y } from '../src/plateauModel';
 import { CELL, cellKey, cellOf, explore, freshOverworld } from '../src/overworldModel';
 
@@ -57,4 +57,13 @@ test('the colour ramp: water blue under the surface, the meadow greener than the
   assert.ok(lum(rgb(sample({ contour: 1 }))) < lum(heath) && lum(rgb(sample({ contour: 1, bold: true }))) < lum(rgb(sample({ contour: 1 }))), 'a contour darkens, a bold one more');
   assert.ok(rgb(sample({ h: 0.3, shore: 1 }))[0] > heath[0] + 20, 'the shore by the lake is sand'); assert.ok(rgb(sample({ h: 0.3, shore: 0 }))[0] < heath[0] + 8, 'and inland low ground is not');
   assert.ok(Object.values(PALETTE).every(c => c.length === 3 && c.every(v => v >= 0 && v <= 255)));
+});
+
+test('the tile builder (the worker\'s): a flat land gives an opaque tile, the same twice, its overview a quarter the side', () => {
+  const n = 9, land = { n, cell: 1000, half: 4000, h: new Float32Array(n * n).fill(20), ao: new Float32Array(n * n).fill(1), waterY: -1.2, snowY: 470 };
+  const build = () => { const b = createTileBuilder(land, 1); b.coarseRows(0, b.cc); const out = new Uint8ClampedArray(TILE_PX * TILE_PX * 4); b.tileRows(0, 0, 0, TILE_PX, out); return { b, out }; };
+  const a = build(), c = build();
+  assert.ok(a.b.cc > 0); assert.ok(a.out.every((v, i) => i % 4 !== 3 || v === 255), 'opaque'); assert.ok(a.out.some((v, i) => i % 4 !== 3 && v > 0), 'coloured');
+  assert.deepEqual(Array.from(a.out.slice(0, 4096)), Array.from(c.out.slice(0, 4096)), 'deterministic');
+  const small = a.b.overview(a.out); assert.equal(small.length, (TILE_PX / OVERVIEW_DIV) ** 2 * 4); assert.equal(small[3], 255);
 });

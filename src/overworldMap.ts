@@ -13,6 +13,7 @@
 // over it. Without a Land (village.html) the base is the old flat biome fill, as cells, drawn the same way.
 import { plateau, PLATEAU_R, MOUNTAIN_RISE, CLOUD_Y } from './plateauModel';
 import type { Land } from './vistaTerrain';
+import type { MapWorkerIn, MapWorkerOut } from './mapWorker';
 import { CELL, lairPlace, riverEdge } from './overworldModel';
 import { islands, MEADOW_ISLAND, ISLAND_FADE, biomeAt, forestField, floorSampler, noise } from './chunkModel';
 import { TAINT } from './taintModel';
@@ -107,7 +108,7 @@ export function landRgb(s: LandSample, waterY: number, snowY: number, out: Float
 }
 
 // ── the map ───────────────────────────────────────────────────────────────
-export interface OverworldMapOptions { land: Land | null; seed: number; /** Called when a tile (or the flat base) is built: the open map redraws. */ onProgress?: () => void }
+export interface OverworldMapOptions { land: Land | null; seed: number; /** Called when a tile (or the flat base) is built: the open map redraws. */ onProgress?: () => void; /** Build on the frame's slices even where a Worker exists (the checks of the slices). */ noWorker?: boolean }
 export interface MapStats { /** The build's cost so far (ms of slices), the last draw (set by the caller: the base and its marks), the last fog mask. */ tileMs: number; drawMs: number; fogMs: number; /** Tiles built of the whole. */ built: number; total: number }
 export interface OverworldMap {
   extent: MapExtent; stats: MapStats;
@@ -122,25 +123,27 @@ export interface OverworldMap {
   /** The base under the marks: the land, the water, the fog. `s` px/m (device px), `pan` the world point at the middle, `fog` the colour where she has not been, `minStroke` the thinnest river (px). */
   drawBase(c: CanvasRenderingContext2D, w: number, h: number, s: number, pan: { x: number; z: number }, fog: string, minStroke: number, revealed: Set<string>): void;
 }
-export function createOverworldMap(o: OverworldMapOptions): OverworldMap {
-  const { land, seed } = o, ext = mapExtent(seed), pl = plateau(seed), stats: MapStats = { tileMs: 0, drawMs: 0, fogMs: 0, built: 0, total: land ? ext.tiles * ext.tiles : 1 };
-  const base = land ? BASE_PX_PER_M : 1 / CELL, atlasPx = land ? ext.tiles * TILE_PX : Math.ceil(ext.size / CELL);
-  const atlas = document.createElement('canvas'); atlas.width = atlas.height = atlasPx; const actx = atlas.getContext('2d')!; actx.fillStyle = FLAT.wood; actx.fillRect(0, 0, atlasPx, atlasPx);
-  const overview = land ? document.createElement('canvas') : null, octx = overview ? overview.getContext('2d')! : null; if (overview && octx) { overview.width = overview.height = atlasPx / OVERVIEW_DIV; octx.fillStyle = FLAT.wood; octx.fillRect(0, 0, overview.width, overview.height); }
-  // ── the build ──
-  let stage = 0, row = 0, done = false, focusAt = { x: 0, z: 0 }, order: number[] = [], next = 0;
-  const n = land?.n ?? 0, cell = land?.cell ?? 1, half = land?.half ?? 0;
-  const cc = Math.ceil(ext.size / COARSE_M) + 1, coarseB = land ? new Uint8Array(cc * cc * CH) : null, coarseInto = land ? new Float32Array(cc * cc) : null;
-  const lair = lairPlace(seed), isl = islands(seed), floorAt = land ? floorSampler(seed, KARST_FOREST) : null, forestAt = land ? forestField(seed) : null;
+/** What a tile's build reads of the Land (vistaTerrain.Land's grid and levels; copied to the worker). */
+export interface TileLand { n: number; cell: number; half: number; h: Float32Array; ao: Float32Array; waterY: number; snowY: number }
+export const tileLandOf = (l: Land): TileLand => ({ n: l.n, cell: l.cell, half: l.half, h: l.h, ao: l.ao, waterY: l.waterY, snowY: l.snowY });
+export interface TileBuilder { /** The coarse grid's side; its rows are built, all of them, before the first tile. */ readonly cc: number; coarseRows(j0: number, j1: number): void; /** A tile's rows r0..r1 into `out` (TILE_PX² RGBA). */ tileRows(ti: number, tj: number, r0: number, r1: number, out: Uint8ClampedArray<ArrayBuffer>): void; /** A built tile box-filtered for the overview. */ overview(src: Uint8ClampedArray<ArrayBuffer>): Uint8ClampedArray<ArrayBuffer> }
+/** The tiles' pixels: pure (no canvas, no DOM), so mapWorker.ts runs it off the frame (2026-11-01: on the phone, which has no requestIdleCallback, the
+ * idle build ran as timer slices of 4 ms that took up to 14 ms each between the frames, and with the Eden's weight the frames missed their vsync in
+ * runs; Noah's recording showed every animation juddering). Where there is no Worker the build steps on the frame as before. */
+export function createTileBuilder(land: TileLand, seed: number): TileBuilder {
+  const ext = mapExtent(seed), pl = plateau(seed);
+  const n = land.n, cell = land.cell, half = land.half;
+  const cc = Math.ceil(ext.size / COARSE_M) + 1, coarseB = new Uint8Array(cc * cc * CH), coarseInto = new Float32Array(cc * cc);
+  const lair = lairPlace(seed), isl = islands(seed), floorAt = floorSampler(seed, KARST_FOREST), forestAt = forestField(seed);
   // The sun: from the north-west, 42° up (the classic relief light; the hillshade reads ridges and gullies at a glance). Tuning.
   const L = [-0.53, 0.67, -0.53], ll = Math.hypot(L[0], L[1], L[2]); L[0] /= ll; L[1] /= ll; L[2] /= ll;
   /** The height at grid coordinates, bilinear (what the vista draws; vistaTerrain.heightAt without the shape past the map, which the extent never reaches). */
-  const hAt = (fx: number, fz: number): number => { const h = land!.h, i = Math.min(n - 2, Math.max(0, Math.floor(fx))), j = Math.min(n - 2, Math.max(0, Math.floor(fz))), u = Math.min(1, Math.max(0, fx - i)), v = Math.min(1, Math.max(0, fz - j)), k = j * n + i; return h[k] * (1 - u) * (1 - v) + h[k + 1] * u * (1 - v) + h[k + n] * (1 - u) * v + h[k + n + 1] * u * v; };
+  const hAt = (fx: number, fz: number): number => { const h = land.h, i = Math.min(n - 2, Math.max(0, Math.floor(fx))), j = Math.min(n - 2, Math.max(0, Math.floor(fz))), u = Math.min(1, Math.max(0, fx - i)), v = Math.min(1, Math.max(0, fz - j)), k = j * n + i; return h[k] * (1 - u) * (1 - v) + h[k + 1] * u * (1 - v) + h[k + n] * (1 - u) * v + h[k + n + 1] * u * v; };
   const coarseRows = (j0: number, j1: number): void => {
-    const B = coarseB!, I = coarseInto!; for (let j = j0; j < j1; j++) for (let i = 0; i < cc; i++) {
-      const x = ext.x0 + i * COARSE_M, z = ext.z0 + j * COARSE_M, k = j * cc + i, oc = k * CH, fl = floorAt!(x, z);
+    const B = coarseB, I = coarseInto; for (let j = j0; j < j1; j++) for (let i = 0; i < cc; i++) {
+      const x = ext.x0 + i * COARSE_M, z = ext.z0 + j * COARSE_M, k = j * cc + i, oc = k * CH, fl = floorAt(x, z);
       if (fl) { B[oc + C_NEEDLES] = fl[0] * 255; B[oc + C_LEAVES] = fl[1] * 255; B[oc + C_MOSS] = fl[2] * 255; B[oc + C_SAND] = fl[3] * 255; }
-      B[oc + C_FOREST] = forestAt!(x, z) * 255;
+      B[oc + C_FOREST] = forestAt(x, z) * 255;
       let meadow = 0; for (const q of isl) meadow = Math.max(meadow, 1 - smooth(MEADOW_ISLAND, MEADOW_ISLAND + ISLAND_FADE, Math.hypot(x - q.x, z - q.z))); B[oc + C_MEADOW] = meadow * 255;
       B[oc + C_WOOD] = noise(x, z, 110, seed + 3) > 0.58 ? 0 : 255;
       const dl = Math.hypot(x - lair.x, z - lair.z); B[oc + C_DARK] = dl < TAINT.edge ? (0.6 + 0.4 * (1 - dl / TAINT.edge)) * 255 : 0;
@@ -149,9 +152,9 @@ export function createOverworldMap(o: OverworldMapOptions): OverworldMap {
       I[k] = pl.into(x, z);
     }
   };
-  const tileImg = land ? actx.createImageData(TILE_PX, TILE_PX) : null, S: LandSample = { h: 0, slope: 0, shade: 0, ao: 1, needles: 0, leaves: 0, moss: 0, sand: 0, forest: 0, meadow: 0, wood: 0, dark: 0, shore: 0, into: 0, contour: 0, bold: false }, rgb = new Float64Array(3);
-  const tileRows = (ti: number, tj: number, r0: number, r1: number): void => {
-    const d = tileImg!.data, h = land!.h, ao = land!.ao, B = coarseB!, I = coarseInto!, waterY = land!.waterY, snowY = land!.snowY, perPx = 1 / BASE_PX_PER_M, NORMAL_D = 1; // the normal by central differences NORMAL_D cells either side: a cell reads the erosion's gullies, more smooths them. Tuning.
+  const S: LandSample = { h: 0, slope: 0, shade: 0, ao: 1, needles: 0, leaves: 0, moss: 0, sand: 0, forest: 0, meadow: 0, wood: 0, dark: 0, shore: 0, into: 0, contour: 0, bold: false }, rgb = new Float64Array(3);
+  const tileRows = (ti: number, tj: number, r0: number, r1: number, out: Uint8ClampedArray<ArrayBuffer>): void => {
+    const d = out, h = land.h, ao = land.ao, B = coarseB, I = coarseInto, waterY = land.waterY, snowY = land.snowY, perPx = 1 / BASE_PX_PER_M, NORMAL_D = 1; // the normal by central differences NORMAL_D cells either side: a cell reads the erosion's gullies, more smooths them. Tuning.
     for (let py = r0; py < r1; py++) {
       const z = ext.z0 + (tj * TILE_PX + py + 0.5) * perPx, fz = (z + half) / cell, jz = Math.min(n - 2, Math.max(0, Math.floor(fz))), v = Math.min(1, Math.max(0, fz - jz)), gz = (z - ext.z0) / COARSE_M, cj = Math.min(cc - 2, Math.max(0, Math.floor(gz))), cv = Math.min(1, Math.max(0, gz - cj));
       for (let px = 0; px < TILE_PX; px++) {
@@ -171,12 +174,28 @@ export function createOverworldMap(o: OverworldMapOptions): OverworldMap {
       }
     }
   };
-  /** A finished tile into the atlas and, box-filtered OVERVIEW_DIV², into the overview. */
-  const finishTile = (ti: number, tj: number): void => {
-    actx.putImageData(tileImg!, ti * TILE_PX, tj * TILE_PX);
-    const D = OVERVIEW_DIV, m = TILE_PX / D, img = octx!.createImageData(m, m), src = tileImg!.data, dst = img.data;
+  /** A built tile box-filtered OVERVIEW_DIV² for the overview (TILE_PX / OVERVIEW_DIV a side). */
+  const overview = (src: Uint8ClampedArray<ArrayBuffer>): Uint8ClampedArray<ArrayBuffer> => {
+    const D = OVERVIEW_DIV, m = TILE_PX / D, dst = new Uint8ClampedArray(m * m * 4);
     for (let y = 0; y < m; y++) for (let x = 0; x < m; x++) { let r = 0, g = 0, b = 0; for (let dy = 0; dy < D; dy++) for (let dx = 0; dx < D; dx++) { const si = ((y * D + dy) * TILE_PX + x * D + dx) * 4; r += src[si]; g += src[si + 1]; b += src[si + 2]; } const di = (y * m + x) * 4; dst[di] = r / (D * D); dst[di + 1] = g / (D * D); dst[di + 2] = b / (D * D); dst[di + 3] = 255; }
-    octx!.putImageData(img, ti * m, tj * m);
+    return dst;
+  };
+  return { cc, coarseRows, tileRows, overview };
+}
+
+export function createOverworldMap(o: OverworldMapOptions): OverworldMap {
+  const { land, seed } = o, ext = mapExtent(seed), pl = plateau(seed), stats: MapStats = { tileMs: 0, drawMs: 0, fogMs: 0, built: 0, total: land ? ext.tiles * ext.tiles : 1 };
+  const base = land ? BASE_PX_PER_M : 1 / CELL, atlasPx = land ? ext.tiles * TILE_PX : Math.ceil(ext.size / CELL);
+  const atlas = document.createElement('canvas'); atlas.width = atlas.height = atlasPx; const actx = atlas.getContext('2d')!; actx.fillStyle = FLAT.wood; actx.fillRect(0, 0, atlasPx, atlasPx);
+  const overview = land ? document.createElement('canvas') : null, octx = overview ? overview.getContext('2d')! : null; if (overview && octx) { overview.width = overview.height = atlasPx / OVERVIEW_DIV; octx.fillStyle = FLAT.wood; octx.fillRect(0, 0, overview.width, overview.height); }
+  // ── the build ──
+  let stage = 0, row = 0, done = false, focusAt = { x: 0, z: 0 }, order: number[] = [], next = 0;
+  const builder = land ? createTileBuilder(tileLandOf(land), seed) : null, cc = builder?.cc ?? 0, isl = islands(seed);
+  const tileData = land ? new Uint8ClampedArray(TILE_PX * TILE_PX * 4) : null;
+  /** A finished tile (its RGBA and its overview's) into the atlas and the overview. */
+  const finishTile = (ti: number, tj: number, data: Uint8ClampedArray<ArrayBuffer>, small: Uint8ClampedArray<ArrayBuffer>): void => {
+    actx.putImageData(new ImageData(data, TILE_PX, TILE_PX), ti * TILE_PX, tj * TILE_PX);
+    const m = TILE_PX / OVERVIEW_DIV; octx!.putImageData(new ImageData(small, m, m), ti * m, tj * m);
   };
   const sortOrder = (): void => { const tc = (k: number): [number, number] => [ext.x0 + ((k % ext.tiles) + 0.5) * TILE_M, ext.z0 + (Math.floor(k / ext.tiles) + 0.5) * TILE_M]; const rest = order.slice(next).sort((p, q) => { const a = tc(p), b = tc(q); return Math.hypot(a[0] - focusAt.x, a[1] - focusAt.z) - Math.hypot(b[0] - focusAt.x, b[1] - focusAt.z); }); order = [...order.slice(0, next), ...rest]; };
   if (land) { order = Array.from({ length: ext.tiles * ext.tiles }, (_, k) => k); sortOrder(); }
@@ -190,16 +209,32 @@ export function createOverworldMap(o: OverworldMapOptions): OverworldMap {
   /** One step of the build: a band of rows of the stage's grid or of the current tile. True when a tile was finished. */
   const step = (): boolean => {
     if (!land) { flatBase(); stats.built = 1; done = true; return true; }
-    if (stage === 0) { coarseRows(row, Math.min(cc, row + COARSE_ROWS)); row += COARSE_ROWS; if (row >= cc) { stage = 1; row = 0; } return false; }
+    if (stage === 0) { builder!.coarseRows(row, Math.min(cc, row + COARSE_ROWS)); row += COARSE_ROWS; if (row >= cc) { stage = 1; row = 0; } return false; }
     if (!cur) { if (next >= order.length) { done = true; return false; } const k = order[next++]; cur = { ti: k % ext.tiles, tj: Math.floor(k / ext.tiles), row: 0 }; }
-    tileRows(cur.ti, cur.tj, cur.row, Math.min(TILE_PX, cur.row + TILE_ROWS)); cur.row += TILE_ROWS;
-    if (cur.row >= TILE_PX) { finishTile(cur.ti, cur.tj); cur = null; stats.built++; if (next >= order.length) done = true; return true; }
+    builder!.tileRows(cur.ti, cur.tj, cur.row, Math.min(TILE_PX, cur.row + TILE_ROWS), tileData!); cur.row += TILE_ROWS;
+    if (cur.row >= TILE_PX) { finishTile(cur.ti, cur.tj, tileData!, builder!.overview(tileData!)); cur = null; stats.built++; if (next >= order.length) done = true; return true; }
     return false;
   };
-  const pump = (budgetMs: number): boolean => { if (done) return false; const t0 = now(); let fin = false; do { if (step()) fin = true; } while (!done && now() - t0 < budgetMs); stats.tileMs += now() - t0; if (fin) o.onProgress?.(); return fin; };
+  const pump = (budgetMs: number): boolean => { if (done) return false; if (worker) { feed(); return false; } const t0 = now(); let fin = false; do { if (step()) fin = true; } while (!done && now() - t0 < budgetMs); stats.tileMs += now() - t0; if (fin) o.onProgress?.(); return fin; };
+  // The worker (mapWorker.ts): the tiles' pixels built off the frame, WORKER_FLIGHT in flight, nearest the focus first (sortOrder reorders what is not yet
+  // asked for); a tile comes back as its RGBA and its overview's and goes into the atlas at once. Without a Worker, or on its failure, the build steps on
+  // the frame as before (the tiles in flight go back to the front of the order, and the coarse grid is built here).
+  const WORKER_FLIGHT = 2;
+  let worker: Worker | null = null; const pending = new Map<number, [number, number]>();
+  const feed = (): void => { if (!worker || done) return; while (pending.size < WORKER_FLIGHT && next < order.length) { const k = order[next++], ti = k % ext.tiles, tj = Math.floor(k / ext.tiles); pending.set(k, [ti, tj]); worker.postMessage({ kind: 'tile', k, ti, tj } satisfies MapWorkerIn); } };
+  const workerDown = (why: unknown): void => { if (!worker) return; console.warn('map worker', why); worker.terminate(); worker = null; order.splice(next, 0, ...pending.keys()); pending.clear(); stage = 0; row = 0; if (idling) { idling = false; startIdle(); } };
+  if (land && builder && typeof Worker !== 'undefined' && !o.noWorker) {
+    try {
+      worker = new Worker(new URL('./mapWorker.ts', import.meta.url), { type: 'module' });
+      worker.onmessage = (e: MessageEvent<MapWorkerOut>) => { const m = e.data; if (m.kind !== 'tile' || !pending.has(m.k)) return; pending.delete(m.k); const t0 = now(); finishTile(m.ti, m.tj, m.data, m.small); stats.built++; stats.tileMs += now() - t0; if (next >= order.length && pending.size === 0) done = true; o.onProgress?.(); feed(); };
+      worker.onerror = e => workerDown(e.message);
+      worker.postMessage({ kind: 'land', land: tileLandOf(land), seed } satisfies MapWorkerIn);
+      stage = 1; // the coarse grid is the worker's
+    } catch (e) { workerDown(e); }
+  }
   let idling = false;
   const startIdle = (): void => {
-    if (idling || done) return; idling = true;
+    if (idling || done) return; if (worker) { feed(); return; } idling = true;
     const ric = (globalThis as { requestIdleCallback?: (cb: (d: { timeRemaining(): number; didTimeout: boolean }) => void, o?: { timeout: number }) => number }).requestIdleCallback;
     const again = (): void => { if (done) { idling = false; return; } if (ric) ric(d => { pump(d.didTimeout ? 2 : Math.min(5, d.timeRemaining())); again(); }, { timeout: 250 }); else setTimeout(() => { pump(4); again(); }, 30); };
     again();
