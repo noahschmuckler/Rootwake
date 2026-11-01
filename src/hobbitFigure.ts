@@ -13,7 +13,7 @@ export const HAIRS = ['#6b3f1f', '#4a2b14', '#8a5a2a', '#3a2314', '#a0703a', '#5
 export const SKINS = ['#e8b98f', '#dba878', '#f0c7a0', '#d49c6c'];
 export interface HobbitLook { hair: string; skin: string; nose: number; height: number }
 /** The hen's harvest (henGrove.ts): a kick (one foot swung forward, the body rocking back), a stomp-and-pull (a foot planted on the dress, leaning back, both arms hauling up), holding the piece up as it walks home, and cooking (sat down at the fire, a stick held out over it). `k` 0..1 is the beat within the pose. */
-export type HobbitPose = { kind: 'kick' | 'pull' | 'hold' | 'cook'; k: number };
+export type HobbitPose = { kind: 'kick' | 'pull' | 'hold' | 'eat' | 'cook'; k: number };
 export interface HobbitState { /** The hen's harvest's poses (henGrove.ts); they override the walk's arms and feet. */ pose?: HobbitPose | null; speed: number; carry: 'chicken' | 'berries' | null; eating: boolean; taking: boolean; inside: boolean; /** E1b: the antic it is in, posed here: sniffing (bent to the flower), sitting (down, toes up, swaying to its hum), napping (on its side, eyes shut, Zs), scuffling (leaning in, arms flailing, hopping), hugging (leaning in, arms round), a trip (flat on its face, feet kicking), a tumble (rolling as a ball) and dizzy (reeling, stars). */ antic?: AnticKind | null }
 /** The glyph over a hobbit's head in an antic: the dwarf's own idle overlays (sniff sniff, Zs, la la la) and the slapstick's hearts and stars. */
 const GLYPHS: Partial<Record<AnticKind, string>> = { smell: 'sniff', sit: '\u266a', nap: 'Z', scuffle: '\u2726', hug: '\u2665', trip: '\u2726', dizzy: '\u2726' };
@@ -23,7 +23,7 @@ function glyphTexture(text: string): THREE.Texture | null {
   const c = document.createElement('canvas'); c.width = 128; c.height = 64; const g = c.getContext('2d')!; g.font = `bold ${text.length > 1 ? 30 : 44}px Georgia, serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineWidth = 6; g.strokeStyle = '#1a1208'; g.strokeText(text, 64, 34); g.fillStyle = text === '\u2665' ? '#ff6a8a' : '#fff6dc'; g.fillText(text, 64, 34);
   t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; glyphTextures.set(text, t); return t;
 }
-export interface HobbitFigure { group: THREE.Group; look: HobbitLook; update(x: number, y: number, z: number, heading: number, s: HobbitState, dt: number): void; dispose(): void }
+export interface HobbitFigure { group: THREE.Group; look: HobbitLook; /** The left mitten, for a thing held in it (henGrove.ts). */ hand: THREE.Object3D; update(x: number, y: number, z: number, heading: number, s: HobbitState, dt: number): void; dispose(): void }
 
 export function hobbitLook(seed: number, i: number): HobbitLook { const r = mulberry32((seed * 613 + i * 97 + 5) >>> 0); return { hair: HAIRS[Math.floor(r() * HAIRS.length)], skin: SKINS[Math.floor(r() * SKINS.length)], nose: 0.85 + r() * 0.4, height: HOBBIT_HEIGHT * (0.92 + r() * 0.16) }; }
 
@@ -59,11 +59,12 @@ export function createHobbit(look: HobbitLook, seed = 1): HobbitFigure {
   }
   const nose = mesh(new THREE.SphereGeometry(0.046 * look.nose, 12, 10), noseMat); nose.scale.set(1, 0.9, 1.1); nose.position.set(0, 0.278, -0.235);
   // The arms: stubby, hanging from the sides, a mitten at the end; they swing from the shoulder.
-  const arms: THREE.Group[] = [];
+  const arms: THREE.Group[] = [], hand = new THREE.Object3D();
   for (const s of [-1, 1]) {
     const arm = new THREE.Group(); arm.position.set(s * 0.16, 0.24, 0); body.add(arm); arms.push(arm);
     const upper = mesh(new THREE.CapsuleGeometry(0.03, 0.09, 4, 8), skinMat, arm); upper.position.set(s * 0.03, -0.06, 0); upper.rotation.z = s * -0.35;
     const mitten = mesh(new THREE.SphereGeometry(0.042, 10, 8), skinMat, arm); mitten.scale.set(1, 0.9, 1.1); mitten.position.set(s * 0.065, -0.125, 0);
+    if (s < 0) { hand.position.set(s * 0.065, -0.15, 0); arm.add(hand); }
   }
   // The feet: wide and bare, the toes showing, set well apart.
   const feet: THREE.Group[] = [];
@@ -113,7 +114,10 @@ export function createHobbit(look: HobbitLook, seed = 1): HobbitFigure {
       const k = po.k;
       if (po.kind === 'kick') { const sw = Math.sin(Math.min(1, k) * Math.PI); body.rotation.x = 0.25 * sw; body.position.y = 0.01; feet[0].rotation.x = 1.6 * sw; feet[0].position.z = -0.02 - 0.12 * sw; feet[0].position.y = 0.02 + 0.08 * sw; arms[0].rotation.z = 0.9 * sw; arms[1].rotation.z = -0.9 * sw; }
       else if (po.kind === 'pull') { const tug = Math.abs(Math.sin(clock * 9)) * 0.08; body.rotation.x = 0.35 + 0.2 * k + tug; body.position.z = 0.03; feet[0].position.y = 0.05; feet[0].position.z = -0.12; feet[0].rotation.x = 0.4; arms[0].rotation.x = arms[1].rotation.x = -2.4 + tug * 2; arms[0].rotation.z = -0.2; arms[1].rotation.z = 0.2; }
-      else if (po.kind === 'hold') { arms[0].rotation.x = arms[1].rotation.x = -1.6; arms[0].rotation.z = -0.25; arms[1].rotation.z = 0.25; }
+      // Held by the feet in the left hand, as a plucked chicken is carried; eating, the hand up to the mouth.
+      // (A positive x turn brings an arm forward, a negative z turn takes the left one out to the side.) Held up and out like a trophy, it clears the ground.
+      else if (po.kind === 'hold') { arms[0].rotation.set(0.3, 0, -1.95 + Math.sin(clock * 6) * 0.06); }
+      else if (po.kind === 'eat') { const bite = Math.max(0, Math.sin(clock * 5)); arms[0].rotation.set(1.75 + 0.15 * bite, 0, 0.35); body.rotation.x = -0.05 * bite; }
       else if (po.kind === 'cook') { body.position.y -= 0.07; body.rotation.x = 0.06; body.rotation.z = Math.sin(clock * 1.4) * 0.05; for (const f of feet) { f.rotation.x = -1.25; f.position.z = -0.1; f.position.y = 0.05; } arms[0].rotation.x = arms[1].rotation.x = -1.1 + Math.sin(clock * 2) * 0.05; arms[0].rotation.z = -0.3; arms[1].rotation.z = 0.3; }
     }
     // The glyph: shown through an antic that has one (the trip's stars once it is down), rising and fading on a loop.
@@ -122,5 +126,5 @@ export function createHobbit(look: HobbitLook, seed = 1): HobbitFigure {
     if (glyph.visible) { const f = (clock % 1.4) / 1.4; glyph.position.set(0.08, (an === 'nap' ? 0.3 : 0.56) + f * 0.14, 0); glyphMat.opacity = f < 0.15 ? f / 0.15 : 1 - (f - 0.15) / 0.85; }
   }
   function dispose(): void { for (const g of geoms) g.dispose(); hairMat.dispose(); skinMat.dispose(); noseMat.dispose(); dark.dispose(); white.dispose(); hull.dispose(); fan.dispose(); fan2.dispose(); blue.dispose(); glyphMat.dispose(); }
-  return { group, look, update, dispose };
+  return { group, look, hand, update, dispose };
 }

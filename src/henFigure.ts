@@ -4,8 +4,8 @@
 //    ballgown); hoisted at the back to show a bare bottom, bunched behind the neck when sitting, fallen flat and splayed on the ground
 //    when the hen is flipped and harvested;
 //  - the core: the upper torso and two eyestalks with glossy black eyes, which retract and resprout;
-//  - the meat piece: the legs, the bottom and a stem topped with a soft cap socketed into the chest (a king oyster mushroom with a butt
-//    and legs), long and thin when lean, short and fat when fat; it pulls out whole and is made separately for the hunter to carry.
+//  - the meat piece: the legs and the bare bottom alone, long and thin when lean, short and fat when fat; it pulls away whole and is
+//    made separately for the hunter to carry (Noah, 2026-11-01: a stem and cap with it read as phallic; the torso stays in the dress).
 // No arms, no face, no beak. Cel look as the Eden's figures: flat shading and a black back-face hull. Faces -z at heading 0.
 import * as THREE from 'three';
 import { mulberry32 } from './colors';
@@ -109,17 +109,14 @@ export function createDress(seed = 1, tint = '#ffffff'): Dress {
 export interface MeatPose { f: number; /** Walk phase and how much it walks. */ phase: number; walk: number; /** 0..1 legs tucked (sitting). */ tuck: number; /** 0..1 legs kicking in the air (flipped); its own clock. */ kick: number; /** 0..1 floppy, dangling (carried). */ flop: number; /** 0..1 a braced, straining stance. */ brace: number; clock: number; /** 0..1 the legs grown (regrowing, new). */ grow: number; /** 0..1 how cooked (browning). */ cooked: number }
 export interface Meat { group: THREE.Group; set(p: MeatPose): void; dispose(): void }
 
-/** The meat piece: legs, a bare cartoon bottom, a pale stem up into the chest and a soft colourful cap at its top. Its origin is the hip. */
+/** The meat piece: the legs and a bare cartoon bottom, no more (the torso stays in the dress). Its origin is the hip. */
 export function createMeat(_seed = 1): Meat {
   const group = new THREE.Group(), geoms: THREE.BufferGeometry[] = [];
-  const skin = new THREE.MeshStandardMaterial({ color: SKIN, roughness: 0.8, flatShading: true }), capMat = new THREE.MeshStandardMaterial({ color: '#d0743a', roughness: 0.7, flatShading: true });
+  const skin = new THREE.MeshStandardMaterial({ color: SKIN, roughness: 0.8, flatShading: true });
   const hull = new THREE.MeshBasicMaterial({ color: HULL, side: THREE.BackSide });
   const keep = <T extends THREE.BufferGeometry>(g: T): T => { geoms.push(g); return g; };
   const withHull = (m: THREE.Mesh, k = 1.12): THREE.Mesh => { const h = new THREE.Mesh(m.geometry, hull); h.scale.setScalar(k); h.renderOrder = -1; m.add(h); return m; };
   const cap = keep(new THREE.CapsuleGeometry(0.5, 1, 4, 10)), ball = keep(new THREE.SphereGeometry(1, 12, 10));
-  // The stem and its cap (a dome with a rolled rim).
-  const stem = withHull(new THREE.Mesh(cap, skin), 1.1); group.add(stem);
-  const capTop = withHull(new THREE.Mesh(keep(new THREE.SphereGeometry(1, 14, 10, 0, Math.PI * 2, 0, Math.PI * 0.6)), capMat), 1.08); group.add(capTop);
   // The bottom: two cheeks behind.
   const cheeks = [-1, 1].map(s => { const c = withHull(new THREE.Mesh(ball, skin), 1.08); group.add(c); return { c, s }; });
   // The legs: a thigh from the hip, a shin from the knee, a foot.
@@ -127,13 +124,10 @@ export function createMeat(_seed = 1): Meat {
     const hip = new THREE.Group(), thigh = withHull(new THREE.Mesh(cap, skin)), knee = new THREE.Group(), shin = withHull(new THREE.Mesh(cap, skin)), foot = withHull(new THREE.Mesh(ball, skin), 1.1);
     hip.add(thigh, knee); knee.add(shin, foot); group.add(hip); return { s, hip, thigh, knee, shin, foot };
   });
-  const raw = new THREE.Color(SKIN), done = new THREE.Color('#a8682e'), capRaw = new THREE.Color('#d0743a'), capDone = new THREE.Color('#6e3a18');
+  const raw = new THREE.Color(SKIN), done = new THREE.Color('#a8682e');
   function set(p: MeatPose): void {
     const f = clamp01(p.f), fr = henFrame(f), g = clamp01(p.grow);
-    skin.color.copy(raw).lerp(done, p.cooked); capMat.color.copy(capRaw).lerp(capDone, p.cooked);
-    const stemR = lerp(0.026, 0.065, f), stemL = fr.torso * 0.62;
-    stem.scale.set(stemR * 2, stemL / 2, stemR * 2); stem.position.set(0, stemL / 2 + 0.01, 0);
-    const capR = lerp(0.034, 0.08, f); capTop.scale.set(capR, capR * 0.75, capR); capTop.position.set(0, stemL + 0.005, 0);
+    skin.color.copy(raw).lerp(done, p.cooked);
     const cr = lerp(0.044, 0.088, f); // the cheeks: a round cartoon bottom even when lean, shown when the gown is hoisted
     for (const { c, s } of cheeks) { c.scale.setScalar(cr * g); c.position.set(s * cr * 0.6, -cr * 0.05, cr * 0.75); }
     const L = fr.hip * g, half = L / 2, legR = lerp(0.013, 0.05, f) * Math.max(0.3, g), spread = lerp(0.028, 0.06, f);
@@ -153,7 +147,7 @@ export function createMeat(_seed = 1): Meat {
       l.hip.rotation.set(th, 0, l.s * 0.05 * (1 - p.tuck)); l.knee.rotation.x = sh;
     }
   }
-  function dispose(): void { for (const g of geoms) g.dispose(); skin.dispose(); capMat.dispose(); hull.dispose(); }
+  function dispose(): void { for (const g of geoms) g.dispose(); skin.dispose(); hull.dispose(); }
   return { group, set, dispose };
 }
 
@@ -206,7 +200,7 @@ export function createHen(seed = 1, tint = '#ffffff'): HenFigure {
     const e = clamp01(p.eyes);
     for (const s of stalks) { s.g.visible = e > 0.02; s.g.scale.setScalar(Math.max(0.02, e)); s.g.rotation.x = (sway - swayLag) * 2.2 + Math.sin(clock * 2.1 + s.s) * 0.06 + 0.4 * p.strain - 0.25 * p.sit + Math.sin(clock * 3) * 0.12 * p.sit; s.g.rotation.z = -s.s * (0.32 + 0.1 * Math.sin(clock * 1.3 + s.s)) - (sway - swayLag) * 1.5; }
     // The meat: socketed at the hip, drawn out toward its feet (up, when flipped).
-    meatHolder.visible = p.meat; meatHolder.position.set(0, fr.hip - p.pull * (fr.torso * 0.95 + 0.05), 0); meatHolder.scale.set(1, 1 + 0.25 * Math.sin(Math.PI * clamp01(p.pull * 1.1)), 1);
+    meatHolder.visible = p.meat; meatHolder.position.set(0, fr.hip - p.pull * 0.07, 0); meatHolder.scale.set(1, 1 + 0.08 * Math.sin(Math.PI * clamp01(p.pull * 1.1)), 1);
     meat.set({ f, phase, walk, tuck: p.sit, kick: p.invert > 0.7 && p.pull < 0.95 ? 1 : 0, flop: 0, brace: p.strain, clock, grow: p.legs, cooked: 0 });
     // The dress: attached at the neck on the body's axis (the hoist bunches its shelves at the back, in the dress), or fallen flat on the ground at the centre.
     body.updateMatrix(); attach.copy(body.matrix).multiply(new THREE.Matrix4().makeTranslation(0, fr.neck, 0));

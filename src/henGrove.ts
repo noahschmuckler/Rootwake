@@ -24,6 +24,8 @@ export const CUSHION_S = 16, CUSHION_H = 0.09;
 export const HEN_LEAN = 0.5, HEN_FAT = 0.24, HEN_RUN = 1.1, HOBBIT_PACE = 0.9;
 /** Stages from the miniskirt (0) to plump (STAGES): each cushion absorbed is one. */
 export const STAGES = 4;
+/** How far the carried piece's hip hangs below the hand that holds it by the feet (m): the plump legs' length and a foot. */
+export const HANG_M = 0.13;
 /** Each beat's seconds. */
 const BEAT = { hoist: 0.9, turn: 0.9, back: 1.1, sit: 0.7, absorb: 4.5, rest: 3, strain: 3.4, free: 0.6, flip: 0.9, flat: 2.4, eyes: 1.4, legs: 2.2, spring: 0.7, wilt: 7,
   kick: 0.7, step: 0.9, pull: 2.6, cook: 8, eat: 3.5 } as const;
@@ -179,7 +181,7 @@ export function createHenGrove(scene: THREE.Scene, relief: (x: number, z: number
         hen.group.updateMatrixWorld(true); popFrom = new THREE.Vector3().setFromMatrixPosition(hen.meat.group.matrixWorld); popT = 0; bites = 1;
         hset('flat'); bset('carry'); }
         break;
-      case 'carry': { const from = { x: b.x, z: b.z }; if (t > 0.6) { if (walk(b, cookSpot, HOBBIT_PACE * 0.85, dt)) bset('cook'); hobSpeed = HOBBIT_PACE * 0.85; hobHeading = angleTo(hobHeading, toward(from, cookSpot), Math.min(1, dt * 8)); } break; }
+      case 'carry': { popT += dt; const from = { x: b.x, z: b.z }; if (t > 0.6) { if (walk(b, cookSpot, HOBBIT_PACE * 0.85, dt)) bset('cook'); hobSpeed = HOBBIT_PACE * 0.85; hobHeading = angleTo(hobHeading, toward(from, cookSpot), Math.min(1, dt * 8)); } break; }
       case 'cook': hobHeading = angleTo(hobHeading, toward(b, hearth), Math.min(1, dt * 6)); if (t >= BEAT.cook) bset('eat'); break;
       case 'eat': bites = 1 - Math.floor(t / BEAT.eat * 4) / 4; if (t >= BEAT.eat) { bites = 0; bset('idle'); } break;
     }
@@ -190,7 +192,8 @@ export function createHenGrove(scene: THREE.Scene, relief: (x: number, z: number
     if (b.phase === 'kick') return { kind: 'kick', k: b.t / BEAT.kick };
     if (b.phase === 'step') return { kind: 'pull', k: 0 };
     if (b.phase === 'pull') return { kind: 'pull', k: b.t / BEAT.pull };
-    if (b.phase === 'carry' || b.phase === 'eat') return { kind: 'hold', k: 0 };
+    if (b.phase === 'carry') return { kind: 'hold', k: 0 };
+    if (b.phase === 'eat') return { kind: 'eat', k: b.t / BEAT.eat };
     if (b.phase === 'cook') return { kind: 'cook', k: b.t / BEAT.cook };
     return null;
   };
@@ -221,14 +224,15 @@ export function createHenGrove(scene: THREE.Scene, relief: (x: number, z: number
     // The hobbit, posed, and the piece in its hands, on its stick over the fire, or in its mouth.
     const po = hobPose(); hob.update(b.x, relief(b.x, b.z), b.z, hobHeading, { pose: po, speed: hobSpeed, carry: null, eating: false, taking: false, inside: false }, dt);
     const carrying = b.phase === 'carry' || b.phase === 'cook' || b.phase === 'eat';
-    piece.group.visible = carrying && bites > 0; stick.visible = b.phase === 'cook' || b.phase === 'eat';
+    piece.group.visible = carrying && bites > 0; stick.visible = b.phase === 'cook';
     const fx = -Math.sin(hobHeading), fz = -Math.cos(hobHeading), by = relief(b.x, b.z);
     if (piece.group.visible) {
-      let cooked = 0; piece.group.rotation.set(0, hobHeading, 0); piece.group.scale.setScalar(1);
-      if (b.phase === 'carry') { tmp.set(b.x + fx * 0.17, by + 0.36, b.z + fz * 0.17); if (popFrom && popT < 0.4) { popT += dt; const k = smooth(popT / 0.4); tmp.lerpVectors(popFrom, tmp, k); tmp.y += Math.sin(Math.PI * k) * 0.25; } }
+      // Carried and eaten, it hangs upside down by its feet from the hobbit's left hand (as a plucked chicken is carried), swinging a little.
+      let cooked = 0; const sc = b.phase === 'eat' ? Math.max(0.05, bites) : 1; piece.group.rotation.order = 'YXZ'; piece.group.rotation.set(Math.PI + Math.sin(clock * 4) * 0.12, hobHeading, Math.sin(clock * 3.1) * 0.15); piece.group.scale.setScalar(sc);
+      hob.group.updateMatrixWorld(true); hob.hand.getWorldPosition(tmp); tmp.y -= HANG_M * sc;
+      if (b.phase === 'carry') { if (popFrom && popT < 0.4) { const k = smooth(popT / 0.4); tmp.lerpVectors(popFrom, tmp, k); tmp.y += Math.sin(Math.PI * k) * 0.25; } }
       else { const hy = relief(hearth.x, hearth.z); cooked = b.phase === 'cook' ? clamp01(b.t / BEAT.cook) : 1;
-        if (b.phase === 'cook') { tmp.set(hearth.x, hy + 0.42, hearth.z); piece.group.rotation.set(0, hobHeading, Math.PI / 2 + Math.sin(clock * 0.8) * 0.3); }
-        else { tmp.set(b.x + fx * 0.14, by + 0.3, b.z + fz * 0.14); piece.group.scale.setScalar(Math.max(0.05, bites)); } }
+        if (b.phase === 'cook') { tmp.set(hearth.x, hy + 0.42, hearth.z); piece.group.rotation.set(0, hobHeading, Math.PI / 2 + Math.sin(clock * 0.8) * 0.3); } }
       piece.group.position.copy(tmp); piece.set({ f: 1, phase: 0, walk: 0, tuck: 0, kick: 0, flop: 1, brace: 0, clock, grow: 1, cooked });
       if (stick.visible) { const hx = b.x + fx * 0.12, hz = b.z + fz * 0.12, hy2 = by + 0.2, to = b.phase === 'cook' ? tmp.clone() : new THREE.Vector3(hx + fx * 0.05, hy2 + 0.1, hz + fz * 0.05); const from = new THREE.Vector3(hx, hy2, hz), d = to.clone().sub(from); stick.position.copy(from); stick.scale.set(1, Math.max(0.05, d.length() + 0.05), 1); stick.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); }
     }

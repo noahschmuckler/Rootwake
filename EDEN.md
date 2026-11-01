@@ -204,8 +204,9 @@ cycle about three minutes), beside the band's own fungus, which keep `chickenFig
   orange with a cream lip and pale pores under, few, small and spaced when lean (a miniskirt on stilts) and many and round when fat (a
   ballgown); hoisted by bunching (Noah, 2026-11-01: lifting the whole gown back made the body pass through it and lost the joke): it stays on the body's axis and each shelf's back is gathered in toward the axis, flipped up and crumpled, the lower shelves most, so the round cartoon bottom shows (`BUNCH_IN`, `BUNCH_UP`); bunched at the back sitting; fallen flat and splayed on the ground,
   the largest underneath. **The core:** a pale upper torso inside the gown and two thin curved eyestalks with glossy black eyes and a
-  glint, lagging the waddle, retracting and resprouting. **The meat piece:** two-segment legs, a bare cartoon bottom, a pale stem up
-  into the chest and a soft orange cap on it (a king oyster mushroom with a butt and legs); `henFrame(f)` sets the hip (long thin legs
+  glint, lagging the waddle, retracting and resprouting. **The meat piece:** two-segment legs and a bare cartoon bottom, nothing more
+  (Noah, 2026-11-01: the first cut's stem and cap up into the chest, a king oyster with a butt and legs, read as phallic, worse in the
+  hobbit's hands; the torso stays in the dress); `henFrame(f)` sets the hip (long thin legs
   lean, short fat ones fat), the torso and the neck from fatness 0..1. No arms, no face, no beak. Cel look as the Eden's figures.
 - **The grove** (`henGrove.ts`): two trees `GROVE_GAP` (6.5 m) apart, their midpoint 11 to 19 m from the hearth on the side away from
   the cave, across the hobbit's line, on level dry ground with no forest tree within 5 m (`chooseGrove`). The trees join the land's own
@@ -217,12 +218,12 @@ cycle about three minutes), beside the band's own fungus, which keep `chickenFig
   the other tree (slower the fatter), **hoists** the back of its gown, **turns**, **backs** onto the cushion and **sits**, legs tucked;
   the cushion is **absorbed** and it fills out a stage (thicker legs and bottom, more and fuller tiers), **rests**, and goes again. At
   stage 4 (three crossings) it tears free and **stops midway**. A hobbit from the hearth walks out, **kicks** it onto its head (the gown
-  falls flat, the bare bottom and legs up and kicking), **steps on the dress** and **pulls**, the piece stretching out of the chest
-  until it comes free with a pop into its hands; it carries it home held up, **cooks** it on a stick over a small fire at the hearth
-  (it browns) and **eats** it in four bites. The **flat dress** lies still; **two eyestalks pop up** from its middle; the legs grow
+  falls flat, the bare bottom and legs up and kicking), **steps on the dress** and **pulls** the legs and bottom away with a pop;
+  it carries it home **by the feet in its left hand,** held up and out like a trophy (the piece is two-thirds its height and would drag),
+  **cooks** it on a stick over a small fire at the hearth (it browns) and **eats** it, hand to mouth, in four bites. The **flat dress** lies still; **two eyestalks pop up** from its middle; the legs grow
   under it; a **lanky stage-0 hen in a miniskirt springs out**, the old gown **withers** (its lower tiers shrink and darken) and **sinks
   into the soil**; the runner goes to the nearer budded tree, flips its little skirt and sits, absorbing that cushion (stage 1), and the
-  cycle repeats. The hobbit's poses (`kick`, `pull`, `hold`, `cook`) are an additive `pose` on `hobbitFigure`'s state.
+  cycle repeats. The hobbit's poses (`kick`, `pull`, `hold`, `eat`, `cook`) are an additive `pose` on `hobbitFigure`'s state, and its left mitten is `hand` for things held.
 - **The lab** (`hen.html`, `henLab.ts`): the grove on plain ground with two trunks and a hearth: follow the hen, the hobbit or the
   grove, ×1/×4, day or night. Dev: `__village.eden.hen` (`state`, `skip(s)`, `toHen()` to stand her looking at it), `__hen` in the lab.
 - **Tuning** (henGrove.ts' head): the beats' seconds, the paces (lean 0.5, fat 0.24, the runner 1.1 m/s), `STAGES`, `CUSHION_S`.
