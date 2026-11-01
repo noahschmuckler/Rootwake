@@ -114,8 +114,19 @@ fruit to harvest instead of a slow, dodo-like creature. His headcanon keeps the 
   budded base, absorb, rest, tear free); a stunned state with a roll-over-and-right animation; and a bud on each tree base that regrows
   after it is taken.
 
-- **Two forms (Noah, 2026-11-01).** After tearing free it **fluffs its tiers into a round body** to walk; to attach it **swivels the tiers to one
-  side** and exposes its flat attachment face. (Claude: this joins the rosette and shelf images, and a round body suits the roll.)
+- **The dress (Noah, 2026-11-01, replaces the earlier "two forms" idea).** The tiers are **a large dress of many tiers and tresses,**
+  worn by a small pale creature (bare white bottom, lanky legs, eyestalks) that lives inside it.
+  - **Walking:** it goes about **fluffed up** in the full dress.
+  - **Attaching:** it approaches a tree, **hoists the gown** (showing a bare white bottom), **backs up and sits against the tree** with
+    the folds of the dress **ruffled up behind it around its neck.** While it sits, **new tresses grow and the body thickens.**
+  - **Harvest:** wolves or hobbits remove **the innards from beneath.** The **eyestalks are yoinked in,** and at first there is only **a
+    flattened dress splayed out with no occupant.** Then **two eyestalks pop up from the middle,** and the occupant **springs out of the
+    tresses on lanky legs,** carrying **only a few small brackets: a miniskirt on stilts.**
+  - **Recovery:** it **runs to the nearest budded tree,** **flips its skirt up briefly** (a tiny white bottom), and **sits against the
+    tree,** **eyestalks bobbing as if sighing with relief.**
+  - (Claude: the dress is the woody, tasteless part; the pale body and its meaty centre are the meat. This replaces the turtle-roll as the
+    stun, and it gives fatness a clear read: a miniskirt on stilts when lean, a ballgown when fat. Open: what exactly is removed, and
+    does the occupant keep its legs and eyes while the meat goes?)
 
 ### Open (the hen)
 

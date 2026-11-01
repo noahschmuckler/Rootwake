@@ -28,9 +28,11 @@ A **lean** young hen (few tiers, long legs), middle stages, and a **fat** one (b
 pose (rolled onto its back, righting itself); a **bud** on a tree base (pale lumpy cluster) and the **sealed patch** it grows from.
 Fatness should read from the silhouette alone.
 
-## Two forms (Noah's idea, 2026-11-01)
+## The dress (Noah, 2026-11-01)
 
-The walking body is a **round, fluffed rosette.** To attach, it **swivels its tiers to one side** and exposes a flat, bark-textured attachment
-face against the trunk; after tearing free it **fluffs back out** to the round form. A sphere also rolls, which suits the stun-and-roll-upright.
+The tiers are **a gown of tresses** worn by a small pale creature. It walks **fluffed up,** then at a tree **hoists the gown** (a bare white bottom),
+**backs onto the trunk** and sits with the dress **ruffled up behind it round its neck.** When harvested it is left as a **flat, splayed dress**,
+then **springs out on stilt legs in a miniskirt** of a few small brackets and runs to a budded tree to sit and regrow. Reference for the sitting
+gown: `backing-onto-tree-best.jpg`; for the lean stilt-legged stage: `life-stages-four.jpg` (stage 1).
 
 **Note on generation:** editing an image with Gemini kept putting the bark face on the wrong side (front against the tree). A fresh prompt that says the creature *backs against* the trunk, with no log named, worked. Prefer fresh generation.

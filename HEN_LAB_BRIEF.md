@@ -13,11 +13,17 @@ form I could find by search. Find it on the branch Noah is playing (the village 
 
 1. **A lab page** that shows one hen on a plain ground with a trunk beside it, with buttons for each state and a slider for fatness.
    Judge it at a phone's portrait aspect.
-2. **One body, two forms.**
-   - **Walking:** a round, fluffed rosette. Tiers are rings of overlapping lobes, spreading evenly all the way round.
-   - **Attached:** every lobe rotates about the vertical axis toward the creature's front, leaving a flat, rough, bark-textured
-     **back face** bare; the creature backs onto the trunk with that face against it and the tiers fanning outward from the tree.
-     (Reference: `backing-onto-tree-best.jpg`.) The back is a fixed side.
+2. **A pale creature in a dress.** The body is a small pale creature with a bare white bottom, lanky legs and two eyestalks. The brackets are
+   **a gown of many tiers and tresses** worn over it (the dress is the woody part; the body inside is the meat).
+   - **Walking:** the dress is fluffed and round, evenly spread all the way round.
+   - **Attaching:** it approaches a budded tree base, **hoists the gown** to show a bare white bottom, **backs up and sits against the
+     trunk,** the dress's folds bunched up behind it around its neck and the tiers spilling down in front. (Reference:
+     `backing-onto-tree-best.jpg`.) While sitting, **new tresses grow and the body thickens.**
+   - **Harvested:** the meat is pulled from beneath, the eyestalks yoink in, and the dress lies **flat and splayed with no occupant.**
+     Then two eyestalks pop up from the middle, and the occupant **springs out on stilt legs wearing a miniskirt of a few small
+     brackets.**
+   - **Recovery:** it runs to the nearest budded tree, flips its skirt up for a moment, sits against the tree, and its eyestalks bob in relief.
+   - Comedy is the point: keep it cartoonish and gentle.
 3. **Fatness 0 to 1** read from the silhouette alone: lean (few thin tiers, long thin legs, tall), middle, fat (broad, round,
    short legs), and the heaviest (too heavy to walk). Reference: `life-stages-four.jpg`. Speed falls as fatness rises.
 4. **Face:** two glossy black eyes on thin curved stalks from the top, each able to droop, lean back or flare; pale stubby mushroom-stem
@@ -27,10 +33,9 @@ form I could find by search. Find it on the branch Noah is playing (the village 
 ## States and animations
 
 wander (a waddle, side-to-side sway, eyestalks lagging) · graze (head tipped forward, eating a grass tuft) · approach a budded tree base
-· **swivel and attach** (turn, back on, tiers swing round, legs fold) · rest attached · **absorb the bud** (threads join, the bud melts into
+· **hoist the gown and sit** (turn, back on, skirt lifted then bunched behind, legs fold) · rest attached · **absorb the bud** (threads join, the bud melts into
 the back face, fatness steps up) · **tear free** (bark and wood splinters, mycelium threads, a pale wound left on the trunk) · **fluff**
-(tiers spring back to round, a burst of spores) · **stunned** (a harvester rips out the meaty centre; the hen rolls like a ball, lies on its
-back with its legs waving, rocks and rights itself, hollow and irritated, fatness reset).
+(tiers spring back to round, a burst of spores) · **harvested** (the meat is pulled out from beneath; the dress collapses flat and splayed, the eyestalks pop up, the occupant springs out on stilt legs in a miniskirt, runs to a budded tree, flips its skirt and sits, fatness reset). **Rig hint:** the tiers are stacked rings on a spine or pelvis chain; the hoist and the bunching are lifting and rotating rings upward and back; the flat dress is every ring dropped and splayed on the ground.
 
 ## Rules for the sim (from `ECOLOGY.md`)
 
