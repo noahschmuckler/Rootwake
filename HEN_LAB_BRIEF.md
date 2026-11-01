@@ -32,11 +32,11 @@ ruffled, turkey-tail bands) are a tint parameter, not new models.
 |---|---|---|
 | **Wander / waddle** | walks fluffed up, side-to-side sway, eyestalks lagging | `dress-walk-hoist-sit.jpg` panel 1 (ignore the smile), `rosette-walking.jpg` (legs and waddle), `life-stages-four.jpg` (round body) |
 | **Graze** | head-down, eating a grass tuft | (none; derive) |
-| **Approach and hoist** | goes to a **budded** tree base, **lifts the front of the gown** to show a bare white bottom | `dress-walk-hoist-sit.jpg` panel 2 |
+| **Approach and hoist** | goes to a tree base with a **cushion**, **lifts the front of the gown** to show a bare white bottom | `dress-walk-hoist-sit.jpg` panel 2 |
 | **Back up** | turns and backs toward the trunk | panel 3 |
 | **Sit and rest** | sits against the trunk, **legs tucked in (never stretched forward),** the dress bunched up behind it around its neck, tiers spilling down in front | panel 4, `backing-onto-tree-best.jpg` |
-| **Absorb the bud, thicken** | threads join it to the bud; **new tresses grow and the body thickens;** fatness steps up | `life-cycle-five-panels.jpg` (the bud is the pale lumps at the foot of panel 1), `dress-regrowth-five.jpg` (growth, but legs must be tucked and the figure has no arms or face) |
-| **Leave the tree** | gets up, leaving a sealed patch that regrows a bud | `pulling-free.jpg` is the tree-side reference: the pale wound and the new yellow bud. **Whether it still tears bark away is open.** |
+| **Sit on the cushion, absorb it, thicken** | threads join it to the bud; **new tresses grow and the body thickens;** fatness steps up | `life-cycle-five-panels.jpg` (the bud is no longer the pale lumps in panel 1: it is the **pillowy cushion**), `dress-regrowth-five.jpg` (growth, but legs must be tucked and the figure has no arms or face) |
+| **Leave the tree** | **strains comically to rip free** (some tearing, threads stretching) but **tears no bark slab** (too brutal); leaves a **mycelial patch with a small central nub** that **slowly inflates into a pillowy cushion** | `pulling-free.jpg` for the straining and threads **only** (ignore its bark slab and its yellow bracket bud). No image yet for the patch and the cushion. |
 | **Flip (hunt)** | a wolf or hobbit knocks it **upside down;** the dress falls over it and the **bare bottom and legs kick in the air** | none yet (prompt in the README's notes) |
 | **Pull** | the hunter **steps on the dress and pulls the legs** until the meat piece **tears free with a pop;** the **eyestalks retract into the body.** No blood. | none yet |
 | **Flat dress** | the dress lies flat and splayed, no occupant visible | `dress-harvest-flat-dress.jpg` panel 2 |

@@ -137,6 +137,10 @@ fruit to harvest instead of a slow, dodo-like creature. His headcanon keeps the 
     stun, and it gives fatness a clear read: a miniskirt on stilts when lean, a ballgown when fat. Open: what exactly is removed, and
     does the occupant keep its legs and eyes while the meat goes?)
 
+- **Leaving the tree (Noah, 2026-11-01).** It does **not** tear a slab of bark off (too brutal), but there is still **some tearing away,** and
+  Noah likes the **comic straining to rip free.** What it leaves is **a mycelial patch with a small central nub that slowly inflates into a
+  tiny pillowy cushion** for a hen to sit on. **That cushion is the bud:** a hen sits on it and absorbs it.
+
 ### Open (the hen)
 
 - **Are the buds edible?** Noah's first thought was that the young buds are the edible form. The headcanon makes the fat hens the meat.

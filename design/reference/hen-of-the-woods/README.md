@@ -5,7 +5,7 @@ Noah, and two screenshots of the current in-game model. They are inspiration, no
 
 | File | What it is | Keep or ignore |
 |---|---|---|
-| `pulling-free.jpg` | **The best "tearing free" image.** A shelf-fungus body on a torn slab of bark pulling off a trunk, mycelium threads stretching, splinters flying, a raw pale wound on the tree, a small new yellow bud at the base. Two pale stem legs, eyestalks. | **Keep.** The reference for the tear-away and the bud left behind. |
+| `pulling-free.jpg` | **Superseded in part (Noah, 2026-11-01): tearing off a bark slab is too brutal.** Keep it only for the **straining and the threads;** the bud is no longer a yellow bracket but a **pillowy cushion on a mycelial patch.** Original note: the best "tearing free" image. A shelf-fungus body on a torn slab of bark pulling off a trunk, mycelium threads stretching, splinters flying, a raw pale wound on the tree, a small new yellow bud at the base. Two pale stem legs, eyestalks. | **Keep.** The reference for the tear-away and the bud left behind. |
 | `life-cycle-five-panels.jpg` | Budding at the tree base, tiers on the trunk, tearing free, walking with the slab, settling on a new tree. | Keep for the cycle. Its first panel (a sapling) is wrong: the buds are the pale lumps at its foot. |
 | `bracket-ambulator-slab.jpg` | The body as half-moon shelf tiers up a flat, hollowed, bark-textured slab, on two stem legs. | Keep for the silhouette and the tier fan. |
 | `backing-onto-tree-best.jpg` | **The best attached form.** The creature backed against a pine trunk: a fan of tiers cascading down and away from the tree, two long curved eyestalks drooping forward, pale stubby legs, a hollowed bark patch on the trunk beside it with threads. Generated fresh, not edited. | **Keep.** The reference for the attached pose and the tier cascade. |
@@ -54,3 +54,5 @@ gown: `backing-onto-tree-best.jpg`; for the lean stilt-legged stage: `life-stage
 **Note on generation:** editing an image with Gemini kept putting the bark face on the wrong side (front against the tree). A fresh prompt that says the creature *backs against* the trunk, with no log named, worked. Prefer fresh generation.
 
 **See `../../../HEN_LAB_BRIEF.md`:** the prompt for the modelling agent, with each state tied to its reference image.
+
+**Leaving the tree (Noah):** no bark slab is torn off, but it strains comically to rip free, leaving **a mycelial patch with a small central nub that slowly inflates into a tiny pillowy cushion** (the bud) for a hen to sit on.
