@@ -14,7 +14,7 @@ readings or proposals; **Open** lines wait on him.
 
 | Creature | Life cycle |
 |---|---|
-| **Chicken / hen of the woods** (the meat-fruit; replaces the rabbit) | Grows at tree bases, in many colourings, some like turkey tail. Breaks free when mature, waddles about eating grass and whatever is in its path, then attaches to another tree to rest. A new one grows where it broke off. |
+| **Chicken / hen of the woods** (the meat-fruit; replaces the rabbit) | Grows at tree bases, in many colourings, some like turkey tail. Breaks free when mature, waddles about eating grass and whatever is in its path, then attaches to a tree to rest. **(Revised 2026-11-01: see "The hen's life" below.)** |
 | **Birds** | Puffball-like growths on **nest-shaped burls** high in trees. A popped one releases flying bird-like fungi that soar like enormous spores; where they land they settle and start another nest-burl. |
 | **Fish** | Waterborne fungus. Bubbles in river eddies settle into opaque spheres on the river's edge. When mature the fish-fungi swim to the lake, bind with fish from other rivers into larger salmon-like fish, swim upstream to eddies, and dissolve in the froth, which restarts the cycle. |
 
@@ -82,9 +82,51 @@ Both are singular. They cull whatever the predators fail to hunt, and to the pla
 - Defeating them lets the hobbit population grow, but **moves toward awakening the mother** as the symbol of unrestrained fecundity
   (`MOTHER.md`).
 
+## The hen's life (Noah, 2026-11-01, revised)
+
+Noah, thinking through it as a food source: it no longer looked meaty, and young buds would be the edible form, which would turn it into a
+fruit to harvest instead of a slow, dodo-like creature. His headcanon keeps the creature:
+
+- **Most of its life it is woody and tasteless.** The older it gets, the **slower** it gets.
+- **Each attachment to a tree makes it a little fatter.** It leaves behind **a sealed patch that slowly grows a bulging fungus bud.**
+- **To avoid exponential growth, it does not attach to a brand-new tree each time.** It attaches to **a tree base that has a bud and
+  absorbs the bud.** Its wandering is a **journey for genetic diversity:** a different base, a different microclimate, different
+  accumulated nutrients.
+- **Life stages:** a **smaller, thinner first-emerged hen,** then middle stages, then a **fat, waddling one.** **The fat ones have a
+  nutritious, meaty centre.**
+- **It is a deathless meat.** Wolves and hobbits **rip out the meaty innards,** which **stuns and irritates the hen.** It then
+  **turtle-shell rolls itself back onto its feet** and **resumes collecting buds from tree bases and fattening itself up.**
+- **The population is static or scripted.** There are no reproduction rates or spread to manage as a live dynamic.
+
+### How it fits (Claude's reading)
+
+- **The loop is closed.** One hen to one bud site: a hen absorbs a bud, leaves a patch, the patch grows a new bud, and a later hen
+  absorbs that one. The number of hens and buds stays constant, so nothing runs away.
+- **Fatness is the harvest.** Meat available is the hen's fatness, and a harvest empties the centre and resets it to lean. Refilling
+  takes a number of attachments, and each attachment takes a visit to a budded base and a rest. So **the rate of refattening is the
+  food supply.**
+- **Overharvest keeps its meaning.** Take innards faster than the hens refatten and the wolves go hungry, with no hen dying. That is the
+  first step of the fall (below), and it still ends in the first real blood.
+- **Eden stays bloodless.** Its meat does not die, so a wolf or hobbit eating it does no killing. The first death of flesh is still the
+  hungry wolf.
+- **Slower with age** means wolves and hobbits meet the fat, meaty ones first, which gives the meat a place and a pace the player can read.
+- **For the build:** a hen needs a fatness value (lean to fat) that sets its size, speed and meat; a state cycle (wander, attach to a
+  budded base, absorb, rest, tear free); a stunned state with a roll-over-and-right animation; and a bud on each tree base that regrows
+  after it is taken.
+
+### Open (the hen)
+
+- **Are the buds edible?** Noah's first thought was that the young buds are the edible form. The headcanon makes the fat hens the meat.
+  Are buds food for anything, or only for hens?
+- **How many attachments from lean to fat,** and how long does a hen rest at each?
+- **Does fire (the thunderbird's burn) kill buds, hens, or only the trees?** The burn "clears the infested trees" (above), and a static
+  count needs an answer to what it does to the loop.
+- **Where do the first thin hens emerge** if the count is fixed? From the starting buds, scripted at the start?
+- **Does the stun have a cost for the harvester** (a kick, a hiss, a cloud of spores)?
+
 ## The fall, in order (Noah's sequence, Claude's arrangement)
 
-1. **Overharvest.** The hobbits take more chicken-of-the-woods than the web can replace, and the wolves go hungry. (Existing mechanics
+1. **Overharvest.** The hobbits take innards from the hens faster than the hens can refatten (the hens themselves never die), and the wolves go hungry. (Existing mechanics
    this touches: warren and larder in `villageModel.ts`, `SETTLEMENTS.md`.)
 2. **First real blood.** A hungry wolf is killed. It is the first death of flesh in the Eden. Wolves and hobbits had been coequal
    tribes, so it is a killing between kin.
