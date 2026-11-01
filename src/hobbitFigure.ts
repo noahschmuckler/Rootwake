@@ -12,7 +12,9 @@ export const HOBBIT_HEIGHT = 0.46;
 export const HAIRS = ['#6b3f1f', '#4a2b14', '#8a5a2a', '#3a2314', '#a0703a', '#5c3a22', '#7a4a28', '#2e1d10'];
 export const SKINS = ['#e8b98f', '#dba878', '#f0c7a0', '#d49c6c'];
 export interface HobbitLook { hair: string; skin: string; nose: number; height: number }
-export interface HobbitState { speed: number; carry: 'chicken' | 'berries' | null; eating: boolean; taking: boolean; inside: boolean; /** E1b: the antic it is in, posed here: sniffing (bent to the flower), sitting (down, toes up, swaying to its hum), napping (on its side, eyes shut, Zs), scuffling (leaning in, arms flailing, hopping), hugging (leaning in, arms round), a trip (flat on its face, feet kicking), a tumble (rolling as a ball) and dizzy (reeling, stars). */ antic?: AnticKind | null }
+/** The hen's harvest (henGrove.ts): a kick (one foot swung forward, the body rocking back), a stomp-and-pull (a foot planted on the dress, leaning back, both arms hauling up), holding the piece up as it walks home, and cooking (sat down at the fire, a stick held out over it). `k` 0..1 is the beat within the pose. */
+export type HobbitPose = { kind: 'kick' | 'pull' | 'hold' | 'cook'; k: number };
+export interface HobbitState { /** The hen's harvest's poses (henGrove.ts); they override the walk's arms and feet. */ pose?: HobbitPose | null; speed: number; carry: 'chicken' | 'berries' | null; eating: boolean; taking: boolean; inside: boolean; /** E1b: the antic it is in, posed here: sniffing (bent to the flower), sitting (down, toes up, swaying to its hum), napping (on its side, eyes shut, Zs), scuffling (leaning in, arms flailing, hopping), hugging (leaning in, arms round), a trip (flat on its face, feet kicking), a tumble (rolling as a ball) and dizzy (reeling, stars). */ antic?: AnticKind | null }
 /** The glyph over a hobbit's head in an antic: the dwarf's own idle overlays (sniff sniff, Zs, la la la) and the slapstick's hearts and stars. */
 const GLYPHS: Partial<Record<AnticKind, string>> = { smell: 'sniff', sit: '\u266a', nap: 'Z', scuffle: '\u2726', hug: '\u2665', trip: '\u2726', dizzy: '\u2726' };
 const glyphTextures = new Map<string, THREE.Texture>();
@@ -105,6 +107,15 @@ export function createHobbit(look: HobbitLook, seed = 1): HobbitFigure {
     else if (an === 'hug') { body.rotation.x = -0.3; arms[0].rotation.x = arms[1].rotation.x = -1.3; arms[0].rotation.z = -0.35; arms[1].rotation.z = 0.35; body.rotation.z = Math.sin(clock * 2) * 0.04; }
     else if (an === 'dizzy') { body.rotation.z = Math.sin(clock * 3.2) * 0.28; body.rotation.x = Math.cos(clock * 3.2) * 0.2; arms[0].rotation.z = 0.9; arms[1].rotation.z = -0.9; }
     if (rolling) { roll += dt * s.speed / 0.21; body.rotation.set(-roll, 0, 0); body.position.set(0, MASS_Y - MASS_Y * Math.cos(roll), MASS_Y * Math.sin(roll)); for (const f of feet) { f.rotation.x = 0.6; } arms[0].rotation.z = 1.4; arms[1].rotation.z = -1.4; } else if (roll !== 0 && an !== 'dizzy') roll = 0;
+    // The hen's harvest (henGrove.ts): posed over the walk.
+    const po = s.pose ?? null;
+    if (po) {
+      const k = po.k;
+      if (po.kind === 'kick') { const sw = Math.sin(Math.min(1, k) * Math.PI); body.rotation.x = 0.25 * sw; body.position.y = 0.01; feet[0].rotation.x = 1.6 * sw; feet[0].position.z = -0.02 - 0.12 * sw; feet[0].position.y = 0.02 + 0.08 * sw; arms[0].rotation.z = 0.9 * sw; arms[1].rotation.z = -0.9 * sw; }
+      else if (po.kind === 'pull') { const tug = Math.abs(Math.sin(clock * 9)) * 0.08; body.rotation.x = 0.35 + 0.2 * k + tug; body.position.z = 0.03; feet[0].position.y = 0.05; feet[0].position.z = -0.12; feet[0].rotation.x = 0.4; arms[0].rotation.x = arms[1].rotation.x = -2.4 + tug * 2; arms[0].rotation.z = -0.2; arms[1].rotation.z = 0.2; }
+      else if (po.kind === 'hold') { arms[0].rotation.x = arms[1].rotation.x = -1.6; arms[0].rotation.z = -0.25; arms[1].rotation.z = 0.25; }
+      else if (po.kind === 'cook') { body.position.y -= 0.07; body.rotation.x = 0.06; body.rotation.z = Math.sin(clock * 1.4) * 0.05; for (const f of feet) { f.rotation.x = -1.25; f.position.z = -0.1; f.position.y = 0.05; } arms[0].rotation.x = arms[1].rotation.x = -1.1 + Math.sin(clock * 2) * 0.05; arms[0].rotation.z = -0.3; arms[1].rotation.z = 0.3; }
+    }
     // The glyph: shown through an antic that has one (the trip's stars once it is down), rising and fading on a loop.
     const g = an && !(an === 'trip' && fall < 0.9) ? GLYPHS[an] ?? null : null;
     if (g !== glyphOf) { glyphOf = g; const t = g ? glyphTexture(g) : null; glyphMat.map = t; glyphMat.needsUpdate = true; glyph.visible = !!t; }

@@ -193,6 +193,44 @@ loop. The frame's weight was two things:
   flat while it did).
 
 
+## The hen's grove (Noah, 2026-11-01): the refined hen-of-the-woods
+
+Noah, on the brief and the references another session gathered on `docs/vision` (`HEN_LAB_BRIEF.md`, `ECOLOGY.md` "The hen's life",
+`design/reference/hen-of-the-woods/`): "place a pair of trees near the cave, separate from the forest, and create the refined hen of the
+woods", with its cycle played out between them and a hobbit's harvest. Built as a set piece for the eye, in real seconds (the whole
+cycle about three minutes), beside the band's own fungus, which keep `chickenFigure.ts` for now.
+
+- **The figure** (`henFigure.ts`): three parts posed by numbers. **The dress:** up to nine scalloped, drooping shelves, banded cream to
+  orange with a cream lip and pale pores under, few, small and spaced when lean (a miniskirt on stilts) and many and round when fat (a
+  ballgown); hoisted at the back by turning about the neck; bunched behind the neck sitting; fallen flat and splayed on the ground,
+  the largest underneath. **The core:** a pale upper torso inside the gown and two thin curved eyestalks with glossy black eyes and a
+  glint, lagging the waddle, retracting and resprouting. **The meat piece:** two-segment legs, a bare cartoon bottom, a pale stem up
+  into the chest and a soft orange cap on it (a king oyster mushroom with a butt and legs); `henFrame(f)` sets the hip (long thin legs
+  lean, short fat ones fat), the torso and the neck from fatness 0..1. No arms, no face, no beak. Cel look as the Eden's figures.
+- **The grove** (`henGrove.ts`): two trees `GROVE_GAP` (6.5 m) apart, their midpoint 11 to 19 m from the hearth on the side away from
+  the cave, across the hobbit's line, on level dry ground with no forest tree within 5 m (`chooseGrove`). The trees join the land's own
+  (`createChunks`' new `extraTrees`, a 3 m clearing round each), so the vista draws them as its pines and they collide. At each trunk's
+  foot, facing the other tree, a **mycelial patch** (a web on the ground and a fainter one on the bark) whose **nub** swells to a ball and
+  spreads into a **dented pillowy cushion** over `CUSHION_S` (16 s) once the hen has left it (`cushion-growth-stages.jpg`).
+- **The cycle:** it starts sat against the first tree, skinny (stage 1 of 4). It **strains** (up off the seat, leaning out, braced,
+  trembling, threads from its back to the bark stretching), they **snap** and it lurches free, leaving the bare patch; it **walks** to
+  the other tree (slower the fatter), **hoists** the back of its gown, **turns**, **backs** onto the cushion and **sits**, legs tucked;
+  the cushion is **absorbed** and it fills out a stage (thicker legs and bottom, more and fuller tiers), **rests**, and goes again. At
+  stage 4 (three crossings) it tears free and **stops midway**. A hobbit from the hearth walks out, **kicks** it onto its head (the gown
+  falls flat, the bare bottom and legs up and kicking), **steps on the dress** and **pulls**, the piece stretching out of the chest
+  until it comes free with a pop into its hands; it carries it home held up, **cooks** it on a stick over a small fire at the hearth
+  (it browns) and **eats** it in four bites. The **flat dress** lies still; **two eyestalks pop up** from its middle; the legs grow
+  under it; a **lanky stage-0 hen in a miniskirt springs out**, the old gown **withers** (its lower tiers shrink and darken) and **sinks
+  into the soil**; the runner goes to the nearer budded tree, flips its little skirt and sits, absorbing that cushion (stage 1), and the
+  cycle repeats. The hobbit's poses (`kick`, `pull`, `hold`, `cook`) are an additive `pose` on `hobbitFigure`'s state.
+- **The lab** (`hen.html`, `henLab.ts`): the grove on plain ground with two trunks and a hearth: follow the hen, the hobbit or the
+  grove, ×1/×4, day or night. Dev: `__village.eden.hen` (`state`, `skip(s)`, `toHen()` to stand her looking at it), `__hen` in the lab.
+- **Tuning** (henGrove.ts' head): the beats' seconds, the paces (lean 0.5, fat 0.24, the runner 1.1 m/s), `STAGES`, `CUSHION_S`.
+- **Readings (for Noah):** the stage-0 runner absorbs a cushion on its first sit to become the skinny stage 1, so every sit is one
+  stage and the loop is uniform; the threads show faintly while it sits (the mycelium joining it to the bud) and taut as it strains;
+  the hobbit eats what it cooks. **Not yet:** the band's 66 fungus still wear the old cone figure, and the grove does not touch the
+  Eden's model (no needs, no pack); whether the refined figure replaces them, and at what cost in draws (one hen is about 30), is open.
+
 ## Passes
 
 - **E1 (this sprint):** the Eden's state; the hobbit band in the cave with its daily round; the chicken-of-the-woods cycle; the pack;
