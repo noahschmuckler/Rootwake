@@ -232,6 +232,31 @@ cycle about three minutes), beside the band's own fungus, which keep `chickenFig
   the hobbit eats what it cooks. **Not yet:** the band's 66 fungus still wear the old cone figure, and the grove does not touch the
   Eden's model (no needs, no pack); whether the refined figure replaces them, and at what cost in draws (one hen is about 30), is open.
 
+### The wolf's grove (Noah, 2026-11-01)
+
+Noah, on timing: only one or two hens need to be moving at once; the rest can be frozen simplified shells, each with an origin and a
+destination tree, and the harvests scripted, certain wolves and certain hobbits harvesting on a cadence. Before the band's hens are
+replaced, the wolf's harvest is tuned: "a wolf waiting patiently for his own hen".
+
+- **Where:** a second pair of trees chosen the same way (`chooseGrove`), at least `WOLF_GROVE_APART` (14 m) from the first, and the
+  wolf's spot `WOLF_SPOT_M` (7 m) on beyond it, away from the hearth (`village.ts`, `henGroves`). It runs 80 s behind the hobbit's grove
+  so the two harvests come at different times. It is its own wolf, drawn from the pack's file (none is drawn until the file has loaded).
+- **The beats** (`henGrove.ts`, `harvester: 'wolf'`, `stepWolf`/`drawWolf`): it **lies at its spot watching** the hen, head up, until the
+  plump hen walks out to the middle; it **gets up and trots over**; noses down and **under it and tosses its head**, flipping it onto its
+  head; **steps in with a paw on the dress** and its jaws on the bottom, **tugging back in jerks** until it pops off; **shakes it side to
+  side** in its jaws; **runs home** with it; **lies down**, the piece set on its side between its forepaws, and **gnaws it like a bone**,
+  head down and tilting side to side, the piece going in six bites over 14 s. Then it watches again.
+- **The poses** (`wolfFigure.ts`): the file has only Idle and Walking, so a `WolfPose` is laid over the clip on the bones (neck and head
+  pitched and turned, the head rolled, lying with the forelegs reaching forward and the hind legs folded under, a forepaw raised), and
+  a `mouth` anchor sits in its jaws. Found on the file: a neck or head bone's x pitches it, its z turns it, its y rolls it; a foreleg's z
+  swings it, a hind leg's x (its z splays it sideways). The posed bones are put back to rest each frame (Idle does not drive the legs).
+  The pack passes no pose and is unchanged.
+- **Tuning:** `WOLF_TROT`, `WOLF_RUN`, `WOLF_REACH`, `GRIP_IN` and the wolf's beats in `BEAT` (henGrove.ts); `MOUTH_FWD`, `MOUTH_UP`,
+  `LIE_DROP` (wolfFigure.ts). The lab (`hen.html`) has the wolf's grove behind the first, with "the wolf" and "its hen" to follow.
+  Dev: `__village.opening.eden.wolfHen` (`state`, `skip(s)`, `toWolf()`).
+- **Noticed, not changed:** the file wolf's eyes (`createAssetWolf`) sit on its neck, not its head: the head bone's origin is at the
+  head's base, so the eyes placed back from it land on the neck. The pack's eyes are there too.
+
 ## Passes
 
 - **E1 (this sprint):** the Eden's state; the hobbit band in the cave with its daily round; the chicken-of-the-woods cycle; the pack;

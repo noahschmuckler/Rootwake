@@ -3,6 +3,7 @@
 // hobbit or the whole grove; ×1/×4 time; day or night. `window.__hen` for checks.
 import * as THREE from 'three';
 import { createHenGrove, TRUNK_R, GROVE_GAP } from './henGrove';
+import { loadWolfAsset } from './wolfFigure';
 
 const renderer = new THREE.WebGLRenderer({ antialias: true }); renderer.setPixelRatio(Math.min(2, devicePixelRatio)); renderer.setSize(innerWidth, innerHeight); renderer.outputColorSpace = THREE.SRGBColorSpace; document.body.prepend(renderer.domElement);
 const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(45, innerWidth / innerHeight, 0.05, 200);
@@ -10,17 +11,22 @@ const sky = new THREE.Color('#9cc0d8'), nightSky = new THREE.Color('#162030'); s
 const hemi = new THREE.HemisphereLight('#dfe8f0', '#4a4030', 1.2), sun = new THREE.DirectionalLight('#fff2dc', 2.2); sun.position.set(6, 10, 4); scene.add(hemi, sun);
 const ground = new THREE.Mesh(new THREE.CircleGeometry(40, 48), new THREE.MeshStandardMaterial({ color: '#7a6a48', roughness: 1 })); ground.rotation.x = -Math.PI / 2; scene.add(ground);
 const hearth = { x: 0, z: 10 }, trees: [{ x: number; z: number }, { x: number; z: number }] = [{ x: -GROVE_GAP / 2, z: 0 }, { x: GROVE_GAP / 2, z: 0 }];
+// The wolf's grove: a second pair of trees behind the first, the wolf's spot beyond them.
+const wolfHome = { x: 0, z: -20 }, wolfTrees: [{ x: number; z: number }, { x: number; z: number }] = [{ x: -GROVE_GAP / 2, z: -12 }, { x: GROVE_GAP / 2, z: -12 }];
 const bark = new THREE.MeshStandardMaterial({ color: '#5a4030', roughness: 1, flatShading: true }), hull = new THREE.MeshBasicMaterial({ color: '#1a1008', side: THREE.BackSide }), leaf = new THREE.MeshStandardMaterial({ color: '#3e5a2a', roughness: 1, flatShading: true });
-for (const t of trees) {
+for (const t of [...trees, ...wolfTrees]) {
   const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.14, TRUNK_R, 9, 12).translate(0, 4.5, 0), bark); trunk.position.set(t.x, 0, t.z); const h = new THREE.Mesh(trunk.geometry, hull); h.scale.set(1.05, 1, 1.05); trunk.add(h); scene.add(trunk);
   for (let i = 0; i < 5; i++) { const c = new THREE.Mesh(new THREE.IcosahedronGeometry(1.1 + (i % 3) * 0.3, 0), leaf); c.position.set(t.x + Math.cos(i * 2.3) * 0.9, 7 + i * 0.5, t.z + Math.sin(i * 2.3) * 0.9); scene.add(c); }
 }
 const stone = new THREE.MeshStandardMaterial({ color: '#6a6660', roughness: 1, flatShading: true });
 for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2, m = new THREE.Mesh(new THREE.IcosahedronGeometry(0.14, 0), stone); m.position.set(hearth.x + Math.cos(a) * 0.55, 0.08, hearth.z + Math.sin(a) * 0.55); scene.add(m); }
 const grove = createHenGrove(scene, () => 0, hearth, trees, 1);
-let follow: 'hen' | 'hobbit' | 'wide' = 'hen', speed = 1, night = 0, yaw = 0.35, pitch = 0.32, dist = 2.6;
+// The wolf's grove starts further on, its hen nearly plump, so the wolf's harvest comes round soon.
+const wolfGrove = createHenGrove(scene, () => 0, wolfHome, wolfTrees, 2, 'wolf'); wolfGrove.skip(85);
+loadWolfAsset(`${import.meta.env.BASE_URL}models/wolf.glb`).then(a => wolfGrove.setWolfAsset(a), e => console.warn('wolf asset', e));
+let fixed: THREE.Vector3 | null = null, follow: 'hen' | 'hobbit' | 'wide' | 'wolf' | 'wolfhen' = 'hen', speed = 1, night = 0, yaw = 0.35, pitch = 0.32, dist = 2.6;
 const target = new THREE.Vector3(0, 0.3, 0); let snap = true;
-document.querySelectorAll<HTMLButtonElement>('[data-follow]').forEach(b => b.onclick = () => { follow = b.dataset.follow as typeof follow; dist = follow === 'wide' ? 11 : 2.6; document.querySelectorAll('[data-follow]').forEach(x => x.classList.toggle('on', x === b)); });
+document.querySelectorAll<HTMLButtonElement>('[data-follow]').forEach(b => b.onclick = () => { follow = b.dataset.follow as typeof follow; dist = follow === 'wide' ? 11 : follow === 'wolf' ? 3.4 : 2.6; document.querySelectorAll('[data-follow]').forEach(x => x.classList.toggle('on', x === b)); });
 const fast = document.getElementById('fast')!; fast.onclick = () => { speed = speed === 1 ? 4 : 1; fast.textContent = `×${speed}`; };
 const nightB = document.getElementById('night')!; nightB.onclick = () => { night = night ? 0 : 1; nightB.textContent = night ? 'night' : 'day'; };
 const pts = new Map<number, { x: number; y: number }>(); let pinch = 0;
@@ -32,12 +38,12 @@ addEventListener('resize', () => { renderer.setSize(innerWidth, innerHeight); ca
 let last = performance.now();
 function frame(now: number): void {
   const dt = Math.min(0.1, (now - last) / 1000) * speed; last = now;
-  for (let s = dt; s > 0; s -= 0.05) grove.update(Math.min(0.05, s), night);
-  const st = grove.state, want = follow === 'hen' ? new THREE.Vector3(st.hen.x, 0.25, st.hen.z) : follow === 'hobbit' ? new THREE.Vector3(st.hobbit.x, 0.25, st.hobbit.z) : new THREE.Vector3(0, 0.3, 4);
+  for (let s = dt; s > 0; s -= 0.05) { grove.update(Math.min(0.05, s), night); wolfGrove.update(Math.min(0.05, s), night); }
+  const st = grove.state, want = fixed ? fixed.clone() : follow === 'hen' ? new THREE.Vector3(st.hen.x, 0.25, st.hen.z) : follow === 'hobbit' ? new THREE.Vector3(st.hobbit.x, 0.25, st.hobbit.z) : follow === 'wolf' ? new THREE.Vector3(wolfGrove.state.hobbit.x, 0.4, wolfGrove.state.hobbit.z) : follow === 'wolfhen' ? new THREE.Vector3(wolfGrove.state.hen.x, 0.25, wolfGrove.state.hen.z) : new THREE.Vector3(0, 0.3, 4);
   target.lerp(want, snap ? 1 : 0.08); snap = false;
   camera.position.set(target.x + Math.sin(yaw) * Math.cos(pitch) * dist, target.y + Math.sin(pitch) * dist, target.z + Math.cos(yaw) * Math.cos(pitch) * dist); camera.lookAt(target);
   const bg = sky.clone().lerp(nightSky, night); (scene.background as THREE.Color).copy(bg); (scene.fog as THREE.Fog).color.copy(bg); hemi.intensity = 1.2 - 0.9 * night; sun.intensity = 2.2 - 2.0 * night;
   renderer.render(scene, camera); requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);
-Object.assign(window, { __hen: { grove, camera, view: (y: number, p: number, d: number, f: typeof follow = follow) => { yaw = y; pitch = p; dist = d; follow = f; snap = true; }, set speed(v: number) { speed = v; } } });
+Object.assign(window, { __hen: { grove, wolfGrove, camera, view: (y: number, p: number, d: number, f: typeof follow = follow) => { yaw = y; pitch = p; dist = d; follow = f; fixed = null; snap = true; }, look: (x: number, y: number, z: number, yw: number, p: number, d: number) => { fixed = new THREE.Vector3(x, y, z); yaw = yw; pitch = p; dist = d; snap = true; }, scene, THREE, set speed(v: number) { speed = v; } } });

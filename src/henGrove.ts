@@ -11,6 +11,7 @@
 import * as THREE from 'three';
 import { createHen, createDress, createMeat, henFrame, type HenPose } from './henFigure';
 import { createHobbit, hobbitLook, type HobbitPose } from './hobbitFigure';
+import { createAssetWolf, type WolfAsset, type WolfFigure, type WolfPose } from './wolfFigure';
 
 export interface Vec2 { x: number; z: number }
 // ---- Tuning ---------------------------------------------------------------------------------------------------------------------
@@ -22,13 +23,16 @@ export const GROVE_GAP = 6.5, GROVE_FROM_HEARTH: [number, number] = [11, 19];
 export const CUSHION_S = 16, CUSHION_H = 0.09;
 /** The hen's pace (m/s) lean and fat; the fresh runner's; the hobbit's. */
 export const HEN_LEAN = 0.5, HEN_FAT = 0.24, HEN_RUN = 1.1, HOBBIT_PACE = 0.9;
+/** The wolf (Noah, 2026-11-01: the wolf's harvest to tune before the hens are replaced): its trot out, its run home with the piece, how far its body centre stands from the hen to reach it with its nose (m). */
+export const WOLF_TROT = 1.1, WOLF_RUN = 1.9, WOLF_REACH = 0.82, GRIP_IN = 0.24;
 /** Stages from the miniskirt (0) to plump (STAGES): each cushion absorbed is one. */
 export const STAGES = 4;
 /** How far the carried piece's hip hangs below the hand that holds it by the feet (m): the plump legs' length and a foot. */
 export const HANG_M = 0.13;
 /** Each beat's seconds. */
 const BEAT = { hoist: 0.9, turn: 0.9, back: 1.1, sit: 0.7, absorb: 4.5, rest: 3, strain: 3.4, free: 0.6, flip: 0.9, flat: 2.4, eyes: 1.4, legs: 2.2, spring: 0.7, wilt: 7,
-  kick: 0.7, step: 0.9, pull: 2.6, cook: 8, eat: 3.5 } as const;
+  kick: 0.7, step: 0.9, pull: 2.6, cook: 8, eat: 3.5,
+  rise: 0.9, nudge: 1.2, grip: 0.9, tug: 2.4, shake: 1.8, lie: 1.1, gnaw: 14 } as const;
 // ----------------------------------------------------------------------------------------------------------------------------------
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
 const clamp01 = (v: number): number => Math.max(0, Math.min(1, v));
@@ -64,11 +68,14 @@ function webTexture(): THREE.Texture | null {
 }
 
 type HenPhase = 'go' | 'hoist' | 'turn' | 'back' | 'sit' | 'absorb' | 'rest' | 'strain' | 'free' | 'mid' | 'wait' | 'flip' | 'kicking' | 'pulled' | 'flat' | 'eyes' | 'legs' | 'spring';
-type HobbitPhase = 'idle' | 'go' | 'ready' | 'kick' | 'step' | 'pull' | 'carry' | 'cook' | 'eat';
-export interface HenGroveState { hen: { phase: HenPhase; t: number; stage: number; f: number; tree: number; x: number; z: number }; hobbit: { phase: HobbitPhase; t: number; x: number; z: number }; cushions: number[]; loops: number }
-export interface HenGrove { root: THREE.Group; trees: Vec2[]; update(dt: number, night: number): void; /** Dev: run the cycle forward `seconds` in small steps. */ skip(seconds: number): void; readonly state: HenGroveState; dispose(): void }
+type HobbitPhase = 'idle' | 'go' | 'ready' | 'kick' | 'step' | 'pull' | 'carry' | 'cook' | 'eat' | 'rise' | 'nudge' | 'grip' | 'tug' | 'shake' | 'lie' | 'gnaw';
+export type Harvester = 'hobbit' | 'wolf';
+export interface HenGroveState { hen: { phase: HenPhase; t: number; stage: number; f: number; tree: number; x: number; z: number }; /** The harvester, a hobbit or a wolf (`harvester`). */ hobbit: { phase: HobbitPhase; t: number; x: number; z: number }; harvester: Harvester; cushions: number[]; loops: number }
+export interface HenGrove { root: THREE.Group; trees: Vec2[]; /** The wolf's figure from the file, once loaded (a wolf's grove draws no wolf until then). */ setWolfAsset(a: WolfAsset): void; readonly home: Vec2; update(dt: number, night: number): void; /** Dev: run the cycle forward `seconds` in small steps. */ skip(seconds: number): void; readonly state: HenGroveState; dispose(): void }
 
-export function createHenGrove(scene: THREE.Scene, relief: (x: number, z: number) => number, hearth: Vec2, trees: [Vec2, Vec2], seed = 1): HenGrove {
+/** `hearth` is the harvester's home: the band's hearth, where a hobbit cooks; a wolf's own spot, where it lies to gnaw. */
+export function createHenGrove(scene: THREE.Scene, relief: (x: number, z: number) => number, hearth: Vec2, trees: [Vec2, Vec2], seed = 1, harvester: Harvester = 'hobbit'): HenGrove {
+  const isWolf = harvester === 'wolf';
   const root = new THREE.Group(); root.name = 'hen-grove'; scene.add(root);
   const geoms: THREE.BufferGeometry[] = [], mats: THREE.Material[] = [];
   const keep = <T extends THREE.BufferGeometry>(g: T): T => { geoms.push(g); return g; }, mat = <T extends THREE.Material>(m: T): T => { mats.push(m); return m; };
@@ -105,7 +112,8 @@ export function createHenGrove(scene: THREE.Scene, relief: (x: number, z: number
   const threadMat = mat(new THREE.LineBasicMaterial({ color: '#f8f2e0', transparent: true, opacity: 0 })), threadLines = new THREE.LineSegments(threadGeo, threadMat); threadLines.frustumCulled = false; root.add(threadLines);
   // ── the hen, the hobbit, the piece it takes, the shed gown, the cooking fire ──
   const hen = createHen(seed); root.add(hen.group);
-  const hob = createHobbit(hobbitLook(seed + 77, 3), seed * 7 + 5); root.add(hob.group);
+  const hob = createHobbit(hobbitLook(seed + 77, 3), seed * 7 + 5); if (!isWolf) root.add(hob.group);
+  let wolf: WolfFigure | null = null;
   const piece = createMeat(seed + 1); piece.group.visible = false; root.add(piece.group);
   const stick = new THREE.Mesh(keep(new THREE.CylinderGeometry(0.006, 0.008, 1, 5).translate(0, 0.5, 0)), mat(new THREE.MeshStandardMaterial({ color: '#6a4a2a', roughness: 1 }))); stick.visible = false; root.add(stick);
   const shed = createDress(seed + 2); shed.group.visible = false; root.add(shed.group); let shedT = -1; const shedAt: Vec2 = { x: 0, z: 0 };
@@ -114,12 +122,16 @@ export function createHenGrove(scene: THREE.Scene, relief: (x: number, z: number
   for (let i = 0; i < 3; i++) { const f = new THREE.Mesh(keep(new THREE.ConeGeometry(0.09 - i * 0.02, 0.28 + i * 0.08, 6)), flameMat); f.position.set((i - 1) * 0.06, 0.16, (i % 2) * 0.05); fire.add(f); flames.push(f); }
   const fireLight = new THREE.PointLight('#ffa040', 0, 6, 1.8); fireLight.position.y = 0.6; fire.add(fireLight);
   // ── the state ──
-  const st: HenGroveState = { hen: { phase: 'rest', t: 0, stage: 1, f: 1 / STAGES, tree: 0, x: seatOf(0).x, z: seatOf(0).z }, hobbit: { phase: 'idle', t: 0, x: 0, z: 0 }, cushions: [0, 1], loops: 0 };
+  const st: HenGroveState = { hen: { phase: 'rest', t: 0, stage: 1, f: 1 / STAGES, tree: 0, x: seatOf(0).x, z: seatOf(0).z }, hobbit: { phase: 'idle', t: 0, x: 0, z: 0 }, harvester, cushions: [0, 1], loops: 0 };
   const toGrove = ((): Vec2 => { const d = dist(hearth, mid) || 1; return { x: (mid.x - hearth.x) / d, z: (mid.z - hearth.z) / d }; })();
   const idleSpot: Vec2 = { x: hearth.x + toGrove.x * 1.7, z: hearth.z + toGrove.z * 1.7 }, cookSpot: Vec2 = { x: hearth.x + toGrove.x * 0.85, z: hearth.z + toGrove.z * 0.85 };
   const kickSpot: Vec2 = { x: mid.x - toGrove.x * 0.42, z: mid.z - toGrove.z * 0.42 }, stepSpot: Vec2 = { x: mid.x - toGrove.x * 0.3, z: mid.z - toGrove.z * 0.3 };
-  st.hobbit.x = idleSpot.x; st.hobbit.z = idleSpot.z;
-  let henHeading = toward(seatOf(0), trees[1]), hobHeading = toward(idleSpot, mid), henSpeed = 0, hobSpeed = 0, clock = 0, popFrom: THREE.Vector3 | null = null, popT = 0, bites = 1;
+  // The wolf: it lies at its spot (the home) facing the grove; it reaches the hen from WOLF_REACH back along the line from home.
+  const toHen = ((): Vec2 => { const d = dist(hearth, mid) || 1; return { x: (mid.x - hearth.x) / d, z: (mid.z - hearth.z) / d }; })();
+  const reachSpot: Vec2 = { x: mid.x - toHen.x * WOLF_REACH, z: mid.z - toHen.z * WOLF_REACH }, gripSpot: Vec2 = { x: mid.x - toHen.x * (WOLF_REACH - GRIP_IN), z: mid.z - toHen.z * (WOLF_REACH - GRIP_IN) };
+  const wolfPose: WolfPose = { neckPitch: 0, neckYaw: 0, headPitch: 0, headYaw: 0, headRoll: 0, lie: 1, paw: 0 };
+  if (isWolf) { st.hobbit.x = hearth.x; st.hobbit.z = hearth.z; } else { st.hobbit.x = idleSpot.x; st.hobbit.z = idleSpot.z; }
+  let henHeading = toward(seatOf(0), trees[1]), hobHeading = toward(isWolf ? hearth : idleSpot, mid), henSpeed = 0, hobSpeed = 0, clock = 0, popFrom: THREE.Vector3 | null = null, popT = 0, bites = 1;
   const pose: HenPose = { f: st.hen.f, speed: 0, hoist: 0.45, sit: 1, seat: CUSHION_H, strain: 0, invert: 0, fall: 0, pull: 0, meat: true, legs: 1, eyes: 1, sunk: 0, lift: 0, night: 0 };
   const henPace = (): number => st.hen.stage === 0 ? HEN_RUN : lerp(HEN_LEAN, HEN_FAT, st.hen.f);
   /** A step toward `to` at `pace`; true on arrival. */
@@ -187,6 +199,34 @@ export function createHenGrove(scene: THREE.Scene, relief: (x: number, z: number
     }
     if (b.phase === 'idle' && t > 0.5 && t < 4 && dist(b, idleSpot) > 0.05) { const from = { x: b.x, z: b.z }; walk(b, idleSpot, HOBBIT_PACE, dt); hobSpeed = HOBBIT_PACE; hobHeading = toward(from, idleSpot); }
   }
+  /** The wolf's harvest: lying watching at its spot until the plump hen stops midway; up and over to it; nose under and toss it onto its
+   * head; a paw on the dress, the bottom in its jaws, tugging back until it pops off; a shake side to side; a run home; down, and the
+   * piece gnawed between its forepaws like a bone until it is gone. */
+  function stepWolf(dt: number): void {
+    const b = st.hobbit; b.t += dt; const t = b.t, P = wolfPose; hobSpeed = 0;
+    P.neckPitch = 0; P.neckYaw = 0; P.headPitch = 0; P.headYaw = 0; P.headRoll = 0; P.paw = 0;
+    switch (b.phase) {
+      case 'idle': P.lie = 1; P.neckPitch = 0.12 + Math.sin(clock * 0.7) * 0.04; P.headYaw = Math.sin(clock * 0.31) * 0.15; hobHeading = angleTo(hobHeading, toward(b, mid), Math.min(1, dt * 2)); if (st.hen.phase === 'mid' || st.hen.phase === 'wait') bset('rise'); break;
+      case 'rise': P.lie = 1 - smooth(t / BEAT.rise); if (t >= BEAT.rise) bset('go'); break;
+      case 'go': { P.lie = 0; const from = { x: b.x, z: b.z }; if (walk(b, reachSpot, WOLF_TROT, dt)) bset('ready'); hobSpeed = WOLF_TROT; hobHeading = angleTo(hobHeading, toward(from, reachSpot), Math.min(1, dt * 6)); break; }
+      case 'ready': P.lie = 0; P.neckPitch = -0.25; hobHeading = angleTo(hobHeading, toward(b, mid), Math.min(1, dt * 6)); if (st.hen.phase === 'wait' && st.hen.t > 0.8 && t > 0.8) bset('nudge'); break;
+      // Nose down and under it, then a toss of the head that flips it.
+      case 'nudge': { const k = t / BEAT.nudge; P.lie = 0; if (k < 0.55) { P.neckPitch = -1.0 * smooth(k / 0.4); P.headPitch = -0.3 * smooth(k / 0.4); } else { const u = smooth((k - 0.55) / 0.2); P.neckPitch = lerp(-1.0, 0.55, u) - 0.3 * smooth((k - 0.8) / 0.2); P.headPitch = lerp(-0.3, 0.35, u); }
+        if (k >= 0.6 && st.hen.phase === 'wait') hset('flip'); if (t >= BEAT.nudge) bset('grip'); break; }
+      // A step in, a paw planted on the dress, the jaws down on the bottom.
+      case 'grip': { const k = smooth(t / BEAT.grip); P.lie = 0; b.x = lerp(reachSpot.x, gripSpot.x, k); b.z = lerp(reachSpot.z, gripSpot.z, k); P.paw = 0.55 * k; P.neckPitch = -0.32 * k; P.headPitch = -0.2 * k; hobSpeed = 0.3; if (t >= BEAT.grip && st.hen.phase === 'kicking') { bset('tug'); hset('pulled'); } break; }
+      // Tugging back in jerks, the paw holding the dress down, until it pops.
+      case 'tug': { const k = t / BEAT.tug, jerk = Math.max(0, Math.sin(t * 9)); P.lie = 0; P.paw = 0.55; P.neckPitch = -0.32 + 0.3 * k + 0.12 * jerk; P.headPitch = -0.25 + 0.1 * jerk; P.headYaw = Math.sin(t * 13) * 0.12; const back = 0.06 * k + 0.02 * jerk; b.x = gripSpot.x - toHen.x * back; b.z = gripSpot.z - toHen.z * back;
+        if (t >= BEAT.tug) { hen.group.updateMatrixWorld(true); popFrom = new THREE.Vector3().setFromMatrixPosition(hen.meat.group.matrixWorld); popT = 0; bites = 1; hset('flat'); bset('shake'); } break; }
+      // The piece in its jaws, shaken side to side.
+      case 'shake': { popT += dt; P.lie = 0; P.neckPitch = 0.15; const sh = Math.sin(t * 17) * Math.min(1, t * 3) * (1 - smooth((t - BEAT.shake + 0.3) / 0.3)); P.neckYaw = 0.6 * sh; P.headYaw = 0.35 * sh; P.headRoll = 0.2 * sh; if (t >= BEAT.shake) bset('carry'); break; }
+      case 'carry': { popT += dt; P.lie = 0; P.neckPitch = 0.2; const from = { x: b.x, z: b.z }; if (walk(b, hearth, WOLF_RUN, dt)) bset('lie'); hobSpeed = WOLF_RUN; hobHeading = angleTo(hobHeading, toward(from, hearth), Math.min(1, dt * 8)); break; }
+      // Turned to face the grove again, down, the piece set between its forepaws.
+      case 'lie': { hobHeading = angleTo(hobHeading, toward(b, mid), Math.min(1, dt * 5)); P.lie = smooth(t / BEAT.lie); P.neckPitch = -0.3 * smooth(t / BEAT.lie); if (t >= BEAT.lie) bset('gnaw'); break; }
+      // Gnawing like a bone: the head down and tilted, working side to side, the piece going in bites.
+      case 'gnaw': { P.lie = 1; const side = Math.sin(t * 1.6) > 0 ? 1 : -1, chew = Math.abs(Math.sin(t * 7)); P.neckPitch = -0.42 + 0.05 * chew; P.headPitch = -0.15 - 0.08 * chew; P.headRoll = 0.38 * side; P.headYaw = 0.12 * side; bites = 1 - Math.floor(t / BEAT.gnaw * 6) / 6; if (t >= BEAT.gnaw) { bites = 0; bset('idle'); } break; }
+    }
+  }
   const hobPose = (): HobbitPose | null => {
     const b = st.hobbit;
     if (b.phase === 'kick') return { kind: 'kick', k: b.t / BEAT.kick };
@@ -221,6 +261,7 @@ export function createHenGrove(scene: THREE.Scene, relief: (x: number, z: number
     }
     // The shed gown withers: its lower tiers shrink and darken and it sinks into the soil, then it is gone.
     if (shedT >= 0) { shedT += dt; const w = clamp01(shedT / BEAT.wilt); shed.set({ f: 1, hoist: 0, fall: 1, wilt: w, sway: 0, bounce: 0, night: night * (1 - w) }); shed.group.position.y = relief(shedAt.x, shedAt.z) - 0.06 * smooth((shedT - BEAT.wilt * 0.6) / (BEAT.wilt * 0.4)); if (shedT > BEAT.wilt) { shed.group.visible = false; shedT = -1; } }
+    if (isWolf) { drawWolf(dt); return; }
     // The hobbit, posed, and the piece in its hands, on its stick over the fire, or in its mouth.
     const po = hobPose(); hob.update(b.x, relief(b.x, b.z), b.z, hobHeading, { pose: po, speed: hobSpeed, carry: null, eating: false, taking: false, inside: false }, dt);
     const carrying = b.phase === 'carry' || b.phase === 'cook' || b.phase === 'eat';
@@ -241,11 +282,31 @@ export function createHenGrove(scene: THREE.Scene, relief: (x: number, z: number
     for (let k = 0; k < flames.length; k++) flames[k].scale.set(1, fire.visible ? 0.85 + Math.sin(clock * 13 + k * 2.1) * 0.2 : 0.001, 1);
     fireLight.intensity = fire.visible ? 3 + Math.sin(clock * 11) * 0.6 : 0;
   }
-  function step(dt: number): void { clock += dt; stepHen(dt); stepHobbit(dt); }
+  /** The wolf, its pose, and the piece: popping into its jaws, shaken and carried there, then on its side between its forepaws. */
+  function drawWolf(dt: number): void {
+    const b = st.hobbit, wy = relief(b.x, b.z), fx = -Math.sin(hobHeading), fz = -Math.cos(hobHeading);
+    if (wolf) { wolf.group.position.set(b.x, wy, b.z); wolf.group.rotation.y = hobHeading + Math.PI / 2; wolf.update(hobSpeed, dt, wolfPose); }
+    const inMouth = b.phase === 'shake' || b.phase === 'carry' || (b.phase === 'lie' && b.t < BEAT.lie * 0.6), onGround = (b.phase === 'lie' && !inMouth) || b.phase === 'gnaw';
+    piece.group.visible = (inMouth || onGround) && bites > 0;
+    if (!piece.group.visible) return;
+    piece.group.rotation.order = 'YXZ'; piece.group.scale.setScalar(onGround ? Math.max(0.08, bites) : 1);
+    if (inMouth) {
+      // Held by the bottom, legs dangling; it swings with the head.
+      if (wolf) { wolf.group.updateMatrixWorld(true); wolf.mouth.getWorldPosition(tmp); } else tmp.set(b.x + fx * 0.75, wy + 0.5, b.z + fz * 0.75);
+      tmp.y -= 0.04; if (popFrom && popT < 0.35) { const k = smooth(popT / 0.35); tmp.lerpVectors(popFrom, tmp, k); }
+      piece.group.rotation.set(Math.sin(clock * 9) * 0.3 * (b.phase === 'shake' ? 1 : 0.3), hobHeading + Math.PI / 2 + wolfPose.neckYaw * 1.6, wolfPose.neckYaw * 1.2);
+    } else {
+      // On its side on the ground between the forepaws, worried a little as it is gnawed.
+      tmp.set(b.x + fx * 0.6, wy + 0.09, b.z + fz * 0.6); piece.group.rotation.set(0, hobHeading + Math.PI / 2 + Math.sin(clock * 3) * 0.1 * (b.phase === 'gnaw' ? 1 : 0), Math.PI / 2);
+    }
+    piece.group.position.copy(tmp); piece.set({ f: 1, phase: 0, walk: 0, tuck: 0, kick: 0, flop: 1, brace: 0, clock, grow: 1, cooked: 0 });
+  }
+  function setWolfAsset(a: WolfAsset): void { if (!isWolf || wolf) return; wolf = createAssetWolf(a); root.add(wolf.group); }
+  function step(dt: number): void { clock += dt; stepHen(dt); if (isWolf) stepWolf(dt); else stepHobbit(dt); }
   function update(dt: number, night: number): void { const d = Math.min(0.1, dt); step(d); draw(d, night); }
   function skip(seconds: number): void { for (let s = 0; s < seconds; s += 0.05) { step(0.05); for (const p of patches) if (p.growing) p.grow = Math.min(1, p.grow + 0.05 / CUSHION_S); } draw(0.001, 0); }
   // Start seated at the first tree, skinny, the other tree's cushion grown.
   drawPatch(0); drawPatch(1);
-  function dispose(): void { scene.remove(root); hen.dispose(); hob.dispose(); piece.dispose(); shed.dispose(); web?.dispose(); for (const g of geoms) g.dispose(); for (const m of mats) m.dispose(); }
-  return { root, trees, update, skip, get state() { return st; }, dispose };
+  function dispose(): void { scene.remove(root); hen.dispose(); hob.dispose(); wolf?.dispose(); piece.dispose(); shed.dispose(); web?.dispose(); for (const g of geoms) g.dispose(); for (const m of mats) m.dispose(); }
+  return { root, trees, home: hearth, setWolfAsset, update, skip, get state() { return st; }, dispose };
 }
