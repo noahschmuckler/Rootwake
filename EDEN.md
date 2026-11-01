@@ -168,6 +168,31 @@ What was found, and what was done:
   `WOLF_LENGTH` 1.55 m and the walk's pace are by eye; the Vol.2 wolf has no lying clip (resting, it is
   lowered and tilted as the body was, legs standing); the eyes sit at a guessed offset from the head bone's tip.
 
+## The judder (Noah, 2026-11-01)
+
+Noah: "After recent updates, hulda's animations other than walking/running are shuddering/stuttering", with a screen recording. The
+recording (60 fps, free mode at the hearth, strike combos) showed the game running at 20–30 fps with an uneven cadence (between frames
+where she changed: 196 gaps of two recorded frames, 82 of three, 70 of one): every animation of hers stepped unevenly, her walking least,
+since her travel runs on the wall clock (`player.update`) while her clips step by the frame's time capped at 50 ms (`herDt`). Headless,
+her clips step evenly, her body and the camera hold still, and nothing in the Eden's commits touches her clips, her mixer or the frame
+loop. The frame's weight was two things:
+- **The map's atlas build on the frame.** iOS has no `requestIdleCallback`, so T9's idle build ran as timer slices of 4 ms that took
+  4–14 ms each, every 30 ms, for the 289 tiles, after every load (and free mode reloads at each toggle); a third of the frame's JS in
+  the profile. Now the tiles are built in a Web Worker (`mapWorker.ts`, `overworldMap.createTileBuilder`): PLATEAU.md T9 "Built off
+  the frame".
+- **The Eden's draws.** 1,289 draw calls in view from the summit against 352 in the village era at the same spot (270 at the hearth
+  facing the cave): 664 of them the fungi's shelves (66 fungi, each shelf and its hull a mesh), 71 the bobcat file's primitives (the
+  simplifier's one per material group, never culled). Now the fungus is six draws (`chickenFigure.ts`: the shelves one geometry in its
+  two materials, their hull one, the eyes one, each leg with its foot; unchanged to the eye) and the bobcat file three primitives
+  (`scripts/merge-glb.mjs`: joined by material over the shared vertices; BOBCAT_CREDITS.md).
+- **Not done (later passes):** the hobbits' parts (a dozen meshes each), the burls, the village era's hobbit figures standing hidden
+  under the Eden (their skeletons), an outline hull for the skinned figures; her clips' 50 ms cap stays, so under 20 fps her moves
+  still slow while she travels at pace; the phone's frame rate itself is Noah's to judge (the probes here run under SwiftShader).
+- **Checks:** `tests/overworldMap.test.ts` builds a tile off a flat land (opaque, deterministic, its overview a quarter the side); the
+  opening check runs unchanged (the map's atlas now lands from the worker; a headless probe watched it fill and the frame's logic stay
+  flat while it did).
+
+
 ## Passes
 
 - **E1 (this sprint):** the Eden's state; the hobbit band in the cave with its daily round; the chicken-of-the-woods cycle; the pack;
