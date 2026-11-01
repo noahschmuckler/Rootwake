@@ -52,3 +52,5 @@ then **springs out on stilt legs in a miniskirt** of a few small brackets and ru
 gown: `backing-onto-tree-best.jpg`; for the lean stilt-legged stage: `life-stages-four.jpg` (stage 1).
 
 **Note on generation:** editing an image with Gemini kept putting the bark face on the wrong side (front against the tree). A fresh prompt that says the creature *backs against* the trunk, with no log named, worked. Prefer fresh generation.
+
+**See `../../../HEN_LAB_BRIEF.md`:** the prompt for the modelling agent, with each state tied to its reference image.

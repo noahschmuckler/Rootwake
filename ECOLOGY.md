@@ -131,7 +131,8 @@ fruit to harvest instead of a slow, dodo-like creature. His headcanon keeps the 
     into the main body.** Lying flat, the creature **grows lanky legs, folded and ready to spring.** It **draws energy from the largest,
     lowest brackets** and **keeps only the top few, youngest brackets,** just enough to grow legs and resprout its eyestalks. Then the new
     legs **spring,** and it **bursts out of the tresses with its lanky legs scrambling,** a **miniskirt covering its tiny torso and
-    bottom,** the **eyestalks resprouted above.**
+    bottom,** the **eyestalks resprouted above.** **The withered lower brackets dissolve into the soil shortly after the thin creature flees.**
+    **The soft cap is part of the edible portion.** The piece looks like **a king oyster mushroom with a butt and legs.**
   - (Claude: the dress is the woody, tasteless part; the pale body and its meaty centre are the meat. This replaces the turtle-roll as the
     stun, and it gives fatness a clear read: a miniskirt on stilts when lean, a ballgown when fat. Open: what exactly is removed, and
     does the occupant keep its legs and eyes while the meat goes?)

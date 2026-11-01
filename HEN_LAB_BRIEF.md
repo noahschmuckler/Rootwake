@@ -1,54 +1,63 @@
-# Brief: the hen-of-the-woods lab (model, rig and behaviours)
+# Prompt for the modelling agent: the hen-of-the-woods (model, rig, behaviours, lab)
 
-For a fresh session (Opus 5.5 or Fable 5.1) that sets up an isolated lab page for this one creature, as `LAB.md` did for the rust monster.
-Design: **`ECOLOGY.md`**, "The hen's life". Pictures: **`design/reference/hen-of-the-woods/`** (read its README). Written 2026-11-01,
-branch `docs/vision`. Nothing here is built yet.
+You are building a new model and behaviour set for one creature, in an isolated lab page like `LAB.md`'s rust monster. Read **`ECOLOGY.md`**
+("The hen's life") for the design and **`design/reference/hen-of-the-woods/`** (its README has Noah's verdicts) for pictures. Nothing here is
+built. Written 2026-11-01 on branch `docs/vision`. The current in-game model (stacked cone tiers, two black dots; `game-model-current-*.jpg`)
+is not on this docs branch in a form I could find: find it on the branch Noah is playing, and replace it.
 
-## Where the current model is
+## What it is
 
-The in-game model (stacked cone tiers with two black dots for eyes; see `game-model-current-*.jpg`) is **not on this docs branch** in a
-form I could find by search. Find it on the branch Noah is playing (the village build) before replacing it.
+**A small pale creature wearing a huge gown of orange-and-cream bracket-fungus tiers and tresses** (chicken-of-the-woods, hen-of-the-woods,
+some turkey-tail banding). It is a slow, comic, dodo-like walker and a deathless meat: wolves and hobbits harvest it by a flip-and-pull, it
+survives, regrows, and fattens again. It is funny and gentle, never gory.
 
-## What to build
+**The look (every image agrees):** two glossy black eyes on thin curved stalks from the top; **no arms, no face, no beak, no feathers, no shell**
+on the creature itself; a pale bare body with a cartoon bottom; legs that are **short and fat when fat, long and thin when lean**; tiers as
+overlapping half-moon shelves with a ruffled, banded front edge; cel-shaded with a dark outline, in the vista look (`vistaShaders.ts`).
 
-1. **A lab page** that shows one hen on a plain ground with a trunk beside it, with buttons for each state and a slider for fatness.
-   Judge it at a phone's portrait aspect.
-2. **A pale creature in a dress.** The body is a small pale creature with a bare white bottom, lanky legs and two eyestalks. The brackets are
-   **a gown of many tiers and tresses** worn over it (the dress is the woody part; the body inside is the meat).
-   - **Walking:** the dress is fluffed and round, evenly spread all the way round.
-   - **Attaching:** it approaches a budded tree base, **hoists the gown** to show a bare white bottom, **backs up and sits against the
-     trunk,** the dress's folds bunched up behind it around its neck and the tiers spilling down in front. (Reference:
-     `backing-onto-tree-best.jpg`.) While sitting, **new tresses grow and the body thickens.**
-   - **Harvested (Noah: flip it upside down, the dress falls, bare bottom and legs kick; a wolf or hobbit steps on the dress and pulls the legs until the stem, small cap, bottom and two fat legs tear free; comic, not gory):** the meat is pulled from beneath, the eyestalks yoink in, and the dress lies **flat and splayed with no occupant.**
-     Then two eyestalks pop up from the middle, and the occupant **springs out on stilt legs wearing a miniskirt of a few small
-     brackets.**
-   - **Recovery:** it runs to the nearest budded tree, flips its skirt up for a moment, sits against the tree, and its eyestalks bob in relief.
-   - No arms and no face on the occupant, only eyestalks with eyes. Legs are tucked in while sitting. Comedy is the point: keep it cartoonish and gentle.
-3. **Fatness 0 to 1** read from the silhouette alone: lean (few thin tiers, long thin legs, tall), middle, fat (broad, round,
-   short legs), and the heaviest (too heavy to walk). Reference: `life-stages-four.jpg`. Speed falls as fatness rises.
-4. **Face:** two glossy black eyes on thin curved stalks from the top, each able to droop, lean back or flare; pale stubby mushroom-stem
-   legs; no beak, no feathers, no shell.
-5. **Colourways** (a few: sulphur-orange with yellow edges, grey-brown ruffled hen, turkey-tail bands) as a tint parameter, not new models.
+## Body: two pieces
 
-## Two body parts
+1. **The core:** the eyestalks and the upper torso, inside the dress.
+2. **The meat piece:** the **legs, the bottom and part of the torso, topped with a soft mushroom cap socketed into the chest.** It is detachable.
+   It looks like **a king oyster mushroom with a butt and legs** (pale stem, small round colourful cap, fat floppy legs). **No reference
+   image exists yet** for it alone; make it plump and cartoonish. The soft cap is part of the edible portion.
 
-The body is **two pieces:** a lower, detachable **meat piece** (legs, bottom and part of the torso, topped by a soft mushroom cap socketed into the chest) and an upper core (the eyestalks and the rest of the torso). The meat piece pulls out for the harvest. Afterward the core grows folded lanky legs, **absorbing the biggest lower brackets** (they shrink away) and keeping the top few youngest, then springs out in a miniskirt.
+**Fatness 0 to 1** reads from the silhouette: lean (a few brackets, long thin legs; stage 1 of `life-stages-four.jpg`), middle, fat (a full
+round gown, short fat legs), heaviest (a ballgown too heavy to walk). Speed falls as fatness rises. Colourways (sulphur-orange, grey-brown
+ruffled, turkey-tail bands) are a tint parameter, not new models.
 
-## States and animations
+## States, each with its reference
 
-wander (a waddle, side-to-side sway, eyestalks lagging) · graze (head tipped forward, eating a grass tuft) · approach a budded tree base
-· **hoist the gown and sit** (turn, back on, skirt lifted then bunched behind, legs fold) · rest attached · **absorb the bud** (threads join, the bud melts into
-the back face, fatness steps up) · **tear free** (bark and wood splinters, mycelium threads, a pale wound left on the trunk) · **fluff**
-(tiers spring back to round, a burst of spores) · **harvested** (the meat is pulled out from beneath; the dress collapses flat and splayed, the eyestalks pop up, the occupant springs out on stilt legs in a miniskirt, runs to a budded tree, flips its skirt and sits, fatness reset). **Rig hint:** the tiers are stacked rings on a spine or pelvis chain; the hoist and the bunching are lifting and rotating rings upward and back; the flat dress is every ring dropped and splayed on the ground.
+| State | What happens | Reference |
+|---|---|---|
+| **Wander / waddle** | walks fluffed up, side-to-side sway, eyestalks lagging | `dress-walk-hoist-sit.jpg` panel 1 (ignore the smile), `rosette-walking.jpg` (legs and waddle), `life-stages-four.jpg` (round body) |
+| **Graze** | head-down, eating a grass tuft | (none; derive) |
+| **Approach and hoist** | goes to a **budded** tree base, **lifts the front of the gown** to show a bare white bottom | `dress-walk-hoist-sit.jpg` panel 2 |
+| **Back up** | turns and backs toward the trunk | panel 3 |
+| **Sit and rest** | sits against the trunk, **legs tucked in (never stretched forward),** the dress bunched up behind it around its neck, tiers spilling down in front | panel 4, `backing-onto-tree-best.jpg` |
+| **Absorb the bud, thicken** | threads join it to the bud; **new tresses grow and the body thickens;** fatness steps up | `life-cycle-five-panels.jpg` (the bud is the pale lumps at the foot of panel 1), `dress-regrowth-five.jpg` (growth, but legs must be tucked and the figure has no arms or face) |
+| **Leave the tree** | gets up, leaving a sealed patch that regrows a bud | `pulling-free.jpg` is the tree-side reference: the pale wound and the new yellow bud. **Whether it still tears bark away is open.** |
+| **Flip (hunt)** | a wolf or hobbit knocks it **upside down;** the dress falls over it and the **bare bottom and legs kick in the air** | none yet (prompt in the README's notes) |
+| **Pull** | the hunter **steps on the dress and pulls the legs** until the meat piece **tears free with a pop;** the **eyestalks retract into the body.** No blood. | none yet |
+| **Flat dress** | the dress lies flat and splayed, no occupant visible | `dress-harvest-flat-dress.jpg` panel 2 |
+| **Regrow legs** | flat on the ground, the core grows **lanky folded legs,** **drawing energy from the largest lower brackets (they shrink and wrinkle),** keeping only the top few young ones; the eyestalks resprout | `dress-harvest-flat-dress.jpg` panel 3 (eyestalks popping up) |
+| **Spring out** | the new legs **spring;** it bursts out **scrambling on long thin legs, in a miniskirt of a few brackets,** eyestalks above | `dress-escape-miniskirt.jpg` (**drop the arms and the face**) |
+| **Dissolve** | the withered lower brackets **dissolve into the soil** shortly after it flees | none |
+| **Run, flip skirt, sit** | runs to the nearest **budded** tree, **flips its skirt up briefly** (a tiny white bottom), sits against the tree, **eyestalks bobbing in relief** | `dress-relief-sit.jpg` has the beat but not the action; **legs must be tucked, no arms, no face** |
 
 ## Rules for the sim (from `ECOLOGY.md`)
 
-- A hen has a fatness value; the meat a harvest can take is its fatness; a harvest sets it to lean and stuns it.
-- Each attachment to a *budded* base absorbs the bud and raises fatness a step; the patch it leaves seals and slowly regrows a bud.
+- A hen has a fatness value. Meat available is its fatness; a harvest sets it to lean and sends it through the flat-dress, regrow and spring-out states.
+- Each attachment to a **budded** tree base absorbs the bud and raises fatness a step; the patch left behind seals and slowly regrows a bud.
 - The count of hens equals the count of bud sites, so nothing runs away. Population is static or scripted.
-- Open questions (bud as food, how many attachments to full, what fire does, stun cost) are listed at the end of `ECOLOGY.md`.
+- Open (see `ECOLOGY.md`): are buds food for anything; attachments from lean to full; what fire does to buds; the stun's cost.
 
-## Conventions
+## Rig hint
 
-Follow `CLAUDE.md`: small commits, `npm run build` green, record decisions in the docs as you go. Use the existing cel-shading and outline
-look so the hen belongs in the world (`vistaShaders.ts`). Test at portrait phone size with the headless Chromium notes in `CLAUDE.md`.
+Tiers are stacked rings of lobes on a spine or pelvis chain. The hoist and the bunching are lifting and rotating rings up and back; the flat dress
+is every ring dropped and splayed on the ground. The meat piece is a separate mesh socketed into the core's chest. Keep the cartoon humour.
+
+## The lab and conventions
+
+A lab page with one hen on plain ground and a trunk beside it, a fatness slider, a colourway picker, and a button for each state. Judge it at
+portrait phone size. Follow `CLAUDE.md`: small commits, `npm run build` green, record decisions in the docs as you go.
