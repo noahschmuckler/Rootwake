@@ -36,6 +36,8 @@ export async function loadWolfAsset(url: string): Promise<WolfAsset> {
 export const WOLF_LENGTH = 1.55, ASSET_WOLF_LENGTH = 1000, WOLF_CLIP_WALK_MS = 0.85, WOLF_BLEND_S = 0.18;
 /** The jaws from the head bone's root at rest (m, forward and up), and how far the body drops lying down (m). Tuning, by eye. */
 export const MOUTH_FWD = 0.21, MOUTH_UP = -0.06, LIE_DROP = 0.3;
+/** The eyes behind the nose, under the skull's top there and out toward its side (a fraction of its half-width) (m). Tuning, by eye. */
+export const EYE_BACK = 0.13, EYE_DOWN = 0.075, EYE_OUT = 0.62;
 /** A pose laid over the clips (henGrove.ts' harvesting wolf; the file has only Idle and Walking): the neck and head pitched (+ up) and
  * turned (+ to its left), lying down 0..1 (the body lowered, forelegs reaching forward, hind legs folded under), a forepaw raised 0..1. */
 export interface WolfPose { neckPitch: number; neckYaw: number; headPitch: number; headYaw: number; headRoll: number; lie: number; paw: number }
@@ -46,12 +48,18 @@ export function createAssetWolf(asset: WolfAsset, hide: THREE.MeshStandardMateri
   let triangles = 0;
   model.traverse(o => { if (o instanceof THREE.Mesh) { o.castShadow = true; o.frustumCulled = false; o.material = hide; const g = o.geometry; triangles += g.index ? g.index.count / 3 : g.attributes.position.count / 3; } });
   group.updateMatrixWorld(true);
-  // Its eyes: on the bone furthest forward (the head's tip), a little back and down from the nose, either side.
+  // Its eyes: on the head bone (the bone furthest forward: its root is at the head's base, behind the eyes), placed from the skin itself
+  // at rest: EYE_BACK behind the nose, a little under the skull's top there, most of the way out to its side.
+  // (They had been placed back from the head bone's root and sat on the neck: Noah, 2026-11-02.)
   const eyes: THREE.Mesh[] = []; let tip: THREE.Object3D | null = null, tipX = -Infinity; const p = new THREE.Vector3();
   model.traverse(o => { if ((o as THREE.Bone).isBone) { o.getWorldPosition(p); if (p.x > tipX) { tipX = p.x; tip = o; } } });
+  const skin: THREE.Vector3[] = [];
+  model.traverse(o => { if ((o as THREE.SkinnedMesh).isSkinnedMesh) { const m = o as THREE.SkinnedMesh, a = m.geometry.attributes.position; for (let i = 0; i < a.count; i++) { const v = new THREE.Vector3().fromBufferAttribute(a, i); m.applyBoneTransform(i, v); skin.push(v.applyMatrix4(m.matrixWorld)); } } });
+  const nose = skin.reduce((n, v) => Math.max(n, v.x), -Infinity), at = skin.filter(v => v.x > nose - EYE_BACK - 0.04 && v.x < nose - EYE_BACK + 0.04);
+  const eyeY = at.length ? Math.max(...at.map(v => v.y)) - EYE_DOWN : 0.7, eyeZ = at.length ? Math.max(...at.map(v => Math.abs(v.z))) * EYE_OUT : 0.07;
   // (The file's bones carry a scale of their own, so an eye's size is undone from the bone's world scale, not the fit.)
-  const head: THREE.Object3D = tip ?? model, eyeGeo = new THREE.SphereGeometry(0.03, 6, 5), headScale = head.getWorldScale(new THREE.Vector3()).x || 1;
-  for (const zz of [-0.075, 0.075]) { const e = new THREE.Mesh(eyeGeo, wolfEye); const w = new THREE.Vector3(tipX - 0.16, 0.6, zz); e.position.copy(head.worldToLocal(w)); e.scale.setScalar(1 / headScale); head.add(e); eyes.push(e); }
+  const head: THREE.Object3D = tip ?? model, eyeGeo = new THREE.SphereGeometry(0.024, 6, 5), headScale = head.getWorldScale(new THREE.Vector3()).x || 1;
+  for (const s of [-1, 1]) { const e = new THREE.Mesh(eyeGeo, wolfEye); const w = new THREE.Vector3(nose - EYE_BACK, eyeY, s * eyeZ); e.position.copy(head.worldToLocal(w)); e.scale.setScalar(1 / headScale); head.add(e); eyes.push(e); }
   // The jaws: forward of the head bone's root, low (found by eye on the file: the head bone's origin is at the head's base).
   const mouth = new THREE.Object3D(); { const hp = head.getWorldPosition(new THREE.Vector3()); mouth.position.copy(head.worldToLocal(new THREE.Vector3(hp.x + MOUTH_FWD, hp.y + MOUTH_UP, 0))); head.add(mouth); }
   const bones: Record<string, THREE.Object3D> = {}; model.traverse(o => { if ((o as THREE.Bone).isBone) bones[o.name] = o; });
