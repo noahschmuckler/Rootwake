@@ -964,6 +964,8 @@ const WHIP_ON = (window as { __ROOTWAKE_PRACTICE?: boolean }).__ROOTWAKE_PRACTIC
 const whip = createWhip(scene, { vine: HULDA_PALETTE.hair, leaf: HULDA_PALETTE.leaf });
 /** Her figure playing (her part) and the ones still holding foes (prone, staggered); a press held for the next; the last figure (the novelty rule); the whip out. */
 let herFlow: Flow | null = null, flowYaw = 0, whipQueued = false, lastFigure: FigureName | null = null, whipOut = false, whipAim: { x: number; z: number } | null = null;
+/** How fast the camera comes round to her facing during a figure (1/s). Tuning: the brief's open question of framing a figure on a narrow screen. */
+const WHIP_CAM_TURN = 3.2;
 const flows: Flow[] = [], whipPose = new Map<number, { lift: number; roll: number }>();
 const whipBtn: HTMLButtonElement | null = WHIP_ON ? (() => { const b = document.createElement('button'); b.id = 'whip'; b.setAttribute('aria-label', 'Whip: a figure on the foe the stick points to'); b.innerHTML = '<span>whip</span>'; document.getElementById('fight')?.insertBefore(b, fightEl.strike); return b; })() : null;
 /** The stick's way in the world (relative to the camera), or null when it is not pushed. */
@@ -1007,6 +1009,8 @@ function whipFrame(dt: number): void {
       // Her clips at their cues, her place along her path, her facing.
       for (const c of f.plan.clips) if ((was === 0 ? c.t >= 0 : c.t > was) && c.t <= f.t) moves?.play(c.move, c.dur);
       const k = sampleKeys(f.plan.her, f.t), l = herLocal(), dx = k.x - l.x, dz = k.z - l.z; if (Math.hypot(dx, dz) > 1e-4) player.slide(dx, dz); flowYaw = k.face;
+      // The camera comes round with her (the phone sees little to either side): the matador's pivot shows the foe going down behind her, the swap's turn the crash.
+      if (player.view === 'third') player.yaw += Math.atan2(Math.sin(flowYaw - player.yaw), Math.cos(flowYaw - player.yaw)) * (1 - Math.exp(-dt * WHIP_CAM_TURN));
       if (f.done) { herFlow = null; if (whipQueued) { whipQueued = false; startFigure(whipAim); } }
     }
     for (const b of beats) whipBeat(b);

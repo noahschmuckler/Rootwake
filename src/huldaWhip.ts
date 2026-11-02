@@ -43,8 +43,8 @@ export function createWhip(scene: THREE.Scene, palette: { vine: string; leaf: st
     if (!mesh.visible) { first = true; return; }
     if (first) { lastHand.copy(hand); swing.set(0, 0, 0); first = false; }
     // The hanging tip lags the hand like a pendulum.
-    if (dt > 0) handVel.subVectors(hand, lastHand).divideScalar(dt); lastHand.copy(hand);
-    swing.addScaledVector(handVel, -dt * 0.6).multiplyScalar(Math.exp(-dt * 3)); swing.clampLength(0, 0.8);
+    // (Skipped on a frame frozen by hit-stop: a hand moved by her figure over no time is no speed at all.)
+    if (dt > 1e-3) { handVel.subVectors(hand, lastHand).divideScalar(dt).clampLength(0, 6); swing.addScaledVector(handVel, -dt * 0.5).multiplyScalar(Math.exp(-dt * 4)); swing.clampLength(0, 0.45); } lastHand.copy(hand);
     restTip.copy(hand).add(swing); restTip.y -= WHIP_HANG * grown;
     // The crack: as the rope flies out, a loop runs down the lash; it rings on a little after.
     if (out > lastOut + 1e-4) crack = 1; else crack = Math.max(0, crack - dt * 2.2); lastOut = out;
