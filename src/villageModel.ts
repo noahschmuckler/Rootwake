@@ -194,7 +194,7 @@ export interface Spirit { id: number; keeps: SiteKind; x: number; z: number; hea
 // nothing happens while the page is closed; the night's arrival is set by the tick (advance).
 export type RaiderState = 'coming' | 'eating' | 'hunting' | 'leaving' | 'dead' | 'devouring' | 'retreating' | 'melting' | /** S1: a wolf eating at its warren. */ 'foraging';
 export type RaiderKind = 'dy' | 'wolf' | /** STAGS.md: the tree stag. */ 'stag';
-export interface Raider { id: number; x: number; z: number; heading: number; hp: number; state: RaiderState; target: Store | null; ate: number; eatClock: number; aggro: number; rooted: number; biteClock: number; hurt: number; gone: number; site: YieldSite | null; devourClock: number; held: number; infant: InfantRef | null; kind: RaiderKind; den: string | null; prey: string | null; /** STAGS.md: a tree stag's walk between the twitching trees: out of one (from f), to another (t), and in; `omen` while it only shows itself; `armed`, set by the scene, its blow landing this frame. Not saved. */ stag?: StagWalk }
+export interface Raider { id: number; x: number; z: number; heading: number; hp: number; state: RaiderState; target: Store | null; ate: number; eatClock: number; aggro: number; rooted: number; biteClock: number; hurt: number; gone: number; site: YieldSite | null; devourClock: number; held: number; infant: InfantRef | null; kind: RaiderKind; den: string | null; prey: string | null; /** F5a (WHIP.md): seconds left in a whip figure: while it runs the raider's own step is paused (the figure drives its x and z), and its wind up is lost, so it comes out of a figure needing a whole bite's wind up again. Not saved. */ choreo?: number; /** STAGS.md: a tree stag's walk between the twitching trees: out of one (from f), to another (t), and in; `omen` while it only shows itself; `armed`, set by the scene, its blow landing this frame. Not saved. */ stag?: StagWalk }
 export interface StagWalk { phase: 'emerge' | 'walk' | 'enter' | 'fight'; fx: number; fz: number; tx: number; tz: number; omen: boolean; clock: number }
 /** D3: an infant as it is carried off, kept at the lair, bred into a Dark Young, dropped, or carried home: who it is, its house, when it was born. */
 export interface InfantRef { id: string; home: number; born: number; /** Cut free of a sac late in its gestation: home, but marked (MOTHER.md, the sacs). */ marked?: boolean }
@@ -849,7 +849,7 @@ export function spawnFoe(v: Village, kind: RaiderKind, x: number, z: number, agg
 }
 /** F3: her defence, set by the entry each frame: `evading` (the dodge's untouchable window) and `guarding` (the guard held). The raiders' step adds what happened: `lunges` (the ids that bit or tried to), `dodged` (bites she rolled clear of as they landed), `blocked` (bites taken on her guard); the entry reads and clears them. Tuning: TELL_S, LUNGE_REACH, GUARD_TAKE (an open question for the phone). */
 export const TELL_S = 0.55, LUNGE_REACH = 2.3, GUARD_TAKE = 0.35;
-export const defense = { evading: false, guarding: false, lunges: [] as number[], dodged: 0, blocked: 0 };
+export const defense = { evading: false, guarding: false, /** F5a: in a whip figure she is untouchable (a bite misses without root time). */ flowing: false, lunges: [] as number[], dodged: 0, blocked: 0 };
 /** How far into its tell a raider hunting her is, 0..1 (0: not winding up). */
 export const tellOf = (r: Raider): number => (r.state === 'hunting' ? Math.max(0, Math.min(1, (r.biteClock - (DY_BITE_S - TELL_S)) / TELL_S)) : 0);
 export function stepRaiders(v: Village, dt: number, her: Vec2 | null, herTime = true, regen = 1): void {
@@ -865,6 +865,8 @@ export function stepRaiders(v: Village, dt: number, her: Vec2 | null, herTime = 
   for (const r of v.raiders) {
     r.hurt = Math.max(0, r.hurt - dt); if (r.state === 'dead' || r.state === 'melting') { r.gone += dt; continue; }
     if (v.hedges.length && r.state !== 'retreating') { hedgeHold(v, r, dt, r.kind === 'wolf' ? WOLF_PACE : DY_PACE); if ((r.state as RaiderState) === 'dead') continue; }
+    // F5a: in a whip figure, the figure moves it.
+    if (r.choreo && r.choreo > 0) { r.choreo = Math.max(0, r.choreo - dt); r.biteClock = 0; if (r.kind !== 'stag' && r.state !== 'retreating') r.aggro = Math.max(r.aggro, DY_AGGRO_S * 0.5); continue; }
     if (r.rooted > 0) {
       // The hold (D2): while she stands by a rooted one the bind does not run down, for sap; held long enough, a retreating one withers and melts.
       // One hold at a time (Noah asked what limits it): only the one she bound last, while she stands by it and has sap; the others' binds run down.
@@ -893,6 +895,7 @@ export function stepRaiders(v: Village, dt: number, her: Vec2 | null, herTime = 
       else { r.heading = Math.atan2(her.z - r.z, her.x - r.x); r.biteClock += dt; if (r.biteClock >= DY_BITE_S) { r.biteClock = 0; defense.lunges.push(r.id);
         // Rolling clear as it lands, she is not there to bite; guarding, she takes GUARD_TAKE of it.
         if (defense.evading) defense.dodged++;
+        else if (defense.flowing) { /* F5a: she flows clear */ }
         else { if (defense.guarding) defense.blocked++; h.vigor = Math.max(0, h.vigor - (r.kind === 'wolf' ? WOLF_BITE : r.kind === 'stag' ? STAG_BLOW : DY_BITE) * (defense.guarding ? GUARD_TAKE : 1)); h.calm = 0; if (h.vigor === 0) { h.faint = FAINT_S; r.aggro = 0; } else if (r.kind === 'stag' && !defense.guarding) knockDown(v, her, r); } } }
       if (r.aggro <= 0) { r.aggro = 0; r.state = 'coming'; r.target = null; }
       continue;
@@ -1220,6 +1223,8 @@ function hurt(v: Village, r: Raider, dmg: number, byHer = true): void {
   if (r.kind === 'stag') { r.state = 'retreating'; r.aggro = 0; r.held = 0; if (byHer) { v.slain += 1; gainXp(v, XP_DY); } stagHome(r); event(v, 'The tree stag breaks off: it goes back into the trees', true); return; }
   r.state = 'retreating'; r.aggro = 0; r.ate = 0; r.held = 0;
 }
+/** F5a (WHIP.md): a whip figure's beat lands on raider `id`: `mult` times her strike. Returns whether it was hurt. */
+export function lash(v: Village, id: number, mult: number): boolean { const r = v.raiders.find(x => x.id === id); if (!r || r.state === 'dead' || r.state === 'melting' || r.state === 'retreating' || mult <= 0) return false; hurt(v, r, strikeDamage(v.hero) * mult); return true; }
 /** The ones her strikes can reach: not the melting, not the beaten (those only the roots can hold). */
 const alive = (v: Village): Raider[] => v.raiders.filter(r => r.state !== 'dead' && r.state !== 'melting' && r.state !== 'retreating');
 /** The ones her root bind can hold: everything still on the land, the beaten first of all. */
