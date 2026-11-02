@@ -21,6 +21,8 @@ export const RISE_SPREAD = 80, MEAL_TICKS = 60;
 export const ANTIC_CHANCE = 1 / 40, ANTIC_R = 9, SCUFFLE_M = 3, TRIP_CHANCE = 1 / 350, TRIP_TICKS = 28, DIZZY_TICKS = 24, HUG_TICKS = 32, TUMBLE_PACE = 2.4, NAP_M = 30;
 export const SMELL_TICKS: [number, number] = [40, 70], SIT_TICKS: [number, number] = [80, 160], NAP_TICKS: [number, number] = [120, 260], SCUFFLE_TICKS: [number, number] = [40, 70], TUMBLE_M: [number, number] = [3, 5];
 export const FLOWER_SPOTS = 6, ROCK_SPOTS = 3;
+/** Where the band's home is up a climb (EdenHome.from): the chance a hobbit home with its take stops for a breather (an antic) first. Tuning. */
+export const BREATHER_CHANCE = 0.4;
 /** E2a, the night (Noah, 2026-10-31: "nothing happens at night"; ECOLOGY.md's birds and bobcat). The birds are fungal: puffball nests on burls high in the hosts (BURL_H m up, at most BURLS_PER_TREE a tree), their eggs luminescent, ripening over BURL_DAYS and popping at dusk or night into BIRDS_PER_BURL bird-fungi that soar like spores, glowing, for FLIGHT_TICKS and settle on a host within LAND_R (LAND_CHANCE; the rest soar off and are lost) as a new burl. A third of the hosts start burled. The bobcat (one, nocturnal, in the Hollowed's design language) sleeps at its den by day (CAT_DEN_M from the hearth), prowls from dusk, climbs to burls with eggs within CAT_HUNT_R to eat them (CAT_CLIMB_TICKS up, CAT_EAT_TICKS, down) and takes a bird passing within CAT_LEAP_M and under CAT_LEAP_H, up to CAT_MEALS a night, then lies up at dawn. Tuning. */
 export const BURL_H: [number, number] = [3, 6], BURLS_PER_TREE = 3, BURL_DAYS = 4, BIRDS_PER_BURL = 2, FLIGHT_TICKS: [number, number] = [70, 160], BIRD_SPEED = 1.6, LAND_R = 60, LAND_CHANCE = 0.7, BURLED_AT_START = 0.33;
 export const CAT_DEN_M = 90, CAT_HUNT_R = 220, CAT_WALK = 1.3, CAT_CLIMB_TICKS = 24, CAT_EAT_TICKS = 30, CAT_LEAP_M = 3, CAT_LEAP_H = 3.5, CAT_LEAP_TICKS = 8, CAT_MEALS = 4;
@@ -199,7 +201,7 @@ function stepOne(e: Eden, ctx: EdenCtx): void {
         else if (--h.taking <= 0) { h.carry = 'berries'; h.target = null; h.act = 'home'; event(e, 'hobbit-picks', h, h.id); }
         break;
       }
-      case 'home': if (walk(h, e.ring ? stepTo(e.hearth, (e.hobbits.indexOf(h) / BAND) * Math.PI * 2 + 0.25, e.ring) : e.hearth, HOBBIT_WALK, ctx)) { if (h.carry === 'chicken') e.store++; else if (h.carry === 'berries') e.berriesStore++; h.carry = null; h.trips++; h.act = 'idle'; } else maybeTrip(e, h, rand); break;
+      case 'home': if (walk(h, e.ring ? stepTo(e.hearth, (e.hobbits.indexOf(h) / BAND) * Math.PI * 2 + 0.25, e.ring) : e.hearth, HOBBIT_WALK, ctx)) { if (h.carry === 'chicken') e.store++; else if (h.carry === 'berries') e.berriesStore++; h.carry = null; h.trips++; h.act = 'idle'; /* home from a long way (the Hearth-Hold's climb): a breather now and then before going out again */ if (e.from && !dayOver && rand() < BREATHER_CHANCE) startAntic(e, h, rand, ctx); } else maybeTrip(e, h, rand); break;
       case 'eating': h.hunger = Math.max(0, h.hunger - 0.6 / MEAL_TICKS); if (--h.taking <= 0) h.act = 'idle'; break;
     }
     if (h.act !== 'out' && h.act !== 'home' && !(h.act === 'idle' && !atHearth(h))) h.speed = 0;
