@@ -255,7 +255,7 @@ export interface VillageLook {
 export interface LookInputs {
   renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.PerspectiveCamera; sun: THREE.DirectionalLight; hemi: THREE.HemisphereLight;
   vl: VillageLand; seed: number;
-  treesOf: (cx: number, cz: number) => Tree[]; villages: () => { root: THREE.Object3D; x: number; z: number }[];
+  treesOf: (cx: number, cz: number) => Tree[]; /** Where grass gives way (refreshClearing); each a village whose meadow woods stand at it, unless `noTrees` (the Hearth-Hold). */ villages: () => { root: THREE.Object3D; x: number; z: number; noTrees?: boolean }[];
   dark: (x: number, z: number) => boolean; blighted: (x: number, z: number) => boolean;
   /** RUINS.md: squares (centre, half-side) the understory keeps clear of: the industrial ruins' yards. */
   clearings?: { x: number; z: number; r: number }[];
@@ -301,7 +301,7 @@ export function createVillageLook(inp: LookInputs): VillageLook {
   let quality = inp.quality ?? QUALITIES.find(q => q.name.toLowerCase() === qName) ?? QUALITIES[coarse ? 1 : 2];
   const kinds = treeCache(), tint = groundCache(), landStamp = () => inp.landStamp?.() ?? ''; let lastTrees: VTree[] = [];
   let decalsHidden = false;
-  const trees = (full = false) => (lastTrees = villageTrees(vl.land, vl.edge, vl.terrain, inp.treesOf, inp.villages().map(v => ({ x: v.x, z: v.z })), inp.dark, inp.blighted, inp.taint, seed, kinds, landStamp(), full));
+  const trees = (full = false) => (lastTrees = villageTrees(vl.land, vl.edge, vl.terrain, inp.treesOf, inp.villages().filter(v => !v.noTrees).map(v => ({ x: v.x, z: v.z })), inp.dark, inp.blighted, inp.taint, seed, kinds, landStamp(), full));
   const world = buildVista(scene, vl.land, trees(), villageRocks(vl, seed), quality, { hazeBase: 0, hazeBelow: HAZE_BELOW, ground: groundTint(vl.land, seed, inp.blighted, inp.taint, tint, landStamp()), fine: vl.terrain.height, fineLod: true, renderer, waterDisc: { x: KARST_AT.x, z: KARST_AT.z, r: PLATEAU_R + 40 }, cloudSea: { x: KARST_AT.x, z: KARST_AT.z, y: CLOUD_Y, inner: PLATEAU_R + MOUNTAIN_RISE + 120, outer: FAR_REACH, cover: CLOUD_COVER }, farReach: FAR_REACH, lowY: LOW_Y, bladeH: BLADE_H, nearTreesScale: NEAR_TREES, treeReach: TREE_REACH });
   world.setCanopy(canopyMap(vl.land, seed)); world.setFloor(floorMap(vl.land, seed)); tint.bytes = world.groundBytes;
   // FOREST: the understory, kept from the places (as the rocks are) and the trunks.

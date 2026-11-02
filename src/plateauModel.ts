@@ -10,6 +10,7 @@ import { KARST_AT, villageSites, lairPlace, places, FOOT } from './overworldMode
 import { convergences, RING_FOOT } from './chunkModel';
 import { STREAM_Z, STREAM_REACH, MEADOW_RADIUS } from './villageModel';
 import { TAINT } from './taintModel';
+import { holdFrame, toLocal, inReach, carve, levelAt as holdLevelAt, onHold, type HoldFrame } from './holdModel';
 
 const smooth = (a: number, b: number, x: number): number => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
@@ -74,7 +75,13 @@ export interface Plateau {
   into(x: number, z: number): number;
   /** T6: the passes' brinks, and how far inside a pass a point lies (0 off it, 1 on its line). */
   brinks: Brink[]; passAt(x: number, z: number): number;
+  /** The Hearth-Hold (holdModel.ts): the cave at the mountain's foot on the first village's bearing from the karst, where the belt has
+   * risen CAVE_INTO m; the hold's frame there and its datum (the natural ground at the mouth, before erosion); its built ground's
+   * height (absolute) where (x, z) is on it, else null; whether (x, z) is on it. `ground` carves it into the land. */
+  hold: { cave: P & { dir: number }; frame: HoldFrame; datum: number; levelAt(x: number, z: number): number | null; on(x: number, z: number, pad?: number): boolean };
 }
+/** The cave's place: how far into the belt (m) on the first village's bearing from the karst. */
+export const CAVE_INTO = 10;
 
 const RIVER_STEP = 4;
 const cache = new Map<number, Plateau>();
@@ -291,7 +298,19 @@ function build(seed: number): Plateau {
       if (nr.d < half) h = Math.min(h, s - depth * (1 - (nr.d / half) ** 2) - (ford ? 0 : 0.15));
       else { const bank = s + 0.45 + (nr.d - half) * 0.12; if (h > bank) h = lerp(bank, h, smooth(half, half + 10, nr.d)); else h = Math.max(h, Math.min(bank, s + 0.3)); }
     }
+    // The Hearth-Hold: its terraces, stairs and apron level, the land easing back round them, the bluff raised behind the facade.
+    if (padded) { const hd = holdData(); const q = toLocal(hd.frame, x, z); if (inReach(q.u, q.v)) h = hd.datum + carve(q.u, q.v, h - hd.datum); }
     return h;
+  }
+  let holdCache: { cave: P & { dir: number }; frame: HoldFrame; datum: number } | null = null;
+  function holdData(): { cave: P & { dir: number }; frame: HoldFrame; datum: number } {
+    if (holdCache) return holdCache;
+    const a = Math.atan2(0 - C.z, 0 - C.x); let cave: P & { dir: number } | null = null;
+    for (let r = PLATEAU_R - 80; r < PLATEAU_R + 60 && !cave; r += 2) { const x = C.x + Math.cos(a) * r, z = C.z + Math.sin(a) * r; if (into(x, z) >= CAVE_INTO) cave = { x, z, dir: Math.atan2(Math.cos(a), Math.sin(a)) }; }
+    cave ??= { x: C.x + Math.cos(a) * PLATEAU_R, z: C.z + Math.sin(a) * PLATEAU_R, dir: Math.atan2(Math.cos(a), Math.sin(a)) };
+    const frame = holdFrame(cave);
+    holdCache = { cave, frame, datum: ground(cave.x, cave.z, base, false) };
+    return holdCache;
   }
   /** A footbridge's deck: across the river (perpendicular to it), FOOTBRIDGE_OVER past each bank, ends at the ground and a low arch between. */
   const decks = new Map<string, { y0: number; y1: number }>();
@@ -324,7 +343,12 @@ function build(seed: number): Plateau {
     const q = onCircle(a, rr), bearing = ((Math.atan2(Math.cos(a), -Math.sin(a)) * 180 / Math.PI) + 360) % 360, oct = ['north', 'north-east', 'east', 'south-east', 'south', 'south-west', 'west', 'north-west'][Math.round(bearing / 45) % 8];
     return { id: `brink:${i}`, name: `the ${oct} brink`, x: q.x, z: q.z, angle: a };
   });
-  return { seed, centre: C, radius: PLATEAU_R, lakeR, islandR: ISLAND_R, waterY: WATER_Y, rivers, crossings, bridge, terraces, base, ground, water, nearRiver, deckAt, into, brinks, passAt };
+  const hold: Plateau['hold'] = {
+    get cave() { return holdData().cave; }, get frame() { return holdData().frame; }, get datum() { return holdData().datum; },
+    levelAt: (x, z) => { const hd = holdData(), q = toLocal(hd.frame, x, z), l = holdLevelAt(q.u, q.v); return l === null ? null : hd.datum + l; },
+    on: (x, z, pad = 0) => { const q = toLocal(holdData().frame, x, z); return onHold(q.u, q.v, pad); },
+  };
+  return { seed, centre: C, radius: PLATEAU_R, lakeR, islandR: ISLAND_R, waterY: WATER_Y, rivers, crossings, bridge, terraces, base, ground, water, nearRiver, deckAt, into, brinks, passAt, hold };
 }
 
 /** A polyline resampled every `step` m. */
@@ -342,6 +366,8 @@ export function resample(pts: P[], step: number): P[] {
  * `wade` is the depth that refuses (hers by default; her stag's STAG_WADE_DEPTH, STAGS.md pass 4, lets it through the rivers and not the lake). */
 export function walkable(p: Plateau, x: number, z: number, wade = WADE_DEPTH): boolean {
   if (p.deckAt(x, z) !== null) return true;
+  // The Hearth-Hold's built ground is walkable however far into the belt it climbs.
+  if (p.hold.on(x, z, 0.2)) return true;
   // T6: the belt is too steep but at its passes, and a pass ends at the brink: past it is the fall.
   const d = p.into(x, z); if (d > PASS_FOOT && (d > MOUNTAIN_RISE + BRINK_PAST + 8 || p.passAt(x, z) < 0.5)) return false;
   const w = p.water(x, z); return !w || w.depth < wade;

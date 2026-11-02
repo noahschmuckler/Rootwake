@@ -101,7 +101,8 @@ export function villageLandFrom(seed: number, base: Terrain, e: Eroded, baked: b
   }
   const land: Land = { ...raw, h, flow, ceiling: top + 30 };
   // The ground she walks: the deck where she is on one (the island's bridge, a footbridge), else the land.
-  const height = (x: number, z: number): number => { const g = tri(x, z), d = p.deckAt(x, z); return d !== null && d > g ? d : g; };
+  // On the Hearth-Hold's built ground, its own level exactly (a terrace, a stair's ramp), not the mesh's 2 m triangles across its walls.
+  const height = (x: number, z: number): number => { const hl = p.hold.levelAt(x, z); if (hl !== null) return hl; const g = tri(x, z), d = p.deckAt(x, z); return d !== null && d > g ? d : g; };
   // The near mesh draws the land itself (never the decks), a hair lower on the karst's island, whose own forest floor lies over it.
   land.surface = (x, z) => tri(x, z) - 0.22 * (1 - smooth(KARST_FOREST + 20, KARST_FOREST + 34, Math.hypot(x - KARST_AT.x, z - KARST_AT.z)));
   const normal = (x: number, z: number): [number, number, number] => { const dx = tri(x - 1, z) - tri(x + 1, z), dz = tri(x, z - 1) - tri(x, z + 1), l = Math.hypot(dx, 2, dz); return [dx / l, 2 / l, dz / l]; };

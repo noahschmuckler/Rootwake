@@ -51,6 +51,7 @@ jobs:
           mkdir -p "$study_checkout/opening/assets"
           cp dist/opening.html "$study_checkout/opening/index.html"
           cp dist/hen.html "$study_checkout/opening/hen.html"
+          cp dist/hold.html "$study_checkout/opening/hold.html"
           cp dist/assets/* "$study_checkout/opening/assets/"
           cp -r dist/models "$study_checkout/opening/models"
           # The land baked at build (PLATEAU.md) and the floor's textures: without them the phone erodes the land itself at every load.
