@@ -331,7 +331,7 @@ export function createVillageLook(inp: LookInputs): VillageLook {
   // ?hud=1: what it costs, top centre (frame rate, triangles and draw calls over every pass).
   const hud = new URLSearchParams(location.search).get('hud') === '1' ? document.body.appendChild(Object.assign(document.createElement('div'), { id: 'look-hud' })) : null;
   if (hud) { hud.style.cssText = 'position:fixed;z-index:40;bottom:calc(env(safe-area-inset-bottom,0px) + 12px);left:50%;transform:translateX(-50%);padding:4px 8px;border-radius:6px;background:#0b1918aa;color:#eef6f0;font:11px/1.3 ui-monospace,Menlo,monospace;white-space:pre;pointer-events:none'; renderer.info.autoReset = false; }
-  let hudFrames = 0, hudMs = 0, hudLast = performance.now(), hudClock = 0;
+  let hudFrames = 0, hudMs = 0, hudLast = performance.now(), hudClock = 0, hudWorst = 0;
   const resize = () => { composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(innerWidth, innerHeight); };
   addEventListener('resize', resize); resize();
 
@@ -410,8 +410,9 @@ export function createVillageLook(inp: LookInputs): VillageLook {
     render() {
       composer.render();
       if (hud) {
-        const now = performance.now(), dt = now - hudLast; hudLast = now; hudFrames++; hudMs += dt; hudClock += dt;
-        if (hudClock > 500) { const i = renderer.info.render, ms = hudMs / hudFrames; hud.textContent = `${(1000 / ms).toFixed(0)} fps ${ms.toFixed(1)} ms · ${quality.name}\n${(i.triangles / 1000).toFixed(0)}k tris · ${i.calls} calls`; hudFrames = 0; hudMs = 0; hudClock = 0; }
+        const now = performance.now(), dt = now - hudLast; hudLast = now; hudFrames++; hudMs += dt; hudClock += dt; hudWorst = Math.max(hudWorst, dt);
+        // The worst frame of the half second too: a hitch hides in an average (Noah, 2026-11-02: judder without a clear drop in the rate).
+        if (hudClock > 500) { const i = renderer.info.render, ms = hudMs / hudFrames; hud.textContent = `${(1000 / ms).toFixed(0)} fps ${ms.toFixed(1)} ms · worst ${hudWorst.toFixed(0)} ms · ${quality.name}\n${(i.triangles / 1000).toFixed(0)}k tris · ${i.calls} calls`; hudFrames = 0; hudMs = 0; hudClock = 0; hudWorst = 0; }
         renderer.info.reset();
       }
     },

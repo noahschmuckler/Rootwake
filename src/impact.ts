@@ -53,6 +53,8 @@ export class Impact {
   get rooted(): number { if (this.root <= 0) return 0; const age = ROOT_S - this.root; return Math.min(1, age / ROOT_EASE, this.root / ROOT_EASE); }
   /** Off by `?shake=0`, for those it unsettles; the hit-stop and slow motion stay. */
   shake = true;
+  /** Scales every hit-stop (0: blows never stop the world; `?stop=0`, to judge the stops apart from the rest). */
+  stopScale = 1;
   private saved = { fov: 0, x: 0, y: 0, z: 0, qx: 0, qy: 0, qz: 0, qw: 1 };
   private pushed = false;
   /** The latest blows felt (dev and checks), newest last. */
@@ -60,7 +62,7 @@ export class Impact {
   /** A blow lands: the stronger of what is running and what it asks for, never stacked into a long freeze. */
   hit(kind: Blow, scale = 1): void {
     const f = BLOWS[kind]; this.log.push(kind); if (this.log.length > 24) this.log.shift();
-    this.stop = Math.max(this.stop, f.stop * scale);
+    this.stop = Math.max(this.stop, f.stop * scale * this.stopScale);
     this.trauma = Math.min(1, this.trauma + f.trauma * scale);
     this.kick = Math.abs(f.kick) > Math.abs(this.kick) ? f.kick * scale : this.kick;
     if (f.slow > 0 && f.slow >= this.slow) { this.slow = f.slow; this.slowTotal = f.slow; }

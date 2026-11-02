@@ -120,7 +120,7 @@ const FAR_GROUND = 220, FAR_VISTA = 1100, VISTA_ALT = [8, 40], VISTA_FOG = 0.22;
 const scene = new THREE.Scene(); const camera = new THREE.PerspectiveCamera(62, innerWidth / innerHeight, 0.05, FAR_GROUND); scene.add(camera);
 // F1: the feel of a blow (hit-stop, shake, punch in, slow motion, buzz), its sound, and what it looks like in the world. `?shake=0` keeps the camera still; `?mute=1` silences the fight.
 const impact = new Impact(), sound = new FightSound(), fightParams = new URLSearchParams(location.search);
-impact.shake = fightParams.get('shake') !== '0'; sound.muted = fightParams.get('mute') === '1';
+impact.shake = fightParams.get('shake') !== '0'; if (fightParams.get('stop') === '0') impact.stopScale = 0; sound.muted = fightParams.get('mute') === '1';
 addEventListener('pointerdown', () => sound.wake(), { capture: true });
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' }); renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5)); renderer.setSize(innerWidth, innerHeight); renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.15; document.body.prepend(renderer.domElement);
 const hemi = new THREE.HemisphereLight('#eef4e2', '#4d5f48', 2.3); scene.add(hemi); const sun = new THREE.DirectionalLight('#fff0c8', 2.3); sun.position.set(-20, 40, 15); scene.add(sun);
@@ -607,6 +607,8 @@ function stepTaintFx(dt: number): { spot?: [number, number, number, number]; spo
 const daySky = new THREE.Color('#a9bcae'), duskSky = new THREE.Color('#c9946a'), nightSky = new THREE.Color('#1d2836'), colour = new THREE.Color();
 /** The way she last faced on screen (her stag rises facing it). */
 let herYaw = 0;
+/** In her guard she turns to the foe she is locked on at GUARD_TURN (1/s), not at once: a lock moving or changing snapped her round (the judder Noah saw, 2026-11-02). Tuning. */
+const GUARD_TURN = 12; let guardYaw = 0, guardFacing = false;
 const visualPosition = new THREE.Vector3(), visualRotation = new THREE.Quaternion(), up = new THREE.Vector3(0, 1, 0), tmp = new THREE.Vector3();
 const visualForward = new THREE.Vector3(0, 0, -1);
 function presentHulda(dt: number): void {
@@ -614,7 +616,8 @@ function presentHulda(dt: number): void {
   visualPosition.copy(player.feet());
   let heading = player.yaw; if ((mode === 'ground' || mode === 'catwalk') && player.motor.speed > 0.08) heading = Math.atan2(-player.motor.velocity.x, -player.motor.velocity.z);
   // F3: she faces the way she rolls, and in her guard, the foe she guards against.
-  if (mode === 'ground' && herFlow) heading = flowYaw; else if (mode === 'ground' && dodge) heading = dodge.heading; else if (mode === 'ground' && guarding && locked) heading = Math.atan2(-(locked.x + ctx.ox - player.feet().x), -(locked.z + ctx.oz - player.feet().z));
+  if (mode === 'ground' && herFlow) heading = flowYaw; else if (mode === 'ground' && dodge) heading = dodge.heading; else if (mode === 'ground' && guarding && locked) { const want = Math.atan2(-(locked.x + ctx.ox - player.feet().x), -(locked.z + ctx.oz - player.feet().z)); if (!guardFacing) guardYaw = herYaw; guardYaw += Math.atan2(Math.sin(want - guardYaw), Math.cos(want - guardYaw)) * (1 - Math.exp(-dt * GUARD_TURN)); heading = guardYaw; }
+  guardFacing = mode === 'ground' && guarding && !!locked && !herFlow && !dodge;
   // Parkour: she faces the way the move goes (a hang drop turns her to the wall), and its clips pose her.
   // The mount (STAGS.md): mounting, the mount clip; after a collapse, the landing; riding, she faces the stag's way.
   const rp = ridePlan(), move = rp ? rp.plan : mode === 'ground' || mode === 'catwalk' ? player.motor.traversal : null; if (mode === 'ride') heading = rideHeading(); if (move?.face !== undefined) { heading = move.face; const l = leanAt(move, player.motor.traversalTime); visualPosition.x -= Math.sin(move.face) * l; visualPosition.z -= Math.cos(move.face) * l; }
@@ -788,8 +791,11 @@ const STAFF_KEEP_S = 6, STAFF_NEAR_M = 12, FACE_REACH = 4, FACE_COS = 0.2, FACE_
 function faceFoe(): void {
   const l = herLocal(), { fx: hx, fz: hz } = herFacing(); let best: Raider | null = locked && Math.hypot(locked.x - l.x, locked.z - l.z) < FACE_REACH ? locked : null, bd = best ? -1 : FACE_REACH;
   for (const r of village.raiders) { if (r.state === 'dead' || r.state === 'melting') continue; const dx = r.x - l.x, dz = r.z - l.z, d = Math.hypot(dx, dz); if (d < bd && (d < 0.6 || (dx * hx + dz * hz) / d > FACE_COS)) { bd = d; best = r; } }
-  if (!best) return; const yaw = Math.atan2(-(best.x - l.x), -(best.z - l.z)); player.yaw += Math.atan2(Math.sin(yaw - player.yaw), Math.cos(yaw - player.yaw)) * FACE_TURN;
+  if (!best) return; const yaw = Math.atan2(-(best.x - l.x), -(best.z - l.z)); faceTurn = Math.atan2(Math.sin(yaw - player.yaw), Math.cos(yaw - player.yaw)) * FACE_TURN;
 }
+/** The soft lock's turn, eased in over a few frames (FACE_EASE, 1/s): turned in one frame, each press jerked the camera. Tuning. */
+const FACE_EASE = 14; let faceTurn = 0;
+function easeFace(dt: number): void { if (Math.abs(faceTurn) < 1e-4) { faceTurn = 0; return; } const d = faceTurn * (1 - Math.exp(-dt * FACE_EASE)); player.yaw += d; faceTurn -= d; }
 /** R2: a blow at the ward's door or within it; whether it struck something there. */
 function wardBlow(f: THREE.Vector3, hx: number, hz: number, cuts: number): boolean {
   const at = new THREE.Vector3(f.x + hx * 0.9, f.y + 0.4, f.z + hz * 0.9), dir = new THREE.Vector3(hx, 0, hz);
@@ -896,13 +902,15 @@ function rollFrame(): void {
   if (c.t > 1.15 && c.t < 1.3 && Math.random() < 0.5) { const f = player.feet(); fx.spray(new THREE.Vector3(f.x, f.y + 0.05, f.z), new THREE.Vector3(-dodge.dx, 0, -dodge.dz), 'soil', 3, 1.4); }
 }
 // The lock: the foe hunting her that is nearest (within LOCK_M), ringed on the ground; her blows and her guard turn to it.
-const LOCK_M = 9; let locked: Raider | null = null;
+const LOCK_M = 9, LOCK_SWITCH_M = 1.5; let locked: Raider | null = null;
 const lockRing = new THREE.Mesh(new THREE.RingGeometry(0.62, 0.74, 40).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: '#d8f07a', transparent: true, opacity: 0.8, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }));
 lockRing.renderOrder = 4; lockRing.visible = false; scene.add(lockRing);
 const tellWas = new Map<number, number>();
 function lockFrame(dt: number): void {
   const l = herLocal(); let best: Raider | null = null, bd = LOCK_M;
   if (mode === 'ground') for (const r of village.raiders) { if (r.state !== 'hunting') continue; const d = Math.hypot(r.x - l.x, r.z - l.z); if (d < bd) { bd = d; best = r; } }
+  // It keeps the foe it has unless another is clearly nearer (LOCK_SWITCH_M): two at much the same distance had flipped it from frame to frame.
+  if (best && locked && best !== locked && locked.state === 'hunting' && mode === 'ground') { const d = Math.hypot(locked.x - l.x, locked.z - l.z); if (d < LOCK_M && d < bd + LOCK_SWITCH_M) best = locked; }
   locked = best; lockRing.visible = !!best;
   if (best) { const x = best.x + ctx.ox, z = best.z + ctx.oz, t = tellOf(best), sc = best.kind === 'wolf' ? 1 : 1.6; lockRing.position.set(x, relief(x, z) + 0.06, z); lockRing.scale.setScalar(sc * (1 + Math.sin(time * 0.008) * 0.05 + t * 0.25)); (lockRing.material as THREE.MeshBasicMaterial).color.set(t > 0 ? '#ff7a3a' : '#d8f07a'); }
   // The tells: as one begins, its eyes flare and it snarls.
@@ -931,6 +939,7 @@ function defended(her: { x: number; z: number } | null): void {
 }
 /** Before her figure is posed: the moves advance (their contacts land), the staff withdraws when the fight is over. */
 function stepMoves(dt: number): void {
+  easeFace(dt);
   guardFrame();
   if (moves) { const moving = THREE.MathUtils.clamp((player.motor.speed - 0.3) / 1.2, 0, 1); for (const e of moves.update(dt * (impact.root > 0 ? ROOT_FLURRY : 1), mode === 'ground' ? moving : 0)) moveEvent(e); }
   defense.evading = !!moves?.queue.evading;
