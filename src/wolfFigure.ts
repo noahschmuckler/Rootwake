@@ -37,7 +37,8 @@ export const WOLF_LENGTH = 1.55, ASSET_WOLF_LENGTH = 1000, WOLF_CLIP_WALK_MS = 0
 /** The jaws from the head bone's root at rest (m, forward and up), and how far the body drops lying down (m). Tuning, by eye. */
 export const MOUTH_FWD = 0.21, MOUTH_UP = -0.06, LIE_DROP = 0.3;
 /** The eyes behind the nose, under the skull's top there and out toward its side (a fraction of its half-width) (m). Tuning, by eye. */
-export const EYE_BACK = 0.13, EYE_DOWN = 0.075, EYE_OUT = 0.62;
+/** The eye's radius and how far its centre sits inside the skin (in radii): an almond, mostly under the surface. */
+export const EYE_BACK = 0.13, EYE_DOWN = 0.075, EYE_R = 0.022, EYE_SINK = 0.75;
 /** A pose laid over the clips (henGrove.ts' harvesting wolf; the file has only Idle and Walking): the neck and head pitched (+ up) and
  * turned (+ to its left), lying down 0..1 (the body lowered, forelegs reaching forward, hind legs folded under), a forepaw raised 0..1. */
 export interface WolfPose { neckPitch: number; neckYaw: number; headPitch: number; headYaw: number; headRoll: number; lie: number; paw: number }
@@ -56,10 +57,16 @@ export function createAssetWolf(asset: WolfAsset, hide: THREE.MeshStandardMateri
   const skin: THREE.Vector3[] = [];
   model.traverse(o => { if ((o as THREE.SkinnedMesh).isSkinnedMesh) { const m = o as THREE.SkinnedMesh, a = m.geometry.attributes.position; for (let i = 0; i < a.count; i++) { const v = new THREE.Vector3().fromBufferAttribute(a, i); m.applyBoneTransform(i, v); skin.push(v.applyMatrix4(m.matrixWorld)); } } });
   const nose = skin.reduce((n, v) => Math.max(n, v.x), -Infinity), at = skin.filter(v => v.x > nose - EYE_BACK - 0.04 && v.x < nose - EYE_BACK + 0.04);
-  const eyeY = at.length ? Math.max(...at.map(v => v.y)) - EYE_DOWN : 0.7, eyeZ = at.length ? Math.max(...at.map(v => Math.abs(v.z))) * EYE_OUT : 0.07;
+  const eyeY = at.length ? Math.max(...at.map(v => v.y)) - EYE_DOWN : 0.7;
+  // The skin's side at the eye (the widest point within a few cm of it), and the eye sunk into it: only a lid's worth shows (Noah,
+  // 2026-11-02: they bulged; set in like the deer's).
+  // Found by a ray onto the skin from the side (its faces lie inside its vertices, so the vertices overstate it).
+  const skins: THREE.Object3D[] = []; model.traverse(o => { if ((o as THREE.SkinnedMesh).isSkinnedMesh) skins.push(o); });
+  const ray = new THREE.Raycaster(), surface = (s: number): THREE.Intersection | undefined => { ray.set(new THREE.Vector3(nose - EYE_BACK, eyeY, s * 2), new THREE.Vector3(0, 0, -s)); const was = hide.side; hide.side = THREE.DoubleSide; const h = ray.intersectObjects(skins, false)[0]; hide.side = was; return h; };
+  // (Both sides of the skin are tested: the file's faces on one side wind inward, and a ray would pass through them.)
   // (The file's bones carry a scale of their own, so an eye's size is undone from the bone's world scale, not the fit.)
-  const head: THREE.Object3D = tip ?? model, eyeGeo = new THREE.SphereGeometry(0.024, 6, 5), headScale = head.getWorldScale(new THREE.Vector3()).x || 1;
-  for (const s of [-1, 1]) { const e = new THREE.Mesh(eyeGeo, wolfEye); const w = new THREE.Vector3(nose - EYE_BACK, eyeY, s * eyeZ); e.position.copy(head.worldToLocal(w)); e.scale.setScalar(1 / headScale); head.add(e); eyes.push(e); }
+  const head: THREE.Object3D = tip ?? model, eyeGeo = new THREE.SphereGeometry(EYE_R, 8, 6), headScale = head.getWorldScale(new THREE.Vector3()).x || 1;
+  for (const s of [-1, 1]) { const e = new THREE.Mesh(eyeGeo, wolfEye), hit = surface(s); const w = hit ? hit.point.clone().addScaledVector(new THREE.Vector3(0, 0, s), -EYE_R * EYE_SINK) : new THREE.Vector3(nose - EYE_BACK, eyeY, s * 0.07); e.position.copy(head.worldToLocal(w)); head.add(e); e.updateWorldMatrix(true, false); { const hq = head.getWorldQuaternion(new THREE.Quaternion()).invert(); e.quaternion.copy(hq); } e.scale.set(1.35 / headScale, 0.75 / headScale, 0.6 / headScale); eyes.push(e); }
   // The jaws: forward of the head bone's root, low (found by eye on the file: the head bone's origin is at the head's base).
   const mouth = new THREE.Object3D(); { const hp = head.getWorldPosition(new THREE.Vector3()); mouth.position.copy(head.worldToLocal(new THREE.Vector3(hp.x + MOUTH_FWD, hp.y + MOUTH_UP, 0))); head.add(mouth); }
   const bones: Record<string, THREE.Object3D> = {}; model.traverse(o => { if ((o as THREE.Bone).isBone) bones[o.name] = o; });
