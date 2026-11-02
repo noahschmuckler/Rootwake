@@ -141,7 +141,7 @@ export function createHenGrove(scene: THREE.Scene, relief: (x: number, z: number
   /** A step toward `to` at `pace`; true on arrival. */
   /** A step toward `to` (by the home's route's waypoints where it has them): true on arriving at `to` itself. */
   const walk = (p: { x: number; z: number }, to: Vec2, pace: number, dt: number): boolean => {
-    const w = home.route?.(p, to) ?? null, goal = w ?? to, d = dist(p, goal); if (d < 0.02) return !w;
+    const w0 = home.route?.(p, to) ?? null, w = w0 && dist(p, w0) < 0.02 ? null : w0, goal = w ?? to, d = dist(p, goal); if (d < 0.02) return !w;
     const m = Math.min(d, pace * dt); p.x += (goal.x - p.x) / d * m; p.z += (goal.z - p.z) / d * m; return !w && d - m < 0.02;
   };
   /** The way it faces walking from `from` to where it is now (or toward `to` if it has not moved). */

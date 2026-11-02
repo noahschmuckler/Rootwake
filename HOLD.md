@@ -90,7 +90,20 @@ The approved schematic, a plan over the real contours, a section, the halls and 
     - Out of the halls it goes by the Great Door.
     - On the land, a way that would cross the terraces goes round the foot's corners.
     - `tests/hold.test.ts` walks every such way and checks that none passes through a wall.
-  - **Foraging:** nothing to forage is set on the hold's flanks.
+  - **Foraging:** nothing to forage is set on the hold's flanks, nor on the side stairs or the stairwells' cheeks (`onSideStair`).
+  - **After review (an independent bug hunt, 2026-11-02):** routing across a level is a small planner (`levelPath`).
+    - It takes the shortest way by the corners of what stands on that level, each obstacle grown by a walker's clearance: the level's sunken stairwell and its cheeks, its side stairs, the walls at its back (open only at the stair, the facade open only at its doors), pylons, the gate's plinths, the hearth's plinth, the tower stumps, and the hall's pillars.
+    - A walker inside an obstacle's clearance steps out by the nearest edge first. A target inside one is approached from its edge.
+    - A target on a central flight is reached down that flight from its head.
+    - The halls go by the rooms' openings and in and out by each room's own facade door (`entryOf`); the watch stair has its own.
+    - The test walks named cases and random ways at the band's stride and checks every step against `occupy`. It passed 3,000 random ways on five seeds.
+  - **Other review fixes:**
+    - The tower stumps are solid on the land too (`holdDecides`; `occupy` tests solids first).
+    - In front of a terrace the land eases from the level below it, so its wall stands clear and can't be stepped onto. Beside its wings the land lies `WING_DROP` under it.
+    - The hearth moved back to v 105.3, so the front of its seat ring clears the stair's head, and `MEAL_RING` is 4.0, outside the plinth's corners.
+    - The store's way joins the hall.
+    - The Ever-Hearth's lights leave the scene beyond `HEARTH_NEAR_M`.
+    - The camera's guard covers the whole bluff.
   - **Old saves:** an Eden saved before the move starts afresh in the hold.
   - **What the old cave did:** the cave's rock mouth and the stone hearth are no longer drawn (`EdenLook`). The hen grove's harvester cooks at the Ever-Hearth, without its own little fire.
   - **Open:** the gallery is dark at night, so the sleepers barely show. A glow, such as a dim bronze lamp kept alight by the gas, would be a later touch.

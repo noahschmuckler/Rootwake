@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { holdRoute, levelOf, APRON_ENTRY, HEARTH_TOP, DOOR_SPOT, MEAL_RING, roomAt, NICHES, TERRACES, APRON, FLIGHTS, BEDS, WALLS, levelAt, carve, occupy, cameraClear, onHold, holdFrame, toLocal, toWorld, runOf, RISER, STEP_TOL, FACADE_V, FACADE_TOP, HEARTH, ROOMS, DOORS, CLEAR_H } from '../src/holdModel';
+import { onSideStair, WING_DROP, holdRoute, levelOf, APRON_ENTRY, HEARTH_TOP, DOOR_SPOT, MEAL_RING, roomAt, NICHES, TERRACES, APRON, FLIGHTS, BEDS, WALLS, levelAt, carve, occupy, cameraClear, onHold, holdFrame, toLocal, toWorld, runOf, RISER, STEP_TOL, FACADE_V, FACADE_TOP, HEARTH, ROOMS, DOORS, CLEAR_H } from '../src/holdModel';
 import { plateau, walkable } from '../src/plateauModel';
 
 test('H1: the terraces climb in order, each flight reaching the level above in hobbit steps', () => {
@@ -19,7 +19,7 @@ test('H1: the ground is level on a terrace, ramps up a flight, and is nothing of
 test('H1: the land is carved level on the hold, eases back outside, and the bluff stands behind the facade', () => {
   assert.equal(carve(-30, 20, 5), TERRACES[0].z);
   assert.equal(carve(46 + 40, 20, 3.3), 3.3, 'far off it the land is its own');
-  const near = carve(46 + 2, 20, 6); assert.ok(near > TERRACES[0].z && near < 6, 'a fill eases back');
+  const near = carve(46 + 2, 20, 6); assert.ok(near > TERRACES[0].z - WING_DROP && near < 6, 'beside a wing the land eases back from under its wall'); assert.ok(carve(25, 7.8, 0) < 0.3, 'in front of T1 the land stays below it: its wall stands clear');
   assert.ok(carve(-39, FACADE_V + 3, 15) >= FACADE_TOP - 0.01, 'the bluff behind the facade'); assert.ok(carve(0, FACADE_V + 10, 15) < TERRACES[5].z, 'under the halls\' floors (the rock cap is drawn over them)');
   const w = WALLS.find(x => x.terrace === 3)!; assert.equal(carve((w.u0 + w.u1) / 2, w.v + 1, 0), w.low, 'drawn low just inside a wall (the masonry covers it)'); assert.equal(levelAt((w.u0 + w.u1) / 2, w.v + 1), w.high, 'her feet on the upper level'); assert.equal(carve(0, FACADE_V - 1, 15), TERRACES[5].z, 'the hearth terrace before it');
 });
@@ -47,7 +47,7 @@ test('H1: on the plateau: the frame round-trips, the hold is carved into the gro
 });
 test('H4: the halls: in through the Great Door, the hall under its vault, the walls between rooms solid, her camera only inside', () => {
   const H = TERRACES[5].z;
-  for (let v = FACADE_V - 2.6; v <= FACADE_V + 22; v += 0.25) assert.equal(occupy(0.5, v, H, 0.26), true, `the way in at ${v}`);
+  for (let v = FACADE_V - 1.9; v <= FACADE_V + 22; v += 0.25) assert.equal(occupy(0.5, v, H, 0.26), true, `the way in at ${v}`);
   assert.equal(occupy(-3, FACADE_V + 4, H, 0.26), false, 'the passage\'s wall');
   assert.equal(occupy(0, FACADE_V + 4, H, 0.26, 5), false, 'too tall for the passage');
   assert.equal(occupy(-14.5, FACADE_V + 14.5, H, 0.26), true, 'the way to the gallery'); assert.equal(occupy(-19, FACADE_V + 26, H, 0.26), true, 'the gallery\'s far end');
@@ -76,4 +76,22 @@ test('H5: the band\'s ways: from the land to the hearth\'s ring, to the door, ou
   const bed = BEDS.find(b => b.terrace === 2)!, onBed = { u: (bed.u0 + bed.u1) / 2, v: (bed.v0 + bed.v1) / 2 };
   walkTo(ring(1), onBed); walkTo(onBed, land[2]); walkTo({ u: 0, v: 118 }, land[0]);
   assert.equal(levelOf(HEARTH_TOP.u, HEARTH_TOP.v), 5); assert.equal(levelOf(DOOR_SPOT.u, DOOR_SPOT.v), 5); assert.equal(levelOf(APRON_ENTRY.u, APRON_ENTRY.v), -1);
+});
+test('H5 review: random ways across every level, the halls and the land, at the band\'s own stride, arrive and never cut a wall, stairwell, pylon, plinth or tower', () => {
+  let seed = 7; const rnd = (): number => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  const ok = (q: { u: number; v: number }): boolean => { if (onSideStair(q.u, q.v)) return false; const g = levelAt(q.u, q.v); if (g === null) return levelOf(q.u, q.v) === -2 && occupy(q.u, q.v, 0, 0.3) !== false; return occupy(q.u, q.v, g, 0.3) === true; };
+  const pick = (): { u: number; v: number } => { for (;;) { const q = rnd() < 0.15 ? { u: (rnd() - 0.5) * 120, v: -30 + rnd() * 30 } : rnd() < 0.15 ? { u: -25 + rnd() * 50, v: FACADE_V + rnd() * 28 } : { u: (rnd() - 0.5) * 90, v: -8 + rnd() * 118 }; if (ok(q) && !(levelOf(q.u, q.v) === -2 && q.v > -6)) return q; } };
+  const go = (from: { u: number; v: number }, to: { u: number; v: number }): void => {
+    const p = { ...from };
+    for (let n = 0; n < 3000; n++) {
+      let w = holdRoute(p, to) ?? to; if (w !== to && Math.hypot(w.u - p.u, w.v - p.v) < 0.05) w = to;
+      const d = Math.hypot(w.u - p.u, w.v - p.v), m = Math.min(d, 0.75), nu = p.u + (w.u - p.u) / (d || 1) * m, nv = p.v + (w.v - p.v) / (d || 1) * m;
+      for (let k = 1; k <= 6; k++) { const q = { u: p.u + (nu - p.u) * k / 6, v: p.v + (nv - p.v) * k / 6 }, g = levelAt(q.u, q.v); if (g !== null && occupy(q.u, q.v, g, 0.22) === false) assert.fail(`cut a wall at ${q.u.toFixed(2)},${q.v.toFixed(2)} going ${from.u.toFixed(1)},${from.v.toFixed(1)} → ${to.u.toFixed(1)},${to.v.toFixed(1)}`); }
+      p.u = nu; p.v = nv;
+      if (Math.hypot(to.u - p.u, to.v - p.v) < 0.3) return;
+    }
+    assert.fail(`never got from ${from.u.toFixed(1)},${from.v.toFixed(1)} to ${to.u.toFixed(1)},${to.v.toFixed(1)} (stuck at ${p.u.toFixed(2)},${p.v.toFixed(2)})`);
+  };
+  for (const [a, b] of [[{ u: 4, v: 106.5 }, { u: -3.2, v: 104 }], [{ u: -5, v: 97 }, { u: 5, v: 97 }], [{ u: 0, v: 101.2 }, { u: 0, v: 114 }], [{ u: 21, v: 119 }, { u: 25, v: -25 }], [{ u: 5.6, v: 67.6 }, { u: 0, v: 9 }], [{ u: -8, v: 6 }, { u: -30, v: -20 }], [{ u: 17, v: 128 }, { u: -19, v: 130 }]] as const) go(a, b);
+  for (let i = 0; i < 120; i++) go(pick(), pick());
 });

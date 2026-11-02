@@ -6,7 +6,7 @@
 // merged per material: a handful of draws for the whole of it.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { TERRACES, APRON, FLIGHTS, BEDS, WALLS, PYLONS, TOWERS, GATE_PLINTHS, COLLAPSE, DOORS, HEARTH, HALLS_RECT, CAP_SKIRT, capTop, ROOMS, NICHES, NICHE_H, type Room, FACADE_V, FACADE_TOP, FACADE_HW, FACADE_D, STAIR_HW, CURB_H, levelAt, type HoldFrame, type Flight } from './holdModel';
+import { TERRACES, APRON, FLIGHTS, BEDS, WALLS, PYLONS, TOWERS, GATE_PLINTHS, COLLAPSE, DOORS, HEARTH, HALL_PILLARS, HALLS_RECT, CAP_SKIRT, capTop, ROOMS, NICHES, NICHE_H, type Room, FACADE_V, FACADE_TOP, FACADE_HW, FACADE_D, STAIR_HW, CURB_H, levelAt, type HoldFrame, type Flight } from './holdModel';
 import { mulberry32 } from './colors';
 import { createEverHearth, stoneBench, stoneTable, stoneDesk, blockSeat, stoneBedShelf, stoneBin, slabShelf } from './holdFurniture';
 
@@ -21,7 +21,7 @@ const MISSING = 0.1, MOSS_CLIMB = 0.9;
 /** A wall's thickness behind its face; a coping's lip past the face and its height; the bronze band under it. */
 const WALL_D = 0.8, COPE_LIP = 0.14, COPE_H = 0.14, BAND_H = 0.09;
 
-export interface HoldWorld { root: THREE.Group; update(time: number, dt: number, night: number): void; dispose(): void; readonly triangles: number; readonly draws: number }
+export interface HoldWorld { root: THREE.Group; /** `near`: she is near enough for the Ever-Hearth's lights to be in the scene. */ update(time: number, dt: number, night: number, near?: boolean): void; dispose(): void; readonly triangles: number; readonly draws: number }
 
 type Kind = 'stone' | 'bronze' | 'dark' | 'paving' | 'soil';
 export function createHoldWorld(parent: THREE.Object3D, frame: HoldFrame, datum: number, land: (x: number, z: number) => number, seed = 1): HoldWorld {
@@ -266,7 +266,7 @@ export function createHoldWorld(parent: THREE.Object3D, frame: HoldFrame, datum:
   }
   // The Long Hall: two rows of square pillars with a bronze band, ribs across the vault and over the rows.
   const hall = ROOMS.find(r => r.id === 'hall')!, top = floorY + hall.ceiling;
-  for (const u of [-6, 6]) for (const v of [FACADE_V + 11, FACADE_V + 15, FACADE_V + 19]) {
+  for (const { u, v } of HALL_PILLARS) {
     let y = floorY; while (y < top - 0.05) { const ch = Math.min(rr(0.8, 1.1), top - y); box('stone', u - 0.6, u + 0.6, y, y + ch - JOINT_W, v - 0.6, v + 0.6, roomStone(y, floorY)); y += ch; }
     box('stone', u - 0.75, u + 0.75, floorY, floorY + 0.45, v - 0.75, v + 0.75, inside(COPING)); box('stone', u - 0.75, u + 0.75, top - 0.5, top, v - 0.75, v + 0.75, inside(COPING));
     box('bronze', u - 0.64, u + 0.64, floorY + 4.6, floorY + 4.75, v - 0.64, v + 0.64, bronzeTint());
@@ -325,7 +325,7 @@ export function createHoldWorld(parent: THREE.Object3D, frame: HoldFrame, datum:
     paving: new THREE.MeshStandardMaterial({ map: paveTex, vertexColors: true, roughness: 1 }),
     soil: new THREE.MeshStandardMaterial({ map: soilTex, color: '#ffffff', roughness: 1 }),
   };
-  let triangles = 0, draws = 0; const geoms: THREE.BufferGeometry[] = [];
+  let triangles = 0, draws = 0, lit = true; const geoms: THREE.BufferGeometry[] = [];
   for (const k of Object.keys(parts) as Kind[]) {
     const list = parts[k]; if (!list.length) continue;
     for (const g of list) { for (const name of Object.keys(g.attributes)) if (!['position', 'normal', 'uv', 'color'].includes(name)) g.deleteAttribute(name); if (!g.attributes.uv) g.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2)); if (!g.attributes.color) paint(g, new THREE.Color(1, 1, 1)); }
@@ -336,7 +336,7 @@ export function createHoldWorld(parent: THREE.Object3D, frame: HoldFrame, datum:
   }
   return {
     root, get triangles() { return triangles; }, get draws() { return draws; },
-    update(time, dt, night) { hearth.update(time, dt, night); },
+    update(time, dt, night, near = true) { if (near !== lit) { lit = near; hearth.group.traverse(o => { if ((o as THREE.Light).isLight) o.visible = near; }); } if (near) hearth.update(time, dt, night); },
     dispose() { hearth.dispose(); root.removeFromParent(); geoms.forEach(g => g.dispose()); Object.values(mats).forEach(m => m.dispose()); paveTex.dispose(); soilTex.dispose(); },
   };
 }
