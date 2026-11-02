@@ -25,12 +25,14 @@ try{
   report.button=await page.evaluate(()=>window.__village.feel.whip.button);assert.ok(report.button,'the whip button is shown in the practice clearing');
   // Set foes down at (ahead, right) metres from her, the rest sent far off; their wind ups cleared and their hp topped up so a beat does not kill.
   const stage=ps=>page.evaluate(ps=>{const v=window.__village,yaw=v.player.yaw,l=v.herLocal(),f=v.player.feet(),ox=f.x-l.x,oz=f.z-l.z,fx=-Math.sin(yaw),fz=-Math.cos(yaw),rx=Math.cos(yaw),rz=-Math.sin(yaw);const ids=v.raiders().filter(r=>r.state==='hunting'&&!(r.choreo>0)).map(r=>r.id);ps.forEach(([a,b],i)=>{const x=l.x+fx*a+rx*b,z=l.z+fz*a+rz*b;if(ids[i]!==undefined)v.placeRaider(ids[i],x,z);else v.feel.spawn('wolf',x+ox,z+oz);});for(const id of ids.slice(ps.length))v.placeRaider(id,l.x+fx*40,l.z+fz*40);for(const r of v.live.raiders){r.biteClock=0;r.hp=Math.max(r.hp,20);}},ps);
+  // A screenshot is for the eye, not the check: the runner's SwiftShader can take longer than a screenshot's default wait.
+  const shot=n=>page.screenshot({path:`${out}/${n}.png`,timeout:120000}).catch(e=>console.warn('screenshot',n,String(e).split('\n')[0]));
   async function play(name,ps){
     await stage(ps);
     const start=await page.evaluate(()=>{const v=window.__village,l=v.herLocal();window.__hp=Object.fromEntries(v.raiders().map(r=>[r.id,r.hp]));window.__at=l;v.feel.whip.press();return v.feel.whip.flow;});
     assert.ok(start,`${name}: a figure starts`);assert.equal(start.figure,name);
     let maxRoll=0,maxLift=0;
-    for(let i=0;i<80;i++){const st=await page.evaluate(()=>{const v=window.__village;return {f:v.feel.whip.flow,poses:v.feel.whip.poses,flowing:v.defense.flowing};});for(const p of st.poses){maxRoll=Math.max(maxRoll,Math.abs(p.roll));maxLift=Math.max(maxLift,p.lift);}if(i%4===0)await page.screenshot({path:`${out}/${name}-${String(i).padStart(2,'0')}.png`});if(!st.f)break;}
+    for(let i=0;i<80;i++){const st=await page.evaluate(()=>{const v=window.__village;return {f:v.feel.whip.flow,poses:v.feel.whip.poses,flowing:v.defense.flowing};});for(const p of st.poses){maxRoll=Math.max(maxRoll,Math.abs(p.roll));maxLift=Math.max(maxLift,p.lift);}if(i%4===0)await shot(`${name}-${String(i).padStart(2,'0')}`);if(!st.f)break;}
     const end=await page.evaluate(t=>{const v=window.__village,l=v.herLocal();return {moved:Math.hypot(l.x-window.__at.x,l.z-window.__at.z),hurt:v.raiders().filter(r=>r.hp<window.__hp[r.id]).map(r=>r.id),held:v.raiders().filter(r=>r.choreo>0).map(r=>r.id),target:t,out:v.feel.whip.out};},start.target);
     return {start,maxRoll,maxLift,...end};
   }
