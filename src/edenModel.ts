@@ -121,7 +121,7 @@ function startAntic(e: Eden, h: EdenHobbit, rand: () => number, ctx: EdenCtx): v
   // A wander: to a flower, a rock or a tree near the hearth when there is one, else a spot at random.
   const k = rand(), pick = <T extends Vec2>(list: T[]): T | null => (list.length ? list[Math.floor(rand() * list.length)] : null);
   let at: Vec2 | null = null, then: AnticKind | undefined;
-  if (k < 0.3) { at = pick(e.flowers); then = 'smell'; } else if (k < 0.5) { at = pick(e.rocks); then = 'sit'; } else if (k < 0.65) { const t = pick(e.hosts.filter(t => dist(t, e.hearth) <= NAP_M)); if (t) { at = stepTo(t, toward(t, e.hearth), 0.7); then = 'nap'; } }
+  if (k < 0.3) { at = pick(e.flowers); then = 'smell'; } else if (k < 0.5) { at = pick(e.rocks); then = 'sit'; } else if (k < 0.65) { const t = pick(e.hosts.filter(t => dist(t, e.hearth) <= NAP_M)) ?? pick(e.rocks); /* no tree by the hearth (the Hearth-Hold): dozing against a sun-warmed stone */ if (t) { at = stepTo(t, toward(t, e.hearth), 0.7); then = 'nap'; } }
   if (!at) { const a = rand() * Math.PI * 2, d = 2 + rand() * (ANTIC_R - 2); at = { x: e.hearth.x + Math.cos(a) * d, z: e.hearth.z + Math.sin(a) * d }; then = undefined; if (!ctx.canStand(at.x, at.z)) return; }
   h.antic = { kind: 'wander', left: 200, at, then };
 }
