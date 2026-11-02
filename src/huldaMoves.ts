@@ -50,12 +50,14 @@ export const WHIP_CLIPS: WhipMove[] = ['whip-crack', 'whip-pull', 'sidestep-l', 
 export const FIGHT_CLIPS: MoveName[] = ['attack-1', 'attack-2', 'attack-3', 'heavy', 'cast-burst', 'cast-bind', 'hit', 'dodge', ...WHIP_CLIPS];
 /** Seconds to blend a move in and out. Tuning. */
 export const FADE_IN = 0.07, FADE_OUT = 0.16;
+/** F5a: a figure's clips follow one another closely, so each blends in more slowly than a pressed blow (a snap between whole-body poses read as a jolt on the phone). Tuning. */
+export const PLAY_FADE_IN = 0.15;
 const COMBO: MoveName[] = ['attack-1', 'attack-2', 'attack-3'];
 
 export type MoveEvent = { kind: 'start' | 'contact' | 'end'; move: MoveName; step: number };
 /** The timing of her moves, apart from any mixer. */
 export class MoveQueue {
-  current: { move: MoveName; t: number; contacted: boolean; step: number; rate?: number } | null = null;
+  current: { move: MoveName; t: number; contacted: boolean; step: number; rate?: number; fade?: number } | null = null;
   queued: { move: MoveName; step: number } | null = null;
   /** The blend weight of the move playing (0 when none), and what is fading out after one ended. */
   weight = 0;
@@ -78,7 +80,7 @@ export class MoveQueue {
     return this.offer({ move, step: 0 });
   }
   /** F5a: play a move now, cutting any other short, its window stretched to `dur` seconds (a figure's plan times it). */
-  play(move: MoveName, dur?: number): void { this.begin({ move, step: 0 }); const s = MOVES[move]; if (dur && dur > 0 && this.current) this.current.rate = (s.to - s.from) / dur; }
+  play(move: MoveName, dur?: number): void { this.begin({ move, step: 0 }); const s = MOVES[move]; if (dur && dur > 0 && this.current) this.current.rate = (s.to - s.from) / dur; if (this.current) this.current.fade = PLAY_FADE_IN; }
   /** A flinch: only when nothing else is playing (her blows are not broken by a bite). */
   flinch(): boolean { if (this.busy) return false; this.begin({ move: 'hit', step: 0 }); return true; }
   private offer(next: { move: MoveName; step: number }): boolean {
@@ -102,7 +104,7 @@ export class MoveQueue {
     const c = this.current;
     if (!c) { this.weight = Math.max(0, this.weight - dt / FADE_OUT); return out; }
     const spec = MOVES[c.move];
-    c.t += dt * (c.rate ?? spec.scale); this.weight = Math.min(1, this.weight + dt / FADE_IN);
+    c.t += dt * (c.rate ?? spec.scale); this.weight = Math.min(1, this.weight + dt / (c.fade ?? FADE_IN));
     if (!c.contacted && c.t >= spec.contact) { c.contacted = true; out.push({ kind: 'contact', move: c.move, step: c.step }); }
     if (this.queued && c.t >= spec.chain) { const q = this.queued; this.begin(q); out.push(...this.pending); this.pending = []; return out; }
     if (c.t >= spec.to) { out.push({ kind: 'end', move: c.move, step: c.step }); this.ending = { move: c.move, t: Math.min(c.t, spec.to), w: this.weight }; this.current = null; this.weight = 0; }

@@ -769,7 +769,8 @@ function landBlows(before: Map<number, number>, heavy: boolean): Blow | null {
   for (const r of village.raiders) {
     const was = before.get(r.id); if (was === undefined || r.hp >= was) continue;
     const killed = r.hp <= 0, dx = r.x - l.x, dz = r.z - l.z, d = Math.hypot(dx, dz) || 1, dir = new THREE.Vector3(dx / d, 0, dz / d);
-    world.react(r.id, dir.x, dir.z, (heavy ? 1.5 : 1) * (killed ? 1.6 : 1), killed && r.kind === 'wolf');
+    // F5a: a foe a whip figure carries is not pushed off its path (only a killed one is thrown).
+    if (killed || !(r.choreo && r.choreo > 0)) world.react(r.id, dir.x, dir.z, (heavy ? 1.5 : 1) * (killed ? 1.6 : 1), killed && r.kind === 'wolf');
     fx.blow(chestOf(r), dir, flecksOf(r), heavy || killed, killed ? 34 : undefined);
     const b: Blow = killed ? (foesNear(25) === 0 ? 'finale' : 'kill') : heavy ? 'heavy' : 'light'; if (!worst || rank.indexOf(b) > rank.indexOf(worst)) worst = b;
   }
@@ -966,6 +967,8 @@ const whip = createWhip(scene, { vine: HULDA_PALETTE.hair, leaf: HULDA_PALETTE.l
 let herFlow: Flow | null = null, flowYaw = 0, whipQueued = false, lastFigure: FigureName | null = null, whipOut = false, whipAim: { x: number; z: number } | null = null;
 /** How fast the camera comes round to her facing during a figure (1/s). Tuning: the brief's open question of framing a figure on a narrow screen. */
 const WHIP_CAM_TURN = 3.2;
+/** The longest hit-stop and the most camera trauma a blow inside a figure may leave. Tuning. */
+const FLOW_STOP = 0.03, FLOW_TRAUMA = 0.18;
 const flows: Flow[] = [], whipPose = new Map<number, { lift: number; roll: number }>();
 const whipBtn: HTMLButtonElement | null = WHIP_ON ? (() => { const b = document.createElement('button'); b.id = 'whip'; b.setAttribute('aria-label', 'Whip: a figure on the foe the stick points to'); b.innerHTML = '<span>whip</span>'; document.getElementById('fight')?.insertBefore(b, fightEl.strike); return b; })() : null;
 /** The stick's way in the world (relative to the camera), or null when it is not pushed. */
@@ -990,12 +993,15 @@ function startFigure(aim: { x: number; z: number } | null): boolean {
 function whipBeat(b: Beat): void {
   const r = village.raiders.find(x => x.id === b.foe), f = player.feet(), at = r ? chestOf(r) : new THREE.Vector3(f.x, f.y + 1, f.z), l = herLocal();
   const dir = r ? new THREE.Vector3(r.x - l.x, 0, r.z - l.z).normalize() : new THREE.Vector3(0, 0, -1);
-  if (b.kind === 'lash') { sound.crack(); fx.glint(at, '#f4ffb0', 0.5); fx.spray(at, dir.clone().negate(), 'leaf', 6, 2); impact.hit('light', 0.4); if (r) world.react(r.id, -dir.x, -dir.z, 0.6); return; }
+  // The lash, the haul and the landing are felt by sound and sparks, never by a stop: a figure that froze at each beat stuttered (Noah's play, 2026-11-02).
+  if (b.kind === 'lash') { sound.crack(); fx.glint(at, '#f4ffb0', 0.5); fx.spray(at, dir.clone().negate(), 'leaf', 6, 2); return; }
   if (b.kind === 'haul' || b.kind === 'cross') { if (b.kind === 'haul') sound.haul(); else { swingSide = -swingSide; sound.whoosh(swingSide); } return; }
-  if (b.kind === 'land') { if (r) { const p = new THREE.Vector3(r.x + ctx.ox, 0, r.z + ctx.oz); p.y = relief(p.x, p.z) + 0.05; fx.spray(p, new THREE.Vector3(0, 1, 0), 'soil', 16, 2.6); fx.ring(p, 1.3, '#c9a24a'); } sound.thud(true); impact.hit('light', 0.8); return; }
+  if (b.kind === 'land') { if (r) { const p = new THREE.Vector3(r.x + ctx.ox, 0, r.z + ctx.oz); p.y = relief(p.x, p.z) + 0.05; fx.spray(p, new THREE.Vector3(0, 1, 0), 'soil', 16, 2.6); fx.ring(p, 1.3, '#c9a24a'); } sound.thud(true); return; }
   const before = new Map(village.raiders.map(x => [x.id, x.hp]));
   lash(village, b.foe, b.dmg); if (b.other !== undefined) lash(village, b.other, b.dmg);
   landBlows(before, b.kind !== 'skid');
+  // A blow inside a figure stops the world only a moment and jolts the camera a little (the last foe's slow motion is kept).
+  impact.stop = Math.min(impact.stop, FLOW_STOP); impact.trauma = Math.min(impact.trauma, FLOW_TRAUMA);
   if (b.kind === 'skid' && r) { const p = new THREE.Vector3(r.x + ctx.ox, 0, r.z + ctx.oz); p.y = relief(p.x, p.z) + 0.05; fx.spray(p, dir, 'soil', 12, 2.2); }
   save();
 }
