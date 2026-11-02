@@ -29,12 +29,13 @@ try{
   const shot=n=>page.screenshot({path:`${out}/${n}.png`,timeout:120000}).catch(e=>console.warn('screenshot',n,String(e).split('\n')[0]));
   async function play(name,ps){
     await stage(ps);
-    const start=await page.evaluate(()=>{const v=window.__village,l=v.herLocal();window.__hp=Object.fromEntries(v.raiders().map(r=>[r.id,r.hp]));window.__at=l;v.feel.whip.press();return v.feel.whip.flow;});
+    const start=await page.evaluate(()=>{const v=window.__village,l=v.herLocal();window.__hp=Object.fromEntries(v.raiders().map(r=>[r.id,r.hp]));window.__at=l;window.__pose={roll:0,lift:0,held:[]};const watch=()=>{if(!v.feel.whip.flow)for(const r of v.live.raiders)if(r.choreo>0&&!window.__pose.held.includes(r.id))window.__pose.held.push(r.id);for(const p of v.feel.whip.poses){window.__pose.roll=Math.max(window.__pose.roll,Math.abs(p.roll));window.__pose.lift=Math.max(window.__pose.lift,p.lift);}if(v.feel.whip.flow||v.feel.whip.poses.length)requestAnimationFrame(watch);};requestAnimationFrame(watch);v.feel.whip.press();return v.feel.whip.flow;});
     assert.ok(start,`${name}: a figure starts`);assert.equal(start.figure,name);
     let maxRoll=0,maxLift=0;
     for(let i=0;i<80;i++){const st=await page.evaluate(()=>{const v=window.__village;return {f:v.feel.whip.flow,poses:v.feel.whip.poses,flowing:v.defense.flowing};});for(const p of st.poses){maxRoll=Math.max(maxRoll,Math.abs(p.roll));maxLift=Math.max(maxLift,p.lift);}if(i%4===0)await shot(`${name}-${String(i).padStart(2,'0')}`);if(!st.f)break;}
-    const end=await page.evaluate(t=>{const v=window.__village,l=v.herLocal();return {moved:Math.hypot(l.x-window.__at.x,l.z-window.__at.z),hurt:v.raiders().filter(r=>r.hp<window.__hp[r.id]).map(r=>r.id),held:v.raiders().filter(r=>r.choreo>0).map(r=>r.id),target:t,out:v.feel.whip.out};},start.target);
-    return {start,maxRoll,maxLift,...end};
+    const end=await page.evaluate(t=>{const v=window.__village,l=v.herLocal();return {seen:window.__pose,moved:Math.hypot(l.x-window.__at.x,l.z-window.__at.z),hurt:v.raiders().filter(r=>r.hp<window.__hp[r.id]).map(r=>r.id),held:[...new Set([...v.raiders().filter(r=>r.choreo>0).map(r=>r.id),...window.__pose.held])],target:t,out:v.feel.whip.out};},start.target);
+    // Every frame's pose, recorded in the page (a slow runner's screenshots span many frames).
+    return {start,...end,maxRoll:Math.max(maxRoll,end.seen.roll),maxLift:Math.max(maxLift,end.seen.lift)};
   }
   report.matador=await play('matador',[[6,0]]);
   assert.ok(report.matador.hurt.includes(report.matador.target),'the clothesline hurts it');
