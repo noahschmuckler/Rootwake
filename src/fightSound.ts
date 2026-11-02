@@ -54,6 +54,10 @@ export class FightSound {
   growl(): void { this.tone('sawtooth', 62, 90, 0.42, 0.16, 0, 0.08); this.tone('sawtooth', 93, 128, 0.4, 0.08, 0.02, 0.08); this.hiss(0.6, 0.42, 0.22, 'bandpass', [300, 700, 400], 2.5); }
   /** F3: a bite taken on her guard: a hard wooden knock. */
   block(): void { this.tone('triangle', 420, 260, 0.08, 0.5); this.tone('sine', 140, 80, 0.16, 0.6); this.hiss(0.05, 0.08, 0.5, 'bandpass', [2400, 1600, 900], 2); }
+  /** F5a: the whip: a rising swish as the lash flies out, then the crack (a sharp broadband snap with a high ring). */
+  crack(): void { this.hiss(0.85, 0.16, 0.35, 'bandpass', [600, 3200, 2600], 1.4); this.hiss(0.04, 0.05, 1.0, 'highpass', [2600, 5200, 3000], 0.8, 0.15); this.tone('square', 3200, 1400, 0.035, 0.18, 0.15, 0.001); this.hiss(0.1, 0.22, 0.25, 'bandpass', [4000, 2200, 900], 2.2, 0.17); }
+  /** F5a: the haul: the vine drawn taut and creaking. */
+  haul(): void { this.tone('sawtooth', 120, 190, 0.22, 0.12, 0, 0.03); this.hiss(0.5, 0.25, 0.3, 'bandpass', [700, 1500, 500], 2); }
   /** F3: the roll. */
   roll(): void { this.hiss(0.4, 0.32, 0.4, 'lowpass', [400, 1400, 300], 0.8); }
   /** A splash (STAGS.md pass 4, the stag wading): a plunge's thump under a bright wet hiss; `heavy` is the step into the river, else a stride's slap. */

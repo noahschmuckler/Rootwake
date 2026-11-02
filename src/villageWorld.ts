@@ -235,11 +235,16 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
     const sq = Math.exp(-t * 14) * 0.16; group.scale.y *= 1 - sq; group.scale.x *= 1 + sq * 0.6; group.scale.z *= 1 + sq * 0.6;
     if (t < REACT_FLASH_S) { hide.emissive.setRGB(1.4, 1.35, 1.2); } else hide.emissive.set(hurt > 0 ? '#b03030' : '#000000');
   }
+  /** F5a (WHIP.md): a figure of the whip holds raider `id` off the ground by `lift` (m) and rolled onto its side by `roll` (rad, about its own length). Called after it is placed, each frame it is held. */
+  function pose(id: number, lift: number, roll: number): void {
+    const g = [raiderFigures.get(id)?.group, direFigures.get(id)?.group, wolfFigures.get(id)?.group].find(x => x?.visible); if (!g) return;
+    g.position.y += lift + Math.abs(Math.sin(roll)) * 0.18; if (roll) g.rotateX(roll);
+  }
   function stepReacts(dt: number): void { for (const [id, r] of reacts) { r.age += dt; if (r.age > (r.killed ? 6 : 0.8)) reacts.delete(id); } }
   /** Place and animate a Dark Young: its gait, its tell and blows, the roots' hold, its flight flat on its arms (`flat`), its feeding at a store or a place (`feed`), its death; then the blow's reaction. */
   function setRaider(id: number, x: number, z: number, heading: number, t: number, moving: boolean, hurt: number, rooted: number, dead: number, flat = false, tell = 0, feed = false): void {
     const f = raiderFigure(id), dt = Number.isNaN(f.t) ? 0 : (t - f.t) / 1000; f.t = t;
-    f.group.visible = true; f.group.position.set(x, relief(x, z), z); f.group.rotation.y = -heading; f.group.scale.setScalar(DY_SCALE);
+    f.group.visible = true; f.group.position.set(x, relief(x, z), z); f.group.rotation.set(0, -heading, 0); f.group.scale.setScalar(DY_SCALE);
     f.dy.update(x, z, { moving, tell, rooted, dead, flat, feed }, dt);
     f.coil.visible = rooted > 0 && dead <= 0; f.coil.scale.setScalar(1 + Math.sin(t * 0.01) * 0.05);
     applyReact(id, f.group, f.hide, hurt);
@@ -263,12 +268,12 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
     if (dire) {
       const g = wolfFigures.get(id); if (g) g.group.visible = false;
       const f = direFigure(id), dt = Number.isNaN(f.t) ? 0 : (t - f.t) / 1000; f.t = t;
-      f.group.visible = true; f.group.position.set(x, relief(x, z), z); f.group.rotation.y = -heading; f.group.scale.setScalar(DIRE_SCALE);
+      f.group.visible = true; f.group.position.set(x, relief(x, z), z); f.group.rotation.set(0, -heading, 0); f.group.scale.setScalar(DIRE_SCALE);
       f.dw.update(x, z, { moving, tell, rooted, dead }, dt, t / 1000); f.coil.visible = rooted > 0 && dead <= 0;
       applyReact(id, f.group, f.dw.hide, hurt); return;
     }
     { const d = direFigures.get(id); if (d) d.group.visible = false; }
-    const f = wolfFigure(id); if (f.dire !== dire) { f.dire = dire; setDireLook(f, dire); } f.group.visible = true; f.group.position.set(x, relief(x, z), z); f.group.rotation.y = -heading;
+    const f = wolfFigure(id); if (f.dire !== dire) { f.dire = dire; setDireLook(f, dire); } f.group.visible = true; f.group.position.set(x, relief(x, z), z); f.group.rotation.set(0, -heading, 0);
     for (let i = 0; i < f.legs.length; i++) f.legs[i].rotation.z = moving ? Math.sin(t * 0.014 + i * 1.6) * 0.5 : 0;
     f.tail.rotation.x = Math.sin(t * 0.005 + id) * 0.25; f.coil.visible = rooted > 0;
     if (dead > 0) { f.group.rotation.z = Math.min(1.5, dead * 3); f.group.position.y = relief(x, z) - Math.max(0, dead - 4) * 0.2; } else f.group.rotation.z = -tell * 0.2;
@@ -386,6 +391,6 @@ export function buildVillage(scene: THREE.Scene, terrain: Terrain = createTerrai
     while (markPool.length < list.length) { const mat = new THREE.MeshBasicMaterial({ color: '#e0603a', transparent: true, opacity: 0.85, depthWrite: false }), shaftMat = new THREE.MeshBasicMaterial({ color: '#e0603a', transparent: true, opacity: 0.3, depthWrite: false, side: THREE.DoubleSide }); const group = new THREE.Group(); group.name = 'incident-mark'; const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.06, 8, 40), mat); ring.rotation.x = Math.PI / 2; ring.position.y = 0.08; const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.16, 9, 8, 1, true), shaftMat); shaft.position.y = 4.5; group.add(ring, shaft); root.add(group); markPool.push({ group, ring, shaft, mat, shaftMat }); }
     markPool.forEach((m, i) => { const d = list[i]; m.group.visible = !!d; if (!d) return; m.group.position.set(d.x, relief(d.x, d.z), d.z); m.mat.color.set(d.colour); m.shaftMat.color.set(d.colour); m.shaft.visible = d.shaft; const k = (d.r ?? 1) * (1 + 0.12 * Math.sin(t * 0.006)); m.ring.scale.set(k, k, 1); });
   }
-  return { root, origin: { x: ox, z: oz }, relief, setMarks, setHedges, setStag, setTrail, setWolf, setHouses, setSite, setSnatcher, hideSnatchersBut, setInfants, setSacs, colliders, get figures() { return livingNow.map(figureFor); }, figureFor, setFigureClips, figure, mass, update, updateLand, updatePrayer, armfuls, setRaider, hideRaider, react, lunge, flashSlash, flashBurst, updateStrokes, setLairAt, setLair, setStation, get activeStation() { return activeStation; }, setStack, stack, spiritFigure, spiritFigures, stream, crownPoint, trunkPoint };
+  return { root, origin: { x: ox, z: oz }, relief, setMarks, setHedges, setStag, setTrail, setWolf, setHouses, setSite, setSnatcher, hideSnatchersBut, setInfants, setSacs, colliders, get figures() { return livingNow.map(figureFor); }, figureFor, setFigureClips, figure, mass, update, updateLand, updatePrayer, armfuls, setRaider, hideRaider, react, lunge, pose, flashSlash, flashBurst, updateStrokes, setLairAt, setLair, setStation, get activeStation() { return activeStation; }, setStack, stack, spiritFigure, spiritFigures, stream, crownPoint, trunkPoint };
 }
 export type VillageWorld = ReturnType<typeof buildVillage>;

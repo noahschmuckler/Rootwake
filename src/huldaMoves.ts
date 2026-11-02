@@ -9,7 +9,9 @@
 import * as THREE from 'three';
 import type { Gait } from './huldaRig';
 
-export type MoveName = 'attack-1' | 'attack-2' | 'attack-3' | 'heavy' | 'cast-burst' | 'cast-bind' | 'hit' | 'dodge';
+export type MoveName = 'attack-1' | 'attack-2' | 'attack-3' | 'heavy' | 'cast-burst' | 'cast-bind' | 'hit' | 'dodge' | WhipMove;
+/** F5a (WHIP.md): the whip's clips, played by a figure's plan (`play`) for the time the plan gives them, not pressed. */
+export type WhipMove = 'whip-crack' | 'whip-pull' | 'sidestep-l' | 'sidestep-r' | 'cartwheel';
 export type Press = 'light' | 'heavy' | 'burst' | 'bind' | 'dodge';
 export interface MoveSpec {
   /** Clip seconds: where it starts, where the blow lands, from when the next move may start, where it ends. */
@@ -27,6 +29,13 @@ export const MOVES: Record<MoveName, MoveSpec> = {
   hit: { from: 0.0, contact: 0.15, chain: 0.4, to: 0.7, scale: 1.2 },
   // F3: the dive roll from just before the dive; its contact is where she becomes untouchable (EVADE_TO ends it), its chain where the next move may start.
   dodge: { from: 0.55, contact: 0.6, chain: 1.75, to: 2.0, scale: 2.2 },
+  // F5a: windows read off the clips' hand speed (scripts in WHIP.md "F5a as built"). The lash cracks at 0.6; the pull is the first haul of Mixamo's
+  // 14.7 s rope pull; the sidesteps are Dodging Right and its mirror; the cartwheel without its run up and settle. Their rate is the plan's.
+  'whip-crack': { from: 0.15, contact: 0.6, chain: 0.85, to: 1.0, scale: 1 },
+  'whip-pull': { from: 1.95, contact: 2.35, chain: 2.8, to: 2.95, scale: 1 },
+  'sidestep-l': { from: 0.1, contact: 0.5, chain: 1.0, to: 1.25, scale: 1 },
+  'sidestep-r': { from: 0.1, contact: 0.3, chain: 1.0, to: 1.25, scale: 1 },
+  cartwheel: { from: 0.25, contact: 1.1, chain: 2.6, to: 2.85, scale: 1 },
 };
 /** F3: the dodge's untouchable window ends at this clip time (the roll's middle). Tuning. */
 export const EVADE_TO = 1.45;
@@ -37,7 +46,8 @@ export function dodgeProgress(t: number): number {
   const z = (x: number): number => { const k = DODGE_TRAVEL; if (x <= k[0][0]) return k[0][1]; for (let i = 1; i < k.length; i++) if (x <= k[i][0]) { const [t0, z0] = k[i - 1], [t1, z1] = k[i]; return z0 + (z1 - z0) * (x - t0) / (t1 - t0); } return k[k.length - 1][1]; };
   const a = z(MOVES.dodge.from), b = z(MOVES.dodge.to); return Math.max(0, Math.min(1, (z(t) - a) / (b - a)));
 }
-export const FIGHT_CLIPS: MoveName[] = ['attack-1', 'attack-2', 'attack-3', 'heavy', 'cast-burst', 'cast-bind', 'hit', 'dodge'];
+export const WHIP_CLIPS: WhipMove[] = ['whip-crack', 'whip-pull', 'sidestep-l', 'sidestep-r', 'cartwheel'];
+export const FIGHT_CLIPS: MoveName[] = ['attack-1', 'attack-2', 'attack-3', 'heavy', 'cast-burst', 'cast-bind', 'hit', 'dodge', ...WHIP_CLIPS];
 /** Seconds to blend a move in and out. Tuning. */
 export const FADE_IN = 0.07, FADE_OUT = 0.16;
 const COMBO: MoveName[] = ['attack-1', 'attack-2', 'attack-3'];
@@ -45,7 +55,7 @@ const COMBO: MoveName[] = ['attack-1', 'attack-2', 'attack-3'];
 export type MoveEvent = { kind: 'start' | 'contact' | 'end'; move: MoveName; step: number };
 /** The timing of her moves, apart from any mixer. */
 export class MoveQueue {
-  current: { move: MoveName; t: number; contacted: boolean; step: number } | null = null;
+  current: { move: MoveName; t: number; contacted: boolean; step: number; rate?: number } | null = null;
   queued: { move: MoveName; step: number } | null = null;
   /** The blend weight of the move playing (0 when none), and what is fading out after one ended. */
   weight = 0;
@@ -67,6 +77,8 @@ export class MoveQueue {
     const move: MoveName = p === 'heavy' ? 'heavy' : p === 'burst' ? 'cast-burst' : 'cast-bind';
     return this.offer({ move, step: 0 });
   }
+  /** F5a: play a move now, cutting any other short, its window stretched to `dur` seconds (a figure's plan times it). */
+  play(move: MoveName, dur?: number): void { this.begin({ move, step: 0 }); const s = MOVES[move]; if (dur && dur > 0 && this.current) this.current.rate = (s.to - s.from) / dur; }
   /** A flinch: only when nothing else is playing (her blows are not broken by a bite). */
   flinch(): boolean { if (this.busy) return false; this.begin({ move: 'hit', step: 0 }); return true; }
   private offer(next: { move: MoveName; step: number }): boolean {
@@ -90,7 +102,7 @@ export class MoveQueue {
     const c = this.current;
     if (!c) { this.weight = Math.max(0, this.weight - dt / FADE_OUT); return out; }
     const spec = MOVES[c.move];
-    c.t += dt * spec.scale; this.weight = Math.min(1, this.weight + dt / FADE_IN);
+    c.t += dt * (c.rate ?? spec.scale); this.weight = Math.min(1, this.weight + dt / FADE_IN);
     if (!c.contacted && c.t >= spec.contact) { c.contacted = true; out.push({ kind: 'contact', move: c.move, step: c.step }); }
     if (this.queued && c.t >= spec.chain) { const q = this.queued; this.begin(q); out.push(...this.pending); this.pending = []; return out; }
     if (c.t >= spec.to) { out.push({ kind: 'end', move: c.move, step: c.step }); this.ending = { move: c.move, t: Math.min(c.t, spec.to), w: this.weight }; this.current = null; this.weight = 0; }
@@ -100,7 +112,7 @@ export class MoveQueue {
 
 /** The bones a move keeps while she runs: spine up, arms and hands. */
 const UPPER = /Spine|Neck|Head|Shoulder|Arm|Hand/;
-export interface MoveLayer { queue: MoveQueue; press(p: Press): boolean; flinch(): boolean; /** F3: hold the guard stance while no move plays. */ guard: boolean; update(dt: number, moving: number): MoveEvent[]; readonly playing: MoveName | null; dispose(): void }
+export interface MoveLayer { queue: MoveQueue; press(p: Press): boolean; /** F5a: play a whip clip for `dur` seconds; false without it. */ play(move: MoveName, dur?: number): boolean; readonly has: (move: MoveName) => boolean; flinch(): boolean; /** F3: hold the guard stance while no move plays. */ guard: boolean; update(dt: number, moving: number): MoveEvent[]; readonly playing: MoveName | null; dispose(): void }
 /** Put the moves' clips (named after their files) on the gait's mixer. */
 export function createMoveLayer(gait: Gait, root: THREE.Object3D, clips: THREE.AnimationClip[]): MoveLayer {
   const queue = new MoveQueue(), full = new Map<MoveName, THREE.AnimationAction>(), upper = new Map<MoveName, THREE.AnimationAction>();
@@ -132,6 +144,6 @@ export function createMoveLayer(gait: Gait, root: THREE.Object3D, clips: THREE.A
     return events;
   }
   function dispose(): void { for (const a of [...full.values(), ...upper.values()]) { a.stop(); gait.mixer.uncacheAction(a.getClip(), root); } gait.suppress = 0; }
-  const layer: MoveLayer = { queue, guard: false, press: p => full.has(p === 'dodge' ? 'dodge' : 'attack-1') && queue.press(p), flinch: () => full.has('hit') && queue.flinch(), update, get playing() { return queue.current?.move ?? null; }, dispose };
+  const layer: MoveLayer = { queue, guard: false, press: p => full.has(p === 'dodge' ? 'dodge' : 'attack-1') && queue.press(p), play: (m, dur) => { if (!full.has(m)) return false; queue.play(m, dur); return true; }, has: m => full.has(m), flinch: () => full.has('hit') && queue.flinch(), update, get playing() { return queue.current?.move ?? null; }, dispose };
   return layer;
 }
