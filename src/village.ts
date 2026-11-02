@@ -11,7 +11,7 @@ import { catwalk as catwalkAt } from './descentModel';
 import { makePortal } from './portalFigure';
 import { plateau, walkable, FOOTBRIDGE_OVER, WADE_DEPTH } from './plateauModel';
 import { createHoldWorld, type HoldWorld } from './holdWorld';
-import { holdRoute, holdDecides, onSideStair, DOOR_SPOT, APRON_ENTRY, MEAL_RING, NICHES, HEARTH as HOLD_HEARTH, headingOf as holdHeading, toLocal as holdLocal, toWorld as holdWorldAt, occupy as holdOccupy, cameraClear as holdCamClear, TERRACES as HOLD_TERRACES, APRON as HOLD_APRON } from './holdModel';
+import { holdRoute, holdDecides, onSideStair, DOOR_SPOT, APRON_ENTRY, MEAL_RING, NICHES, HEARTH as HOLD_HEARTH, headingOf as holdHeading, toLocal as holdLocal, toWorld as holdWorldAt, occupy as holdOccupy, surfacesAt as holdSurfacesAt, cameraClear as holdCamClear, TERRACES as HOLD_TERRACES, APRON as HOLD_APRON } from './holdModel';
 import { buildWaterworks } from './plateauWorld';
 import { chooseDire, freshSteward, parseSteward, serializeSteward, wake as wakeUp, send as sendSteward, stepSteward, bite as biteSteward, lyingUp, leftToWalk, WAKE_GEMS, PACE as STEWARD_PACE, type Steward, type Circle } from './stewardModel';
 import { setMoot, setHeroes, assignDuty, guards, hunters, traitsOf, traitWords, GUARDS_MAX, HUNTERS_MAX, setOwnWarrens, huntingGround, groundRabbits, buildRack, RACK_WOOD, searchers, setSearch, setSearchFound, searchParty, SEARCHERS_MAX, setDire, isDire, direDen, DIRE_HP, DEN_REACH_M, bearingWords, bearingFromGreen, setWallows, setQuarry, wallowOf, type Duty } from './villageModel';
@@ -338,8 +338,11 @@ let wadeLimit = WADE_DEPTH;
 const walkableAt = (x: number, z: number): boolean => walkable(plateau(home.seed), x, z, wadeLimit);
 // The Hearth-Hold's ground: its terraces and stairs exactly, its walls where the ground under a body's edge rises past a step (holdModel.occupy).
 const holdCameraClear = (p: THREE.Vector3): boolean => { const h = plateau(home.seed).hold, q = holdLocal(h.frame, p.x, p.z); return holdCamClear(q.u, q.v, p.y - h.datum); };
-const holdSurfaces = (x: number, z: number): number[] | null => { const l = plateau(home.seed).hold.levelAt(x, z); return l === null ? null : [l]; };
-const holdCan = (p: THREE.Vector3, radius: number): boolean | null => { const h = plateau(home.seed).hold, q = holdLocal(h.frame, p.x, p.z); if (!holdDecides(q.u, q.v, radius + 0.5)) return null; const r = holdOccupy(q.u, q.v, p.y - h.datum, radius); return r ?? null; };
+const holdSurfaces = (x: number, z: number): number[] | null => { const h = plateau(home.seed).hold, q = holdLocal(h.frame, x, z), s = holdSurfacesAt(q.u, q.v); return s === null ? null : s.map(y => y + h.datum); };
+/** The band walks through the hold's props (its seats, the furniture, the scree: hobbit-sized, and their meal ring runs among the hearth's
+ * seats); Hulda and her stag don't. Set while the band asks whether it can stand somewhere. */
+let bandAsks = false;
+const holdCan = (p: THREE.Vector3, radius: number): boolean | null => { const h = plateau(home.seed).hold, q = holdLocal(h.frame, p.x, p.z); if (!holdDecides(q.u, q.v, radius + 0.5)) return null; const r = holdOccupy(q.u, q.v, p.y - h.datum, radius, 1.7, !bandAsks); return r ?? null; };
 const groundWorld: TraversalWorld = {
   // The land is unbounded: the meadow, and past it the chunks (chunkWorld), whose trees the model's lookups see through setTreeProvider.
   // The land is unbounded: the meadow, and past it the chunks (chunkWorld), whose trees the model's lookups see through setTreeProvider; where the karst stands, its own zone worlds are her ground (karstFeature).
@@ -1215,7 +1218,7 @@ descentVisit.stationAct = st => (OPENING && st.keeper === 'snerk' && descentVisi
 // ===== E1 (EDEN.md): the Eden. The cave at the mountain's foot on the first village's bearing from the karst (where the belt's rise passes CAVE_INTO m), its hearth before it; the hosts are the chunks' trees within FORAGE_R of the hearth the band can walk to; berries a few spots; the pack's rest along the foot. Saved under its own key; stepped on the day's ticks in place of the villages. =====
 // The band lives in the Hearth-Hold (HOLD.md, H5): its ways about the hold go by the processional stair (holdModel.holdRoute).
 const holdVia = (from: { x: number; z: number }, to: { x: number; z: number }): { x: number; z: number } | null => { const f = plateau(home.seed).hold.frame, w = holdRoute(holdLocal(f, from.x, from.z), holdLocal(f, to.x, to.z)); return w ? holdWorldAt(f, w.u, w.v) : null; };
-const edenCtx = { canStand: (x: number, z: number) => standable(x, z) && (() => { const q = holdLocal(plateau(home.seed).hold.frame, x, z); return !onSideStair(q.u, q.v); })(), via: holdVia };
+const edenCtx = { canStand: (x: number, z: number) => { bandAsks = true; try { if (!standable(x, z)) return false; } finally { bandAsks = false; } const q = holdLocal(plateau(home.seed).hold.frame, x, z); return !onSideStair(q.u, q.v); }, via: holdVia };
 /** The band's home in the hold: its "cave" before the Great Door (facing out), the Ever-Hearth, the ring it eats round it at, and the apron it reaches the land from. */
 const holdHome = (): { cave: { x: number; z: number; dir: number }; hearth: { x: number; z: number }; from: { x: number; z: number }; ring: number } => { const f = plateau(home.seed).hold.frame; return { cave: { ...holdWorldAt(f, DOOR_SPOT.u, DOOR_SPOT.v), dir: f.dir }, hearth: holdWorldAt(f, HOLD_HEARTH.u, HOLD_HEARTH.v), from: holdWorldAt(f, APRON_ENTRY.u, APRON_ENTRY.v), ring: MEAL_RING }; };
 /** The cave: the Hearth-Hold's mouth (plateauModel.hold.cave), on the first village's bearing from the karst where the belt has risen CAVE_INTO m. */

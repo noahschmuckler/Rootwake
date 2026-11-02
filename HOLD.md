@@ -107,6 +107,15 @@ The approved schematic, a plan over the real contours, a section, the halls and 
   - **Old saves:** an Eden saved before the move starts afresh in the hold.
   - **What the old cave did:** the cave's rock mouth and the stone hearth are no longer drawn (`EdenLook`). The hen grove's harvester cooks at the Ever-Hearth, without its own little fire.
   - **Open:** the gallery is dark at night, so the sleepers barely show. A glow, such as a dim bronze lamp kept alight by the gas, would be a later touch.
+- **Play feedback (Noah, 2026-11-02, from the phone: "altogether a triumph"):**
+  - **Solid, climbable props** (`holdModel.holdProps`): the halls' furniture (now data, `FURNITURE`, that holdWorld draws), the Ever-Hearth's plinth tiers, bowl and seven seats, its gas line (a step) and valve, the great door's two leaves, the gate's plinths and fallen lintel, the fallen pylon and the scree. Each is a turned box with a walkable top: `occupy` refuses a body in one taller than a step, and `surfacesAt` offers its top to the walk and the parkour. Her parkour vaults the benches, clambers onto the seats and scree and climbs the lintel (tested).
+  - **The band walks among them.** The hobbits' meal ring runs among the hearth's seats, so the band asks `occupy` without the props (`bandAsks` in village.ts). Their routes are unchanged.
+  - **The scree** is now the fallen courses as blocks: heaped against the walls the collapse took (T4's, T5's and the hearth terrace's), high by the wall and lower out from it, a rough stair up, with loose blocks strewn over the slid wings and chips among them. It used to be spiky shards a body passed through.
+  - **The great door's leaves** swing inward into the passage, as the comment always said. They had stood out on the hearth terrace.
+  - **The shimmer:** the facade's solid core had filled the doorways' reveals and the store's front wall, in one plane with their blocks. It is now built round the rooms, below their ceiling slabs, and behind the sealed door's slab, not in front of it. That slab had hidden the door: what showed was the core. A wall's blocks never sit behind its face plane now, the core over a hole starts a hair above the hole's top (the soffit is the ceiling slab's), and the doors' jambs stand proud of the reveal.
+  - **The masonry's core** is dark stone now, not near-black, so a missing block reads as a recess. In the collapse it is rubble-coloured.
+  - **The stairs:** a terrace's paving stops at its central flight and the flight's cheeks. It had been laid over the stair, so going down she sank through it. That was also the "sinking by the tower" (a lantern pylon at a stair).
+  - **Bronze** is brighter and less metallic (`#b27c40`, metalness 0.25). With nothing to reflect, metal read as black.
 - **Later:** the irrigation quest; the engravings and paintings.
 
 ## Notes and open

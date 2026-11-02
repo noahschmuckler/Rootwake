@@ -1,7 +1,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { onSideStair, WING_DROP, holdRoute, levelOf, APRON_ENTRY, HEARTH_TOP, DOOR_SPOT, MEAL_RING, roomAt, NICHES, TERRACES, APRON, FLIGHTS, BEDS, WALLS, levelAt, carve, occupy, cameraClear, onHold, holdFrame, toLocal, toWorld, runOf, RISER, STEP_TOL, FACADE_V, FACADE_TOP, HEARTH, ROOMS, DOORS, CLEAR_H } from '../src/holdModel';
+import { holdProps, surfacesAt, STAIR_HW, onSideStair, WING_DROP, holdRoute, levelOf, APRON_ENTRY, HEARTH_TOP, DOOR_SPOT, MEAL_RING, roomAt, NICHES, TERRACES, APRON, FLIGHTS, BEDS, WALLS, levelAt, carve, occupy, cameraClear, onHold, holdFrame, toLocal, toWorld, runOf, RISER, STEP_TOL, FACADE_V, FACADE_TOP, HEARTH, ROOMS, DOORS, CLEAR_H } from '../src/holdModel';
 import { plateau, walkable } from '../src/plateauModel';
+import { Vector3 } from 'three';
+import { planParkour } from '../src/parkour';
+import { NORMAL_MOBILITY } from '../src/mobility';
+import type { Prop } from '../src/holdModel';
 
 test('H1: the terraces climb in order, each flight reaching the level above in hobbit steps', () => {
   let z = APRON.z, v = APRON.v1;
@@ -47,7 +51,8 @@ test('H1: on the plateau: the frame round-trips, the hold is carved into the gro
 });
 test('H4: the halls: in through the Great Door, the hall under its vault, the walls between rooms solid, her camera only inside', () => {
   const H = TERRACES[5].z;
-  for (let v = FACADE_V - 1.9; v <= FACADE_V + 22; v += 0.25) assert.equal(occupy(0.5, v, H, 0.26), true, `the way in at ${v}`);
+  for (let v = FACADE_V - 0.6; v <= FACADE_V + 10.5; v += 0.25) assert.equal(occupy(0, v, H, 0.26), true, `the way in at ${v}`);
+  for (let v = FACADE_V + 10.5; v <= FACADE_V + 22; v += 0.25) assert.equal(occupy(-4, v, H, 0.26), true, `down the hall at ${v}`);
   assert.equal(occupy(-3, FACADE_V + 4, H, 0.26), false, 'the passage\'s wall');
   assert.equal(occupy(0, FACADE_V + 4, H, 0.26, 5), false, 'too tall for the passage');
   assert.equal(occupy(-14.5, FACADE_V + 14.5, H, 0.26), true, 'the way to the gallery'); assert.equal(occupy(-19, FACADE_V + 26, H, 0.26), true, 'the gallery\'s far end');
@@ -63,7 +68,7 @@ test('H5: the band\'s ways: from the land to the hearth\'s ring, to the door, ou
       const w = holdRoute(p, to) ?? to, d = Math.hypot(w.u - p.u, w.v - p.v);
       if (d < 0.05) { if (w === to || Math.hypot(to.u - p.u, to.v - p.v) < 0.05) return n; continue; }
       const m = Math.min(d, 0.25); p.u += (w.u - p.u) / d * m; p.v += (w.v - p.v) / d * m;
-      const g = levelAt(p.u, p.v); if (g !== null) assert.notEqual(occupy(p.u, p.v, g, 0.22), false, `walked into a wall at ${p.u.toFixed(2)},${p.v.toFixed(2)} going ${from.u},${from.v} → ${to.u},${to.v}`);
+      const g = levelAt(p.u, p.v); if (g !== null) assert.notEqual(occupy(p.u, p.v, g, 0.22, 1.7, false), false, `walked into a wall at ${p.u.toFixed(2)},${p.v.toFixed(2)} going ${from.u},${from.v} → ${to.u},${to.v}`);
       if (Math.hypot(to.u - p.u, to.v - p.v) < 0.05) return n;
     }
     assert.fail(`never got from ${from.u},${from.v} to ${to.u},${to.v} (stuck at ${p.u.toFixed(2)},${p.v.toFixed(2)})`);
@@ -79,14 +84,14 @@ test('H5: the band\'s ways: from the land to the hearth\'s ring, to the door, ou
 });
 test('H5 review: random ways across every level, the halls and the land, at the band\'s own stride, arrive and never cut a wall, stairwell, pylon, plinth or tower', () => {
   let seed = 7; const rnd = (): number => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
-  const ok = (q: { u: number; v: number }): boolean => { if (onSideStair(q.u, q.v)) return false; const g = levelAt(q.u, q.v); if (g === null) return levelOf(q.u, q.v) === -2 && occupy(q.u, q.v, 0, 0.3) !== false; return occupy(q.u, q.v, g, 0.3) === true; };
+  const ok = (q: { u: number; v: number }): boolean => { if (onSideStair(q.u, q.v)) return false; const g = levelAt(q.u, q.v); if (g === null) return levelOf(q.u, q.v) === -2 && occupy(q.u, q.v, 0, 0.3, 1.7, false) !== false; return occupy(q.u, q.v, g, 0.3, 1.7, false) === true; };
   const pick = (): { u: number; v: number } => { for (;;) { const q = rnd() < 0.15 ? { u: (rnd() - 0.5) * 120, v: -30 + rnd() * 30 } : rnd() < 0.15 ? { u: -25 + rnd() * 50, v: FACADE_V + rnd() * 28 } : { u: (rnd() - 0.5) * 90, v: -8 + rnd() * 118 }; if (ok(q) && !(levelOf(q.u, q.v) === -2 && q.v > -6)) return q; } };
   const go = (from: { u: number; v: number }, to: { u: number; v: number }): void => {
     const p = { ...from };
     for (let n = 0; n < 3000; n++) {
       let w = holdRoute(p, to) ?? to; if (w !== to && Math.hypot(w.u - p.u, w.v - p.v) < 0.05) w = to;
       const d = Math.hypot(w.u - p.u, w.v - p.v), m = Math.min(d, 0.75), nu = p.u + (w.u - p.u) / (d || 1) * m, nv = p.v + (w.v - p.v) / (d || 1) * m;
-      for (let k = 1; k <= 6; k++) { const q = { u: p.u + (nu - p.u) * k / 6, v: p.v + (nv - p.v) * k / 6 }, g = levelAt(q.u, q.v); if (g !== null && occupy(q.u, q.v, g, 0.22) === false) assert.fail(`cut a wall at ${q.u.toFixed(2)},${q.v.toFixed(2)} going ${from.u.toFixed(1)},${from.v.toFixed(1)} → ${to.u.toFixed(1)},${to.v.toFixed(1)}`); }
+      for (let k = 1; k <= 6; k++) { const q = { u: p.u + (nu - p.u) * k / 6, v: p.v + (nv - p.v) * k / 6 }, g = levelAt(q.u, q.v); if (g !== null && occupy(q.u, q.v, g, 0.22, 1.7, false) === false) assert.fail(`cut a wall at ${q.u.toFixed(2)},${q.v.toFixed(2)} going ${from.u.toFixed(1)},${from.v.toFixed(1)} → ${to.u.toFixed(1)},${to.v.toFixed(1)}`); }
       p.u = nu; p.v = nv;
       if (Math.hypot(to.u - p.u, to.v - p.v) < 0.3) return;
     }
@@ -94,4 +99,38 @@ test('H5 review: random ways across every level, the halls and the land, at the 
   };
   for (const [a, b] of [[{ u: 4, v: 106.5 }, { u: -3.2, v: 104 }], [{ u: -5, v: 97 }, { u: 5, v: 97 }], [{ u: 0, v: 101.2 }, { u: 0, v: 114 }], [{ u: 21, v: 119 }, { u: 25, v: -25 }], [{ u: 5.6, v: 67.6 }, { u: 0, v: 9 }], [{ u: -8, v: 6 }, { u: -30, v: -20 }], [{ u: 17, v: 128 }, { u: -19, v: 130 }]] as const) go(a, b);
   for (let i = 0; i < 120; i++) go(pick(), pick());
+});
+
+test('Play (2026-11-02): the furniture, the hearth, the door leaves, the valve and the scree are solid to her and climbable; the band walks among them', () => {
+  const H = TERRACES[5].z, props = holdProps();
+  for (const kind of ['bench', 'table', 'desk', 'seat', 'leaf', 'valve', 'scree', 'plinth', 'lintel']) assert.ok(props.some(p => p.kind === kind), kind);
+  const scree = props.filter(p => p.kind === 'scree'); assert.ok(scree.length > 40, `scree ${scree.length}`);
+  for (const p of props.filter(q => q.kind !== 'bed')) { // (the bed shelves stand in the niches, which she does not enter)
+    const g = levelAt(p.u, p.v); assert.notEqual(g, null, `${p.kind} on the hold at ${p.u.toFixed(1)},${p.v.toFixed(1)}`);
+    if (p.y1 - p.y0 > STEP_TOL + 0.02 && p.y0 <= g! + 0.01) assert.equal(occupy(p.u, p.v, g!, 0.26), false, `${p.kind} at ${p.u.toFixed(1)},${p.v.toFixed(1)} stops her`);
+    assert.ok(surfacesAt(p.u, p.v)!.some(y => Math.abs(y - p.y1) < 1e-9), `${p.kind}'s top is a surface`);
+  }
+  const bench = props.find(p => p.kind === 'bench')!;
+  assert.equal(occupy(bench.u, bench.v, H + 0.45, 0.26), true, 'stood on a bench');
+  assert.equal(occupy(bench.u, bench.v, H, 0.26, 0.8, false), true, 'the band does not mind it');
+  // A scree heap reaches up its terrace: some stack's top within a clamber of the level above.
+  for (const i of [3, 4]) assert.ok(scree.some(p => Math.abs(p.v - TERRACES[i].v0) < 1.6 && TERRACES[i].z - p.y1 < 1.3), `a heap up T${i + 1}'s fallen wall`);
+  // The pipe is stepped over; the stair has no paving over it (holdWorld), and its ground is the flight's ramp.
+  assert.equal(occupy(0, HEARTH.v + 6, H, 0.26), true, 'the gas line is a step');
+  assert.ok(!props.some(p => p.kind === 'scree' && Math.abs(p.u) < STAIR_HW + 1));
+});
+test('Play (2026-11-02): her parkour takes her up onto a bench, a scree heap and the gate\'s fallen lintel', () => {
+  const world = { surfacesAt: (x: number, z: number) => surfacesAt(x, z) ?? [0], canOccupy: (p: Vector3, r: number, h: number) => occupy(p.x, p.z, p.y, r, h) ?? true };
+  const props = holdProps(), up = (p: Prop, why: string): void => {
+    // From her feet on the ground 0.8 m off the prop's long side, pushing at it: a plan onto its top (a clamber), into a hang under its
+    // lip (a climb: she pulls up from it), or over it (a vault, for a bench's narrow seat).
+    const g = levelAt(p.u, p.v)!, nu = -Math.sin(p.a), nv = Math.cos(p.a), d = p.hz + 0.8;
+    let done = false;
+    for (const s of [1, -1]) { const feet = new Vector3(p.u + nu * d * s, g, p.v + nv * d * s); if (occupy(feet.x, feet.z, g, 0.3) !== true) continue; const plan = planParkour(world, feet, -nu * s, -nv * s, NORMAL_MOBILITY, 2); if (plan && (Math.abs(plan.to.y - p.y1) < 0.05 || plan.kind === 'climb' || plan.kind === 'vault')) { done = true; break; } }
+    assert.ok(done, why);
+  };
+  up(props.find(p => p.kind === 'bench' && Math.abs(p.u) < 3)!, 'a bench by the long table');
+  up(props.find(p => p.kind === 'lintel')!, 'the fallen lintel');
+  const low = props.filter(p => p.kind === 'scree' && Math.abs(p.y0 - levelAt(p.u, p.v)!) < 0.01 && p.y1 - p.y0 > 0.5 && !props.some(q => q !== p && q.kind === 'scree' && Math.abs(q.y0 - p.y1) < 0.01 && Math.hypot(q.u - p.u, q.v - p.v) < 1.5));
+  assert.ok(low.some(p => { try { up(p, ''); return true; } catch { return false; } }), 'a scree block');
 });

@@ -21,7 +21,7 @@ const SHADE_VAR = 0.16, FOOT_DARK = 0.22;
 
 // ── the block ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
 /** A box w×h×d, every edge chamfered by c, its base at y = 0 and centred on x, z (so ~44 triangles). Non-indexed, normals only. */
-function chamferBox(w: number, h: number, d: number, c: number): THREE.BufferGeometry {
+export function chamferBox(w: number, h: number, d: number, c: number): THREE.BufferGeometry {
   c = Math.min(c, w / 2 - 1e-3, h / 2 - 1e-3, d / 2 - 1e-3);
   const x = w / 2, y = h / 2, z = d / 2, pts: THREE.Vector3[] = [];
   for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 1]) {

@@ -101,7 +101,7 @@ export const PYLON_HALF = 0.4;
 /** What stands on the built ground and stops a body (rects, and circles for the towers): the gate's plinths, the pylons, the Ever-Hearth's plinth. */
 /** The Long Hall's pillars (square, PILLAR_HALF to a side). */
 export const HALL_PILLARS: readonly { u: number; v: number }[] = [-6, 6].flatMap(u => [FACADE_V + 11, FACADE_V + 15, FACADE_V + 19].map(v => ({ u, v }))), PILLAR_HALF = 0.75;
-export const SOLIDS: readonly Rect[] = [...HALL_PILLARS.map(p => ({ u0: p.u - PILLAR_HALF, v0: p.v - PILLAR_HALF, u1: p.u + PILLAR_HALF, v1: p.v + PILLAR_HALF })), ...GATE_PLINTHS, ...PYLONS.map(p => ({ u0: p.u - PYLON_HALF, v0: p.v - PYLON_HALF, u1: p.u + PYLON_HALF, v1: p.v + PYLON_HALF })), { u0: HEARTH.u - 2.4, v0: HEARTH.v - 2.4, u1: HEARTH.u + 2.4, v1: HEARTH.v + 2.4 }];
+export const SOLIDS: readonly Rect[] = [...HALL_PILLARS.map(p => ({ u0: p.u - PILLAR_HALF, v0: p.v - PILLAR_HALF, u1: p.u + PILLAR_HALF, v1: p.v + PILLAR_HALF })), ...PYLONS.map(p => ({ u0: p.u - PYLON_HALF, v0: p.v - PYLON_HALF, u1: p.u + PYLON_HALF, v1: p.v + PYLON_HALF }))];
 /** The halls behind the facade (H4): rooms with their floor (the hearth terrace's level) and ceiling over it; the facade's doors. */
 export interface Room extends Rect { id: string; ceiling: number }
 export const ROOMS: readonly Room[] = [
@@ -119,6 +119,107 @@ export interface Door { id: string; u0: number; u1: number; height: number; kind
 export const DOORS: readonly Door[] = [
   { id: 'great', u0: -2.2, u1: 2.2, height: 4.5, kind: 'great' }, { id: 'gallery', u0: -21, u1: -17, height: 4, kind: 'arch' }, { id: 'store', u0: 12.5, u1: 16, height: 4, kind: 'arch' },
   { id: 'watch', u0: -27, u1: -23, height: 4, kind: 'arch' }, { id: 'waterworks', u0: 22.5, u1: 26, height: 4, kind: 'sealed' }];
+
+// ---- The props: what stands on the built ground and can be climbed (Noah's play, 2026-11-02: the furniture, the scree, the door
+// leaves and the gas line's valve were walked through) ------------------------------------------------------------------------------
+/** A solid block standing on the ground: centred at (u, v), its long axis at angle `a` in the (u, v) plane, half extents `hx` along
+ * it and `hz` across it, from `y0` to its walkable top `y1` (over the datum). */
+export interface Prop { u: number; v: number; a: number; hx: number; hz: number; y0: number; y1: number; kind: string }
+/** The halls' stone furniture as data (holdWorld draws it from this): which piece, where, turned by `rot` (+ to the left, as
+ * holdWorld.place turns it), its length where it has one, its seed. */
+export type FurnitureKind = 'table' | 'bench' | 'desk' | 'seat' | 'bed' | 'bin' | 'shelf';
+export interface Furniture { kind: FurnitureKind; u: number; v: number; rot: number; len?: number; seed: number }
+/** Each piece's footprint along its length and across it, and its height (holdFurniture's own sizes; a hobbit's seat is 0.45). */
+export const FURNITURE_DIMS: Record<FurnitureKind, (len: number) => [number, number, number]> = {
+  table: l => [l, 1.4, 0.8], bench: l => [l, 0.5, 0.45], desk: () => [2.4, 1.2, 0.8], seat: () => [0.8, 0.7, 0.45], bed: () => [2.1, 0.95, 0.5], bin: () => [1.7, 1.4, 0.9], shelf: l => [l, 0.49, 2.0],
+};
+export const FURNITURE: readonly Furniture[] = (() => {
+  const F = FACADE_V, out: Furniture[] = [], room = (id: string): Room => ROOMS.find(r => r.id === id)!, hall = room('hall'), store = room('store'), script = room('scriptorium');
+  for (const n of NICHES) out.push({ kind: 'bed', u: n.u0 + 0.55, v: (n.v0 + n.v1) / 2, rot: -Math.PI / 2, seed: Math.round((n.v0 - F) * 10) });
+  out.push({ kind: 'table', u: 0, v: F + 15.5, rot: Math.PI / 2, len: 9, seed: 21 });
+  for (const s of [-1, 1]) for (const v of [F + 12.6, F + 15.5, F + 18.4]) out.push({ kind: 'bench', u: s * 1.75, v, rot: s * Math.PI / 2, len: 2.8, seed: Math.round(v * 3 + s) });
+  for (const s of [-1, 1]) for (const v of [F + 10, F + 21.5]) out.push({ kind: 'bench', u: s * (hall.u1 - 0.45), v, rot: -s * Math.PI / 2, len: 3, seed: Math.round(v + s * 7) });
+  [14.0, 16.0, 18.0, 20.0].forEach((u, k) => out.push({ kind: 'bin', u, v: store.v1 - 0.95, rot: 0, seed: 30 + k }));
+  out.push({ kind: 'shelf', u: store.u1 - 0.35, v: (store.v0 + store.v1) / 2 - 0.8, rot: Math.PI / 2, len: 5, seed: 40 });
+  ([[15.5, F + 16], [19.0, F + 16], [15.5, F + 20], [19.0, F + 20]] as [number, number][]).forEach(([u, v], k) => { out.push({ kind: 'desk', u, v, rot: Math.PI, seed: 50 + k }); out.push({ kind: 'seat', u, v: v - 1.2, rot: 0, seed: 60 + k }); });
+  out.push({ kind: 'shelf', u: script.u1 - 0.35, v: (script.v0 + script.v1) / 2, rot: Math.PI / 2, len: 7, seed: 41 });
+  return out;
+})();
+/** Is (u, v) inside the collapse's polygon? */
+export function inCollapse(u: number, v: number): boolean { let inside = false; for (let i = 0, j = COLLAPSE.length - 1; i < COLLAPSE.length; j = i++) { const a = COLLAPSE[i], b = COLLAPSE[j]; if ((a.v > v) !== (b.v > v) && u < ((b.u - a.u) * (v - a.v)) / (b.v - a.v) + a.u) inside = !inside; } return inside; }
+/** The great door's two bronze leaves, jammed half open into the passage: their hinges, their swing (rad), their thickness. */
+export const LEAF_SWING = 0.75, LEAF_T = 0.13, LEAF_HINGE_V = FACADE_V + 0.5;
+/** The scree: the fallen wall courses of the collapse as blocks heaped against the walls they fell from (a rough stair of them a body
+ * can clamber up), and loose ones strewn over the slid wings. Its seed. Tuning. */
+const SCREE_SEED = 4242;
+function screeProps(): Prop[] {
+  let s = SCREE_SEED >>> 0; const rand = (): number => { s = (s + 0x6d2b79f5) >>> 0; let t = s; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const rr = (a: number, b: number): number => a + (b - a) * rand(), out: Prop[] = [];
+  const ok = (u: number, v: number, w: number): boolean => inCollapse(u, v) && levelAt(u, v) !== null && levelAt(u - w, v) !== null && levelAt(u + w, v) !== null && !FLIGHTS.some(f => inRect(f, u, v, 1.5));
+  // Against each wall the collapse took (T4's, T5's and the hearth terrace's fronts): columns of blocks, high by the wall, lower out from it.
+  for (const i of [3, 4, 5]) {
+    const t = TERRACES[i], below = TERRACES[i - 1].z, rise = t.z - below;
+    for (let u = 17; u < 42;) {
+      const len = rr(1.2, 2.1), cu = u + len / 2; u += len + rr(0.05, 0.5);
+      if (!inCollapse(cu, t.v0 + 0.4) && !inCollapse(cu, t.v0 - 1.5)) continue;
+      for (let k = 0; ; k++) {
+        const d = 0.55 + k * rr(0.95, 1.25), cv = t.v0 - d, n = Math.round((rise / 0.72) * (1 - k * 0.3) + rr(-0.8, 0.6));
+        if (n <= 0 || k > 4) break; if (!ok(cu, cv, len / 2)) continue;
+        let y = below;
+        for (let c = 0; c < n; c++) { const h = rr(0.55, 0.8), top = Math.min(y + h, t.z - 0.05); if (top - y < 0.3) break; out.push({ u: cu + rr(-0.15, 0.15), v: cv + rr(-0.12, 0.12), a: rr(-0.18, 0.18), hx: len / 2 - 0.04, hz: rr(0.42, 0.55), y0: y, y1: top, kind: 'scree' }); y = top; }
+      }
+    }
+  }
+  // Loose blocks strewn over the slid wings.
+  for (let k = 0, n = 0; k < 400 && n < 34; k++) {
+    const u = rr(18, 41), v = rr(56, 94), hx = rr(0.45, 1.0); if (!ok(u, v, hx + 0.3)) continue;
+    const g = levelAt(u, v)!; if (out.some(p => Math.hypot(p.u - u, p.v - v) < p.hx + hx + 0.4)) continue;
+    out.push({ u, v, a: rr(0, Math.PI), hx, hz: rr(0.35, 0.6), y0: g, y1: g + rr(0.4, 0.85), kind: 'scree' }); n++;
+  }
+  return out;
+}
+/** Every prop: the furniture, the hearth's plinth, bowl and ring of seats, its gas line and valve, the great door's leaves, the gate's
+ * plinths and the fallen lintel, the fallen pylon, the scree. Built once (levelAt is needed). */
+let propsCache: Prop[] | null = null;
+export function holdProps(): readonly Prop[] {
+  if (propsCache) return propsCache;
+  const out: Prop[] = [], H = TERRACES[TERRACES.length - 1].z;
+  for (const f of FURNITURE) { const [l, d, h] = FURNITURE_DIMS[f.kind](f.len ?? 0); out.push({ u: f.u, v: f.v, a: f.rot, hx: l / 2, hz: d / 2, y0: H, y1: H + h, kind: f.kind }); }
+  // The Ever-Hearth (holdFurniture: its plinth's tiers 4.8 and 3.6 square, 0.45 and 0.85 high; its bowl; seven seats on an arc of
+  // 1.5π at 4.2, 1.4 by 0.8 and 0.45 high, open behind; its gas line along the axis to the door, the valve 3.5 behind the plinth).
+  out.push({ u: HEARTH.u, v: HEARTH.v, a: 0, hx: 2.4, hz: 2.4, y0: H, y1: H + 0.45, kind: 'plinth' }, { u: HEARTH.u, v: HEARTH.v, a: 0, hx: 1.8, hz: 1.8, y0: H, y1: H + 0.85, kind: 'plinth' }, { u: HEARTH.u, v: HEARTH.v, a: 0, hx: 1.15, hz: 1.15, y0: H, y1: H + 1.4, kind: 'bowl' });
+  for (let i = 0; i < 7; i++) { const th = -Math.PI * 0.75 + Math.PI * 1.5 * i / 6; out.push({ u: HEARTH.u - Math.sin(th) * 4.2, v: HEARTH.v - Math.cos(th) * 4.2, a: Math.atan2(Math.sin(th), -Math.cos(th)), hx: 0.7, hz: 0.4, y0: H, y1: H + 0.45, kind: 'seat' }); }
+  out.push({ u: HEARTH.u, v: HEARTH.v + 3.5, a: 0, hx: 0.34, hz: 0.3, y0: H, y1: H + 0.75, kind: 'valve' });
+  out.push({ u: HEARTH.u, v: (HEARTH.v + 2.4 + FACADE_V + 23.75) / 2, a: Math.PI / 2, hx: (FACADE_V + 23.75 - HEARTH.v - 2.4) / 2, hz: 0.12, y0: H, y1: H + 0.26, kind: 'pipe' });
+  for (const sg of [-1, 1]) { const w = (DOORS[0].u1 - DOORS[0].u0) / 2 - 0.05, hu = sg * DOORS[0].u1, hv = LEAF_HINGE_V; out.push({ u: hu - sg * Math.cos(LEAF_SWING) * w / 2, v: hv + Math.sin(LEAF_SWING) * w / 2, a: sg < 0 ? LEAF_SWING : -LEAF_SWING, hx: w / 2, hz: LEAF_T, y0: H, y1: H + DOORS[0].height - 0.1, kind: 'leaf' }); }
+  for (const g of GATE_PLINTHS) out.push({ u: (g.u0 + g.u1) / 2, v: (g.v0 + g.v1) / 2, a: 0, hx: (g.u1 - g.u0) / 2 + 0.15, hz: (g.v1 - g.v0) / 2 + 0.15, y0: APRON.z - 0.4, y1: APRON.z - 0.4 + 5 * 0.72 + 0.22, kind: 'plinth' });
+  out.push({ u: LINTEL.u, v: LINTEL.v, a: LINTEL.a, hx: 3.3, hz: 0.6, y0: APRON.z, y1: APRON.z + 1.03, kind: 'lintel' });
+  { const g = levelAt(FALLEN_PYLON.u, FALLEN_PYLON.v) ?? 8.6; out.push({ u: FALLEN_PYLON.u - Math.cos(FALLEN_PYLON.a) * 0.15, v: FALLEN_PYLON.v - Math.sin(FALLEN_PYLON.a) * 0.15, a: FALLEN_PYLON.a, hx: 1.9, hz: 0.45, y0: g, y1: g + 0.85, kind: 'pylon' }); }
+  out.push(...screeProps());
+  return (propsCache = out);
+}
+/** The gate's fallen lintel on the apron and the pylon fallen across T4's slid wing: where they lie and the way their length runs. */
+export const LINTEL = { u: 6.6, v: 4.4, a: 0.35 }, FALLEN_PYLON = { u: 29, v: 70.6, a: -0.5 };
+/** How far (u, v) is from a prop's footprint (0 inside it). */
+export function propDist(p: Prop, u: number, v: number): number {
+  const du = u - p.u, dv = v - p.v, c = Math.cos(p.a), s = Math.sin(p.a), x = Math.abs(du * c + dv * s) - p.hx, z = Math.abs(-du * s + dv * c) - p.hz;
+  return Math.hypot(Math.max(0, x), Math.max(0, z));
+}
+/** The props near (u, v) (a 4 m grid of them, built once). */
+const PROP_CELL = 4; let propGrid: Map<string, Prop[]> | null = null;
+function propsNear(u: number, v: number): Prop[] {
+  if (!propGrid) {
+    propGrid = new Map();
+    for (const p of holdProps()) { const r = Math.hypot(p.hx, p.hz) + 1; for (let i = Math.floor((p.u - r) / PROP_CELL); i <= Math.floor((p.u + r) / PROP_CELL); i++) for (let j = Math.floor((p.v - r) / PROP_CELL); j <= Math.floor((p.v + r) / PROP_CELL); j++) { const k = `${i},${j}`; const l = propGrid.get(k); if (l) l.push(p); else propGrid.set(k, [p]); } }
+  }
+  return propGrid.get(`${Math.floor(u / PROP_CELL)},${Math.floor(v / PROP_CELL)}`) ?? [];
+}
+/** Every walkable top at (u, v) over the datum: the built ground and any prop's top over it; null off the hold. */
+export function surfacesAt(u: number, v: number): number[] | null {
+  const g = levelAt(u, v); if (g === null) return null;
+  const out = [g]; for (const p of propsNear(u, v)) if (propDist(p, u, v) === 0) out.push(p.y1);
+  return out;
+}
 
 // ---- The ground ------------------------------------------------------------------------------------------------------------------
 const FOOT: readonly Rect[] = [APRON, ...TERRACES.map(t => ({ u0: -t.hw, u1: t.hw, v0: t.v0, v1: t.v1 })), ...ROOMS];
@@ -195,7 +296,8 @@ const behindFace = (u: number, v: number): boolean => v >= FACADE_V && Math.abs(
 /** Can a body of `radius` and `height` stand with its feet `y` over the datum at (u, v)? null off the built ground (the land decides
  * there). A wall is where the ground under the body's edge stands more than STEP_TOL over its feet; behind the facade only the rooms
  * are open, and a body must stand under their ceilings. */
-export function occupy(u: number, v: number, y: number, radius: number, height = 1.7): boolean | null {
+export function occupy(u: number, v: number, y: number, radius: number, height = 1.7, props = true): boolean | null {
+  if (props) for (const p of propsNear(u, v)) if (p.y1 > y + STEP_TOL && y + height > p.y0 + 0.02 && propDist(p, u, v) < radius) return false;
   const solid = (su: number, sv: number): boolean => SOLIDS.some(r => inRect(r, su, sv)) || TOWERS.some(t => Math.hypot(su - t.u, sv - t.v) < t.r);
   if (solid(u, v) || Array.from({ length: 8 }, (_, k) => solid(u + Math.cos(k / 8 * Math.PI * 2) * radius, v + Math.sin(k / 8 * Math.PI * 2) * radius)).some(Boolean)) return false;
   const g = levelAt(u, v); if (g === null) return behindFace(u, v) && v < FACADE_V + 40 && y < FACADE_TOP ? false : null;

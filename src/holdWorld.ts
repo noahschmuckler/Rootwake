@@ -6,14 +6,16 @@
 // merged per material: a handful of draws for the whole of it.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { TERRACES, APRON, FLIGHTS, BEDS, WALLS, PYLONS, TOWERS, GATE_PLINTHS, COLLAPSE, DOORS, HEARTH, HALL_PILLARS, HALLS_RECT, CAP_SKIRT, capTop, ROOMS, NICHES, NICHE_H, type Room, FACADE_V, FACADE_TOP, FACADE_HW, FACADE_D, STAIR_HW, CURB_H, levelAt, type HoldFrame, type Flight } from './holdModel';
+import { TERRACES, APRON, FLIGHTS, BEDS, WALLS, PYLONS, TOWERS, GATE_PLINTHS, DOORS, FURNITURE, holdProps, inCollapse, LINTEL, FALLEN_PYLON, LEAF_SWING, LEAF_HINGE_V, type Furniture, runOf, HEARTH, HALL_PILLARS, HALLS_RECT, CAP_SKIRT, capTop, ROOMS, NICHES, NICHE_H, type Room, FACADE_V, FACADE_TOP, FACADE_HW, FACADE_D, STAIR_HW, CURB_H, levelAt, type HoldFrame, type Flight } from './holdModel';
 import { mulberry32 } from './colors';
-import { createEverHearth, stoneBench, stoneTable, stoneDesk, blockSeat, stoneBedShelf, stoneBin, slabShelf } from './holdFurniture';
+import { createEverHearth, chamferBox, stoneBench, stoneTable, stoneDesk, blockSeat, stoneBedShelf, stoneBin, slabShelf } from './holdFurniture';
 
 // ---- Tuning ----------------------------------------------------------------------------------------------------------------------
 /** The stone's colour, the joints' dark behind it, the coping's, the moss it greens toward low down; bronze and its verdigris. */
 const STONE = new THREE.Color('#d9a66c'), JOINT = new THREE.Color('#33281c'), COPING = new THREE.Color('#e8bf86'), MOSS = new THREE.Color('#7c8448'), STEP = new THREE.Color('#c89a64');
-const BRONZE = new THREE.Color('#7a5630'), VERDIGRIS = new THREE.Color('#4f8a76');
+const BRONZE = new THREE.Color('#b27c40'), VERDIGRIS = new THREE.Color('#5fa48a');
+/** The masonry's core: what shows in its joints and where a block is missing; in the collapse, broken rubble fill. */
+const CORE = new THREE.Color('#6a4c30'), RUBBLE = new THREE.Color('#9c7650');
 /** A course's height range, a block's length range (m), the gap between blocks (the joint), how much a block's tint wanders. */
 const COURSE: [number, number] = [0.55, 0.8], BLOCK: [number, number] = [1.1, 2.4], JOINT_W = 0.035, TINT = 0.09;
 /** How often a top block or a coping is missing (the ruin), how far moss climbs a wall (m). */
@@ -47,16 +49,22 @@ export function createHoldWorld(parent: THREE.Object3D, frame: HoldFrame, datum:
   };
   const stoneTint = (y: number, base: number, c = STONE): THREE.Color => { if (interiorPass) return stoneTintRaw(y, base, c).multiplyScalar(0.62); return stoneTintRaw(y, base, c); };
   const stoneTintRaw = (y: number, base: number, c = STONE): THREE.Color => { tmp.copy(c).multiplyScalar(1 + (rand() - 0.5) * 2 * TINT); const moss = Math.max(0, 1 - (y - base) / MOSS_CLIMB) * 0.45 * rand(); return tmp.clone().lerp(MOSS, moss); };
-  const inCollapse = (u: number, v: number): boolean => { let inside = false; for (let i = 0, j = COLLAPSE.length - 1; i < COLLAPSE.length; j = i++) { const a = COLLAPSE[i], b = COLLAPSE[j]; if ((a.v > v) !== (b.v > v) && u < ((b.u - a.u) * (v - a.v)) / (b.v - a.v) + a.u) inside = !inside; } return inside; };
 
   /** A masonry run: courses of blocks along canonical x from 0 to `len`, its face at z = 0 looking -z, its body behind (+z) `depth`;
    * placed by `m` into the frame (`at` maps canonical x to the frame's (u, v) for the ruin's tests). `holes` are x ranges open below a height. */
-  function masonry(len: number, y0: number, y1: number, m: THREE.Matrix4, at: (x: number) => { u: number; v: number }, opts: { depth?: number; coping?: boolean; band?: boolean; holes?: { x0: number; x1: number; top: number }[]; ruin?: boolean } = {}): void {
+  function masonry(len: number, y0: number, y1: number, m: THREE.Matrix4, at: (x: number) => { u: number; v: number }, opts: { depth?: number; coping?: boolean; band?: boolean; holes?: { x0: number; x1: number; top: number }[]; ruin?: boolean; core?: boolean } = {}): void {
     const depth = opts.depth ?? WALL_D, holes = opts.holes ?? [];
     const open = (x0: number, x1: number, ya: number): boolean => holes.some(h => x1 > h.x0 && x0 < h.x1 && ya < h.top);
-    // The dark core behind the blocks: what the joints show.
-    for (const [a, b] of spans(0, len, holes.map(h => [h.x0, h.x1] as [number, number]))) { const g = new THREE.BoxGeometry(b - a, y1 - y0, depth - 0.06); g.translate((a + b) / 2, (y0 + y1) / 2, 0.06 + (depth - 0.06) / 2); g.applyMatrix4(m); add('stone', g, JOINT); }
-    for (const h of holes) if (h.top < y1) { const g = new THREE.BoxGeometry(h.x1 - h.x0, y1 - h.top, depth - 0.06); g.translate((h.x0 + h.x1) / 2, (h.top + y1) / 2, 0.06 + (depth - 0.06) / 2); g.applyMatrix4(m); add('stone', g, JOINT); }
+    // The core behind the blocks: what the joints show (in ~2 m pieces, rubble-coloured where the collapse took the blocks off it). Over a
+    // hole it starts a hair above the hole's top, so the soffit is the ceiling slab's (no two faces in one plane: they shimmer).
+    const core = (a: number, b: number, ya: number): void => {
+      const n = Math.max(1, Math.round((b - a) / 2));
+      for (let i = 0; i < n; i++) { const xa = a + (b - a) * i / n, xb = a + (b - a) * (i + 1) / n, mid = at((xa + xb) / 2), c = opts.ruin !== false && inCollapse(mid.u, mid.v) ? RUBBLE.clone().multiplyScalar(0.85 + rand() * 0.3) : interiorPass ? CORE.clone().multiplyScalar(0.62) : CORE; const g = new THREE.BoxGeometry(xb - xa, y1 - ya, depth - 0.06); g.translate((xa + xb) / 2, (ya + y1) / 2, 0.06 + (depth - 0.06) / 2); g.applyMatrix4(m); add('stone', g, c); }
+    };
+    if (opts.core !== false) {
+      for (const [a, b] of spans(0, len, holes.map(h => [h.x0, h.x1] as [number, number]))) core(a, b, y0);
+      for (const h of holes) if (h.top + 0.01 < y1) core(h.x0, h.x1, h.top + 0.01);
+    }
     let y = y0, course = 0;
     while (y < y1 - 0.05) {
       const ch = Math.min(rr(COURSE[0], COURSE[1]), y1 - y), top = y + ch >= y1 - 0.05;
@@ -73,7 +81,7 @@ export function createHoldWorld(parent: THREE.Object3D, frame: HoldFrame, datum:
       function piece(xa: number, xb: number): void {
         const mid = at((xa + xb) / 2); if (opts.ruin !== false && inCollapse(mid.u, mid.v)) return;
         if (top && opts.ruin !== false && rand() < MISSING) return;
-        const out = rr(-0.015, 0.03), g = new THREE.BoxGeometry(xb - xa - JOINT_W, ch - JOINT_W, 0.32);
+        const out = rr(0.005, 0.03), g = new THREE.BoxGeometry(xb - xa - JOINT_W, ch - JOINT_W, 0.32);
         g.translate((xa + xb) / 2, y + ch / 2, 0.16 - out); g.applyMatrix4(m); add('stone', g, stoneTint(y, y0));
       }
       y += ch; course++;
@@ -111,7 +119,8 @@ export function createHoldWorld(parent: THREE.Object3D, frame: HoldFrame, datum:
     g.setAttribute('color', new THREE.BufferAttribute(col, 3)); add('paving', g);
   };
   pave(APRON.u0, APRON.u1, APRON.v0, APRON.v1, APRON.z + 0.02, 0.6);
-  TERRACES.forEach((t, i) => pave(-t.hw, t.hw, t.v0, t.v1, t.z + 0.02, 0.5 - i * 0.09));
+  // A terrace's paving stops at its central flight and the flight's cheeks (it was laid over the stair, and she sank through it going down).
+  TERRACES.forEach((t, i) => { const c = STAIR_HW + 0.45, head = t.v0 + runOf(i), w = 0.5 - i * 0.09; pave(-t.hw, -c, t.v0, t.v1, t.z + 0.02, w); pave(c, t.hw, t.v0, t.v1, t.z + 0.02, w); pave(-c, c, head, t.v1, t.z + 0.02, w); });
   // ── the beds: a curb round dry cracked soil; the runnel along the terrace's back and a sluice gate seized at each bed ──
   for (const b of BEDS) {
     const t = TERRACES[b.terrace], u0 = Math.min(b.u0, b.u1), u1 = Math.max(b.u0, b.u1), y = t.z, c = 0.28;
@@ -179,31 +188,57 @@ export function createHoldWorld(parent: THREE.Object3D, frame: HoldFrame, datum:
     let y = -0.4; for (let c = 0; c < 5; c++) { const ch = 0.72; box('stone', p.u0 + (c % 2) * 0.05, p.u1 - ((c + 1) % 2) * 0.05, y, y + ch - JOINT_W, p.v0, p.v1, stoneTint(y, 0)); y += ch; }
     box('stone', p.u0 - 0.15, p.u1 + 0.15, y, y + 0.22, p.v0 - 0.15, p.v1 + 0.15, COPING.clone()); box('bronze', p.u0 - 0.05, p.u1 + 0.05, y - 0.12, y, p.v0 - 0.05, p.v1 + 0.05, bronzeTint());
   }
-  { const m = tr(6.6, 0, -4.4).multiply(ry(0.35)).multiply(new THREE.Matrix4().makeRotationZ(0.08)); box('stone', -3.3, 3.3, 0, 0.95, -0.55, 0.55, stoneTint(0.5, 0), m); box('bronze', -3.3, 3.3, 0.95, 1.03, -0.6, 0.6, bronzeTint(), m); }
-  // ── the collapse: scree and a fallen pylon over the right wing of T4 and T5 ──
-  for (let k = 0; k < 140; k++) {
-    const u = rr(18, 41), v = rr(57, 95); if (!inCollapse(u, v)) continue;
-    const r = rr(0.25, 1.1) * (rand() < 0.15 ? 1.6 : 1), g = new THREE.IcosahedronGeometry(r, 0), p = g.attributes.position as THREE.BufferAttribute;
-    for (let q = 0; q < p.count; q++) p.setXYZ(q, p.getX(q) * rr(0.75, 1.2), p.getY(q) * rr(0.5, 0.9), p.getZ(q) * rr(0.75, 1.2));
-    g.computeVertexNormals(); const y = (levelAt(u, v) ?? landLocal(u, v)); g.rotateY(rand() * 6); g.translate(u, y + r * 0.3, -v); add('stone', g, stoneTint(y + 1, y));
+  { const m = tr(LINTEL.u, 0, -LINTEL.v).multiply(ry(LINTEL.a)).multiply(new THREE.Matrix4().makeRotationZ(0.08)); box('stone', -3.3, 3.3, 0, 0.95, -0.55, 0.55, stoneTint(0.5, 0), m); box('bronze', -3.3, 3.3, 0.95, 1.03, -0.6, 0.6, bronzeTint(), m); }
+  // ── the collapse: the fallen courses as blocks heaped against the walls they fell from and strewn over the slid wings (holdModel's
+  // scree props: what is drawn is what stops her and what she climbs), chips among them, and a fallen pylon ──
+  for (const p of holdProps()) if (p.kind === 'scree') {
+    // A worn block: chamfered hard, its corners knocked about a little (never above its walkable top), a tint of its own.
+    const h = p.y1 - p.y0 + 0.05, g = chamferBox(2 * p.hx, h, 2 * p.hz, rr(0.07, 0.16)), q = g.attributes.position as THREE.BufferAttribute;
+    for (let n = 0; n < q.count; n++) { const x = q.getX(n), y = q.getY(n), z = q.getZ(n), k = Math.sin(x * 7.1 + z * 5.3 + p.u) * Math.cos(z * 6.7 - x * 3.9 + p.v); q.setXYZ(n, x * (1 + k * 0.03), y > h - 0.02 ? y - Math.max(0, k) * 0.05 : y, z * (1 + k * 0.03)); }
+    g.computeVertexNormals(); g.translate(0, p.y0 - 0.05, 0); g.applyMatrix4(tr(p.u, 0, -p.v).multiply(ry(p.a)));
+    add('stone', g, stoneTint(p.y1, p.y0 - 0.4).multiplyScalar(0.84 + rand() * 0.22));
   }
-  { const m = tr(29, (levelAt(29, 70.6) ?? 8.6) + 0.4, -70.6).multiply(ry(-0.5)).multiply(new THREE.Matrix4().makeRotationZ(Math.PI / 2 - 0.12)).multiply(tr(0, 0, 0)); pylon(0, 0, -1.6, m); }
+  for (let k = 0; k < 160; k++) {
+    const u = rr(18, 41), v = rr(56, 95); if (!inCollapse(u, v)) continue; const g0 = levelAt(u, v); if (g0 === null) continue;
+    const r = rr(0.1, 0.24), g = new THREE.IcosahedronGeometry(r, 0), q = g.attributes.position as THREE.BufferAttribute;
+    for (let n = 0; n < q.count; n++) q.setXYZ(n, q.getX(n) * rr(0.8, 1.3), q.getY(n) * rr(0.45, 0.7), q.getZ(n) * rr(0.8, 1.3));
+    g.computeVertexNormals(); g.rotateY(rand() * 6); g.translate(u, g0 + r * 0.25, -v); add('stone', g, stoneTint(g0 + 1, g0));
+  }
+  { const m = tr(FALLEN_PYLON.u, (levelAt(FALLEN_PYLON.u, FALLEN_PYLON.v) ?? 8.6) + 0.4, -FALLEN_PYLON.v).multiply(ry(FALLEN_PYLON.a)).multiply(new THREE.Matrix4().makeRotationZ(Math.PI / 2 - 0.12)).multiply(tr(0, 0, 0)); pylon(0, 0, -1.6, m); }
   // ── the facade: masonry from the hearth terrace (lower past its ends) to its top; doorways dark; pilasters, frieze, cornice ──
   const H = TERRACES[TERRACES.length - 1], sideBase = Math.min(landLocal(-FACADE_HW, FACADE_V - 1), landLocal(FACADE_HW, FACADE_V - 1), H.z) - 0.8;
   const holes = DOORS.map(d => ({ x0: d.u0, x1: d.u1, top: H.z + d.height }));
   const shifted = (u: number): number => u + FACADE_HW;
-  faceDown(-H.hw, H.hw, FACADE_V, H.z - 0.4, FACADE_TOP, { depth: FACADE_D, coping: false, holes: holes.map(h => ({ x0: H.hw - h.x1, x1: H.hw - h.x0, top: h.top })), ruin: false });
-  for (const s of [-1, 1]) { const a = s < 0 ? -FACADE_HW : H.hw, b = s < 0 ? -H.hw : FACADE_HW; faceDown(a, b, FACADE_V, sideBase, FACADE_TOP, { depth: FACADE_D, coping: false, ruin: false }); }
+  faceDown(-H.hw, H.hw, FACADE_V, H.z - 0.4, FACADE_TOP, { depth: FACADE_D, coping: false, holes: holes.map(h => ({ x0: H.hw - h.x1, x1: H.hw - h.x0, top: h.top })), ruin: false, core: false });
+  for (const s of [-1, 1]) { const a = s < 0 ? -FACADE_HW : H.hw, b = s < 0 ? -H.hw : FACADE_HW; faceDown(a, b, FACADE_V, sideBase, FACADE_TOP, { depth: FACADE_D, coping: false, ruin: false, core: false }); }
+  // The facade's core: its thickness behind the face blocks, but never where a room (and its walls' bodies) stands behind it, below the
+  // room's ceiling slab; and behind the sealed door's slab, not in front of it. (It used to fill the doorways' reveals and the store's
+  // front wall in one plane with their blocks: the shimmer and the black blocks indoors.)
+  {
+    const RW = 0.7, front = FACADE_V + 0.06, back = FACADE_V + FACADE_D;
+    const cuts = ROOMS.filter(r => r.v0 - RW < back).map(r => ({ u0: r.u0 - RW, u1: r.u1 + RW, vEnd: r.v0 - RW <= front ? front : r.v0 - RW, top: H.z + r.ceiling + 0.7 }));
+    const sealed = DOORS.filter(d => d.kind === 'sealed');
+    const xs = [...new Set([-FACADE_HW, FACADE_HW, -H.hw, H.hw, ...cuts.flatMap(c => [c.u0, c.u1]), ...sealed.flatMap(d => [d.u0, d.u1])])].filter(x => x >= -FACADE_HW && x <= FACADE_HW).sort((a, b) => a - b);
+    for (let i = 0; i + 1 < xs.length; i++) {
+      const a = xs[i], b = xs[i + 1], m = (a + b) / 2; if (b - a < 1e-3) continue;
+      const base = Math.abs(m) > H.hw ? sideBase : H.z - 0.4, here = cuts.filter(c => m > c.u0 && m < c.u1), sd = sealed.find(d => m > d.u0 && m < d.u1);
+      const ys = [...new Set([base, ...here.map(c => c.top), ...(sd ? [H.z + sd.height] : []), FACADE_TOP])].filter(y => y >= base && y <= FACADE_TOP).sort((p, q) => p - q);
+      for (let k = 0; k + 1 < ys.length; k++) {
+        const y0 = ys[k], y1 = ys[k + 1], act = here.filter(c => c.top > y0 + 1e-6), v0 = sd && H.z + sd.height > y0 + 1e-6 ? FACADE_V + 0.32 : front, v1 = act.length ? Math.min(...act.map(c => c.vEnd)) : back;
+        if (v1 - v0 > 0.05 && y1 - y0 > 0.01) box('stone', a, b, y0, y1, v0, v1, CORE);
+      }
+    }
+  }
   void shifted;
   for (const d of DOORS) {
     const top = H.z + d.height, w = d.u1 - d.u0;
     // The dark within (the halls are H4's), and a stepped lintel over the opening: three slabs, each wider and further out.
     for (let k = 0; k < 3; k++) box('stone', d.u0 - 0.35 - k * 0.3, d.u1 + 0.35 + k * 0.3, top + k * 0.32, top + (k + 1) * 0.32 - 0.02, FACADE_V - 0.12 - k * 0.1, FACADE_V + 0.3, tmp.copy(COPING).multiplyScalar(1 - k * 0.04).clone());
-    for (const e of [d.u0, d.u1]) box('stone', e - (e === d.u0 ? 0.5 : 0), e + (e === d.u1 ? 0.5 : 0), H.z, top, FACADE_V - 0.18, FACADE_V + 0.3, stoneTint(H.z + 1, H.z, COPING));
+    for (const e of [d.u0, d.u1]) box('stone', e - (e === d.u0 ? 0.5 : 0.05), e + (e === d.u1 ? 0.5 : 0.05), H.z, top, FACADE_V - 0.18, FACADE_V + 0.3, stoneTint(H.z + 1, H.z, COPING));
     box('stone', d.u0, d.u1, H.z - 0.05, H.z + 0.06, FACADE_V - 0.25, FACADE_V + 1.3, STEP.clone());
     if (d.kind === 'great') {
-      // Two bronze leaves jammed half open, inward.
-      for (const s of [-1, 1]) { const hinge = s < 0 ? d.u0 : d.u1, m = tr(hinge, 0, -(FACADE_V + 0.5)).multiply(ry(s * 0.75)); box('bronze', s < 0 ? 0 : -w / 2 + 0.05, s < 0 ? w / 2 - 0.05 : 0, H.z + 0.05, top - 0.1, -0.08, 0.08, bronzeTint(), m); for (const yy of [1.2, 2.6, 3.8]) box('bronze', s < 0 ? 0.1 : -w / 2 + 0.15, s < 0 ? w / 2 - 0.15 : -0.1, H.z + yy, H.z + yy + 0.12, -0.13, -0.08, bronzeTint(), m); }
+      // Two bronze leaves jammed half open, inward (holdModel's leaf props: solid).
+      for (const s of [-1, 1]) { const hinge = s < 0 ? d.u0 : d.u1, m = tr(hinge, 0, -LEAF_HINGE_V).multiply(ry(-s * LEAF_SWING)); box('bronze', s < 0 ? 0 : -w / 2 + 0.05, s < 0 ? w / 2 - 0.05 : 0, H.z + 0.05, top - 0.1, -0.08, 0.08, bronzeTint(), m); for (const yy of [1.2, 2.6, 3.8]) box('bronze', s < 0 ? 0.1 : -w / 2 + 0.15, s < 0 ? w / 2 - 0.15 : -0.1, H.z + yy, H.z + yy + 0.12, -0.13, -0.08, bronzeTint(), m); }
     } else if (d.kind === 'sealed') {
       // The sealed door: a bronze slab flush in its frame, a gear rosette at its heart, its teeth blocks round it.
       box('bronze', d.u0 + 0.04, d.u1 - 0.04, H.z + 0.05, top - 0.05, FACADE_V + 0.1, FACADE_V + 0.3, bronzeTint());
@@ -262,7 +297,6 @@ export function createHoldWorld(parent: THREE.Object3D, frame: HoldFrame, datum:
     for (const e of [n.v0, n.v1]) box('stone', n.u0, n.u1, floorY - 0.1, floorY + NICHE_H, e === n.v0 ? e - 0.3 : e, e === n.v0 ? e : e + 0.3, roomStone(floorY + 0.5, floorY));
     box('stone', n.u0 - 0.2, n.u1, floorY + NICHE_H, floorY + NICHE_H + 0.35, n.v0 - 0.3, n.v1 + 0.3, inside(COPING).multiplyScalar(0.9));
     pave(n.u0, n.u1, n.v0, n.v1, floorY + 0.02, 0.1, IN * 0.8);
-    place(stoneBedShelf(Math.round((n.v0 - FACADE_V) * 10)), n.u0 + 0.55, (n.v0 + n.v1) / 2, -Math.PI / 2, floorY);
   }
   // The Long Hall: two rows of square pillars with a bronze band, ribs across the vault and over the rows.
   const hall = ROOMS.find(r => r.id === 'hall')!, top = floorY + hall.ceiling;
@@ -282,18 +316,12 @@ export function createHoldWorld(parent: THREE.Object3D, frame: HoldFrame, datum:
   // The gas line from the Breath behind the back wall, in a floor channel down the hall and out through the Great Door.
   box('bronze', HEARTH.u - 0.09, HEARTH.u + 0.09, floorY + 0.07, floorY + 0.25, FACADE_V - 0.5, hall.v1, bronzeTint());
   box('bronze', HEARTH.u - 0.3, HEARTH.u + 0.3, floorY + 0.02, floorY + 0.6, hall.v1 - 0.25, hall.v1, bronzeTint());
-  // The hall's furniture: a long table down its middle with benches either side, benches along its walls.
-  place(stoneTable(9, 21), 0, FACADE_V + 15.5, Math.PI / 2, floorY);
-  for (const s of [-1, 1]) for (const v of [FACADE_V + 12.6, FACADE_V + 15.5, FACADE_V + 18.4]) place(stoneBench(2.8, Math.round(v * 3 + s)), s * 1.75, v, s * Math.PI / 2, floorY);
-  for (const s of [-1, 1]) for (const v of [FACADE_V + 10, FACADE_V + 21.5]) place(stoneBench(3, Math.round(v + s * 7)), s * (hall.u1 - 0.45), v, -s * Math.PI / 2, floorY);
-  // The store: bins along its back wall, slab shelves on its right. The scriptorium: four desks with block seats, shelves on its right.
-  const store = ROOMS.find(r => r.id === 'store')!, script = ROOMS.find(r => r.id === 'scriptorium')!;
-  [14.0, 16.0, 18.0, 20.0].forEach((u, k) => place(stoneBin(30 + k), u, store.v1 - 0.95, 0, floorY));
-  place(slabShelf(5, 40), store.u1 - 0.35, (store.v0 + store.v1) / 2 - 0.8, Math.PI / 2, floorY);
-  for (const [k, [u, v]] of ([[15.5, FACADE_V + 16], [19.0, FACADE_V + 16], [15.5, FACADE_V + 20], [19.0, FACADE_V + 20]] as [number, number][]).entries()) { place(stoneDesk(50 + k), u, v, Math.PI, floorY); place(blockSeat(60 + k), u, v - 1.2, 0, floorY); }
-  place(slabShelf(7, 41), script.u1 - 0.35, (script.v0 + script.v1) / 2, Math.PI / 2, floorY);
-  // The watch stair: three steps up into a rubble choke (the stair fell long ago).
+  // The furniture (holdModel.FURNITURE: what is drawn is what is solid): the gallery's bed shelves, the hall's long table and benches,
+  // the store's bins and shelves, the scriptorium's desks, seats and shelves.
+  const piece = (f: Furniture): THREE.BufferGeometry => f.kind === 'table' ? stoneTable(f.len, f.seed) : f.kind === 'bench' ? stoneBench(f.len, f.seed) : f.kind === 'desk' ? stoneDesk(f.seed) : f.kind === 'seat' ? blockSeat(f.seed) : f.kind === 'bed' ? stoneBedShelf(f.seed) : f.kind === 'bin' ? stoneBin(f.seed) : slabShelf(f.len, f.seed);
+  for (const f of FURNITURE) place(piece(f), f.u, f.v, f.rot, floorY);
   const watch = ROOMS.find(r => r.id === 'watch')!;
+  // The watch stair: three steps up into a rubble choke (the stair fell long ago).
   for (let k = 0; k < 3; k++) box('stone', watch.u0 + 0.2, watch.u1 - 0.2, floorY - 0.1, floorY + 0.2 * (k + 1), watch.v1 - 1.6 + k * 0.4, watch.v1, roomStone(floorY, floorY));
   for (let k = 0; k < 18; k++) { const r = rr(0.3, 0.8), g = new THREE.IcosahedronGeometry(r, 0); g.translate(rr(watch.u0 + 0.5, watch.u1 - 0.5), floorY + 0.6 + rr(0, 2.2), -rr(watch.v1 - 1.4, watch.v1 - 0.2)); add('stone', g, roomStone(floorY + 1, floorY)); }
 
@@ -320,7 +348,7 @@ export function createHoldWorld(parent: THREE.Object3D, frame: HoldFrame, datum:
   // ── merged per material ──
   const mats: Record<Kind, THREE.Material> = {
     stone: new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, roughness: 0.95, flatShading: true }),
-    bronze: new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, roughness: 0.42, metalness: 0.55, flatShading: true }),
+    bronze: new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, roughness: 0.5, metalness: 0.25, flatShading: true }),
     dark: new THREE.MeshBasicMaterial({ color: '#070605' }),
     paving: new THREE.MeshStandardMaterial({ map: paveTex, vertexColors: true, roughness: 1 }),
     soil: new THREE.MeshStandardMaterial({ map: soilTex, color: '#ffffff', roughness: 1 }),
