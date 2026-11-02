@@ -574,7 +574,8 @@ const shown = { get list(): Shown[] { return ctx.v.hobbits.map(s => shownFor(ctx
 { const t = Number(new URLSearchParams(location.search).get('tick')); if (Number.isFinite(t) && t > 0) setTick(t); }
 const wrap = (a: number): number => Math.atan2(Math.sin(a), Math.cos(a));
 el('view').onclick = () => { player.view = player.view === 'third' ? 'first' : 'third'; el('view').textContent = player.view === 'third' ? '3rd' : '1st'; };
-const freeBtn = el<HTMLButtonElement>('free'); freeBtn.hidden = !FREE_ABLE; freeBtn.firstElementChild!.textContent = FREE ? 'story' : 'free';
+// Only the opening's page has the free button (the practice clearing and the village have none): without it, nothing.
+const freeBtn = (document.getElementById('free') as HTMLButtonElement | null) ?? document.createElement('button'); freeBtn.hidden = !FREE_ABLE; if (freeBtn.firstElementChild) freeBtn.firstElementChild.textContent = FREE ? 'story' : 'free';
 freeBtn.onclick = () => { try { if (FREE) localStorage.removeItem(FREE_KEY); else localStorage.setItem(FREE_KEY, '1'); } catch { /* Storage is optional. */ } location.reload(); };
 const intro = el<HTMLDialogElement>('intro'); el('help').onclick = () => { player.cancelInput(); intro.showModal(); }; el('begin').onclick = () => { intro.close(); last = performance.now(); };
 document.addEventListener('contextmenu', e => e.preventDefault()); document.addEventListener('visibilitychange', () => { last = performance.now(); player.cancelInput(); if (document.hidden) save(); });
