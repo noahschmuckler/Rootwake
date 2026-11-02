@@ -6,9 +6,9 @@
 // merged per material: a handful of draws for the whole of it.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { TERRACES, APRON, FLIGHTS, BEDS, WALLS, PYLONS, TOWERS, GATE_PLINTHS, COLLAPSE, DOORS, HEARTH, FACADE_V, FACADE_TOP, FACADE_HW, FACADE_D, STAIR_HW, CURB_H, levelAt, type HoldFrame, type Flight } from './holdModel';
+import { TERRACES, APRON, FLIGHTS, BEDS, WALLS, PYLONS, TOWERS, GATE_PLINTHS, COLLAPSE, DOORS, HEARTH, HALLS_RECT, CAP_SKIRT, capTop, ROOMS, NICHES, NICHE_H, type Room, FACADE_V, FACADE_TOP, FACADE_HW, FACADE_D, STAIR_HW, CURB_H, levelAt, type HoldFrame, type Flight } from './holdModel';
 import { mulberry32 } from './colors';
-import { createEverHearth } from './holdFurniture';
+import { createEverHearth, stoneBench, stoneTable, stoneDesk, blockSeat, stoneBedShelf, stoneBin, slabShelf } from './holdFurniture';
 
 // ---- Tuning ----------------------------------------------------------------------------------------------------------------------
 /** The stone's colour, the joints' dark behind it, the coping's, the moss it greens toward low down; bronze and its verdigris. */
@@ -38,7 +38,15 @@ export function createHoldWorld(parent: THREE.Object3D, frame: HoldFrame, datum:
   const box = (k: Kind, u0: number, u1: number, y0: number, y1: number, v0: number, v1: number, c: THREE.Color, m?: THREE.Matrix4): void => {
     const g = new THREE.BoxGeometry(Math.abs(u1 - u0), Math.abs(y1 - y0), Math.abs(v1 - v0)); g.translate((u0 + u1) / 2, (y0 + y1) / 2, -(v0 + v1) / 2); if (m) g.applyMatrix4(m); add(k, g, c);
   };
-  const stoneTint = (y: number, base: number, c = STONE): THREE.Color => { tmp.copy(c).multiplyScalar(1 + (rand() - 0.5) * 2 * TINT); const moss = Math.max(0, 1 - (y - base) / MOSS_CLIMB) * 0.45 * rand(); return tmp.clone().lerp(MOSS, moss); };
+  let interiorPass = false;
+  /** A furniture piece (holdFurniture.ts: origin at its floor centre, front -z, length along x) set at (u, v) turned by `rot` (+ to the left), its stone dimmed as within. */
+  const place = (g: THREE.BufferGeometry, u: number, v: number, rot: number, y: number): void => {
+    g.applyMatrix4(new THREE.Matrix4().makeRotationY(rot)); g.translate(u, y, -v);
+    const c = g.attributes.color as THREE.BufferAttribute | undefined; if (c) for (let i = 0; i < c.count; i++) c.setXYZ(i, c.getX(i) * 0.72, c.getY(i) * 0.72, c.getZ(i) * 0.72);
+    add('stone', g);
+  };
+  const stoneTint = (y: number, base: number, c = STONE): THREE.Color => { if (interiorPass) return stoneTintRaw(y, base, c).multiplyScalar(0.62); return stoneTintRaw(y, base, c); };
+  const stoneTintRaw = (y: number, base: number, c = STONE): THREE.Color => { tmp.copy(c).multiplyScalar(1 + (rand() - 0.5) * 2 * TINT); const moss = Math.max(0, 1 - (y - base) / MOSS_CLIMB) * 0.45 * rand(); return tmp.clone().lerp(MOSS, moss); };
   const inCollapse = (u: number, v: number): boolean => { let inside = false; for (let i = 0, j = COLLAPSE.length - 1; i < COLLAPSE.length; j = i++) { const a = COLLAPSE[i], b = COLLAPSE[j]; if ((a.v > v) !== (b.v > v) && u < ((b.u - a.u) * (v - a.v)) / (b.v - a.v) + a.u) inside = !inside; } return inside; };
 
   /** A masonry run: courses of blocks along canonical x from 0 to `len`, its face at z = 0 looking -z, its body behind (+z) `depth`;
@@ -91,14 +99,14 @@ export function createHoldWorld(parent: THREE.Object3D, frame: HoldFrame, datum:
   });
   // ── the paving: each terrace and the apron, flagstones, moss and litter creeping up from the forest, worse low down ──
   const paveTex = flagTexture(seed), soilTex = soilTexture(seed);
-  const pave = (u0: number, u1: number, v0: number, v1: number, y: number, wild: number): void => {
+  const pave = (u0: number, u1: number, v0: number, v1: number, y: number, wild: number, dim = 1): void => {
     const w = u1 - u0, d = v1 - v0, g = new THREE.PlaneGeometry(w, d, Math.max(1, Math.round(w / 3)), Math.max(1, Math.round(d / 3)));
     g.rotateX(-Math.PI / 2); g.translate((u0 + u1) / 2, y, -(v0 + v1) / 2);
     const p = g.attributes.position as THREE.BufferAttribute, uv = g.attributes.uv as THREE.BufferAttribute, col = new Float32Array(p.count * 3);
     for (let k = 0; k < p.count; k++) {
       const u = p.getX(k), v = -p.getZ(k); uv.setXY(k, u / 4, v / 4);
       const n = 0.5 + 0.5 * Math.sin(u * 0.31 + Math.sin(v * 0.17) * 2.1) * Math.cos(v * 0.27 + Math.sin(u * 0.13) * 1.7), m = Math.max(0, Math.min(1, (n - 0.45 + wild * 0.5) * 1.6));
-      tmp.setRGB(1, 1, 1).lerp(MOSS, m * 0.55).multiplyScalar(0.92 + 0.12 * Math.sin(u * 1.7 + v * 2.3)); col[k * 3] = tmp.r; col[k * 3 + 1] = tmp.g; col[k * 3 + 2] = tmp.b;
+      tmp.setRGB(1, 1, 1).lerp(MOSS, m * 0.55).multiplyScalar((0.92 + 0.12 * Math.sin(u * 1.7 + v * 2.3)) * dim); col[k * 3] = tmp.r; col[k * 3 + 1] = tmp.g; col[k * 3 + 2] = tmp.b;
     }
     g.setAttribute('color', new THREE.BufferAttribute(col, 3)); add('paving', g);
   };
@@ -190,7 +198,6 @@ export function createHoldWorld(parent: THREE.Object3D, frame: HoldFrame, datum:
   for (const d of DOORS) {
     const top = H.z + d.height, w = d.u1 - d.u0;
     // The dark within (the halls are H4's), and a stepped lintel over the opening: three slabs, each wider and further out.
-    box('dark', d.u0, d.u1, H.z, top, FACADE_V + 0.4, FACADE_V + 1.3, JOINT);
     for (let k = 0; k < 3; k++) box('stone', d.u0 - 0.35 - k * 0.3, d.u1 + 0.35 + k * 0.3, top + k * 0.32, top + (k + 1) * 0.32 - 0.02, FACADE_V - 0.12 - k * 0.1, FACADE_V + 0.3, tmp.copy(COPING).multiplyScalar(1 - k * 0.04).clone());
     for (const e of [d.u0, d.u1]) box('stone', e - (e === d.u0 ? 0.5 : 0), e + (e === d.u1 ? 0.5 : 0), H.z, top, FACADE_V - 0.18, FACADE_V + 0.3, stoneTint(H.z + 1, H.z, COPING));
     box('stone', d.u0, d.u1, H.z - 0.05, H.z + 0.06, FACADE_V - 0.25, FACADE_V + 1.3, STEP.clone());
@@ -216,6 +223,96 @@ export function createHoldWorld(parent: THREE.Object3D, frame: HoldFrame, datum:
   box('stone', -FACADE_HW, FACADE_HW, FACADE_TOP - 1.95, FACADE_TOP - 0.85, FACADE_V - 0.2, FACADE_V + 0.5, tmp.copy(STONE).multiplyScalar(0.86).clone());
   for (const y of [FACADE_TOP - 1.95, FACADE_TOP - 0.93]) box('bronze', -FACADE_HW, FACADE_HW, y, y + 0.08, FACADE_V - 0.26, FACADE_V, bronzeTint());
   for (let k = 0; k < 3; k++) { const y = FACADE_TOP - 0.85 + k * 0.3; let u = -FACADE_HW - k * 0.2; while (u < FACADE_HW + k * 0.2) { const l = Math.min(rr(2, 3.5), FACADE_HW + k * 0.2 - u); if (rand() > 0.06 * (k + 1)) box('stone', u, u + l - 0.03, y, y + 0.28, FACADE_V - 0.25 - k * 0.22, FACADE_V + FACADE_D + 0.4, tmp.copy(COPING).multiplyScalar(1 - k * 0.03 + (rand() - 0.5) * 0.08).clone()); u += l; } }
+
+  // ── H4, the halls: each room's walls (dressed courses facing in, open where a room joins it), its ceiling and floor, the Long
+  // Hall's pillars and vault ribs and its Story Wall of six blank panels, the gallery's bed niches, and the stone furniture ──
+  const IN = 0.62, inside = (c: THREE.Color): THREE.Color => c.clone().multiplyScalar(IN);
+  const floorY = H.z;
+  const touching = (a: Room, side: 'v0' | 'v1' | 'u0' | 'u1'): [number, number, number][] => ROOMS.filter(b => b !== a).flatMap(b => {
+    const eq = (x: number, y: number): boolean => Math.abs(x - y) < 1e-6, top = floorY + Math.min(a.ceiling, b.ceiling);
+    if (side === 'v1' && eq(b.v0, a.v1) || side === 'v0' && eq(b.v1, a.v0)) { const lo = Math.max(a.u0, b.u0), hi = Math.min(a.u1, b.u1); return hi > lo ? [[lo, hi, top] as [number, number, number]] : []; }
+    if (side === 'u0' && eq(b.u1, a.u0) || side === 'u1' && eq(b.u0, a.u1)) { const lo = Math.max(a.v0, b.v0), hi = Math.min(a.v1, b.v1); return hi > lo ? [[lo, hi, top] as [number, number, number]] : []; }
+    return [];
+  });
+  const roomStone = (y: number, base: number): THREE.Color => inside(stoneTint(y, base));
+  function roomWall(r: Room, side: 'v0' | 'v1' | 'u0' | 'u1', extra: [number, number, number][] = []): void {
+    const open = [...touching(r, side), ...extra], y0 = floorY - 0.1, y1 = floorY + r.ceiling, saved = stoneTint;
+    void saved;
+    let len: number, m: THREE.Matrix4, at: (x: number) => { u: number; v: number }, toX: (a: number) => number;
+    if (side === 'v1') { len = r.u1 - r.u0; m = tr(r.u1, 0, -r.v1).multiply(ry(Math.PI)); at = x => ({ u: r.u1 - x, v: r.v1 }); toX = a => r.u1 - a; }
+    else if (side === 'v0') { len = r.u1 - r.u0; m = tr(r.u0, 0, -r.v0); at = x => ({ u: r.u0 + x, v: r.v0 }); toX = a => a - r.u0; }
+    else if (side === 'u0') { len = r.v1 - r.v0; m = tr(r.u0, 0, -r.v1).multiply(ry(-Math.PI / 2)); at = x => ({ u: r.u0, v: r.v1 - x }); toX = a => r.v1 - a; }
+    else { len = r.v1 - r.v0; m = tr(r.u1, 0, -r.v0).multiply(ry(Math.PI / 2)); at = x => ({ u: r.u1, v: r.v0 + x }); toX = a => a - r.v0; }
+    const holes = open.map(([a, b, top]) => { const x0 = toX(a), x1 = toX(b); return { x0: Math.min(x0, x1), x1: Math.max(x0, x1), top }; });
+    interiorPass = true; masonry(len, y0, y1, m, at, { depth: 0.7, coping: false, holes, ruin: false }); interiorPass = false;
+  }
+  for (const r of ROOMS) {
+    for (const side of ['v0', 'v1', 'u0', 'u1'] as const) {
+      if (side === 'v0' && Math.abs(r.v0 - FACADE_V) < 1e-6) continue; // the facade's own masonry
+      roomWall(r, side, r.id === 'gallery' && side === 'u0' ? NICHES.map(n => [n.v0, n.v1, floorY + NICHE_H] as [number, number, number]) : []);
+    }
+    // The ceiling: a slab over the room and its walls; the floor: flagstones, darker within.
+    box('stone', r.u0 - 0.75, r.u1 + 0.75, floorY + r.ceiling, floorY + r.ceiling + 0.7, Math.max(FACADE_V + 0.3, r.v0 - 0.75), r.v1 + 0.75, inside(STONE).multiplyScalar(0.8));
+    pave(r.u0, r.u1, r.v0, r.v1, floorY + 0.02, 0.15, IN);
+    // The doorway's sill and lintel where a narrower room meets a wider one are the walls' own holes; a lintel's underside steps down a little.
+  }
+  // The niches: a recess of dressed stone each, a bed shelf in it.
+  for (const n of NICHES) {
+    box('stone', n.u0 - 0.5, n.u0, floorY - 0.1, floorY + NICHE_H + 0.4, n.v0 - 0.3, n.v1 + 0.3, inside(STONE).multiplyScalar(0.85));
+    for (const e of [n.v0, n.v1]) box('stone', n.u0, n.u1, floorY - 0.1, floorY + NICHE_H, e === n.v0 ? e - 0.3 : e, e === n.v0 ? e : e + 0.3, roomStone(floorY + 0.5, floorY));
+    box('stone', n.u0 - 0.2, n.u1, floorY + NICHE_H, floorY + NICHE_H + 0.35, n.v0 - 0.3, n.v1 + 0.3, inside(COPING).multiplyScalar(0.9));
+    pave(n.u0, n.u1, n.v0, n.v1, floorY + 0.02, 0.1, IN * 0.8);
+    place(stoneBedShelf(Math.round((n.v0 - FACADE_V) * 10)), n.u0 + 0.55, (n.v0 + n.v1) / 2, -Math.PI / 2, floorY);
+  }
+  // The Long Hall: two rows of square pillars with a bronze band, ribs across the vault and over the rows.
+  const hall = ROOMS.find(r => r.id === 'hall')!, top = floorY + hall.ceiling;
+  for (const u of [-6, 6]) for (const v of [FACADE_V + 11, FACADE_V + 15, FACADE_V + 19]) {
+    let y = floorY; while (y < top - 0.05) { const ch = Math.min(rr(0.8, 1.1), top - y); box('stone', u - 0.6, u + 0.6, y, y + ch - JOINT_W, v - 0.6, v + 0.6, roomStone(y, floorY)); y += ch; }
+    box('stone', u - 0.75, u + 0.75, floorY, floorY + 0.45, v - 0.75, v + 0.75, inside(COPING)); box('stone', u - 0.75, u + 0.75, top - 0.5, top, v - 0.75, v + 0.75, inside(COPING));
+    box('bronze', u - 0.64, u + 0.64, floorY + 4.6, floorY + 4.75, v - 0.64, v + 0.64, bronzeTint());
+  }
+  for (const v of [FACADE_V + 9, FACADE_V + 13, FACADE_V + 17, FACADE_V + 21]) box('stone', hall.u0, hall.u1, top - 0.55, top, v - 0.3, v + 0.3, inside(COPING).multiplyScalar(0.92));
+  for (const u of [-6, 6]) box('stone', u - 0.4, u + 0.4, top - 0.7, top, hall.v0, hall.v1, inside(COPING).multiplyScalar(0.88));
+  // The Story Wall: six blank dressed panels in bronze frames across the hall's back wall, waiting for what will be carved and painted there.
+  for (let k = 0; k < 6; k++) {
+    const u0 = -10.5 + k * 3.6, u1 = u0 + 3.0, y0 = floorY + 1.0, y1 = floorY + 4.8, v = hall.v1;
+    box('stone', u0, u1, y0, y1, v - 0.08, v, inside(COPING).multiplyScalar(1.12));
+    for (const [a0, a1, b0, b1] of [[u0 - 0.1, u1 + 0.1, y1, y1 + 0.1], [u0 - 0.1, u1 + 0.1, y0 - 0.1, y0], [u0 - 0.1, u0, y0, y1], [u1, u1 + 0.1, y0, y1]]) box('bronze', a0, a1, b0, b1, v - 0.12, v, bronzeTint());
+  }
+  // The gas line from the Breath behind the back wall, in a floor channel down the hall and out through the Great Door.
+  box('bronze', HEARTH.u - 0.09, HEARTH.u + 0.09, floorY + 0.07, floorY + 0.25, FACADE_V - 0.5, hall.v1, bronzeTint());
+  box('bronze', HEARTH.u - 0.3, HEARTH.u + 0.3, floorY + 0.02, floorY + 0.6, hall.v1 - 0.25, hall.v1, bronzeTint());
+  // The hall's furniture: a long table down its middle with benches either side, benches along its walls.
+  place(stoneTable(9, 21), 0, FACADE_V + 15.5, Math.PI / 2, floorY);
+  for (const s of [-1, 1]) for (const v of [FACADE_V + 12.6, FACADE_V + 15.5, FACADE_V + 18.4]) place(stoneBench(2.8, Math.round(v * 3 + s)), s * 1.75, v, s * Math.PI / 2, floorY);
+  for (const s of [-1, 1]) for (const v of [FACADE_V + 10, FACADE_V + 21.5]) place(stoneBench(3, Math.round(v + s * 7)), s * (hall.u1 - 0.45), v, -s * Math.PI / 2, floorY);
+  // The store: bins along its back wall, slab shelves on its right. The scriptorium: four desks with block seats, shelves on its right.
+  const store = ROOMS.find(r => r.id === 'store')!, script = ROOMS.find(r => r.id === 'scriptorium')!;
+  [14.0, 16.0, 18.0, 20.0].forEach((u, k) => place(stoneBin(30 + k), u, store.v1 - 0.95, 0, floorY));
+  place(slabShelf(5, 40), store.u1 - 0.35, (store.v0 + store.v1) / 2 - 0.8, Math.PI / 2, floorY);
+  for (const [k, [u, v]] of ([[15.5, FACADE_V + 16], [19.0, FACADE_V + 16], [15.5, FACADE_V + 20], [19.0, FACADE_V + 20]] as [number, number][]).entries()) { place(stoneDesk(50 + k), u, v, Math.PI, floorY); place(blockSeat(60 + k), u, v - 1.2, 0, floorY); }
+  place(slabShelf(7, 41), script.u1 - 0.35, (script.v0 + script.v1) / 2, Math.PI / 2, floorY);
+  // The watch stair: three steps up into a rubble choke (the stair fell long ago).
+  const watch = ROOMS.find(r => r.id === 'watch')!;
+  for (let k = 0; k < 3; k++) box('stone', watch.u0 + 0.2, watch.u1 - 0.2, floorY - 0.1, floorY + 0.2 * (k + 1), watch.v1 - 1.6 + k * 0.4, watch.v1, roomStone(floorY, floorY));
+  for (let k = 0; k < 18; k++) { const r = rr(0.3, 0.8), g = new THREE.IcosahedronGeometry(r, 0); g.translate(rr(watch.u0 + 0.5, watch.u1 - 0.5), floorY + 0.6 + rr(0, 2.2), -rr(watch.v1 - 1.4, watch.v1 - 0.2)); add('stone', g, roomStone(floorY + 1, floorY)); }
+
+  // ── the bluff's top over the halls: a rough rock cap where the land is drawn under the floors, meeting the land at its skirt ──
+  {
+    const R = HALLS_RECT, u0 = R.u0 - CAP_SKIRT, u1 = R.u1 + CAP_SKIRT, v0 = R.v0, v1 = R.v1 + CAP_SKIRT, step = 1.6;
+    const nu = Math.ceil((u1 - u0) / step), nv = Math.ceil((v1 - v0) / step), g = new THREE.PlaneGeometry(u1 - u0, v1 - v0, nu, nv);
+    g.rotateX(-Math.PI / 2); g.translate((u0 + u1) / 2, 0, -(v0 + v1) / 2);
+    const p = g.attributes.position as THREE.BufferAttribute, ROCK = new THREE.Color('#8e7f69'), GRASSY = new THREE.Color('#6f6a42');
+    for (let k = 0; k < p.count; k++) {
+      const u = p.getX(k), v = -p.getZ(k), edge = Math.min(u - u0, u1 - u, v1 - v), front = v - v0;
+      const rough = edge < 0.01 || front < 0.01 ? 0 : Math.min(1, edge / 2, front / 1.5) * (0.25 + 0.35 * Math.abs(Math.sin(u * 1.37 + v * 0.91) * Math.cos(u * 0.53 - v * 1.21)));
+      p.setY(k, capTop(v) + 0.05 + rough);
+    }
+    const ng = g.toNonIndexed(); g.dispose(); ng.computeVertexNormals();
+    const q = ng.attributes.position as THREE.BufferAttribute, col = new Float32Array(q.count * 3);
+    for (let k = 0; k < q.count; k += 3) { const c = ROCK.clone().lerp(GRASSY, rand() * 0.5).multiplyScalar(0.85 + rand() * 0.25); for (let j = 0; j < 3; j++) { col[(k + j) * 3] = c.r; col[(k + j) * 3 + 1] = c.g; col[(k + j) * 3 + 2] = c.b; } }
+    ng.setAttribute('color', new THREE.BufferAttribute(col, 3)); parts.stone.push(ng);
+  }
 
   // ── the Ever-Hearth (holdFurniture.ts) on the hearth terrace, its gas line running to the Great Door; its +z toward the door (+v) ──
   const hearth = createEverHearth(seed); hearth.group.position.set(HEARTH.u, H.z, -HEARTH.v); hearth.group.rotation.y = Math.PI; root.add(hearth.group);

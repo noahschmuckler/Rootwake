@@ -75,7 +75,13 @@ The approved schematic, a plan over the real contours, a section, the halls and 
 - **H1** ✓ The ground: the carving, the walk, the walls, the camera, the clearing.
 - **H2** ✓, first cut: the masonwork.
 - **H3** ✓, first cut: the Ever-Hearth on the hearth terrace, its gas line running in at the Great Door.
-- **H4:** the halls opened. The passage, the Long Hall, the gallery's niches, the store and the scriptorium as rooms she walks into, with an indoor camera and light and the stone furniture. The Story Wall's six panels stay blank.
+- **H4** ✓, first cut: the halls opened.
+  - **Rooms she walks into:** the passage through the Great Door, the Long Hall (24 × 16 m under a 7 m ceiling), the sleeping gallery with its way into the hall, and the store with its doorway. Also the scriptorium with its way, and the watch-stair room, whose three steps end in a rubble choke because the stair fell long ago.
+  - **Walls and ceilings:** each room has walls of dressed courses facing in, open where another room joins it, a ceiling slab and a darker flagstone floor.
+  - **The hall:** two rows of square pillars with bronze bands, ribs across the vault, and the Story Wall's six blank panels in bronze frames. The gas line runs in a floor channel from the Breath at its back wall out through the Great Door.
+  - **Furniture:** a long stone table with benches, wall benches, nine bed niches with stone bed shelves, bins and slab shelves in the store, and four desks with block seats in the scriptorium.
+  - **Walking:** `ROOMS`, `NICHES` and `roomAt` are in `holdModel.ts`. Inside a room `levelAt` is its floor. `occupy` keeps a body in the rooms and under their ceilings, and the facade and the rock elsewhere are solid. `cameraClear` lets the camera in only inside a room.
+  - **The rock cap:** a heightfield cannot be both the halls' floor and the bluff's top. So the land is drawn under the floors across the facade's whole width (`HALLS_RECT`), and `holdWorld` draws the bluff's top over it as a rough rock cap at `capTop`, reaching `CAP_SKIRT` past it where the land climbs back. The cap also shades the halls.
 - **H5:** the band moves in.
   - They walk the stair by waypoints, sleep in the niches, store the day's take in the bins and eat round the Ever-Hearth.
   - The cave's rock mouth gives way to the Lower Gate, and the old stone hearth is retired.

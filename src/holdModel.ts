@@ -105,15 +105,21 @@ export interface Room extends Rect { id: string; ceiling: number }
 export const ROOMS: readonly Room[] = [
   { id: 'passage', u0: -2.2, v0: FACADE_V, u1: 2.2, v1: FACADE_V + 8, ceiling: 4.5 }, { id: 'hall', u0: -12, v0: FACADE_V + 8, u1: 12, v1: FACADE_V + 24, ceiling: 7 },
   { id: 'gallery', u0: -21, v0: FACADE_V, u1: -17, v1: FACADE_V + 28, ceiling: 4 }, { id: 'gallery-way', u0: -17, v0: FACADE_V + 13, u1: -12, v1: FACADE_V + 16.5, ceiling: 4 },
-  { id: 'store', u0: 12.5, v0: FACADE_V + 2, u1: 21.5, v1: FACADE_V + 11, ceiling: 4.2 }, { id: 'store-way', u0: 12, v0: FACADE_V + 3, u1: 12.5, v1: FACADE_V + 6, ceiling: 4 },
-  { id: 'scriptorium', u0: 12, v0: FACADE_V + 13, u1: 21.5, v1: FACADE_V + 23, ceiling: 4.4 }];
+  { id: 'store-door', u0: 12.5, v0: FACADE_V, u1: 16, v1: FACADE_V + FACADE_D, ceiling: 4 }, { id: 'store', u0: 12.5, v0: FACADE_V + FACADE_D, u1: 21.5, v1: FACADE_V + 11, ceiling: 4.2 }, { id: 'store-way', u0: 12, v0: FACADE_V + 3, u1: 12.5, v1: FACADE_V + 6.5, ceiling: 4 },
+  { id: 'scriptorium', u0: 13.5, v0: FACADE_V + 13, u1: 21.5, v1: FACADE_V + 23, ceiling: 4.4 }, { id: 'scriptorium-way', u0: 12, v0: FACADE_V + 16, u1: 13.5, v1: FACADE_V + 20, ceiling: 4 },
+  { id: 'watch', u0: -27, v0: FACADE_V, u1: -23, v1: FACADE_V + 4, ceiling: 4 }];
+/** The sleeping gallery's bed niches, cut into its outer (left) wall: nine, one a hobbit and a spare; their depth and height. */
+export const NICHES: readonly Rect[] = Array.from({ length: 9 }, (_, k) => ({ u0: -23.6, u1: -21, v0: FACADE_V + 2 + k * 2.9, v1: FACADE_V + 2 + k * 2.9 + 2.2 }));
+export const NICHE_H = 1.7;
+/** The room at (u, v) (a body's centre inside it, `pad` in from its walls), if any. */
+export function roomAt(u: number, v: number, pad = 0): Room | null { for (const r of ROOMS) if (u >= r.u0 + pad && u <= r.u1 - pad && v >= r.v0 + pad && v <= r.v1 - pad) return r; return null; }
 export interface Door { id: string; u0: number; u1: number; height: number; kind: 'great' | 'arch' | 'sealed' }
 export const DOORS: readonly Door[] = [
   { id: 'great', u0: -2.2, u1: 2.2, height: 4.5, kind: 'great' }, { id: 'gallery', u0: -21, u1: -17, height: 4, kind: 'arch' }, { id: 'store', u0: 12.5, u1: 16, height: 4, kind: 'arch' },
   { id: 'watch', u0: -27, u1: -23, height: 4, kind: 'arch' }, { id: 'waterworks', u0: 22.5, u1: 26, height: 4, kind: 'sealed' }];
 
 // ---- The ground ------------------------------------------------------------------------------------------------------------------
-const FOOT: readonly Rect[] = [APRON, ...TERRACES.map(t => ({ u0: -t.hw, u1: t.hw, v0: t.v0, v1: t.v1 }))];
+const FOOT: readonly Rect[] = [APRON, ...TERRACES.map(t => ({ u0: -t.hw, u1: t.hw, v0: t.v0, v1: t.v1 })), ...ROOMS];
 /** Is (u, v) on the hold's built ground (the apron or a terrace)? */
 export function onHold(u: number, v: number, pad = 0): boolean { return FOOT.some(r => inRect(r, u, v, pad)); }
 /** The built ground's level at (u, v) over the datum (a flight's ramp where it climbs; a bed's soil a little under), null off it. */
@@ -124,6 +130,7 @@ export function levelAt(u: number, v: number): number | null {
   }
   for (let i = TERRACES.length - 1; i >= 0; i--) { const t = TERRACES[i]; if (Math.abs(u) <= t.hw && v >= t.v0 && v <= t.v1) return t.z; }
   if (inRect(APRON, u, v)) return APRON.z;
+  if (roomAt(u, v)) return TERRACES[TERRACES.length - 1].z;
   return null;
 }
 /** The nearest point of the built ground and its level (for the land's ease back to itself outside). */
@@ -155,9 +162,14 @@ function drawnLevel(u: number, v: number, at: number): number {
   for (const [du, dv] of [[DRAWN_REACH, 0], [-DRAWN_REACH, 0], [0, DRAWN_REACH], [0, -DRAWN_REACH], [DRAWN_REACH, DRAWN_REACH], [-DRAWN_REACH, -DRAWN_REACH], [DRAWN_REACH, -DRAWN_REACH], [-DRAWN_REACH, DRAWN_REACH]]) { const l = levelAt(u + du, v + dv); if (l !== null && l < h) h = l; }
   return h;
 }
+/** The halls' block: the land is drawn under the floors here (a heightfield cannot be both the halls' floor and the bluff's top), and
+ * holdWorld draws the bluff's top over it as a rock cap at `capTop`, reaching CAP_SKIRT past it where the land climbs back. */
+export const HALLS_RECT: Rect = { u0: -FACADE_HW, u1: FACADE_HW, v0: FACADE_V, v1: FACADE_V + 31 }, CAP_SKIRT = 2.6;
+export const capTop = (v: number): number => FACADE_TOP + Math.max(0, v - FACADE_V) * BLUFF_CLIMB;
 /** The land as carved: the built ground level, easing back to the natural over GROUND_FADE outside, and the bluff raised behind the facade. All over the datum. */
 export function carve(u: number, v: number, natural: number): number {
   if (!inReach(u, v)) return natural;
+  if (inRect(HALLS_RECT, u, v)) return TERRACES[TERRACES.length - 1].z - 0.6;
   const at = levelAt(u, v); let h: number;
   if (at !== null) h = drawnLevel(u, v, at);
   else { const n = nearest(u, v); h = n.d < GROUND_FADE ? lerp(n.level, natural, smooth(0, GROUND_FADE, n.d)) : natural; }
@@ -165,22 +177,30 @@ export function carve(u: number, v: number, natural: number): number {
   const b = v >= FACADE_V + FACADE_D ? bluffAt(u, v, natural) : null; if (b !== null) h = Math.max(h, b);
   return h;
 }
-/** Can a body of `radius` stand with its feet `y` over the datum at (u, v)? null off the built ground (the land decides there). A wall
- * is where the ground under the body's edge stands more than STEP_TOL over its feet; the facade and the bluff behind it are solid. */
-export function occupy(u: number, v: number, y: number, radius: number): boolean | null {
-  const g = levelAt(u, v); if (g === null) return null;
+/** Is (u, v) behind the facade's face, in the masonry or the bluff (solid but where a room opens)? */
+const behindFace = (u: number, v: number): boolean => v >= FACADE_V && Math.abs(u) <= BLUFF_HW + 4;
+/** Can a body of `radius` and `height` stand with its feet `y` over the datum at (u, v)? null off the built ground (the land decides
+ * there). A wall is where the ground under the body's edge stands more than STEP_TOL over its feet; behind the facade only the rooms
+ * are open, and a body must stand under their ceilings. */
+export function occupy(u: number, v: number, y: number, radius: number, height = 1.7): boolean | null {
+  const g = levelAt(u, v); if (g === null) return behindFace(u, v) && v < FACADE_V + 40 && y < FACADE_TOP ? false : null;
   if (y < g - 0.03) return false;
+  const here = roomAt(u, v); if (here && y + height > g + here.ceiling) return false;
   for (let k = 0; k < 8; k++) {
     const a = (k / 8) * Math.PI * 2, su = u + Math.cos(a) * radius, sv = v + Math.sin(a) * radius;
-    if (sv >= FACADE_V && Math.abs(su) <= FACADE_HW) return false;
+    if (behindFace(su, sv) && !roomAt(su, sv)) return false;
     if (SOLIDS.some(r => inRect(r, su, sv)) || TOWERS.some(t => Math.hypot(su - t.u, sv - t.v) < t.r)) return false;
     const s = levelAt(su, sv); if (s !== null && s > y + STEP_TOL) return false;
   }
   return true;
 }
-/** Is the camera clear at (u, v) at `y` over the datum? Not under the built ground, not inside a retaining wall's top edge, not in the facade or the bluff (until the halls are open: H4). */
+/** Is the camera clear at (u, v) at `y` over the datum? Not under the built ground, not inside a retaining wall's top edge; behind
+ * the facade only inside a room, under its ceiling. */
 export function cameraClear(u: number, v: number, y: number): boolean {
-  if (v >= FACADE_V - 0.3 && v <= FACADE_V + FACADE_D + 40 && Math.abs(u) <= FACADE_HW + 2 && y < FACADE_TOP + (v - FACADE_V) * BLUFF_CLIMB + 0.5) return false;
+  if (v >= FACADE_V - 0.3 && Math.abs(u) <= BLUFF_HW + 4 && v <= BLUFF_BACK + 10 && y < FACADE_TOP + Math.max(0, v - FACADE_V) * BLUFF_CLIMB + 0.5) {
+    const r = roomAt(u, v, 0.25), floor = TERRACES[TERRACES.length - 1].z;
+    return !!r && v >= FACADE_V + 0.25 && y > floor + 0.2 && y < floor + r.ceiling - 0.25;
+  }
   const l = levelAt(u, v); if (l === null) return true;
   if (y < l + 0.15) return false;
   for (const [du, dv] of [[0.4, 0], [-0.4, 0], [0, 0.4], [0, -0.4]]) { const s = levelAt(u + du, v + dv); if (s !== null && y < s + 0.15) return false; }

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { TERRACES, APRON, FLIGHTS, BEDS, WALLS, levelAt, carve, occupy, onHold, holdFrame, toLocal, toWorld, runOf, RISER, STEP_TOL, FACADE_V, FACADE_TOP, HEARTH, ROOMS, DOORS, CLEAR_H } from '../src/holdModel';
+import { roomAt, NICHES, TERRACES, APRON, FLIGHTS, BEDS, WALLS, levelAt, carve, occupy, cameraClear, onHold, holdFrame, toLocal, toWorld, runOf, RISER, STEP_TOL, FACADE_V, FACADE_TOP, HEARTH, ROOMS, DOORS, CLEAR_H } from '../src/holdModel';
 import { plateau, walkable } from '../src/plateauModel';
 
 test('H1: the terraces climb in order, each flight reaching the level above in hobbit steps', () => {
@@ -14,13 +14,13 @@ test('H1: the ground is level on a terrace, ramps up a flight, and is nothing of
   const c = FLIGHTS.find(f => f.side === 'centre' && f.terrace === 3)!, mid = levelAt(0, (c.v0 + c.v1) / 2)!;
   assert.ok(mid > c.from && mid < c.to); assert.ok(Math.abs(levelAt(0, c.v0 + 0.001)! - c.from) < 0.05); assert.ok(Math.abs(levelAt(0, c.v1 - 0.001)! - c.to) < 0.05);
   for (const s of FLIGHTS.filter(f => f.side !== 'centre')) { const foot = s.climb === 'u+' ? s.u0 + 0.01 : s.u1 - 0.01, head = s.climb === 'u+' ? s.u1 - 0.01 : s.u0 + 0.01, mv = (s.v0 + s.v1) / 2; assert.ok(Math.abs(levelAt(foot, mv)! - s.from) < 0.05 && Math.abs(levelAt(head, mv)! - s.to) < 0.05, `side stair of ${TERRACES[s.terrace].name}`); }
-  assert.equal(levelAt(80, 40), null); assert.equal(levelAt(0, 120), null); assert.ok(!onHold(0, 120));
+  assert.equal(levelAt(80, 40), null); assert.equal(levelAt(0, 145), null); assert.ok(!onHold(0, 145)); assert.equal(levelAt(0, 120), TERRACES[5].z, 'the Long Hall\'s floor');
 });
 test('H1: the land is carved level on the hold, eases back outside, and the bluff stands behind the facade', () => {
   assert.equal(carve(-30, 20, 5), TERRACES[0].z);
   assert.equal(carve(46 + 40, 20, 3.3), 3.3, 'far off it the land is its own');
   const near = carve(46 + 2, 20, 6); assert.ok(near > TERRACES[0].z && near < 6, 'a fill eases back');
-  assert.ok(carve(0, FACADE_V + 3, 15) >= FACADE_TOP - 0.01, 'the bluff behind the facade');
+  assert.ok(carve(-39, FACADE_V + 3, 15) >= FACADE_TOP - 0.01, 'the bluff behind the facade'); assert.ok(carve(0, FACADE_V + 10, 15) < TERRACES[5].z, 'under the halls\' floors (the rock cap is drawn over them)');
   const w = WALLS.find(x => x.terrace === 3)!; assert.equal(carve((w.u0 + w.u1) / 2, w.v + 1, 0), w.low, 'drawn low just inside a wall (the masonry covers it)'); assert.equal(levelAt((w.u0 + w.u1) / 2, w.v + 1), w.high, 'her feet on the upper level'); assert.equal(carve(0, FACADE_V - 1, 15), TERRACES[5].z, 'the hearth terrace before it');
 });
 test('H1: a retaining wall stops a body at its foot, a flight lets it climb, the facade is solid', () => {
@@ -29,7 +29,8 @@ test('H1: a retaining wall stops a body at its foot, a flight lets it climb, the
   assert.equal(occupy(u, w.v - 0.1, w.low, 0.26), false, 'against it');
   const c = FLIGHTS.find(f => f.side === 'centre' && f.terrace === 2)!;
   for (let v = c.v0 - 1; v <= c.v1 + 1; v += 0.1) { const g = levelAt(0, v)!; assert.equal(occupy(0, v, g, 0.26), true, `the stair at ${v.toFixed(1)}`); }
-  assert.equal(occupy(0, FACADE_V - 0.1, TERRACES[5].z, 0.26), false, 'the facade');
+  assert.equal(occupy(-8, FACADE_V - 0.1, TERRACES[5].z, 0.26), false, 'the facade');
+  assert.equal(occupy(0, FACADE_V - 0.1, TERRACES[5].z, 0.26), true, 'the Great Door');
   assert.ok(STEP_TOL < Math.min(...TERRACES.map((t, i) => t.z - (i ? TERRACES[i - 1].z : 0))), 'no terrace is a step');
 });
 test('H1: beds lie on their terraces off the stair; the halls give her room; the hearth is on the hearth terrace', () => {
@@ -43,4 +44,15 @@ test('H1: on the plateau: the frame round-trips, the hold is carved into the gro
   for (const [u, v] of [[0, -4], [-30, 20], [20, 70], [0, 104]]) { const at = toWorld(f, u, v); assert.ok(walkable(p, at.x, at.z), `walkable at ${u},${v}`); assert.ok(Math.abs(p.ground(at.x, at.z) - (p.hold.datum + levelAt(u, v)!)) < 1e-6, 'drawn level with her feet in a terrace\'s middle'); assert.equal(p.hold.levelAt(at.x, at.z), p.hold.datum + levelAt(u, v)!); }
   const off = toWorld(f, 70, 100); assert.ok(!walkable(p, off.x, off.z), 'the belt beside it is still too steep');
   assert.ok(p.into(toWorld(f, 0, 104).x, toWorld(f, 0, 104).z) > 40, 'the top is past where the walk stopped before');
+});
+test('H4: the halls: in through the Great Door, the hall under its vault, the walls between rooms solid, her camera only inside', () => {
+  const H = TERRACES[5].z;
+  for (let v = FACADE_V - 2.6; v <= FACADE_V + 22; v += 0.25) assert.equal(occupy(0.5, v, H, 0.26), true, `the way in at ${v}`);
+  assert.equal(occupy(-3, FACADE_V + 4, H, 0.26), false, 'the passage\'s wall');
+  assert.equal(occupy(0, FACADE_V + 4, H, 0.26, 5), false, 'too tall for the passage');
+  assert.equal(occupy(-14.5, FACADE_V + 14.5, H, 0.26), true, 'the way to the gallery'); assert.equal(occupy(-19, FACADE_V + 26, H, 0.26), true, 'the gallery\'s far end');
+  assert.equal(occupy(-22, FACADE_V + 4, H, 0.26), false, 'a niche is not walked into');
+  assert.equal(occupy(17, FACADE_V + 18, H, 0.26), true, 'the scriptorium'); assert.equal(occupy(17, FACADE_V + 5, H, 0.26), true, 'the store');
+  assert.ok(cameraClear(0, FACADE_V + 16, H + 3) && !cameraClear(0, FACADE_V + 16, H + 7.5) && !cameraClear(-30, FACADE_V + 16, H + 2));
+  assert.ok(roomAt(0, FACADE_V + 16)?.id === 'hall' && NICHES.length === 9 && NICHES.every(n => n.u1 <= -21 && n.v1 <= FACADE_V + 28));
 });
