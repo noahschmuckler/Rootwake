@@ -82,10 +82,18 @@ The approved schematic, a plan over the real contours, a section, the halls and 
   - **Furniture:** a long stone table with benches, wall benches, nine bed niches with stone bed shelves, bins and slab shelves in the store, and four desks with block seats in the scriptorium.
   - **Walking:** `ROOMS`, `NICHES` and `roomAt` are in `holdModel.ts`. Inside a room `levelAt` is its floor. `occupy` keeps a body in the rooms and under their ceilings, and the facade and the rock elsewhere are solid. `cameraClear` lets the camera in only inside a room.
   - **The rock cap:** a heightfield cannot be both the halls' floor and the bluff's top. So the land is drawn under the floors across the facade's whole width (`HALLS_RECT`), and `holdWorld` draws the bluff's top over it as a rough rock cap at `capTop`, reaching `CAP_SKIRT` past it where the land climbs back. The cap also shades the halls.
-- **H5:** the band moves in.
-  - They walk the stair by waypoints, sleep in the niches, store the day's take in the bins and eat round the Ever-Hearth.
-  - The cave's rock mouth gives way to the Lower Gate, and the old stone hearth is retired.
-  - The hen grove's harvester cooks at the Ever-Hearth.
+- **H5** ✓, first cut: the band moves in.
+  - **The home:** the band's "cave" is now `DOOR_SPOT`, before the Great Door. At night they walk in there, and `edenWorld` lays each sleeper on its niche's bed shelf (`sleepAt`, with the nap pose). Their hearth is the Ever-Hearth: they eat round it at `MEAL_RING` (its seats) and idle just outside the ring. They reach the land from `APRON_ENTRY`, and forage reach and hosts are reckoned from there.
+  - **Routing:** `holdModel.holdRoute` gives the next waypoint toward a target, and the model's `walk` and the hen grove's harvester follow it (`EdenCtx.via`, `GroveHome.route`).
+    - Between levels, a walker goes by the processional stair's axis, onto it at the apron and to the head of a flight before turning off.
+    - On the hearth terrace it goes round the hearth's plinth.
+    - Out of the halls it goes by the Great Door.
+    - On the land, a way that would cross the terraces goes round the foot's corners.
+    - `tests/hold.test.ts` walks every such way and checks that none passes through a wall.
+  - **Foraging:** nothing to forage is set on the hold's flanks.
+  - **Old saves:** an Eden saved before the move starts afresh in the hold.
+  - **What the old cave did:** the cave's rock mouth and the stone hearth are no longer drawn (`EdenLook`). The hen grove's harvester cooks at the Ever-Hearth, without its own little fire.
+  - **Open:** the gallery is dark at night, so the sleepers barely show. A glow, such as a dim bronze lamp kept alight by the gas, would be a later touch.
 - **Later:** the irrigation quest; the engravings and paintings.
 
 ## Notes and open

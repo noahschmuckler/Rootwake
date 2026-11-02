@@ -24,12 +24,16 @@ const ease = (s: Shown, x: number, z: number, heading: number, pace: number, dt:
 /** A shaggy rock: an icosahedron pushed about by a hash. */
 function rock(r: number, seed: number): THREE.BufferGeometry { const g = new THREE.IcosahedronGeometry(r, 1), p = g.attributes.position as THREE.BufferAttribute, rand = mulberry32(seed); const j = new Map<string, number>(); for (let i = 0; i < p.count; i++) { const k = `${p.getX(i).toFixed(2)},${p.getY(i).toFixed(2)},${p.getZ(i).toFixed(2)}`; let f = j.get(k); if (f === undefined) { f = 0.75 + rand() * 0.5; j.set(k, f); } p.setXYZ(i, p.getX(i) * f, p.getY(i) * f, p.getZ(i) * f); } g.computeVertexNormals(); return g; }
 
-export function createEdenWorld(scene: THREE.Scene, relief: (x: number, z: number) => number, e: Eden, seed = 1): EdenWorld {
+/** Where the band's home is the Hearth-Hold (HOLD.md): `cave` and `hearth` false leave out the cave's rock mouth and the stone hearth
+ * (the hold draws the Lower Gate and the Ever-Hearth); `sleepAt(i)` lays the i-th of the band asleep there (a niche's bed shelf) while
+ * the model has it inside. */
+export interface EdenLook { cave?: boolean; hearth?: boolean; sleepAt?(i: number): { x: number; y: number; z: number; heading: number } | null }
+export function createEdenWorld(scene: THREE.Scene, relief: (x: number, z: number) => number, e: Eden, seed = 1, look: EdenLook = {}): EdenWorld {
   const root = new THREE.Group(); root.name = 'eden'; scene.add(root);
   const geoms: THREE.BufferGeometry[] = [], mats: THREE.Material[] = [];
   const keep = <T extends THREE.BufferGeometry>(g: T): T => { geoms.push(g); return g; }, mat = <T extends THREE.Material>(m: T): T => { mats.push(m); return m; };
   // ── the cave: two shoulders of rock and a lintel over a dark mouth in the slope, facing `dir`; the hearth before it ──
-  const cave = new THREE.Group(); cave.name = 'cave'; cave.position.set(e.cave.x, relief(e.cave.x, e.cave.z), e.cave.z); cave.rotation.y = e.cave.dir; root.add(cave);
+  const cave = new THREE.Group(); cave.name = 'cave'; cave.position.set(e.cave.x, relief(e.cave.x, e.cave.z), e.cave.z); cave.rotation.y = e.cave.dir; root.add(cave); cave.visible = look.cave !== false;
   const stone = mat(new THREE.MeshStandardMaterial({ color: '#5a5650', roughness: 1, flatShading: true })), dark = mat(new THREE.MeshBasicMaterial({ color: '#070604', side: THREE.DoubleSide }));
   for (const [sx, sy, sz, r, s] of [[-2.1, 0.6, 0.4, 1.5, 1], [2.2, 0.5, 0.3, 1.4, 2], [-1.4, 2.1, -0.2, 1.1, 3], [1.5, 2.2, -0.3, 1.05, 4], [0, 2.9, -0.6, 1.3, 5], [-2.8, 1.6, -1.2, 1.2, 6], [2.9, 1.5, -1.3, 1.15, 7]] as const) { const m = new THREE.Mesh(keep(rock(r, seed * 11 + s)), stone); m.position.set(sx, sy, sz); cave.add(m); }
   // The mouth: a black hollow set into the slope, deep enough that the figures walk into it and are gone.
@@ -38,7 +42,7 @@ export function createEdenWorld(scene: THREE.Scene, relief: (x: number, z: numbe
   const back = new THREE.Mesh(keep(new THREE.CircleGeometry(1.1, 14)), dark); back.position.set(0, 1.1, 4.9); cave.add(back);
   const floor = new THREE.Mesh(keep(new THREE.PlaneGeometry(3.2, 5.4)), mat(new THREE.MeshStandardMaterial({ color: '#4a4238', roughness: 1 }))); floor.rotation.x = -Math.PI / 2; floor.position.set(0, 0.02, 2.4); cave.add(floor);
   // The hearth: a ring of stones and a fire, lit at dusk.
-  const hearth = new THREE.Group(); hearth.position.set(e.hearth.x, relief(e.hearth.x, e.hearth.z), e.hearth.z); root.add(hearth);
+  const hearth = new THREE.Group(); hearth.position.set(e.hearth.x, relief(e.hearth.x, e.hearth.z), e.hearth.z); root.add(hearth); hearth.visible = look.hearth !== false;
   for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2, m = new THREE.Mesh(keep(rock(0.14, seed * 13 + i)), stone); m.position.set(Math.cos(a) * 0.55, 0.08, Math.sin(a) * 0.55); hearth.add(m); }
   const flameMat = mat(new THREE.MeshBasicMaterial({ color: new THREE.Color('#ff9a30').multiplyScalar(1.6), transparent: true, opacity: 0.9 })), flames: THREE.Mesh[] = [];
   for (let i = 0; i < 3; i++) { const f = new THREE.Mesh(keep(new THREE.ConeGeometry(0.12 - i * 0.03, 0.35 + i * 0.12, 6)), flameMat); f.position.set((i - 1) * 0.08, 0.2 + i * 0.05, (i % 2) * 0.06); hearth.add(f); flames.push(f); }
@@ -92,6 +96,9 @@ export function createEdenWorld(scene: THREE.Scene, relief: (x: number, z: numbe
     } else cat.group.visible = false;
     for (const h of hobbits) {
       const m = ed.hobbits.find(x => x.id === h.id); if (!m) { h.f.group.visible = false; continue; }
+      // Asleep in the hold: lying on its niche's shelf, kept where the model has it (so waking it walks out of the door, not the wall).
+      const bed = m.inside && m.act === 'sleeping' && look.sleepAt ? look.sleepAt(ed.hobbits.indexOf(m)) : null;
+      if (bed) { h.s.x = m.x; h.s.z = m.z; h.s.heading = m.heading; h.s.speed = 0; h.f.update(bed.x, bed.y, bed.z, bed.heading, { speed: 0, carry: null, eating: false, taking: false, inside: false, antic: 'nap' }, dt); continue; }
       const an = m.antic?.kind ?? null; ease(h.s, m.x, m.z, m.heading, an === 'tumble' ? TUMBLE_PACE * 1.2 : HOBBIT_WALK * 1.15, dt);
       // Sitting, it is up on the rock; the rest stand on the ground.
       h.f.update(h.s.x, relief(h.s.x, h.s.z) + (an === 'sit' ? SIT_ROCK_H : 0), h.s.z, h.s.heading, { speed: h.s.speed, carry: m.carry, eating: m.act === 'eating', taking: m.act === 'taking', inside: m.inside, antic: an }, dt);

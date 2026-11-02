@@ -11,7 +11,7 @@ import { catwalk as catwalkAt } from './descentModel';
 import { makePortal } from './portalFigure';
 import { plateau, walkable, FOOTBRIDGE_OVER, WADE_DEPTH } from './plateauModel';
 import { createHoldWorld, type HoldWorld } from './holdWorld';
-import { toLocal as holdLocal, toWorld as holdWorldAt, onHold, occupy as holdOccupy, cameraClear as holdCamClear, TERRACES as HOLD_TERRACES, APRON as HOLD_APRON } from './holdModel';
+import { holdRoute, DOOR_SPOT, APRON_ENTRY, MEAL_RING, NICHES, HEARTH as HOLD_HEARTH, headingOf as holdHeading, toLocal as holdLocal, toWorld as holdWorldAt, onHold, occupy as holdOccupy, cameraClear as holdCamClear, TERRACES as HOLD_TERRACES, APRON as HOLD_APRON } from './holdModel';
 import { buildWaterworks } from './plateauWorld';
 import { chooseDire, freshSteward, parseSteward, serializeSteward, wake as wakeUp, send as sendSteward, stepSteward, bite as biteSteward, lyingUp, leftToWalk, WAKE_GEMS, PACE as STEWARD_PACE, type Steward, type Circle } from './stewardModel';
 import { setMoot, setHeroes, assignDuty, guards, hunters, traitsOf, traitWords, GUARDS_MAX, HUNTERS_MAX, setOwnWarrens, huntingGround, groundRabbits, buildRack, RACK_WOOD, searchers, setSearch, setSearchFound, searchParty, SEARCHERS_MAX, setDire, isDire, direDen, DIRE_HP, DEN_REACH_M, bearingWords, bearingFromGreen, setWallows, setQuarry, wallowOf, type Duty } from './villageModel';
@@ -1211,20 +1211,29 @@ function placeScope(): void {
 }
 descentVisit.stationAct = st => (OPENING && st.keeper === 'snerk' && descentVisit.catwalk?.depth === 0 ? (scopeLine < SNERK_SCOPE_LINES.length ? { label: 'listen to the snerk', press: () => { descentVisit.speak(st, SNERK_SCOPE_LINES[scopeLine++]); } } : { label: 'look into the scope', press: () => { startScope(); } }) : null);
 // ===== E1 (EDEN.md): the Eden. The cave at the mountain's foot on the first village's bearing from the karst (where the belt's rise passes CAVE_INTO m), its hearth before it; the hosts are the chunks' trees within FORAGE_R of the hearth the band can walk to; berries a few spots; the pack's rest along the foot. Saved under its own key; stepped on the day's ticks in place of the villages. =====
-const edenCtx = { canStand: (x: number, z: number) => standable(x, z) };
+// The band lives in the Hearth-Hold (HOLD.md, H5): its ways about the hold go by the processional stair (holdModel.holdRoute).
+const holdVia = (from: { x: number; z: number }, to: { x: number; z: number }): { x: number; z: number } | null => { const f = plateau(home.seed).hold.frame, w = holdRoute(holdLocal(f, from.x, from.z), holdLocal(f, to.x, to.z)); return w ? holdWorldAt(f, w.u, w.v) : null; };
+const edenCtx = { canStand: (x: number, z: number) => standable(x, z), via: holdVia };
+/** The band's home in the hold: its "cave" before the Great Door (facing out), the Ever-Hearth, the ring it eats round it at, and the apron it reaches the land from. */
+const holdHome = (): { cave: { x: number; z: number; dir: number }; hearth: { x: number; z: number }; from: { x: number; z: number }; ring: number } => { const f = plateau(home.seed).hold.frame; return { cave: { ...holdWorldAt(f, DOOR_SPOT.u, DOOR_SPOT.v), dir: f.dir }, hearth: holdWorldAt(f, HOLD_HEARTH.u, HOLD_HEARTH.v), from: holdWorldAt(f, APRON_ENTRY.u, APRON_ENTRY.v), ring: MEAL_RING }; };
 /** The cave: the Hearth-Hold's mouth (plateauModel.hold.cave), on the first village's bearing from the karst where the belt has risen CAVE_INTO m. */
 function caveSpot(): { x: number; z: number; dir: number } { return { ...plateau(home.seed).hold.cave }; }
 function makeEden(): Eden {
-  const cave = caveSpot(), hx = cave.x - Math.sin(cave.dir) * 3.2, hz = cave.z - Math.cos(cave.dir) * 3.2, trees: { id: number; x: number; z: number }[] = [];
+  // The trees, berries and the pack's rest about the apron (where the band comes down to the land); the band itself at home up in the hold.
+  const hh = holdHome(), cave = hh.cave, hx = hh.from.x, hz = hh.from.z, trees: { id: number; x: number; z: number }[] = [];
   for (let cx = Math.floor((hx - FORAGE_R) / CHUNK); cx <= Math.floor((hx + FORAGE_R) / CHUNK); cx++) for (let cz = Math.floor((hz - FORAGE_R) / CHUNK); cz <= Math.floor((hz + FORAGE_R) / CHUNK); cz++) for (const t of chunkTrees(cx, cz, home.seed)) trees.push({ id: t.id, x: t.x, z: t.z });
+  // Nothing to forage on the hold's flanks (beside its wings, up the slope): the band reaches the land from the apron.
+  const flank = (x: number, z: number): boolean => { const q = holdLocal(plateau(home.seed).hold.frame, x, z); return Math.abs(q.u) < HOLD_TERRACES[0].hw + 10 && q.v > -3; };
+  for (let i = trees.length - 1; i >= 0; i--) if (flank(trees[i].x, trees[i].z)) trees.splice(i, 1);
   const r = mulberry32(home.seed * 41 + 9), berries: { x: number; z: number }[] = [];
-  for (let i = 0; i < 40 && berries.length < BERRY_SPOTS; i++) { const a = r() * Math.PI * 2, d = 20 + r() * 40, x = hx + Math.cos(a) * d, z = hz + Math.sin(a) * d; if (standable(x, z)) berries.push({ x, z }); }
+  for (let i = 0; i < 40 && berries.length < BERRY_SPOTS; i++) { const a = r() * Math.PI * 2, d = 20 + r() * 40, x = hx + Math.cos(a) * d, z = hz + Math.sin(a) * d; if (standable(x, z) && !flank(x, z)) berries.push({ x, z }); }
   let packHome = { x: hx, z: hz }; for (let i = 0; i < 60; i++) { const a = cave.dir + Math.PI / 2 * (i % 2 ? 1 : -1) + (r() - 0.5) * 0.8, d = PACK_HOME_M * (0.7 + r() * 0.5), x = hx - Math.sin(a) * d, z = hz - Math.cos(a) * d; if (standable(x, z)) { packHome = { x, z }; break; } }
-  return freshEden(home.seed, cave, trees, berries, packHome, HOBBITS.map(h => ({ id: h.id, name: h.name, rises: h.rises })), edenCtx);
+  return freshEden(home.seed, cave, trees, berries, packHome, HOBBITS.map(h => ({ id: h.id, name: h.name, rises: h.rises })), edenCtx, { hearth: hh.hearth, ring: hh.ring, from: hh.from });
 }
-let eden: Eden = EDEN ? (() => { let raw: string | null = null; try { raw = localStorage.getItem(EDEN_KEY); } catch { /* Storage is optional. */ } return parseEden(raw, makeEden); })() : (null as unknown as Eden);
-const edenWorld: EdenWorld | null = EDEN ? createEdenWorld(scene, relief, eden, home.seed) : null;
-const henGrove: HenGrove | null = EDEN && henGroveTrees ? createHenGrove(scene, relief, eden.hearth, henGroveTrees, home.seed) : null;
+let eden: Eden = EDEN ? (() => { let raw: string | null = null; try { raw = localStorage.getItem(EDEN_KEY); } catch { /* Storage is optional. */ } const e = parseEden(raw, makeEden), c = holdHome().cave; return Math.hypot(e.cave.x - c.x, e.cave.z - c.z) > 0.5 ? makeEden() : e; /* a save from before the band moved into the hold starts again there */ })() : (null as unknown as Eden);
+const edenWorld: EdenWorld | null = EDEN ? createEdenWorld(scene, relief, eden, home.seed, { cave: false, hearth: false, sleepAt: i => { const n = NICHES[i % NICHES.length], h = plateau(home.seed).hold, w = holdWorldAt(h.frame, n.u0 + 1.05, (n.v0 + n.v1) / 2); return { x: w.x, y: h.datum + HOLD_TERRACES[HOLD_TERRACES.length - 1].z + 0.52, z: w.z, heading: holdHeading(h.frame, 0, 1) }; } }) : null;
+// Its harvester cooks at the Ever-Hearth, on the ring's near side, and goes up and down by the stair.
+const henGrove: HenGrove | null = EDEN && henGroveTrees ? (() => { const f = plateau(home.seed).hold.frame; return createHenGrove(scene, relief, eden.hearth, henGroveTrees, home.seed, 'hobbit', { route: holdVia, cookSpot: holdWorldAt(f, HOLD_HEARTH.u + 0.9, HOLD_HEARTH.v - MEAL_RING + 0.3), idleSpot: holdWorldAt(f, HOLD_HEARTH.u + 2.2, HOLD_HEARTH.v - MEAL_RING - 0.6), ownFire: false }); })() : null;
 // The wolf's grove runs half a cycle behind the hobbit's, so their harvests come at different times.
 const wolfGrove: HenGrove | null = EDEN && henGroves.wolf ? createHenGrove(scene, relief, henGroves.wolf.home, henGroves.wolf.trees, home.seed + 1, 'wolf') : null; wolfGrove?.skip(80);
 /** Healthy ground near the first village's green, off the growth, for the deer to rise from (in the Eden, by the band's hearth). */

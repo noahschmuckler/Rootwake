@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { roomAt, NICHES, TERRACES, APRON, FLIGHTS, BEDS, WALLS, levelAt, carve, occupy, cameraClear, onHold, holdFrame, toLocal, toWorld, runOf, RISER, STEP_TOL, FACADE_V, FACADE_TOP, HEARTH, ROOMS, DOORS, CLEAR_H } from '../src/holdModel';
+import { holdRoute, levelOf, APRON_ENTRY, HEARTH_TOP, DOOR_SPOT, MEAL_RING, roomAt, NICHES, TERRACES, APRON, FLIGHTS, BEDS, WALLS, levelAt, carve, occupy, cameraClear, onHold, holdFrame, toLocal, toWorld, runOf, RISER, STEP_TOL, FACADE_V, FACADE_TOP, HEARTH, ROOMS, DOORS, CLEAR_H } from '../src/holdModel';
 import { plateau, walkable } from '../src/plateauModel';
 
 test('H1: the terraces climb in order, each flight reaching the level above in hobbit steps', () => {
@@ -55,4 +55,25 @@ test('H4: the halls: in through the Great Door, the hall under its vault, the wa
   assert.equal(occupy(17, FACADE_V + 18, H, 0.26), true, 'the scriptorium'); assert.equal(occupy(17, FACADE_V + 5, H, 0.26), true, 'the store');
   assert.ok(cameraClear(0, FACADE_V + 16, H + 3) && !cameraClear(0, FACADE_V + 16, H + 7.5) && !cameraClear(-30, FACADE_V + 16, H + 2));
   assert.ok(roomAt(0, FACADE_V + 16)?.id === 'hall' && NICHES.length === 9 && NICHES.every(n => n.u1 <= -21 && n.v1 <= FACADE_V + 28));
+});
+test('H5: the band\'s ways: from the land to the hearth\'s ring, to the door, out to a bed, back to the land, never through a wall', () => {
+  const walkTo = (from: { u: number; v: number }, to: { u: number; v: number }): number => {
+    const p = { ...from }; let n = 0;
+    for (; n < 4000; n++) {
+      const w = holdRoute(p, to) ?? to, d = Math.hypot(w.u - p.u, w.v - p.v);
+      if (d < 0.05) { if (w === to || Math.hypot(to.u - p.u, to.v - p.v) < 0.05) return n; continue; }
+      const m = Math.min(d, 0.25); p.u += (w.u - p.u) / d * m; p.v += (w.v - p.v) / d * m;
+      const g = levelAt(p.u, p.v); if (g !== null) assert.notEqual(occupy(p.u, p.v, g, 0.22), false, `walked into a wall at ${p.u.toFixed(2)},${p.v.toFixed(2)} going ${from.u},${from.v} → ${to.u},${to.v}`);
+      if (Math.hypot(to.u - p.u, to.v - p.v) < 0.05) return n;
+    }
+    assert.fail(`never got from ${from.u},${from.v} to ${to.u},${to.v} (stuck at ${p.u.toFixed(2)},${p.v.toFixed(2)})`);
+  };
+  const ring = (a: number) => ({ u: HEARTH.u + Math.cos(a) * MEAL_RING, v: HEARTH.v + Math.sin(a) * MEAL_RING });
+  const land = [{ u: 25, v: -25 }, { u: -40, v: -10 }, { u: 3, v: -30 }, { u: -48.5, v: 32.7 }, { u: 50, v: 20 }];
+  for (const l of land) for (let k = 0; k < 8; k++) { walkTo(l, ring(k / 8 * Math.PI * 2)); walkTo(ring(k / 8 * Math.PI * 2), l); }
+  walkTo(land[3], land[4]); walkTo(land[4], land[0]);
+  walkTo(land[0], DOOR_SPOT); walkTo(DOOR_SPOT, land[1]); walkTo(ring(-Math.PI / 2), DOOR_SPOT); walkTo(DOOR_SPOT, ring(-Math.PI / 2));
+  const bed = BEDS.find(b => b.terrace === 2)!, onBed = { u: (bed.u0 + bed.u1) / 2, v: (bed.v0 + bed.v1) / 2 };
+  walkTo(ring(1), onBed); walkTo(onBed, land[2]); walkTo({ u: 0, v: 118 }, land[0]);
+  assert.equal(levelOf(HEARTH_TOP.u, HEARTH_TOP.v), 5); assert.equal(levelOf(DOOR_SPOT.u, DOOR_SPOT.v), 5); assert.equal(levelOf(APRON_ENTRY.u, APRON_ENTRY.v), -1);
 });

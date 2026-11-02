@@ -74,7 +74,11 @@ export interface HenGroveState { hen: { phase: HenPhase; t: number; stage: numbe
 export interface HenGrove { root: THREE.Group; trees: Vec2[]; /** The wolf's figure from the file, once loaded (a wolf's grove draws no wolf until then). */ setWolfAsset(a: WolfAsset): void; readonly home: Vec2; update(dt: number, night: number): void; /** Dev: run the cycle forward `seconds` in small steps. */ skip(seconds: number): void; readonly state: HenGroveState; dispose(): void }
 
 /** `hearth` is the harvester's home: the band's hearth, where a hobbit cooks; a wolf's own spot, where it lies to gnaw. */
-export function createHenGrove(scene: THREE.Scene, relief: (x: number, z: number) => number, hearth: Vec2, trees: [Vec2, Vec2], seed = 1, harvester: Harvester = 'hobbit'): HenGrove {
+/** Where the harvester's home is more than a point on open ground (the Hearth-Hold, HOLD.md): `route` gives the next waypoint between
+ * two points (null: straight on); `cookSpot` and `idleSpot` stand it at the home's own fire; `ownFire` false leaves the grove's little
+ * cooking fire out (the Ever-Hearth burns there already). */
+export interface GroveHome { route?(from: Vec2, to: Vec2): Vec2 | null; cookSpot?: Vec2; idleSpot?: Vec2; ownFire?: boolean }
+export function createHenGrove(scene: THREE.Scene, relief: (x: number, z: number) => number, hearth: Vec2, trees: [Vec2, Vec2], seed = 1, harvester: Harvester = 'hobbit', home: GroveHome = {}): HenGrove {
   const isWolf = harvester === 'wolf';
   const root = new THREE.Group(); root.name = 'hen-grove'; scene.add(root);
   const geoms: THREE.BufferGeometry[] = [], mats: THREE.Material[] = [];
@@ -124,7 +128,7 @@ export function createHenGrove(scene: THREE.Scene, relief: (x: number, z: number
   // ── the state ──
   const st: HenGroveState = { hen: { phase: 'rest', t: 0, stage: 1, f: 1 / STAGES, tree: 0, x: seatOf(0).x, z: seatOf(0).z }, hobbit: { phase: 'idle', t: 0, x: 0, z: 0 }, harvester, cushions: [0, 1], loops: 0 };
   const toGrove = ((): Vec2 => { const d = dist(hearth, mid) || 1; return { x: (mid.x - hearth.x) / d, z: (mid.z - hearth.z) / d }; })();
-  const idleSpot: Vec2 = { x: hearth.x + toGrove.x * 1.7, z: hearth.z + toGrove.z * 1.7 }, cookSpot: Vec2 = { x: hearth.x + toGrove.x * 0.85, z: hearth.z + toGrove.z * 0.85 };
+  const idleSpot: Vec2 = home.idleSpot ?? { x: hearth.x + toGrove.x * 1.7, z: hearth.z + toGrove.z * 1.7 }, cookSpot: Vec2 = home.cookSpot ?? { x: hearth.x + toGrove.x * 0.85, z: hearth.z + toGrove.z * 0.85 };
   const kickSpot: Vec2 = { x: mid.x - toGrove.x * 0.42, z: mid.z - toGrove.z * 0.42 }, stepSpot: Vec2 = { x: mid.x - toGrove.x * 0.3, z: mid.z - toGrove.z * 0.3 };
   // The wolf: it lies at its spot (the home) facing the grove; it reaches the hen from WOLF_REACH back along the line from home.
   const toHen = ((): Vec2 => { const d = dist(hearth, mid) || 1; return { x: (mid.x - hearth.x) / d, z: (mid.z - hearth.z) / d }; })();
@@ -135,7 +139,13 @@ export function createHenGrove(scene: THREE.Scene, relief: (x: number, z: number
   const pose: HenPose = { f: st.hen.f, speed: 0, hoist: 0.45, sit: 1, seat: CUSHION_H, strain: 0, invert: 0, fall: 0, pull: 0, meat: true, legs: 1, eyes: 1, sunk: 0, lift: 0, night: 0 };
   const henPace = (): number => st.hen.stage === 0 ? HEN_RUN : lerp(HEN_LEAN, HEN_FAT, st.hen.f);
   /** A step toward `to` at `pace`; true on arrival. */
-  const walk = (p: { x: number; z: number }, to: Vec2, pace: number, dt: number): boolean => { const d = dist(p, to); if (d < 0.02) return true; const m = Math.min(d, pace * dt); p.x += (to.x - p.x) / d * m; p.z += (to.z - p.z) / d * m; return d - m < 0.02; };
+  /** A step toward `to` (by the home's route's waypoints where it has them): true on arriving at `to` itself. */
+  const walk = (p: { x: number; z: number }, to: Vec2, pace: number, dt: number): boolean => {
+    const w = home.route?.(p, to) ?? null, goal = w ?? to, d = dist(p, goal); if (d < 0.02) return !w;
+    const m = Math.min(d, pace * dt); p.x += (goal.x - p.x) / d * m; p.z += (goal.z - p.z) / d * m; return !w && d - m < 0.02;
+  };
+  /** The way it faces walking from `from` to where it is now (or toward `to` if it has not moved). */
+  const facing = (from: Vec2, p: Vec2, to: Vec2): number => (dist(from, p) > 1e-4 ? toward(from, p) : toward(from, to));
   const hset = (phase: HenPhase): void => { st.hen.phase = phase; st.hen.t = 0; };
   const bset = (phase: HobbitPhase): void => { st.hobbit.phase = phase; st.hobbit.t = 0; };
 
@@ -184,7 +194,7 @@ export function createHenGrove(scene: THREE.Scene, relief: (x: number, z: number
     const b = st.hobbit; b.t += dt; const t = b.t; hobSpeed = 0;
     switch (b.phase) {
       case 'idle': hobHeading = angleTo(hobHeading, toward(b, { x: st.hen.x, z: st.hen.z }), Math.min(1, dt * 2)); if (st.hen.phase === 'mid' || st.hen.phase === 'wait') bset('go'); break;
-      case 'go': { const from = { x: b.x, z: b.z }; if (walk(b, kickSpot, HOBBIT_PACE, dt)) bset('ready'); hobSpeed = HOBBIT_PACE; hobHeading = angleTo(hobHeading, toward(from, kickSpot), Math.min(1, dt * 8)); break; }
+      case 'go': { const from = { x: b.x, z: b.z }; if (walk(b, kickSpot, HOBBIT_PACE, dt)) bset('ready'); hobSpeed = HOBBIT_PACE; hobHeading = angleTo(hobHeading, facing(from, b, kickSpot), Math.min(1, dt * 8)); break; }
       case 'ready': hobHeading = angleTo(hobHeading, toward(b, mid), Math.min(1, dt * 6)); if (st.hen.phase === 'wait' && st.hen.t > 0.8 && t > 0.6) bset('kick'); break;
       case 'kick': if (t >= BEAT.kick * 0.45 && st.hen.phase === 'wait') hset('flip'); if (t >= BEAT.kick) bset('step'); break;
       case 'step': { const k = smooth(t / BEAT.step); b.x = lerp(kickSpot.x, stepSpot.x, k); b.z = lerp(kickSpot.z, stepSpot.z, k); hobSpeed = 0.3; if (t >= BEAT.step && st.hen.phase === 'kicking') { bset('pull'); hset('pulled'); } break; }
@@ -193,11 +203,11 @@ export function createHenGrove(scene: THREE.Scene, relief: (x: number, z: number
         hen.group.updateMatrixWorld(true); popFrom = new THREE.Vector3().setFromMatrixPosition(hen.meat.group.matrixWorld); popT = 0; bites = 1;
         hset('flat'); bset('carry'); }
         break;
-      case 'carry': { popT += dt; const from = { x: b.x, z: b.z }; if (t > 0.6) { if (walk(b, cookSpot, HOBBIT_PACE * 0.85, dt)) bset('cook'); hobSpeed = HOBBIT_PACE * 0.85; hobHeading = angleTo(hobHeading, toward(from, cookSpot), Math.min(1, dt * 8)); } break; }
+      case 'carry': { popT += dt; const from = { x: b.x, z: b.z }; if (t > 0.6) { if (walk(b, cookSpot, HOBBIT_PACE * 0.85, dt)) bset('cook'); hobSpeed = HOBBIT_PACE * 0.85; hobHeading = angleTo(hobHeading, facing(from, b, cookSpot), Math.min(1, dt * 8)); } break; }
       case 'cook': hobHeading = angleTo(hobHeading, toward(b, hearth), Math.min(1, dt * 6)); if (t >= BEAT.cook) bset('eat'); break;
       case 'eat': bites = 1 - Math.floor(t / BEAT.eat * 4) / 4; if (t >= BEAT.eat) { bites = 0; bset('idle'); } break;
     }
-    if (b.phase === 'idle' && t > 0.5 && t < 4 && dist(b, idleSpot) > 0.05) { const from = { x: b.x, z: b.z }; walk(b, idleSpot, HOBBIT_PACE, dt); hobSpeed = HOBBIT_PACE; hobHeading = toward(from, idleSpot); }
+    if (b.phase === 'idle' && t > 0.5 && (home.route || t < 4) && dist(b, idleSpot) > 0.05) { const from = { x: b.x, z: b.z }; walk(b, idleSpot, HOBBIT_PACE, dt); hobSpeed = HOBBIT_PACE; hobHeading = facing(from, b, idleSpot); }
   }
   /** The wolf's harvest: lying watching at its spot until the plump hen stops midway; up and over to it; nose under and toss it onto its
    * head; a paw on the dress, the bottom in its jaws, tugging back until it pops off; a shake side to side; a run home; down, and the
@@ -278,7 +288,7 @@ export function createHenGrove(scene: THREE.Scene, relief: (x: number, z: number
       if (stick.visible) { const hx = b.x + fx * 0.12, hz = b.z + fz * 0.12, hy2 = by + 0.2, to = b.phase === 'cook' ? tmp.clone() : new THREE.Vector3(hx + fx * 0.05, hy2 + 0.1, hz + fz * 0.05); const from = new THREE.Vector3(hx, hy2, hz), d = to.clone().sub(from); stick.position.copy(from); stick.scale.set(1, Math.max(0.05, d.length() + 0.05), 1); stick.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize()); }
     }
     // The cooking fire at the hearth.
-    fire.visible = b.phase === 'cook' || (b.phase === 'eat' && b.t < 1.5);
+    fire.visible = home.ownFire !== false && (b.phase === 'cook' || (b.phase === 'eat' && b.t < 1.5));
     for (let k = 0; k < flames.length; k++) flames[k].scale.set(1, fire.visible ? 0.85 + Math.sin(clock * 13 + k * 2.1) * 0.2 : 0.001, 1);
     fireLight.intensity = fire.visible ? 3 + Math.sin(clock * 11) * 0.6 : 0;
   }

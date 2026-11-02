@@ -45,11 +45,15 @@ export type CatAct = 'sleeping' | 'prowling' | 'climbing' | 'eating' | 'descendi
 export interface Bobcat { x: number; z: number; heading: number; speed: number; act: CatAct; /** The burl it is after or up at; the bird it leaps for. */ burl: number | null; bird: number | null; /** 0..1 up the trunk. */ up: number; left: number; meals: number; day: number; den: Vec2; stuck?: number }
 export interface EdenEvent { kind: EventKind; tick: number; x: number; z: number; who?: string }
 export interface Eden {
-  seed: number; tick: number; cave: Vec2 & { dir: number }; hearth: Vec2; hosts: Host[]; berries: Vec2[]; /** E1b: flowers to sniff and rocks to sit on, near the hearth. */ flowers: Vec2[]; rocks: Vec2[]; chickens: Chicken[]; nextChicken: number;
+  seed: number; tick: number; cave: Vec2 & { dir: number }; hearth: Vec2; /** The radius the band eats round the hearth at; where it reaches the land from (EdenHome). */ ring?: number; from?: Vec2; hosts: Host[]; berries: Vec2[]; /** E1b: flowers to sniff and rocks to sit on, near the hearth. */ flowers: Vec2[]; rocks: Vec2[]; chickens: Chicken[]; nextChicken: number;
   hobbits: EdenHobbit[]; pack: Wolf[]; packHome: Vec2; packMeals: number; packDay: number; /** E2a */ burls: Burl[]; birds: Bird[]; nextBurl: number; nextBird: number; cat: Bobcat | null; /** Chickens and berries at the hearth today. */ store: number; berriesStore: number; eatenToday: number;
   events: EdenEvent[]; /** A day's counts (dev). */ days: { chickens: number; free: number; taken: number; wolfEaten: number }[];
 }
-export interface EdenCtx { canStand: (x: number, z: number) => boolean }
+/** `via` (the Hearth-Hold, HOLD.md): the next waypoint between two points where the way is not straight (null: straight on). */
+export interface EdenCtx { canStand: (x: number, z: number) => boolean; via?: (from: Vec2, to: Vec2) => Vec2 | null }
+/** Where the band lives when its home is more than a cave mouth (the Hearth-Hold): the hearth itself, the radius it eats round it at, and
+ * the point it reaches the land from (forage reach and the hosts' reachability are reckoned from there). */
+export interface EdenHome { hearth?: Vec2; ring?: number; from?: Vec2 }
 export const EVENTS_KEPT = 200;
 const dist = (a: Vec2, b: Vec2): number => Math.hypot(a.x - b.x, a.z - b.z);
 const toward = (from: Vec2, to: Vec2): number => Math.atan2(-(to.x - from.x), -(to.z - from.z));
@@ -57,13 +61,13 @@ const toward = (from: Vec2, to: Vec2): number => Math.atan2(-(to.x - from.x), -(
 const stepTo = (p: Vec2, heading: number, m: number): Vec2 => ({ x: p.x - Math.sin(heading) * m, z: p.z - Math.cos(heading) * m });
 
 /** The Eden at a cave: hosts are the tree bases within FORAGE_R the band can walk to (the entry supplies the trees, the model keeps those it can reach), berries a few spots; a chicken on every host at a random growth; the band asleep inside; the pack at its rest. */
-export function freshEden(seed: number, cave: Vec2 & { dir: number }, trees: Host[], berries: Vec2[], packHome: Vec2, names: { id: string; name: string; rises: number }[], ctx: EdenCtx): Eden {
+export function freshEden(seed: number, cave: Vec2 & { dir: number }, trees: Host[], berries: Vec2[], packHome: Vec2, names: { id: string; name: string; rises: number }[], ctx: EdenCtx, home: EdenHome = {}): Eden {
   const rand = mulberry32((seed * 7331 + 11) >>> 0);
-  const hearth = stepTo(cave, cave.dir, 3.2);
-  const reachable = (p: Vec2): boolean => { const d = dist(hearth, p), n = Math.max(1, Math.ceil(d / 4)); for (let i = 1; i <= n; i++) { const t = i / n; if (!ctx.canStand(hearth.x + (p.x - hearth.x) * t, hearth.z + (p.z - hearth.z) * t)) return false; } return true; };
+  const hearth = home.hearth ?? stepTo(cave, cave.dir, 3.2), from = home.from ?? hearth;
+  const reachable = (p: Vec2): boolean => { const d = dist(from, p), n = Math.max(1, Math.ceil(d / 4)); for (let i = 1; i <= n; i++) { const t = i / n; if (!ctx.canStand(from.x + (p.x - from.x) * t, from.z + (p.z - from.z) * t)) return false; } return true; };
   // The nearest HOSTS_MAX the band can walk to: the balance is tuned to that many (a wood holds far more trees than the eaters could keep in check).
-  const hosts = trees.filter(t => dist(t, hearth) <= FORAGE_R && dist(t, hearth) > 6 && reachable(t)).sort((a, b) => dist(a, hearth) - dist(b, hearth)).slice(0, HOSTS_MAX);
-  const e: Eden = { seed, tick: 0, cave, hearth, hosts, berries: berries.filter(reachable), flowers: [], rocks: [], chickens: [], nextChicken: 1, hobbits: [], pack: [], packHome, packMeals: 0, packDay: -1, burls: [], birds: [], nextBurl: 1, nextBird: 1, cat: null, store: 0, berriesStore: 0, eatenToday: 0, events: [], days: [] };
+  const hosts = trees.filter(t => dist(t, from) <= FORAGE_R && dist(t, from) > 6 && reachable(t)).sort((a, b) => dist(a, from) - dist(b, from)).slice(0, HOSTS_MAX);
+  const e: Eden = { seed, tick: 0, cave, hearth, ...(home.ring ? { ring: home.ring } : {}), ...(home.from ? { from: home.from } : {}), hosts, berries: berries.filter(reachable), flowers: [], rocks: [], chickens: [], nextChicken: 1, hobbits: [], pack: [], packHome, packMeals: 0, packDay: -1, burls: [], birds: [], nextBurl: 1, nextBird: 1, cat: null, store: 0, berriesStore: 0, eatenToday: 0, events: [], days: [] };
   // E1b: flowers 3–9 m from the hearth, rocks 2.5–6 m, on ground the band can stand on, off the cave's own line.
   for (let i = 0; i < 60 && e.flowers.length < FLOWER_SPOTS; i++) { const a = rand() * Math.PI * 2, d = 3 + rand() * 6, p = { x: hearth.x + Math.cos(a) * d, z: hearth.z + Math.sin(a) * d }; if (ctx.canStand(p.x, p.z) && dist(p, cave) > 3 && !e.flowers.some(f => dist(f, p) < 1.5)) e.flowers.push(p); }
   for (let i = 0; i < 60 && e.rocks.length < ROCK_SPOTS; i++) { const a = rand() * Math.PI * 2, d = 2.5 + rand() * 3.5, p = { x: hearth.x + Math.cos(a) * d, z: hearth.z + Math.sin(a) * d }; if (ctx.canStand(p.x, p.z) && dist(p, cave) > 3 && !e.flowers.some(f => dist(f, p) < 1.2) && !e.rocks.some(r => dist(r, p) < 2)) e.rocks.push(p); }
@@ -92,11 +96,14 @@ const takeable = (e: Eden, taken: Set<number>): Chicken[] => e.chickens.filter(c
 const nearest = <T extends Vec2>(from: Vec2, list: T[]): T | null => { let best: T | null = null, bd = Infinity; for (const p of list) { const d = dist(from, p); if (d < bd) { bd = d; best = p; } } return best; };
 /** A step toward `to` at `pace`: straight when the ground allows, else round the obstacle by the nearest open heading (water, rock). Returns true at arrival. `stuck` counts ticks without progress, for the callers to give a target up. */
 function walk(p: { x: number; z: number; heading: number; speed: number; stuck?: number }, to: Vec2, pace: number, ctx: EdenCtx): boolean {
-  const d = dist(p, to); if (d < 1e-6) { p.speed = 0; return true; }
-  const want = toward(p, to), m = Math.min(d, pace * SECONDS_PER_TICK);
+  if (dist(p, to) < 1e-6) { p.speed = 0; return true; }
+  // By the way's waypoints where it has them (ctx.via); arriving at a waypoint is not arriving.
+  let goal = ctx.via?.(p, to) ?? to; if (goal !== to && dist(p, goal) < 0.05) goal = to;
+  const d = dist(p, goal), via = goal !== to;
+  const want = toward(p, goal), m = Math.min(d, pace * SECONDS_PER_TICK);
   for (const off of [0, 0.5, -0.5, 1.0, -1.0, 1.6, -1.6, 2.2, -2.2]) {
     const h = want + off, n = stepTo(p, h, m); if (!ctx.canStand(n.x, n.z)) continue;
-    p.x = n.x; p.z = n.z; p.heading = h; p.speed = off === 0 ? pace : pace * 0.7; p.stuck = off === 0 ? 0 : (p.stuck ?? 0) + 1; return dist(p, to) <= 0.3;
+    p.x = n.x; p.z = n.z; p.heading = h; p.speed = off === 0 ? pace : pace * 0.7; p.stuck = off === 0 ? 0 : (p.stuck ?? 0) + 1; return !via && dist(p, to) <= 0.3;
   }
   p.speed = 0; p.stuck = (p.stuck ?? 0) + 1; return false;
 }
@@ -165,7 +172,7 @@ function stepOne(e: Eden, ctx: EdenCtx): void {
   }
   // ── the band ──
   const taken = new Set<number>(e.hobbits.map(h => (h.target?.kind === 'chicken' ? h.target.id : -1)));
-  const need = e.store + e.hobbits.filter(h => h.carry === 'chicken').length < NEED_PER_DAY, dayOver = phase === 'dusk' || phase === 'night', atHearth = (h: EdenHobbit): boolean => dist(h, e.hearth) < 1.2;
+  const need = e.store + e.hobbits.filter(h => h.carry === 'chicken').length < NEED_PER_DAY, dayOver = phase === 'dusk' || phase === 'night', atHearth = (h: EdenHobbit): boolean => dist(h, e.hearth) < (e.ring ?? 0) + 1.2;
   for (const h of e.hobbits) {
     h.hunger = Math.min(1, h.hunger + 1 / (DAY_TICKS * 2));
     if (h.antic && runAntic(e, h, phase, rand, ctx)) continue;
@@ -173,10 +180,10 @@ function stepOne(e: Eden, ctx: EdenCtx): void {
       case 'sleeping': if (phase !== 'night' && t >= h.rises && t < 700) { h.act = 'idle'; h.inside = false; h.x = e.cave.x; h.z = e.cave.z; h.heading = e.cave.dir + Math.PI; } break;
       case 'idle': {
         if (phase === 'night') { if (walk(h, e.cave, HOBBIT_WALK, ctx)) { h.act = 'sleeping'; h.inside = true; } break; }
-        if (phase === 'dusk') { if (walk(h, stepTo(e.hearth, (e.hobbits.indexOf(h) / BAND) * Math.PI * 2, 1.6), HOBBIT_WALK, ctx)) { h.act = 'eating'; h.taking = MEAL_TICKS; h.heading = toward(h, e.hearth); if (e.eatenToday === 0) { e.eatenToday = 1; event(e, 'band-eats', e.hearth); } } break; }
-        if (dayOver || !need && !(h.picksBerries && e.berriesStore < BERRY_PICKERS)) { if (!dayOver && rand() < ANTIC_CHANCE) startAntic(e, h, rand, ctx); else walk(h, stepTo(e.hearth, (e.hobbits.indexOf(h) / BAND) * Math.PI * 2 + 0.5, 2.2), HOBBIT_WALK, ctx); break; }
+        if (phase === 'dusk') { if (walk(h, stepTo(e.hearth, (e.hobbits.indexOf(h) / BAND) * Math.PI * 2, e.ring ?? 1.6), HOBBIT_WALK, ctx)) { h.act = 'eating'; h.taking = MEAL_TICKS; h.heading = toward(h, e.hearth); if (e.eatenToday === 0) { e.eatenToday = 1; event(e, 'band-eats', e.hearth); } } break; }
+        if (dayOver || !need && !(h.picksBerries && e.berriesStore < BERRY_PICKERS)) { if (!dayOver && rand() < ANTIC_CHANCE) startAntic(e, h, rand, ctx); else walk(h, stepTo(e.hearth, (e.hobbits.indexOf(h) / BAND) * Math.PI * 2 + 0.5, (e.ring ?? 1.6) + 0.6), HOBBIT_WALK, ctx); break; }
         if (h.picksBerries && e.berries.length) { h.target = { kind: 'berries', ...e.berries[(h.trips + e.hobbits.indexOf(h)) % e.berries.length] }; h.act = 'out'; break; }
-        const c = nearest(h, takeable(e, taken).filter(c => dist(c, e.hearth) <= FORAGE_R)); if (c) { h.target = { kind: 'chicken', id: c.id }; taken.add(c.id); h.act = 'out'; } else h.speed = 0;
+        const c = nearest(h, takeable(e, taken).filter(c => dist(c, e.from ?? e.hearth) <= FORAGE_R)); if (c) { h.target = { kind: 'chicken', id: c.id }; taken.add(c.id); h.act = 'out'; } else h.speed = 0;
         break;
       }
       case 'out': {
@@ -192,7 +199,7 @@ function stepOne(e: Eden, ctx: EdenCtx): void {
         else if (--h.taking <= 0) { h.carry = 'berries'; h.target = null; h.act = 'home'; event(e, 'hobbit-picks', h, h.id); }
         break;
       }
-      case 'home': if (walk(h, e.hearth, HOBBIT_WALK, ctx)) { if (h.carry === 'chicken') e.store++; else if (h.carry === 'berries') e.berriesStore++; h.carry = null; h.trips++; h.act = 'idle'; } else maybeTrip(e, h, rand); break;
+      case 'home': if (walk(h, e.ring ? stepTo(e.hearth, (e.hobbits.indexOf(h) / BAND) * Math.PI * 2 + 0.25, e.ring) : e.hearth, HOBBIT_WALK, ctx)) { if (h.carry === 'chicken') e.store++; else if (h.carry === 'berries') e.berriesStore++; h.carry = null; h.trips++; h.act = 'idle'; } else maybeTrip(e, h, rand); break;
       case 'eating': h.hunger = Math.max(0, h.hunger - 0.6 / MEAL_TICKS); if (--h.taking <= 0) h.act = 'idle'; break;
     }
     if (h.act !== 'out' && h.act !== 'home' && !(h.act === 'idle' && !atHearth(h))) h.speed = 0;

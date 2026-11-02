@@ -206,3 +206,64 @@ export function cameraClear(u: number, v: number, y: number): boolean {
   for (const [du, dv] of [[0.4, 0], [-0.4, 0], [0, 0.4], [0, -0.4]]) { const s = levelAt(u + du, v + dv); if (s !== null && y < s + 0.15) return false; }
   return true;
 }
+
+// ---- H5: the band's ways about the hold ------------------------------------------------------------------------------------------
+/** Where the band comes onto the hold from the land (before the gate), where the hearth terrace's flight tops out, the band's
+ * "cave" (before the Great Door, behind the hearth: it goes in there at night and sleeps in the gallery's niches), and the ring the
+ * band eats round the Ever-Hearth at (its seats). */
+export const APRON_ENTRY = { u: 0, v: -5 }, HEARTH_TOP = { u: 0, v: TERRACES[TERRACES.length - 1].v0 + runOf(TERRACES.length - 1) + 0.6 }, DOOR_SPOT = { u: 0, v: FACADE_V - 0.9 }, MEAL_RING = 4.2;
+/** The hearth's plinth with a body's clearance, and the lanes either side of it. */
+const PLINTH = { u: 2.75, v0: HEARTH.v - 2.75, v1: HEARTH.v + 2.75 }, LANE = 3.4;
+/** Which level (u, v) is on: -2 off the hold, -1 the apron, 0..5 the terraces (a central flight belongs to the terrace it climbs to), 6 the halls. */
+export function levelOf(u: number, v: number): number {
+  if (roomAt(u, v)) return 6;
+  for (let i = TERRACES.length - 1; i >= 0; i--) { const t = TERRACES[i]; if (Math.abs(u) <= t.hw && v >= t.v0 && v <= t.v1) return i; }
+  return inRect(APRON, u, v) ? -1 : -2;
+}
+const crossesPlinth = (p: { u: number; v: number }, t: { u: number; v: number }): boolean => { for (let k = 1; k < 12; k++) { const u = p.u + (t.u - p.u) * k / 12, v = p.v + (t.v - p.v) * k / 12; if (Math.abs(u) < PLINTH.u && v > PLINTH.v0 && v < PLINTH.v1) return true; } return false; };
+/** Round the hearth's plinth on the hearth terrace: to the corner of the lane on the walker's side, then the far corner. */
+function roundPlinth(p: { u: number; v: number }, t: { u: number; v: number }): { u: number; v: number } | null {
+  if (!crossesPlinth(p, t)) return null;
+  const s = (Math.abs(p.u) > 0.3 ? Math.sign(p.u) : Math.abs(t.u) > 0.3 ? Math.sign(t.u) : 1), near = { u: s * LANE, v: PLINTH.v0 - 0.3 }, far = { u: s * LANE, v: PLINTH.v1 + 0.3 };
+  if (Math.abs(p.u) < PLINTH.u + 0.2) return p.v < HEARTH.v ? near : far;
+  return t.v > HEARTH.v ? far : near;
+}
+const near = (p: { u: number; v: number }, q: { u: number; v: number }, r = 0.6): boolean => Math.hypot(p.u - q.u, p.v - q.v) < r;
+const crossesTerraces = (p: { u: number; v: number }, t: { u: number; v: number }): boolean => { const n = Math.ceil(Math.hypot(t.u - p.u, t.v - p.v) / 0.75); for (let k = 1; k < n; k++) { const u = p.u + (t.u - p.u) * k / n, v = p.v + (t.v - p.v) * k / n; for (const [du, dv] of [[0, 0], [0.8, 0], [-0.8, 0], [0, 0.8], [0, -0.8]]) if (levelOf(u + du, v + dv) >= 0) return true; } return false; };
+/** On the land, a way that would cross the terraces goes round the foot instead: to the corner on its own side, along the front to
+ * the far corner if it must, then on (null: straight on). */
+function aroundFoot(p: { u: number; v: number }, t: { u: number; v: number }): { u: number; v: number } | null {
+  if (!crossesTerraces(p, t)) return null;
+  const corner = (s: number) => ({ u: s * (TERRACES[0].hw + 3), v: TERRACES[0].v0 - 5.5 }), ct = corner(t.u >= 0 ? 1 : -1);
+  if (crossesTerraces(p, ct)) { const cp = corner(p.u >= 0 ? 1 : -1); return near(p, cp, 0.8) ? ct : cp; }
+  return near(p, ct, 0.8) ? null : ct;
+}
+/** The next waypoint from `p` toward `t` about the hold (null: straight on). The terraces are walled but at the processional stair,
+ * so a walker between levels goes by the stair's axis (u 0): onto it from the land at the apron, up or down it to the level it wants,
+ * then across; on the hearth terrace round the hearth's plinth; out of the halls by the Great Door. */
+export function holdRoute(p: { u: number; v: number }, t: { u: number; v: number }): { u: number; v: number } | null {
+  const a = levelOf(p.u, p.v), b = levelOf(t.u, t.v), H = TERRACES.length - 1, onAxis = Math.abs(p.u) < 0.9;
+  if (a === 6) return b === 6 ? null : near(p, DOOR_SPOT) ? (b === H ? roundPlinth(p, t) : HEARTH_TOP) : DOOR_SPOT;
+  if (b === 6) return a === H && near(p, DOOR_SPOT) ? null : holdRoute(p, DOOR_SPOT) ?? DOOR_SPOT;
+  // On a central flight (a terrace's own, climbing to it) bound for that terrace or higher: up to its head before turning off it (its cheeks are walls).
+  if (a >= 0 && a <= H && b >= a && Math.abs(p.u) < STAIR_HW + 0.3 && p.v < TERRACES[a].v0 + runOf(a) + 0.3) { const head = { u: 0, v: TERRACES[a].v0 + runOf(a) + 0.6 }; if (!(b === a && Math.abs(t.u) < STAIR_HW && t.v < head.v)) return onAxis ? head : { u: 0, v: p.v }; }
+  // On the land or the apron for the land: round the foot's corner when the way would cross the terraces (beside the hold's wings).
+  if (a <= -1 && b === -2) {
+    if (a === -1 && p.v > GATE_PLINTHS[0].v0 - 0.5) return { u: Math.abs(p.u) < 2.8 ? 0 : p.u, v: GATE_PLINTHS[0].v0 - 1.0 }; // out before the gate's plinths, straight down past them
+    return aroundFoot(p, t);
+  }
+  if (a === b) return a === H ? roundPlinth(p, t) : null;
+  if (a < b) { // up
+    if (a === -2) {
+      if (!near(p, APRON_ENTRY, 1)) return aroundFoot(p, APRON_ENTRY) ?? APRON_ENTRY;
+      return b === -1 ? null : { u: 0, v: TERRACES[b].v0 + runOf(b) + 0.6 };
+    }
+    if (!onAxis) return { u: 0, v: a === -1 ? Math.min(Math.max(p.v, APRON.v0 + 1), APRON.v1 - 0.5) : Math.min(Math.max(p.v, TERRACES[a].v0 + runOf(a) + 0.3), TERRACES[a].v1 - 0.4) };
+    return { u: 0, v: TERRACES[b].v0 + runOf(b) + 0.6 };
+  }
+  // down
+  if (a === H && !near(p, HEARTH_TOP) && !(onAxis && p.v < PLINTH.v0)) return roundPlinth(p, HEARTH_TOP) ?? HEARTH_TOP;
+  if (!onAxis) return { u: 0, v: a === -1 ? Math.min(Math.max(p.v, APRON.v0 + 1), APRON.v1 - 0.5) : Math.min(Math.max(p.v, TERRACES[a].v0 + runOf(a) + 0.3), TERRACES[a].v1 - 0.4) };
+  if (b === -2) return near(p, APRON_ENTRY, 1) ? null : APRON_ENTRY;
+  return { u: 0, v: (b === -1 ? TERRACES[0].v0 : TERRACES[b + 1].v0) - 0.8 };
+}
