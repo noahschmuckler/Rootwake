@@ -73,7 +73,8 @@ export function installGait(root: THREE.Object3D, clips: THREE.AnimationClip[], 
     motion.update(seconds, speed, heading, grounded);
     // Folding into a wooden form settles her to the idle before the bark takes over.
     const k = THREE.MathUtils.clamp(fold, 0, 1), w = gaitWeights(motion.moving * (1 - k), motion.run, actions);
-    const keep = 1 - THREE.MathUtils.clamp(gait.suppress, 0, 1);
+    // Read once a frame and cleared: every layer over the gait (the fight's moves, the parkour's clips, the seat on the stag) re-asserts its suppress each frame it wants the gait held back, so none has to guess what another left from the frame before.
+    const keep = 1 - THREE.MathUtils.clamp(gait.suppress, 0, 1); gait.suppress = 0;
     for (const role of ROLES) { const a = actions[role]; if (!a) continue; a.setEffectiveWeight(w[role] * keep); a.setEffectiveTimeScale(timeScaleFor(role, motion.speed)); }
     mixer.update(seconds);
   }

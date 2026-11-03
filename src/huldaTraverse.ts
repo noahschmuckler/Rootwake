@@ -60,7 +60,7 @@ export function createTraverseLayer(gait: Gait, root: THREE.Object3D, clips: THR
     const clip = src.clone(); clip.name = `parkour-${name}`; inPlace(clip, name);
     const a = gait.mixer.clipAction(clip, root); a.setLoop(THREE.LoopOnce, 1); a.clampWhenFinished = true; a.paused = true; a.setEffectiveWeight(0); a.play(); actions.set(name, a);
   }
-  let weight = 0, last = 0, cross = CROSS, current: { clip: string; time: number } | null = null, previous: { clip: string; time: number; w: number } | null = null, stage: string | null = null;
+  let weight = 0, cross = CROSS, current: { clip: string; time: number } | null = null, previous: { clip: string; time: number; w: number } | null = null, stage: string | null = null;
   function update(dt: number, plan: Traversal | null, t: number): void {
     const p = plan ? poseFor(plan, t) : null;
     if (p && actions.has(p.clip)) {
@@ -72,8 +72,8 @@ export function createTraverseLayer(gait: Gait, root: THREE.Object3D, clips: THR
     const k = previous ? 1 - previous.w : 1;
     if (previous) { const a = actions.get(previous.clip)!; a.time = previous.time; a.setEffectiveWeight(weight * previous.w); }
     if (current) { const a = actions.get(current.clip)!; a.time = Math.max(0, Math.min(current.time, a.getClip().duration)); a.setEffectiveWeight(weight * k); }
-    // The fight's move layer sets the gait's suppress each frame it runs; where nothing else has, it is still ours from the last frame.
-    const other = gait.suppress === last ? 0 : gait.suppress; gait.suppress = last = Math.max(other, weight);
+    // The gait clears its suppress each time it reads it; the fight's move layer may have set it already this frame. (This had guessed by comparing with its own last value, which flipped the gait in and out every other frame under any fight pose held at full weight: the judder Noah saw, 2026-11-02.)
+    gait.suppress = Math.max(gait.suppress, weight);
   }
   function dispose(): void { for (const a of actions.values()) { a.stop(); gait.mixer.uncacheAction(a.getClip(), root); } }
   return { update, get stage() { return stage; }, get clips() { return [...actions.keys()]; }, dispose };
