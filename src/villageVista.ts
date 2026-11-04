@@ -372,7 +372,7 @@ export function createVillageLook(inp: LookInputs): VillageLook {
     if (renderer.shadowMap.enabled !== shadows) { renderer.shadowMap.enabled = shadows; scene.traverse(o => { const m = (o as THREE.Mesh).material; if (m) (Array.isArray(m) ? m : [m]).forEach(x => (x.needsUpdate = true)); }); }
     sun.castShadow = shadows;
     if (shadows) { sun.shadow.mapSize.set(q.shadow, q.shadow); sun.shadow.map?.dispose(); sun.shadow.map = null; const c = sun.shadow.camera; c.left = c.bottom = -q.shadowBox; c.right = c.top = q.shadowBox; c.updateProjectionMatrix(); }
-    bloom.enabled = q.bloom;
+    bloom.enabled = q.bloom && new URLSearchParams(location.search).get('bloom') !== '0'; // ?bloom=0: no glow passes, to judge their cost.
   }
   setQuality(quality);
   return {

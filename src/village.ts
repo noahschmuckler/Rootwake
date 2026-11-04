@@ -122,7 +122,7 @@ const scene = new THREE.Scene(); const camera = new THREE.PerspectiveCamera(62, 
 const impact = new Impact(), sound = new FightSound(), fightParams = new URLSearchParams(location.search);
 impact.shake = fightParams.get('shake') !== '0'; if (fightParams.get('stop') === '0') impact.stopScale = 0; sound.muted = fightParams.get('mute') === '1';
 addEventListener('pointerdown', () => sound.wake(), { capture: true });
-const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' }); renderer.setPixelRatio(Math.min(devicePixelRatio, 1.5)); renderer.setSize(innerWidth, innerHeight); renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.15; document.body.prepend(renderer.domElement);
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' }); renderer.setPixelRatio(Math.min(devicePixelRatio, Number(fightParams.get('dpr')) || 1.5)); /* ?dpr=N: the drawing's pixel ratio, to judge what the phone's frame costs in pixels. */ renderer.setSize(innerWidth, innerHeight); renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.15; document.body.prepend(renderer.domElement);
 const hemi = new THREE.HemisphereLight('#eef4e2', '#4d5f48', 2.3); scene.add(hemi); const sun = new THREE.DirectionalLight('#fff0c8', 2.3); sun.position.set(-20, 40, 15); scene.add(sun);
 if (overworld.seed !== home.seed) overworld = freshOverworld(home.seed);
 // The look (VISTA_HANDOFF.md, village): ?look=vista, or the /vista/village/ entry, draws the same village with the vista's land, light and grade, its world ringed by mountains past the farthest den.
