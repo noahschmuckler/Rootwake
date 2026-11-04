@@ -31,6 +31,8 @@ import type { VillageLand } from './plateauLand';
 import { PLATEAU_R, MOUNTAIN_RISE, CLOUD_Y, LOW_Y } from './plateauModel';
 /** T6: how far the lowland and the cloud sea run out from the brink before the haze has them (m from the map's middle). Tuning. */
 const FAR_REACH = 18000;
+/** The narrow focus (Noah, 2026-11-04: a fight's frame rate in the 30s; "dial down draw distance so only enough renders to make combat cohesive"): how far the camera draws at full focus (m); the haze is opaque by then. Tuning. */
+export const FOCUS_FAR = 140;
 /** T6: how much of the lowland the cloud sea hides (0..1); the rest is the breaks. Tuning. */
 const CLOUD_COVER = 0.5;
 /** T6: the air below the plateau's level, as a share of the haze at its base: thin enough that the lowland shows through the breaks. Tuning. */
@@ -234,7 +236,7 @@ export function hourAtClock(h: number): Hour {
 }
 
 // ── the look ─────────────────────────────────────────────────────────────
-export interface LookFrame { clockHour: number; feet: THREE.Vector3; under: number; /** T8 (PLATEAU.md, the stratum): how far under the soil she is on a shallow ride (the grass, a surface root; 0..1): the rock under the roots, the soil's underside, the fog that closes in the dark. Not the deep, nor the karst's conduits. */ stratum?: number; interior: boolean; gloom: number; hidden?: boolean; /** MOTHER.md: the Colour's strength (0..1) and how far into her out-breath (0..1); a tree's flare on screen (uv x, y, radius, strength; hue 0..1); the grey fog thinning (0..1). */ colour?: number; exhale?: number; spot?: [number, number, number, number]; spotHue?: number; clear?: number }
+export interface LookFrame { /** The fight's narrow focus (0..1, eased by the entry): the view drawn in to FOCUS_FAR and hazed to the horizon's colour short of it, so a fight draws only what it needs. */ focus?: number; clockHour: number; feet: THREE.Vector3; under: number; /** T8 (PLATEAU.md, the stratum): how far under the soil she is on a shallow ride (the grass, a surface root; 0..1): the rock under the roots, the soil's underside, the fog that closes in the dark. Not the deep, nor the karst's conduits. */ stratum?: number; interior: boolean; gloom: number; hidden?: boolean; /** MOTHER.md: the Colour's strength (0..1) and how far into her out-breath (0..1); a tree's flare on screen (uv x, y, radius, strength; hue 0..1); the grey fog thinning (0..1). */ colour?: number; exhale?: number; spot?: [number, number, number, number]; spotHue?: number; clear?: number }
 export interface VillageLook {
   world: VistaWorld; quality: Quality;
   /** FOREST: what grows under the trees (understory.ts). */
@@ -360,7 +362,7 @@ export function createVillageLook(inp: LookInputs): VillageLook {
   }
 
   // ── each frame ──
-  const UNDER = new THREE.Color(UNDER_COLOUR), GREY_FOG = new THREE.Color('#77746f'), GLOOM = new THREE.Color('#1a1020'), GLOOM_IN = new THREE.Color('#4a0c40'), gloomColour = new THREE.Color('#1a1020'), fogColour = new THREE.Color(), dir = new THREE.Vector3();
+  const focusColour = new THREE.Color(), UNDER = new THREE.Color(UNDER_COLOUR), GREY_FOG = new THREE.Color('#77746f'), GLOOM = new THREE.Color('#1a1020'), GLOOM_IN = new THREE.Color('#4a0c40'), gloomColour = new THREE.Color('#1a1020'), fogColour = new THREE.Color(), dir = new THREE.Vector3();
   let lastClock = -1;
   function setQuality(q: Quality): void {
     quality = q; world.setQuality(q); understory?.setQuality(q.name);
@@ -395,7 +397,10 @@ export function createVillageLook(inp: LookInputs): VillageLook {
       if ((st > 0.5) !== decalsHidden) { decalsHidden = st > 0.5; for (const v of inp.villages()) v.root.traverse(o => { if (o.name === 'worn-green' || o.name === 'worn-path') o.visible = !decalsHidden; }); }
       // Under it the vista's sun and sky-light go too (the trees and the understory about her stand in the dark; the earth and the rock have their own glow about her).
       if (st > 0) { const u = world.uniforms; (u.uSunCol.value as THREE.Color).multiplyScalar(1 - 0.9 * st); (u.uAmbSky.value as THREE.Color).multiplyScalar(1 - 0.75 * st); (u.uAmbGround.value as THREE.Color).multiplyScalar(1 - 0.75 * st); }
-      world.setGloom(gloomColour, Math.min(1, (0.25 + f.gloom * 0.9) * Math.min(1, f.gloom * 8)) * (1 - 0.8 * clear), (0.012 + f.gloom * 0.03) * (1 - 0.85 * clear));
+      const fk = Math.max(0, Math.min(1, f.focus ?? 0)), gAmt = Math.min(1, (0.25 + f.gloom * 0.9) * Math.min(1, f.gloom * 8)) * (1 - 0.8 * clear), gD = (0.012 + f.gloom * 0.03) * (1 - 0.85 * clear);
+      // The narrow focus: the gloom's own fog, turned to the horizon's colour and thickened to be all but opaque at FOCUS_FAR (exp: 3.5 lengths leaves 3%).
+      if (fk > 0) focusColour.set(h.horizon).lerp(gloomColour, Math.min(1, f.gloom * 2));
+      world.setGloom(fk > 0 ? focusColour.lerp(gloomColour, (1 - fk) * Math.min(1, gAmt * 2)) : gloomColour, gAmt + (1 - gAmt) * fk, gD + (3.5 / FOCUS_FAR - gD) * fk * fk);
       world.update(camera, performance.now() / 1000); understory.update(camera);
       // The village's figures and houses: the same sun (dimmed in a mountain's baked shadow), shadows near her, fog of the hour's horizon.
       dir.copy(sunDirection(h)); const lit = world.sunAt(f.feet.x, f.feet.z);
@@ -403,8 +408,12 @@ export function createVillageLook(inp: LookInputs): VillageLook {
       hemi.color.set(h.ambSky); hemi.groundColor.set(h.ambGround); hemi.intensity = h.ambI * 2.2 * (1 - f.gloom * 0.5) * (1 - 0.5 * st);
       fogColour.set(h.horizon).lerp(gloomColour, Math.min(1, f.gloom > 0 ? 0.3 + f.gloom * 0.6 + f.gloom * f.gloom * 0.1 : 0) * (1 - 0.6 * clear)).lerp(UNDER, st); scene.background = fogColour.clone();
       // Three's exponential fog is squared in the distance: 5% is left at √3 / density.
-      scene.fog = new THREE.FogExp2(fogColour.getHex(), THREE.MathUtils.lerp(h.haze * 1.3 + (f.gloom > 0 ? 0.008 + f.gloom * 0.03 : 0) * (1 - 0.92 * clear), Math.sqrt(3) / UNDER_FOG_M, st));
-      if (camera.far !== FAR_REACH * 1.3) { camera.far = FAR_REACH * 1.3; camera.updateProjectionMatrix(); }
+      if (fk > 0) { fogColour.lerp(focusColour, fk * (1 - st)); scene.background = fogColour.clone(); }
+      const fogD = THREE.MathUtils.lerp(h.haze * 1.3 + (f.gloom > 0 ? 0.008 + f.gloom * 0.03 : 0) * (1 - 0.92 * clear), Math.sqrt(3) / UNDER_FOG_M, st);
+      // The narrow focus closes the village's own fog too (its houses and figures), 5% left at FOCUS_FAR.
+      scene.fog = new THREE.FogExp2(fogColour.getHex(), Math.max(fogD, fogD + (Math.sqrt(3) / FOCUS_FAR - fogD) * fk * fk));
+      // Drawn in only once the haze has closed (focus near 1), so nothing is seen to be cut.
+      const far = fk > 0.9 ? FOCUS_FAR * 1.05 : FAR_REACH * 1.3; if (camera.far !== far) { camera.far = far; camera.updateProjectionMatrix(); }
     },
     stratum: () => ({ ...world.stratum(), fogReach: Math.sqrt(3) / (scene.fog as THREE.FogExp2).density }),
     render() {
