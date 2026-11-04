@@ -42,6 +42,8 @@ try{
   assert.ok(report.matador.maxRoll>1.2&&report.matador.maxLift>0.3,'it is thrown up and laid on its side');
   assert.ok(report.matador.held.includes(report.matador.target),'it is held lying there after her part ends');
   assert.ok(report.matador.out,'the whip is out');
+  report.combat=await page.evaluate(()=>({combat:window.__village.feel.combat,focus:window.__village.feel.focus}));
+  assert.ok(report.combat.combat&&report.combat.focus>0.6,`combat mode in a fight (focus ${report.combat.focus})`);
   await page.waitForFunction(()=>window.__village.raiders().every(r=>!(r.choreo>0)),null,{timeout:120000});
   report.swap=await play('swap',[[2.4,0],[-1.2,0.9]]);
   assert.equal(report.swap.start.foes.length,2,'the swap takes the neighbour in');

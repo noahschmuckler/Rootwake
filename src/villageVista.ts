@@ -35,6 +35,8 @@ const FAR_REACH = 18000;
 export const FOCUS_FAR = 140;
 /** The share of the grass's tufts kept at full focus (the field about her is most of what the land costs within the focus). Tuning. */
 export const FOCUS_GRASS = 0.4;
+/** Combat mode's pixel ratio. Tuning. */
+export const COMBAT_DPR = 1;
 /** T6: how much of the lowland the cloud sea hides (0..1); the rest is the breaks. Tuning. */
 const CLOUD_COVER = 0.5;
 /** T6: the air below the plateau's level, as a share of the haze at its base: thin enough that the lowland shows through the breaks. Tuning. */
@@ -249,6 +251,8 @@ export interface VillageLook {
   stratum(): { amount: number; rock: boolean; rockTris: number; tiles: number; hidden: string[]; fogReach: number };
   /** Where grass gives way to the village (its paths, floors and fields), drawn from above; again when huts are built. */
   refreshClearing(): void;
+  /** Combat mode (Noah, 2026-11-04, after trying them on the phone: smoother, and he prefers the look): at COMBAT_DPR, without the bloom; off, as before. Changing it resizes the frame's targets, so the entry switches it once, while the focus's haze hides the moment. */
+  combat(on: boolean): void;
   /** The trees' kinds and the ground's tint again under the taint and the blight (at dawn): only what moved since the last, `full` everything (C1.1). Return how many chunks / tiles were drawn again. */
   refreshTrees(full?: boolean): number;
   refreshGround(full?: boolean): number;
@@ -336,6 +340,7 @@ export function createVillageLook(inp: LookInputs): VillageLook {
   const hud = new URLSearchParams(location.search).get('hud') === '1' ? document.body.appendChild(Object.assign(document.createElement('div'), { id: 'look-hud' })) : null;
   if (hud) { hud.style.cssText = 'position:fixed;z-index:40;bottom:calc(env(safe-area-inset-bottom,0px) + 12px);left:50%;transform:translateX(-50%);padding:4px 8px;border-radius:6px;background:#0b1918aa;color:#eef6f0;font:11px/1.3 ui-monospace,Menlo,monospace;white-space:pre;pointer-events:none'; renderer.info.autoReset = false; }
   let hudFrames = 0, hudMs = 0, hudLast = performance.now(), hudClock = 0, hudWorst = 0;
+  let combatOn = false; const baseDpr = renderer.getPixelRatio();
   const resize = () => { composer.setPixelRatio(renderer.getPixelRatio()); composer.setSize(innerWidth, innerHeight); };
   addEventListener('resize', resize); resize();
 
@@ -372,11 +377,12 @@ export function createVillageLook(inp: LookInputs): VillageLook {
     if (renderer.shadowMap.enabled !== shadows) { renderer.shadowMap.enabled = shadows; scene.traverse(o => { const m = (o as THREE.Mesh).material; if (m) (Array.isArray(m) ? m : [m]).forEach(x => (x.needsUpdate = true)); }); }
     sun.castShadow = shadows;
     if (shadows) { sun.shadow.mapSize.set(q.shadow, q.shadow); sun.shadow.map?.dispose(); sun.shadow.map = null; const c = sun.shadow.camera; c.left = c.bottom = -q.shadowBox; c.right = c.top = q.shadowBox; c.updateProjectionMatrix(); }
-    bloom.enabled = q.bloom && new URLSearchParams(location.search).get('bloom') !== '0'; // ?bloom=0: no glow passes, to judge their cost.
+    bloom.enabled = q.bloom && !combatOn && new URLSearchParams(location.search).get('bloom') !== '0'; // ?bloom=0: no glow passes, to judge their cost; none in combat mode.
   }
   setQuality(quality);
   return {
     world, understory, get quality() { return quality; }, setQuality, refreshClearing,
+    combat(on) { if (on === combatOn) return; combatOn = on; renderer.setPixelRatio(on ? Math.min(baseDpr, COMBAT_DPR) : baseDpr); resize(); bloom.enabled = quality.bloom && !on && new URLSearchParams(location.search).get('bloom') !== '0'; },
     refreshTrees(full = false) { world.setTrees(trees(full)); return kinds.chunks; },
     refreshGround(full = false) { const bytes = groundTint(vl.land, seed, inp.blighted, inp.taint, tint, landStamp(), full); if (tint.tiles > 0) world.setGround(bytes); return tint.tiles; },
     trees: () => lastTrees,
