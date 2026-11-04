@@ -33,6 +33,8 @@ import { PLATEAU_R, MOUNTAIN_RISE, CLOUD_Y, LOW_Y } from './plateauModel';
 const FAR_REACH = 18000;
 /** The narrow focus (Noah, 2026-11-04: a fight's frame rate in the 30s; "dial down draw distance so only enough renders to make combat cohesive"): how far the camera draws at full focus (m); the haze is opaque by then. Tuning. */
 export const FOCUS_FAR = 140;
+/** The share of the grass's tufts kept at full focus (the field about her is most of what the land costs within the focus). Tuning. */
+export const FOCUS_GRASS = 0.4;
 /** T6: how much of the lowland the cloud sea hides (0..1); the rest is the breaks. Tuning. */
 const CLOUD_COVER = 0.5;
 /** T6: the air below the plateau's level, as a share of the haze at its base: thin enough that the lowland shows through the breaks. Tuning. */
@@ -413,6 +415,7 @@ export function createVillageLook(inp: LookInputs): VillageLook {
       // The narrow focus closes the village's own fog too (its houses and figures), 5% left at FOCUS_FAR.
       scene.fog = new THREE.FogExp2(fogColour.getHex(), Math.max(fogD, fogD + (Math.sqrt(3) / FOCUS_FAR - fogD) * fk * fk));
       // Drawn in only once the haze has closed (focus near 1), so nothing is seen to be cut.
+      world.setGrassShare(1 - (1 - FOCUS_GRASS) * fk);
       const far = fk > 0.9 ? FOCUS_FAR * 1.05 : FAR_REACH * 1.3; if (camera.far !== far) { camera.far = far; camera.updateProjectionMatrix(); }
     },
     stratum: () => ({ ...world.stratum(), fogReach: Math.sqrt(3) / (scene.fog as THREE.FogExp2).density }),

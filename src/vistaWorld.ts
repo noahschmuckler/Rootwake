@@ -86,6 +86,8 @@ export interface VistaWorld {
   stratum(): { amount: number; rock: boolean; rockTris: number; tiles: number; hidden: string[] };
   /** A dark fog over everything (the dark forest). */
   setGloom(colour: THREE.Color, amount: number, density: number): void;
+  /** The share of the grass's tufts drawn (0..1): the fight's narrow focus thins it. */
+  setGrassShare(k: number): void;
   /** Mask i (0..2): where no grass grows, a texture laid on the square at (x0, z0) of the given side. */
   setClear(i: number, texture: THREE.Texture | null, x0: number, z0: number, side: number): void;
   setQuality(q: Quality): void;
@@ -238,13 +240,15 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
   let grass: THREE.Mesh | null = null, soilClear = true;
   /** Tuning: the camera's height above the ground past which no grass is drawn (m). */
   const GRASS_CEILING = 14;
+  // The tufts lie in random order, so drawing the first share of them thins the field evenly (setGrassShare: free, nothing rebuilt).
+  let grassCount = 0, grassShare = 1;
   function buildGrass(count: number, patch: number): void {
     if (grass) { grass.geometry.dispose(); scene.remove(grass); grass = null; }
     if (!count) return;
     const g = new THREE.InstancedBufferGeometry(); g.index = bladeGeo.index; g.setAttribute('position', bladeGeo.getAttribute('position')); g.setAttribute('aTuft', bladeGeo.getAttribute('aTuft'));
     const r = rng(77), a = new Float32Array(count * 4);
     for (let i = 0; i < count; i++) { a[i * 4] = r() * patch; a[i * 4 + 1] = r() * patch; a[i * 4 + 2] = r(); a[i * 4 + 3] = r() * Math.PI * 2; }
-    g.setAttribute('aBlade', new THREE.InstancedBufferAttribute(a, 4)); g.instanceCount = count;
+    g.setAttribute('aBlade', new THREE.InstancedBufferAttribute(a, 4)); grassCount = count; g.instanceCount = Math.max(1, Math.round(count * grassShare));
     grass = new THREE.Mesh(g, grassMat); grass.frustumCulled = false; grass.receiveShadow = true; grass.name = 'grass'; scene.add(grass);
     grassMat.uniforms.uPatch.value = patch;
   }
@@ -376,6 +380,7 @@ export function buildVista(scene: THREE.Scene, land: Land, trees: Tree[], rocks:
       const glass = amount > 0.01; if (terrainMat.transparent !== glass) { terrainMat.transparent = glass; terrainMat.needsUpdate = true; }
       terrainMat.depthWrite = amount < 0.5; soilClear = amount < 0.05;
     },
+    setGrassShare(k) { grassShare = Math.max(0, Math.min(1, k)); if (grass) (grass.geometry as THREE.InstancedBufferGeometry).instanceCount = Math.max(1, Math.round(grassCount * grassShare)); },
     setGloom(colour, amount, density) { shared.uGloom.value.set(colour.r, colour.g, colour.b, amount); shared.uGloomD.value = density; },
     setClear(i, texture, x0, z0, side) { (clearU as Record<string, THREE.IUniform>)[`uClear${i}`].value = texture ?? blank; clearU.uClearAt.value[i].set(x0, z0, texture ? side : 1e-3); },
     update(camera, timeS) {
