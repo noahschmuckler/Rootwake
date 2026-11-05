@@ -119,3 +119,30 @@ The question: *does a pull and a swap feel good in the practice clearing?* Live 
 - **Feel:** the lash cracks (`fightSound.crack`: a rising swish, a snap, a ring) and sparks at the foe's chest; the haul creaks (`fightSound.haul`); the clothesline, crash and skid land as her blows do (`landBlows`: hit-stop, shake, flecks, the finale on the wave's last). A figure's time is her own, so hit-stop and root time hold it too.
 - **Fixed on the way:** the practice clearing had stopped loading since free mode. `village.ts` required the opening's `#free` button, the module threw, and nothing after it ran. The button is now optional.
 - **Checks:** `tests/whip.test.ts` (in `scripts/test-vista.mjs`), and `scripts/browser-whip.mjs`, which plays a matador and a swap with a neighbour in headless Chromium and screenshots them to `artifacts/whip/`.
+
+### After Noah's play (2026-11-02 to 11-05)
+
+- **The judder.** Her walking gait flickered in and out every other frame under any fight pose held at full weight. The parkour layer had guessed whether the fight's move layer had already set `gait.suppress` that frame, and on alternate frames it guessed wrong. It was found by recording her bones at a true 60 fps, with the game's frames stepped by hand. Now the gait clears `suppress` each time it reads it, and each layer re-asserts its own value every frame. `huldaRig.ts`, `huldaTraverse.ts`.
+- **A figure flows.** Its beats no longer hit-stop. The lash, haul and landing are sound and sparks. The clothesline, crash and skid stop the world for at most `FLOW_STOP` with `FLOW_TRAUMA` of camera shake. A foe a figure carries is not pushed off its path. The figure's clips blend in over `PLAY_FADE_IN`.
+- **The lock, the guard and the soft lock** no longer snap:
+  - The lock keeps its foe unless another is `LOCK_SWITCH_M` nearer.
+  - In her guard she turns to it at `GUARD_TURN`.
+  - The soft lock's camera turn eases in (`FACE_EASE`).
+- **Combat mode (the narrow focus).** Noah: "dial down draw distance so only enough renders to make combat cohesive".
+  - **Trigger:** a foe within `FOCUS_M`, or a figure playing.
+  - **Haze:** the look's gloom fog turns to the horizon's colour and is opaque by `FOCUS_FAR`. The village's own fog closes with it, and the camera draws no farther.
+  - **Grass:** thinned to `FOCUS_GRASS`.
+  - **Pixels:** past `COMBAT_ON` the pixel ratio drops to `COMBAT_DPR` and the bloom goes off, once each way.
+  - **Noah's verdict:** smoother on the phone, and he prefers the look.
+  - **Switches:** `?focus=0` gives the whole view; `?dpr=N` and `?bloom=0` were left in for judging cost; `?hud=1` gives the worst frame too.
+- **Noah's decisions (2026-11-05):**
+  - **The camera** turning with her through a figure works; kept.
+  - **The whip becomes the dodge (on trial).**
+    - Its first `WHIP_EVADE_S` is the roll's untouchable window, so a bite met by a timed press is rolled clear of and root time begins. Later in a figure bites only miss.
+    - When no figure fits (foes pressed against her, or every foe already down), she rolls out of their reach, away from their middle, and turns with the camera to the nearest attacker after.
+    - The guard's stick roll is unchanged.
+  - **The danger mark.** A disc over her head while a foe within `LUNGE_REACH + DANGER_NEAR` of her winds up to bite. It grows and reddens toward the bite, so the eye can stay on her to time the dodge.
+  - **The strike seeks.**
+    - A press picks the nearest foe within `STRIKE_SEEK_M` in any direction, even one over her shoulder.
+    - Out of reach, she darts in at `DASH_SPEED` to `DASH_STOP` from it, faces it through the swing, and the blow lands on it.
+    - A foe whipped down just out of reach is struck.

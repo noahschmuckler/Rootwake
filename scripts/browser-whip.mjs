@@ -52,6 +52,22 @@ try{
   // A strike takes the staff back.
   report.strike=await page.evaluate(()=>{const v=window.__village;v.attack('strike');return {out:v.feel.whip.out,staff:v.feel.staff.shown};});
   assert.ok(!report.strike.out&&report.strike.staff,'a strike brings the staff back');
+  // Noah, 2026-11-05: the whip is her dodge. Up close, no figure fits: she rolls away from the foes.
+  await page.waitForFunction(()=>window.__village.raiders().every(r=>!(r.choreo>0))&&!window.__village.feel.whip.flow,null,{timeout:120000});
+  await stage([[0.8,0.3],[0.9,-0.4]]);
+  report.closeWhip=await page.evaluate(()=>{const v=window.__village;const ok=v.feel.whip.press();return {figure:ok,roll:!!v.guard.dodge};});
+  assert.ok(!report.closeWhip.figure&&report.closeWhip.roll,'whip up close rolls her clear');
+  await page.waitForFunction(()=>!window.__village.guard.dodge,null,{timeout:120000});
+  // The strike seeks the nearest foe, behind her too, and darts in to it.
+  await stage([[-3.6,0]]);
+  report.seek=await page.evaluate(()=>{const v=window.__village;for(const r of v.live.raiders)r.biteClock=0;const id=v.raiders().filter(r=>r.state==='hunting').sort((a,b)=>Math.hypot(a.x-v.herLocal().x,a.z-v.herLocal().z)-Math.hypot(b.x-v.herLocal().x,b.z-v.herLocal().z))[0].id;window.__seek={id,hp:v.raiders().find(r=>r.id===id).hp};v.attack('strike');return {target:v.feel.strikeTarget,want:id,dashing:v.feel.dashing};});
+  assert.equal(report.seek.target,report.seek.want,'the strike seeks the foe behind her');
+  await page.waitForFunction(()=>{const v=window.__village,r=v.raiders().find(r=>r.id===window.__seek.id);return !r||r.hp<window.__seek.hp;},null,{timeout:120000});
+  report.seekLanded=await page.evaluate(()=>{const v=window.__village,l=v.herLocal(),r=v.raiders().find(r=>r.id===window.__seek.id);return r?{d:Math.hypot(r.x-l.x,r.z-l.z),hp:r.hp}:{gone:true};});
+  // The danger mark: a foe within reach winding up to bite shows over her head.
+  await stage([[1.4,0]]);
+  report.danger=await page.evaluate(()=>new Promise(res=>{const v=window.__village;const r=v.raiders().filter(r=>r.state==='hunting')[0];v.setBite(r.id,1.0);requestAnimationFrame(()=>requestAnimationFrame(()=>res({danger:v.feel.danger})));}));
+  assert.ok(report.danger.danger,'the danger mark shows over her head in a tell');
   report.errors=errors;assert.equal(errors.length,0,`no page errors: ${errors.slice(0,3).join(' | ')}`);
   console.log('whip browser checks passed');
 }finally{await writeFile(resolve(out,'report.json'),JSON.stringify(report,null,2));await browser.close();server.close();}
